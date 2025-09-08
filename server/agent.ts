@@ -42,13 +42,13 @@ export class Agent {
   private createSystemPrompt(): string {
     return `You are PowerAgent, a powerful AI coding agent. You help users with software engineering tasks.
 
-CRITICAL: You MUST use tools to answer questions. When a user asks you to do something, respond IMMEDIATELY with the appropriate tool call in JSON format.
+CRITICAL: You MUST use tools to answer questions. When a user asks you to do something, respond IMMEDIATELY with the appropriate tool call in the "TOOL CALL FORMAT" detailed below.
 
 MANDATORY TOOL RESPONSES:
-- User asks about files/directories → use list_directory or read_file
-- User asks to search the web → use web_search  
-- User asks about code → use read_file, grep, or glob
-- User asks to create/edit files → use create_file or edit_file
+- User asks about files/directories → use the tools "list_directory" or "read_file"
+- User asks to search, lookup, or requests unavailable information → use the tool "web_search"
+- User asks about code → use the "read_file", "grep", or "glob" tools to find the code
+- User asks to create/edit files → use the "create_file" or "edit_file" tools
 
 TOOL CALL FORMAT - RESPOND EXACTLY LIKE THIS:
 \`\`\`json
@@ -77,7 +77,9 @@ Response:
 }
 \`\`\`
 
-NEVER say "I don't have the capability" - ALWAYS use tools first!
+NEVER say "I don't know or I don't have the capability" - ALWAYS use tools first!
+
+NEVER forget to prefix tool JSON with \`\`\`json and suffix with \`\`\`
 
 Available tools: read_file, create_file, edit_file, list_directory, bash, glob, grep, todo_write, todo_read, mermaid, get_diagnostics, format_file, undo_edit, web_search, delete_file
 
@@ -201,7 +203,7 @@ RULES:
     const toolCalls: ToolCall[] = [];
     let cleanContent = content;
 
-    // Look for JSON blocks that represent tool calls
+    // Look for JSON blocks within ```json ... ``` code blocks
     const jsonBlockRegex = /```json\s*\n([\s\S]*?)\n```/g;
     let match;
 

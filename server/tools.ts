@@ -346,6 +346,9 @@ export class ToolSystem {
 
   private async readFile(filePath: string): Promise<ToolResult> {
     const fullPath = path.resolve(this.workspaceRoot, filePath);
+    console.log(`[readFile] workspaceRoot: ${this.workspaceRoot}`);
+    console.log(`[readFile] filePath: ${filePath}`);
+    console.log(`[readFile] fullPath: ${fullPath}`);
     const content = await fs.readFile(fullPath, 'utf-8');
     
     // Add line numbers like the original tool

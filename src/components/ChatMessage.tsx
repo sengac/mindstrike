@@ -1,6 +1,8 @@
-import { User, Bot, Wrench, CheckCircle, XCircle, ChevronDown, ChevronRight } from 'lucide-react';
+import { User, Bot, Wrench, CheckCircle, XCircle, ChevronDown, ChevronRight, FileText, Code } from 'lucide-react';
 import { ConversationMessage } from '../types';
 import { useState } from 'react';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 
 interface ChatMessageProps {
   message: ConversationMessage;
@@ -10,6 +12,16 @@ export function ChatMessage({ message }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const [toolCallsExpanded, setToolCallsExpanded] = useState(false);
   const [resultsExpanded, setResultsExpanded] = useState(false);
+  const [showMarkdown, setShowMarkdown] = useState(true);
+
+  const renderContent = (content: string) => {
+    if (showMarkdown) {
+      const html = marked(content);
+      const sanitizedHtml = DOMPurify.sanitize(html);
+      return <div className="prose prose-invert prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />;
+    }
+    return <div className="whitespace-pre-wrap text-sm">{content}</div>;
+  };
 
   return (
     <div className={`flex space-x-3 ${isUser ? 'justify-end' : 'justify-start'}`}>
@@ -27,9 +39,35 @@ export function ChatMessage({ message }: ChatMessageProps) {
             ? 'bg-blue-600 text-white' 
             : 'bg-gray-800 border border-gray-700'
         }`}>
-          <div className="whitespace-pre-wrap text-sm">
-            {message.content}
-          </div>
+          {!isUser && (
+            <div className="flex items-center justify-between mb-2 border-b border-gray-700 pb-2">
+              <div className="flex space-x-1">
+                <button
+                  onClick={() => setShowMarkdown(true)}
+                  className={`flex items-center space-x-1 px-2 py-1 rounded text-xs transition-colors ${
+                    showMarkdown 
+                      ? 'bg-blue-600 text-white' 
+                      : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  <FileText size={12} />
+                  <span>Markdown</span>
+                </button>
+                <button
+                  onClick={() => setShowMarkdown(false)}
+                  className={`flex items-center space-x-1 px-2 py-1 rounded text-xs transition-colors ${
+                    !showMarkdown 
+                      ? 'bg-blue-600 text-white' 
+                      : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  <Code size={12} />
+                  <span>Raw</span>
+                </button>
+              </div>
+            </div>
+          )}
+          {renderContent(message.content)}
           
           {/* Tool calls */}
           {message.toolCalls && message.toolCalls.length > 0 && (
