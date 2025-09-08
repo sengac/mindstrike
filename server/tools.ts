@@ -650,38 +650,36 @@ export class ToolSystem {
     try {
       const { chromium } = await import('playwright');
       
-      const browser = await chromium.launch({ headless: true });
+      const browser = await chromium.launch({ headless: false });
       const page = await browser.newPage();
       
       // Use DuckDuckGo for search
-      await page.goto(`https://duckduckgo.com/?q=${encodeURIComponent(query)}`);
+      await page.goto(`https://www.perplexity.ai/?q=${encodeURIComponent(query)}`);
       
-      // Wait for search results to load
-      await page.waitForSelector('[data-testid="result"]', { timeout: 60000 });
+      // Wait for prose element to appear
+      await page.waitForSelector('.prose', { timeout: 60000 });
       
-      // Extract search results
+      // Wait for text to finish rendering (at least 10 seconds)
+      await page.waitForTimeout(10000);
+      
+      // Extract text content from prose element children
       const results = await page.evaluate((maxResults) => {
-        const resultElements = document.querySelectorAll('[data-testid="result"]');
+        const proseElement = document.querySelector('.prose');
+        if (!proseElement) return [];
+        
+        const childElements = proseElement.children;
         const extractedResults = [];
         
-        for (let i = 0; i < Math.min(resultElements.length, maxResults); i++) {
-          const element = resultElements[i];
+        for (let i = 0; i < Math.min(childElements.length, maxResults); i++) {
+          const element = childElements[i];
+          const textContent = element.textContent?.trim() || '';
           
-          const titleElement = element.querySelector('h2 a, [data-testid="result-title-a"]');
-          const snippetElement = element.querySelector('[data-testid="result-snippet"]');
-          
-          if (titleElement) {
-            const title = titleElement.textContent?.trim() || '';
-            const url = titleElement.getAttribute('href') || '';
-            const snippet = snippetElement?.textContent?.trim() || '';
-            
-            if (title && url) {
-              extractedResults.push({
-                title,
-                url: url.startsWith('http') ? url : `https://duckduckgo.com${url}`,
-                snippet
-              });
-            }
+          if (textContent) {
+            extractedResults.push({
+              title: textContent.substring(0, 100) + '...',
+              url: '',
+              snippet: textContent
+            });
           }
         }
         
