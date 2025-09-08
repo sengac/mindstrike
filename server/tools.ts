@@ -648,23 +648,41 @@ export class ToolSystem {
   // Web search
   private async webSearch(query: string, numResults = 5): Promise<ToolResult> {
     try {
-      const { chromium } = await import('playwright');
+      const { chromium } = await import('playwright-extra');
+      const StealthPlugin = await import('puppeteer-extra-plugin-stealth');
+      
+      chromium.use(StealthPlugin.default());
       
       const browser = await chromium.launch({ headless: false });
       const page = await browser.newPage();
+
+      // Use Google Gemini for search
+      await page.goto(`https://gemini.google.com/app`);
+
+      // Random delay
+      await page.waitForTimeout(Math.floor(Math.random() * 4000 + 1000));
+
+      // Scroll to simulate user activity
+      await page.evaluate(() => window.scrollBy(0, window.innerHeight));
       
-      // Use DuckDuckGo for search
-      await page.goto(`https://www.perplexity.ai/?q=${encodeURIComponent(query)}`);
+      // Wait for input element to appear
+      await page.waitForSelector('rich-textarea', { timeout: 60000 });
+
+      const richText = page.locator('rich-textarea');
+      await richText.click();
+      await richText.type(query);
+
+      // Wait for the button to appear
+      await page.waitForTimeout(1000);
+
+      await page.locator('[aria-label="Send message"]').click();
       
-      // Wait for prose element to appear
-      await page.waitForSelector('.prose', { timeout: 60000 });
-      
-      // Wait for text to finish rendering (at least 10 seconds)
-      await page.waitForTimeout(10000);
+      // Wait for text to finish rendering (at least 60 seconds)
+      await page.waitForSelector('[data-mat-icon-name="refresh"]', { timeout: 60000 });
       
       // Extract text content from prose element children
       const results = await page.evaluate((maxResults) => {
-        const proseElement = document.querySelector('.prose');
+        const proseElement = document.querySelector('message-content');
         if (!proseElement) return [];
         
         const childElements = proseElement.children;
