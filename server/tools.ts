@@ -648,39 +648,70 @@ export class ToolSystem {
   // Web search
   private async webSearch(query: string, numResults = 5): Promise<ToolResult> {
     try {
-      // Using DuckDuckGo instant search API as a simple exle
-      const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_redirect=1&no_html=1&skip_disambig=1`;
+      const { chromium } = await import('playwright');
       
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`Search API error: ${response.status}`);
-      }
+      const browser = await chromium.launch({ headless: true });
+      const page = await browser.newPage();
       
-      const data = await response.json();
-      const results = [];
+      // Use DuckDuckGo for search
+      await page.goto(`https://duckduckgo.com/?q=${encodeURIComponent(query)}`);
       
-      if (data.AbstractText) {
-        results.push(`Summary: ${data.AbstractText}`);
-        if (data.AbstractURL) {
-          results.push(`Source: ${data.AbstractURL}`);
-        }
-      }
+      // Wait for search results to load
+      await page.waitForSelector('[data-testid="result"]', { timeout: 60000 });
       
-      if (data.RelatedTopics && data.RelatedTopics.length > 0) {
-        results.push('\nRelated topics:');
-        data.RelatedTopics.slice(0, Math.min(numResults, 5)).forEach((topic: any, index: number) => {
-          if (topic.Text) {
-            results.push(`${index + 1}. ${topic.Text}`);
-            if (topic.FirstURL) {
-              results.push(`   ${topic.FirstURL}`);
+      // Extract search results
+      const results = await page.evaluate((maxResults) => {
+        const resultElements = document.querySelectorAll('[data-testid="result"]');
+        const extractedResults = [];
+        
+        for (let i = 0; i < Math.min(resultElements.length, maxResults); i++) {
+          const element = resultElements[i];
+          
+          const titleElement = element.querySelector('h2 a, [data-testid="result-title-a"]');
+          const snippetElement = element.querySelector('[data-testid="result-snippet"]');
+          
+          if (titleElement) {
+            const title = titleElement.textContent?.trim() || '';
+            const url = titleElement.getAttribute('href') || '';
+            const snippet = snippetElement?.textContent?.trim() || '';
+            
+            if (title && url) {
+              extractedResults.push({
+                title,
+                url: url.startsWith('http') ? url : `https://duckduckgo.com${url}`,
+                snippet
+              });
             }
           }
-        });
+        }
+        
+        return extractedResults;
+      }, numResults);
+      
+      await browser.close();
+      
+      if (results.length === 0) {
+        return {
+          success: true,
+          output: 'No results found'
+        };
       }
+      
+      // Format results
+      const formattedResults = results.map((result, index) => {
+        let formatted = `${index + 1}. **${result.title}**`;
+        if (result.url) {
+          formatted += `\n   ${result.url}`;
+        }
+        if (result.snippet) {
+          formatted += `\n   ${result.snippet}`;
+        }
+        return formatted;
+      }).join('\n\n');
       
       return {
         success: true,
-        output: results.length > 0 ? results.join('\n') : 'No results found'
+        output: formattedResults
       };
     } catch (error: any) {
       return {
