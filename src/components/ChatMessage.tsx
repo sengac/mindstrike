@@ -1,5 +1,6 @@
-import { User, Bot, Wrench, CheckCircle, XCircle } from 'lucide-react';
+import { User, Bot, Wrench, CheckCircle, XCircle, ChevronDown, ChevronRight } from 'lucide-react';
 import { ConversationMessage } from '../types';
+import { useState } from 'react';
 
 interface ChatMessageProps {
   message: ConversationMessage;
@@ -7,6 +8,8 @@ interface ChatMessageProps {
 
 export function ChatMessage({ message }: ChatMessageProps) {
   const isUser = message.role === 'user';
+  const [toolCallsExpanded, setToolCallsExpanded] = useState(false);
+  const [resultsExpanded, setResultsExpanded] = useState(false);
 
   return (
     <div className={`flex space-x-3 ${isUser ? 'justify-end' : 'justify-start'}`}>
@@ -31,8 +34,18 @@ export function ChatMessage({ message }: ChatMessageProps) {
           {/* Tool calls */}
           {message.toolCalls && message.toolCalls.length > 0 && (
             <div className="mt-3 space-y-2">
-              <div className="text-xs text-gray-300 font-medium">Tool calls:</div>
-              {message.toolCalls.map((toolCall, index) => (
+              <button
+                onClick={() => setToolCallsExpanded(!toolCallsExpanded)}
+                className="flex items-center space-x-1 text-xs text-gray-300 font-medium hover:text-gray-100 transition-colors"
+              >
+                {toolCallsExpanded ? (
+                  <ChevronDown size={12} />
+                ) : (
+                  <ChevronRight size={12} />
+                )}
+                <span>Tool calls ({message.toolCalls.length})</span>
+              </button>
+              {toolCallsExpanded && message.toolCalls.map((toolCall, index) => (
                 <div key={index} className="bg-gray-700 rounded p-2 text-xs">
                   <div className="flex items-center space-x-2 mb-1">
                     <Wrench size={12} />
@@ -49,8 +62,18 @@ export function ChatMessage({ message }: ChatMessageProps) {
           {/* Tool results */}
           {message.toolResults && message.toolResults.length > 0 && (
             <div className="mt-3 space-y-2">
-              <div className="text-xs text-gray-300 font-medium">Results:</div>
-              {message.toolResults.map((result, index) => (
+              <button
+                onClick={() => setResultsExpanded(!resultsExpanded)}
+                className="flex items-center space-x-1 text-xs text-gray-300 font-medium hover:text-gray-100 transition-colors"
+              >
+                {resultsExpanded ? (
+                  <ChevronDown size={12} />
+                ) : (
+                  <ChevronRight size={12} />
+                )}
+                <span>Results ({message.toolResults.length})</span>
+              </button>
+              {resultsExpanded && message.toolResults.map((result, index) => (
                 <div key={index} className="bg-gray-700 rounded p-2 text-xs">
                   <div className="flex items-center space-x-2 mb-1">
                     {result.result.success ? (
