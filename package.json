@@ -1,0 +1,21 @@
+{
+  "name": "sengac-website-cdk",
+  "version": "1.0.0",
+  "description": "CDK infrastructure for sengac.com static website",
+  "scripts": {
+    "build": "tsc",
+    "cdk": "cdk",
+    "deploy": "npm run build && cdk deploy",
+    "sync": "aws s3 sync ./website s3://$(aws cloudformation describe-stacks --stack-name SengacWebsiteStack --query 'Stacks[0].Outputs[?OutputKey==`BucketName`].OutputValue' --output text) --delete",
+    "destroy": "cdk destroy"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "aws-cdk": "^2.170.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.170.0",
+    "constructs": "^10.3.0"
+  }
+}
