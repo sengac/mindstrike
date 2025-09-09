@@ -7,41 +7,41 @@ export function useThreads() {
   const [isLoaded, setIsLoaded] = useState(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  const loadThreads = useCallback(async () => {
+    try {
+      const response = await fetch('/api/conversations');
+      if (response.ok) {
+        const data = await response.json();
+        const parsedThreads = data.map((thread: any) => ({
+          ...thread,
+          createdAt: new Date(thread.createdAt),
+          updatedAt: new Date(thread.updatedAt),
+          messages: thread.messages.map((msg: any) => ({
+            ...msg,
+            timest: new Date(msg.timest)
+          }))
+        }));
+        setThreads(parsedThreads);
+        
+        // Set the most recently updated thread as active, or create new one if none exist
+        if (parsedThreads.length > 0) {
+          const mostRecent = parsedThreads.sort((a: Thread, b: Thread) => 
+            b.updatedAt.getTime() - a.updatedAt.getTime()
+          )[0];
+          setActiveThreadId(mostRecent.id);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load threads from file:', error);
+    } finally {
+      setIsLoaded(true);
+    }
+  }, []);
+
   // Load threads from CONVERSATIONS.json file on mount
   useEffect(() => {
-    const loadThreads = async () => {
-      try {
-        const response = await fetch('/api/conversations');
-        if (response.ok) {
-          const data = await response.json();
-          const parsedThreads = data.map((thread: any) => ({
-            ...thread,
-            createdAt: new Date(thread.createdAt),
-            updatedAt: new Date(thread.updatedAt),
-            messages: thread.messages.map((msg: any) => ({
-              ...msg,
-              timest: new Date(msg.timest)
-            }))
-          }));
-          setThreads(parsedThreads);
-          
-          // Set the most recently updated thread as active, or create new one if none exist
-          if (parsedThreads.length > 0) {
-            const mostRecent = parsedThreads.sort((a: Thread, b: Thread) => 
-              b.updatedAt.getTime() - a.updatedAt.getTime()
-            )[0];
-            setActiveThreadId(mostRecent.id);
-          }
-        }
-      } catch (error) {
-        console.error('Failed to load threads from file:', error);
-      } finally {
-        setIsLoaded(true);
-      }
-    };
-    
     loadThreads();
-  }, []);
+  }, [loadThreads]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -215,7 +215,22 @@ export function useThreads() {
     const thread = threads.find(t => t.id === threadId);
     if (!thread) return false;
 
-    const updatedMessages = thread.messages.filter(msg => msg.id !== messageId);
+    // Find the message to delete
+    const messageIndex = thread.messages.findIndex(msg => msg.id === messageId);
+    if (messageIndex === -1) return false;
+
+    const messageToDelete = thread.messages[messageIndex];
+    let messagesToRemove = [messageId];
+
+    // If deleting a user message, also delete the next assistant response (if it exists)
+    if (messageToDelete.role === 'user' && messageIndex + 1 < thread.messages.length) {
+      const nextMessage = thread.messages[messageIndex + 1];
+      if (nextMessage.role === 'assistant') {
+        messagesToRemove.push(nextMessage.id);
+      }
+    }
+
+    const updatedMessages = thread.messages.filter(msg => !messagesToRemove.includes(msg.id));
     const updatedThreads = threads.map(t =>
       t.id === threadId
         ? { ...t, messages: updatedMessages, updatedAt: new Date() }
@@ -231,8 +246,17 @@ export function useThreads() {
     return threads.find(t => t.id === activeThreadId) || null;
   }, [threads, activeThreadId]);
 
-  const selectThread = useCallback((threadId: string) => {
+  const selectThread = useCallback(async (threadId: string) => {
     setActiveThreadId(threadId);
+    
+    // Load the thread's conversation into the agent's context
+    try {
+      await fetch(`/api/load-thread/${threadId}`, {
+        method: 'POST'
+      });
+    } catch (error) {
+      console.error('Failed to load thread into agent:', error);
+    }
   }, []);
 
   return {
@@ -240,6 +264,7 @@ export function useThreads() {
     activeThreadId,
     activeThread: getActiveThread(),
     isLoaded,
+    loadThreads,
     createThread,
     deleteThread,
     renameThread,

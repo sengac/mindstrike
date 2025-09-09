@@ -14,7 +14,7 @@ interface ChatPanelProps {
 
 export function ChatPanel({ threadId, messages: initialMessages = [], onMessagesUpdate, onFirstMessage, onDeleteMessage }: ChatPanelProps) {
   const [input, setInput] = useState('');
-  const { messages, isLoading, sendMessage, clearConversation } = useChat({
+  const { messages, isLoading, sendMessage, clearConversation, regenerateMessage, cancelToolCalls, editMessage } = useChat({
     threadId,
     messages: initialMessages,
     onMessagesUpdate,
@@ -104,6 +104,13 @@ export function ChatPanel({ threadId, messages: initialMessages = [], onMessages
             key={message.id} 
             message={message} 
             onDelete={onDeleteMessage ? () => onDeleteMessage(message.id) : undefined}
+            onRegenerate={message.role === 'assistant' ? () => regenerateMessage(message.id) : undefined}
+            onEdit={message.role === 'user' ? (newContent: string) => editMessage(message.id, newContent) : undefined}
+            onCancelToolCalls={
+              message.status === 'processing' && message.toolCalls && message.toolCalls.length > 0 
+                ? () => cancelToolCalls(message.id) 
+                : undefined
+            }
           />
         ))}
         
@@ -127,7 +134,8 @@ export function ChatPanel({ threadId, messages: initialMessages = [], onMessages
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Ask PowerAgent anything..."
-              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 pr-12 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 pr-12 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent overflow-y-auto"
+              style={{ overflowY: input.includes('\n') ? 'auto' : 'hidden' }}
               rows={1}
               disabled={isLoading}
             />

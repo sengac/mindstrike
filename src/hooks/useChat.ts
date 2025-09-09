@@ -72,11 +72,12 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
       content,
       timest: new Date()
     };
-    const newMessages = [...messages, userMessage];
-    setMessages(newMessages);
+    let currentMessages = [...messages, userMessage];
+    setMessages(currentMessages);
 
     try {
-      const response = await fetch('/api/message', {
+      // Use SSE for real-time updates
+      const response = await fetch('/api/message/stream', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -84,40 +85,104 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
         body: JSON.stringify({ message: content })
       });
 
-      if (response.ok) {
-        const assistantMessage = await response.json();
-        const assistantMsg = {
-          ...assistantMessage,
-          timest: new Date(assistantMessage.timest)
-        };
-        const finalMessages = [...newMessages, assistantMsg];
-        setMessages(finalMessages);
-        notifyMessagesUpdate(finalMessages);
-        
-        // Trigger first message callback if this was the first exchange
-        if (isFirstMessage && onFirstMessage) {
-          onFirstMessage();
-        }
-      } else {
-        const errorData = await response.json();
-        const errorMessage: ConversationMessage = {
-          id: Date.now().toString(),
-          role: 'assistant',
-          content: `Error: ${errorData.error}`,
-          timest: new Date()
-        };
-        const errorMessages = [...newMessages, errorMessage];
-        setMessages(errorMessages);
-        notifyMessagesUpdate(errorMessages);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error('No response body reader available');
+      }
+
+      let assistantMessage: ConversationMessage | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              console.log('📡 SSE Message received (sendMessage):', data.type, data);
+              
+              if (data.type === 'connected') {
+                 console.log('✅ SSE connected');
+              } else if (data.type === 'message-update') {
+                const updatedMsg = {
+                ...data.message,
+                timest: new Date(data.message.timest)
+                };
+                
+                console.log('🔄 Message update - Status:', updatedMsg.status, 'Tool calls:', updatedMsg.toolCalls?.length || 0, updatedMsg);
+                
+                if (!assistantMessage) {
+                // First update - add the message
+                  console.log('➕ Adding new assistant message');
+                assistantMessage = updatedMsg;
+                currentMessages = [...currentMessages, updatedMsg];
+                } else {
+                // Update existing message
+                console.log('🔄 Updating existing message');
+                  assistantMessage = updatedMsg;
+                  currentMessages = currentMessages.map(msg => 
+                     msg.id === updatedMsg.id ? updatedMsg : msg
+                   );
+                 }
+                 console.log('📝 Setting messages state, total:', currentMessages.length);
+                 setMessages([...currentMessages]);
+                
+              } else if (data.type === 'completed') {
+              console.log('✅ Message completed');
+              const finalMsg = {
+              ...data.message,
+                timest: new Date(data.message.timest)
+                 };
+                
+                if (assistantMessage) {
+                  currentMessages = currentMessages.map(msg => 
+                    msg.id === finalMsg.id ? finalMsg : msg
+                  );
+                } else {
+                  currentMessages = [...currentMessages, finalMsg];
+                }
+                
+                setMessages([...currentMessages]);
+                notifyMessagesUpdate([...currentMessages]);
+                
+                // Set loading to false when message is completed
+                setIsLoading(false);
+                
+                // Trigger first message callback if this was the first exchange
+                if (isFirstMessage && onFirstMessage) {
+                  onFirstMessage();
+                }
+                
+              } else if (data.type === 'error') {
+                throw new Error(data.error);
+              }
+            } catch (parseError) {
+              console.error('Error parsing SSE data:', parseError);
+            }
+          }
+        }
+      }
+
     } catch (error) {
+      console.error('SSE Error:', error);
       const errorMessage: ConversationMessage = {
         id: Date.now().toString(),
         role: 'assistant',
         content: `Error: Failed to send message - ${error}`,
         timest: new Date()
       };
-      const errorMessages = [...newMessages, errorMessage];
+      const errorMessages = [...currentMessages, errorMessage];
       setMessages(errorMessages);
       notifyMessagesUpdate(errorMessages);
     } finally {
@@ -139,10 +204,231 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
     }
   }, [notifyMessagesUpdate]);
 
+  const cancelToolCalls = useCallback(async (messageId: string) => {
+    try {
+      const response = await fetch('/api/message/cancel', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ messageId })
+      });
+
+      if (response.ok) {
+        // The SSE stream will send the cancelled update automatically
+        // so we don't need to manually update the message here
+        console.log('Tool calls cancelled for message:', messageId);
+      }
+    } catch (error) {
+      console.error('Failed to cancel tool calls:', error);
+    }
+  }, []);
+
+  const regenerateMessage = useCallback(async (messageId: string) => {
+    setIsLoading(true);
+    
+    // Find the message and get the previous user message to regenerate from
+    const messageIndex = messages.findIndex(msg => msg.id === messageId);
+    if (messageIndex === -1 || messageIndex === 0) {
+      setIsLoading(false);
+      return;
+    }
+    
+    // Find the last user message before this assistant message
+    const userMessageIndex = messages.slice(0, messageIndex).reverse().findIndex(msg => msg.role === 'user');
+    if (userMessageIndex === -1) {
+      setIsLoading(false);
+      return;
+    }
+    
+    const actualUserIndex = messageIndex - 1 - userMessageIndex;
+    const userMessage = messages[actualUserIndex];
+    
+    // Remove the assistant message and all messages after it
+    const messagesBeforeRegeneration = messages.slice(0, messageIndex);
+    setMessages(messagesBeforeRegeneration);
+
+    try {
+      const response = await fetch('/api/message', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ message: userMessage.content })
+      });
+
+      if (response.ok) {
+        const assistantMessage = await response.json();
+        const assistantMsg = {
+          ...assistantMessage,
+          timest: new Date(assistantMessage.timest)
+        };
+        const finalMessages = [...messagesBeforeRegeneration, assistantMsg];
+        setMessages(finalMessages);
+        notifyMessagesUpdate(finalMessages);
+      } else {
+        const errorData = await response.json();
+        const errorMessage: ConversationMessage = {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: `Error: ${errorData.error}`,
+          timest: new Date()
+        };
+        const errorMessages = [...messagesBeforeRegeneration, errorMessage];
+        setMessages(errorMessages);
+        notifyMessagesUpdate(errorMessages);
+      }
+    } catch (error) {
+      const errorMessage: ConversationMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `Error: Failed to regenerate message - ${error}`,
+        timest: new Date()
+      };
+      const errorMessages = [...messagesBeforeRegeneration, errorMessage];
+      setMessages(errorMessages);
+      notifyMessagesUpdate(errorMessages);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [messages, notifyMessagesUpdate]);
+
+  const editMessage = useCallback(async (messageId: string, newContent: string) => {
+    setIsLoading(true);
+    
+    // Find the message to edit
+    const messageIndex = messages.findIndex(msg => msg.id === messageId);
+    if (messageIndex === -1) {
+      setIsLoading(false);
+      return;
+    }
+    
+    // Update the user message with new content
+    const updatedMessages = [...messages];
+    updatedMessages[messageIndex] = {
+      ...updatedMessages[messageIndex],
+      content: newContent
+    };
+    
+    // Remove all assistant messages after this user message
+    const messagesBeforeRegeneration = updatedMessages.slice(0, messageIndex + 1);
+    setMessages(messagesBeforeRegeneration);
+
+    try {
+      // Use SSE for real-time updates
+      const response = await fetch('/api/message/stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ message: newContent })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error('No response body reader available');
+      }
+
+      let assistantMessage: ConversationMessage | null = null;
+      let currentMessages = [...messagesBeforeRegeneration];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+            const data = JSON.parse(line.slice(6));
+            console.log('📡 SSE Message received (regenerate):', data.type, data);
+            
+            if (data.type === 'connected') {
+              console.log('✅ SSE connected');
+            } else if (data.type === 'message-update') {
+            const updatedMsg = {
+            ...data.message,
+              timest: new Date(data.message.timest)
+            };
+            
+            console.log('🔄 Message update - Status:', updatedMsg.status, 'Tool calls:', updatedMsg.toolCalls?.length || 0, updatedMsg);
+            
+            if (!assistantMessage) {
+              // First update - add the message
+            console.log('➕ Adding new assistant message');
+            assistantMessage = updatedMsg;
+            currentMessages = [...currentMessages, updatedMsg];
+            } else {
+            // Update existing message
+              console.log('🔄 Updating existing message');
+              assistantMessage = updatedMsg;
+                   currentMessages = currentMessages.map(msg => 
+                     msg.id === updatedMsg.id ? updatedMsg : msg
+                   );
+                 }
+                 console.log('📝 Setting messages state, total:', currentMessages.length);
+                 setMessages([...currentMessages]);
+                
+              } else if (data.type === 'completed') {
+              console.log('✅ Message completed (regenerate)');
+              const finalMsg = {
+              ...data.message,
+                timest: new Date(data.message.timest)
+                 };
+                
+                if (assistantMessage) {
+                  currentMessages = currentMessages.map(msg => 
+                    msg.id === finalMsg.id ? finalMsg : msg
+                  );
+                } else {
+                  currentMessages = [...currentMessages, finalMsg];
+                }
+                
+                setMessages([...currentMessages]);
+                notifyMessagesUpdate([...currentMessages]);
+                
+              } else if (data.type === 'error') {
+                throw new Error(data.error);
+              }
+            } catch (parseError) {
+              console.error('Error parsing SSE data:', parseError);
+            }
+          }
+        }
+      }
+
+    } catch (error) {
+      console.error('SSE Error:', error);
+      const errorMessage: ConversationMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `Error: Failed to regenerate response - ${error}`,
+        timest: new Date()
+      };
+      const errorMessages = [...messagesBeforeRegeneration, errorMessage];
+      setMessages(errorMessages);
+      notifyMessagesUpdate(errorMessages);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [messages, notifyMessagesUpdate]);
+
   return {
     messages,
     isLoading,
     sendMessage,
-    clearConversation
+    clearConversation,
+    regenerateMessage,
+    cancelToolCalls,
+    editMessage
   };
 }

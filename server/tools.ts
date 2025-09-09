@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { glob } from 'glob';
 import fastGlob from 'fast-glob';
+import { logger } from './logger.js';
 
 interface TodoItem {
   id: string;
@@ -346,9 +347,11 @@ export class ToolSystem {
 
   private async readFile(filePath: string): Promise<ToolResult> {
     const fullPath = path.resolve(this.workspaceRoot, filePath);
-    console.log(`[readFile] workspaceRoot: ${this.workspaceRoot}`);
-    console.log(`[readFile] filePath: ${filePath}`);
-    console.log(`[readFile] fullPath: ${fullPath}`);
+    logger.debug('readFile operation', { 
+      workspaceRoot: this.workspaceRoot, 
+      filePath, 
+      fullPath 
+    });
     const content = await fs.readFile(fullPath, 'utf-8');
     
     // Add line numbers like the original tool

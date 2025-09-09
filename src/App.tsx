@@ -15,6 +15,7 @@ function App() {
     activeThreadId,
     activeThread,
     isLoaded,
+    loadThreads,
     createThread,
     deleteThread,
     renameThread,
@@ -93,7 +94,7 @@ function App() {
             onDeleteMessage={handleDeleteMessage}
           />
         )}
-        {activePanel === 'files' && <FileExplorer />}
+        {activePanel === 'files' && <FileExplorer onDirectoryChange={loadThreads} />}
       </div>
 
       {/* Overlay for mobile */}

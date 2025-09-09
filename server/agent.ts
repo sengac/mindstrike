@@ -1,5 +1,6 @@
 import { LLMClient, LLMMessage, ToolCall } from './llm-client.js';
 import { ToolSystem } from './tools.js';
+import { logger } from './logger.js';
 
 export interface AgentConfig {
   workspaceRoot: string;
@@ -17,12 +18,14 @@ export interface ConversationMessage {
   timest: Date;
   toolCalls?: ToolCall[];
   toolResults?: Array<{ name: string; result: any }>;
+  status?: 'processing' | 'completed' | 'cancelled';
 }
 
 export class Agent {
   private llmClient: LLMClient;
   private toolSystem: ToolSystem;
   private conversation: ConversationMessage[] = [];
+  private cancelledMessages: Set<string> = new Set();
   private systemPrompt: string;
 
   constructor(config: AgentConfig) {
@@ -89,7 +92,9 @@ RULES:
 3. Don't explain unless asked - just execute tools`;
   }
 
-  async processMessage(userMessage: string): Promise<ConversationMessage> {
+  async processMessage(userMessage: string, onUpdate?: (message: ConversationMessage) => void): Promise<ConversationMessage> {
+    console.log('🚀 processMessage called with onUpdate callback:', !!onUpdate);
+    
     // Add user message to conversation
     const userMsg: ConversationMessage = {
       id: this.generateId(),
@@ -116,14 +121,41 @@ RULES:
       const assistantMsg: ConversationMessage = {
         id: this.generateId(),
         role: 'assistant',
-        content,
+        content: toolCalls && toolCalls.length > 0 ? '' : content, // Don't show content if there are tool calls
         timest: new Date(),
-        toolCalls
+        toolCalls,
+        status: toolCalls && toolCalls.length > 0 ? 'processing' : 'completed'
       };
+
+      console.log('🔧 Created assistant message - Status:', assistantMsg.status, 'Tool calls:', assistantMsg.toolCalls?.length || 0);
+
+      this.conversation.push(assistantMsg);
+
+      // Send initial message update
+      if (onUpdate) {
+        console.log('📤 Sending initial message update via onUpdate callback');
+        onUpdate(assistantMsg);
+      } else {
+        console.log('⚠️ No onUpdate callback provided');
+      }
 
       // Execute tool calls if present
       if (toolCalls && toolCalls.length > 0) {
-        const toolResults = await this.executeToolCalls(toolCalls);
+        const toolResults = await this.executeToolCalls(toolCalls, assistantMsg.id);
+        
+        // Check if the message was cancelled during execution
+        if (this.cancelledMessages.has(assistantMsg.id)) {
+          assistantMsg.status = 'cancelled';
+          assistantMsg.content = 'Tool execution was cancelled.';
+          this.cancelledMessages.delete(assistantMsg.id);
+          
+          // Send update when cancelled
+          if (onUpdate) {
+            onUpdate(assistantMsg);
+          }
+          return assistantMsg;
+        }
+        
         assistantMsg.toolResults = toolResults;
 
         // Add tool results to conversation and get follow-up response
@@ -143,10 +175,17 @@ RULES:
 
         // Get follow-up response after tool execution
         const followUpResponse = await this.llmClient.generateResponse(llmMessages);
-        assistantMsg.content = content + '\n\n' + followUpResponse.content;
+        assistantMsg.content = followUpResponse.content;
+        assistantMsg.status = 'completed';
+        
+        console.log('✅ Tool execution completed, updating status to completed');
+        
+        // Send update when completed
+        if (onUpdate) {
+          console.log('📤 Sending completion update via onUpdate callback');
+          onUpdate(assistantMsg);
+        }
       }
-
-      this.conversation.push(assistantMsg);
       return assistantMsg;
 
     } catch (error: any) {
@@ -161,10 +200,15 @@ RULES:
     }
   }
 
-  private async executeToolCalls(toolCalls: ToolCall[]): Promise<Array<{ name: string; result: any }>> {
+  private async executeToolCalls(toolCalls: ToolCall[], messageId: string): Promise<Array<{ name: string; result: any }>> {
     const results = [];
     
     for (const toolCall of toolCalls) {
+      // Check if cancelled before each tool execution
+      if (this.cancelledMessages.has(messageId)) {
+        break;
+      }
+      
       try {
         const result = await this.toolSystem.executeTool(toolCall.name, toolCall.parameters);
         results.push({
@@ -195,6 +239,15 @@ RULES:
     return this.conversation.length < initialLength;
   }
 
+  cancelMessage(messageId: string): boolean {
+    const message = this.conversation.find(msg => msg.id === messageId);
+    if (message && message.status === 'processing') {
+      this.cancelledMessages.add(messageId);
+      return true;
+    }
+    return false;
+  }
+
   clearConversation(): void {
     this.conversation = [{
       id: 'system',
@@ -204,32 +257,46 @@ RULES:
     }];
   }
 
+  loadConversation(messages: ConversationMessage[]): void {
+    // Start with system message
+    this.conversation = [{
+      id: 'system',
+      role: 'system',
+      content: this.systemPrompt,
+      timest: new Date()
+    }];
+    
+    // Add provided messages
+    this.conversation.push(...messages);
+  }
+
   private parseToolCalls(content: string): { content: string; toolCalls?: ToolCall[] } {
-    console.log('Parsing content for tool calls:', content);
+    logger.debug('Parsing content for tool calls:', { content });
     const toolCalls: ToolCall[] = [];
     let cleanContent = content;
+    const jsonBlocksToRemove: string[] = [];
 
     // Look for JSON blocks within ```json ... ``` code blocks
     const jsonBlockRegex = /```json\s*\n([\s\S]*?)\n```/g;
     let match;
 
     while ((match = jsonBlockRegex.exec(content)) !== null) {
-      console.log('Found JSON block:', match[1]);
+      logger.debug('Found JSON block:', { jsonBlock: match[1] });
       try {
         const jsonStr = match[1];
         const parsed = JSON.parse(jsonStr);
         
         // Handle correct format: {"tool": "name", "parameters": {...}}
         if (parsed.tool && parsed.parameters) {
-          console.log('Parsed tool call:', parsed.tool, parsed.parameters);
+          logger.debug('Parsed tool call:', { tool: parsed.tool, parameters: parsed.parameters });
           toolCalls.push({
             id: this.generateId(),
             name: parsed.tool,
             parameters: parsed.parameters
           });
           
-          // Remove the JSON block from the content
-          cleanContent = cleanContent.replace(match[0], '');
+          // Mark this JSON block for removal
+          jsonBlocksToRemove.push(match[0]);
         }
         // Handle alternate format: {"tool_name": {...}} 
         else {
@@ -241,35 +308,40 @@ RULES:
                 'todo_write', 'todo_read', 'mermaid', 'get_diagnostics', 'format_file', 'undo_edit', 'web_search', 'delete_file'
               ];
               if (validTools.includes(key)) {
-                console.log('Parsed alternate tool call:', key, value);
+                logger.debug('Parsed alternate tool call:', { tool: key, parameters: value });
                 toolCalls.push({
                   id: this.generateId(),
                   name: key,
                   parameters: value as Record<string, any>
                 });
                 
-                // Remove the JSON block from the content
-                cleanContent = cleanContent.replace(match[0], '');
+                // Mark this JSON block for removal
+                jsonBlocksToRemove.push(match[0]);
                 break;
               }
             }
           }
         }
       } catch (e) {
-        console.log('Failed to parse JSON block:', match[1], e);
+        logger.debug('Failed to parse JSON block:', { jsonBlock: match[1], error: e });
       }
+    }
+
+    // Remove all identified JSON blocks from the content
+    for (const block of jsonBlocksToRemove) {
+      cleanContent = cleanContent.replace(block, '');
     }
 
     // Also check for standalone JSON without code blocks
     if (toolCalls.length === 0) {
-      console.log('No JSON blocks found, checking for standalone JSON');
+      logger.debug('No JSON blocks found, checking for standalone JSON');
       try {
         const trimmed = content.trim();
         if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-          console.log('Found standalone JSON:', trimmed);
+          logger.debug('Found standalone JSON:', { json: trimmed });
           const parsed = JSON.parse(trimmed);
           if (parsed.tool && parsed.parameters) {
-            console.log('Parsed standalone tool call:', parsed.tool, parsed.parameters);
+            logger.debug('Parsed standalone tool call:', { tool: parsed.tool, parameters: parsed.parameters });
             toolCalls.push({
               id: this.generateId(),
               name: parsed.tool,
@@ -279,12 +351,12 @@ RULES:
           }
         }
       } catch (e) {
-        console.log('Failed to parse standalone JSON:', e);
+        logger.debug('Failed to parse standalone JSON:', { error: e });
       }
     }
 
     if (toolCalls.length > 0) {
-      console.log('Parsed tool calls:', toolCalls);
+      logger.debug('Parsed tool calls:', { toolCalls });
     }
 
     // Clean up the content by removing extra whitespace and newlines

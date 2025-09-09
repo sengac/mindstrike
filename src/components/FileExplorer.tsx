@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react';
-import { File, Folder, RefreshCw, Edit3, Save, Trash2 } from 'lucide-react';
+import { File, Folder, RefreshCw, Edit3, Save, Trash2, FolderOpen, ArrowUp, Home } from 'lucide-react';
 import { useWorkspace } from '../hooks/useWorkspace';
 import { CodeEditor } from './CodeEditor';
 import { TabbedEditor } from './TabbedEditor';
 
-export function FileExplorer() {
-  const { files, loadFiles, getFileContent, isLoading } = useWorkspace();
+interface FileExplorerProps {
+  onDirectoryChange?: () => void;
+}
+
+export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
+  const { files, loadFiles, loadDirectory, changeDirectory, setWorkspaceRoot, currentDirectory, getFileContent, isLoading } = useWorkspace();
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string>('');
   const [loadingContent, setLoadingContent] = useState(false);
@@ -13,13 +17,25 @@ export function FileExplorer() {
   const [editedContent, setEditedContent] = useState<string>('');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [fileToDelete, setFileToDelete] = useState<string | null>(null);
+  const [showDirectoryInput, setShowDirectoryInput] = useState(false);
+  const [newDirectoryPath, setNewDirectoryPath] = useState('');
 
   useEffect(() => {
+    loadDirectory();
     loadFiles();
-  }, [loadFiles]);
+  }, [loadDirectory, loadFiles]);
 
   const handleFileClick = async (filePath: string) => {
-    if (filePath.endsWith('/')) return; // Skip directories
+    if (filePath.endsWith('/')) {
+      // Navigate to directory
+      const dirName = filePath.slice(0, -1);
+      const newPath = currentDirectory === '.' ? dirName : `${currentDirectory}/${dirName}`;
+      const result = await changeDirectory(newPath, onDirectoryChange);
+      if (!result.success) {
+        alert(`Failed to change directory: ${result.error}`);
+      }
+      return;
+    }
     
     setSelectedFile(filePath);
     setLoadingContent(true);
@@ -138,20 +154,96 @@ export function FileExplorer() {
     setFileToDelete(null);
   };
 
+  const handleGoUp = async () => {
+    const result = await changeDirectory('..', onDirectoryChange);
+    if (!result.success) {
+      alert(`Failed to go up: ${result.error}`);
+    }
+  };
+
+  const handleChangeDirectory = () => {
+    setNewDirectoryPath(currentDirectory);
+    setShowDirectoryInput(true);
+  };
+
+  const handleDirectorySubmit = async () => {
+    if (!newDirectoryPath.trim()) return;
+    
+    const result = await changeDirectory(newDirectoryPath.trim(), onDirectoryChange);
+    if (result.success) {
+      setShowDirectoryInput(false);
+      setNewDirectoryPath('');
+    } else {
+      alert(`Failed to change directory: ${result.error}`);
+    }
+  };
+
+  const handleDirectoryCancel = () => {
+    setShowDirectoryInput(false);
+    setNewDirectoryPath('');
+  };
+
+  const handleSetWorkspaceRoot = async () => {
+    const result = await setWorkspaceRoot('.', onDirectoryChange);
+    if (result.success) {
+      alert(`✅ ${result.message}\n\nThe current directory is now your workspace root. CONVERSATIONS.json will be saved here.`);
+    } else {
+      alert(`Failed to set workspace root: ${result.error}`);
+    }
+  };
+
   return (
     <div className="flex h-full">
       {/* File list */}
       <div className="w-1/3 border-r border-gray-700 flex flex-col">
-        <div className="border-b border-gray-700 p-4 flex items-center justify-between">
-          <h2 className="font-medium">Files</h2>
-          <button
-            onClick={loadFiles}
-            disabled={isLoading}
-            className="p-1 hover:bg-gray-800 rounded transition-colors"
-            title="Refresh"
-          >
-            <RefreshCw size={16} className={`text-gray-400 ${isLoading ? 'animate-spin' : ''}`} />
-          </button>
+        <div className="border-b border-gray-700 p-4">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="font-medium">Files</h2>
+            <div className="flex items-center space-x-1">
+              <button
+                onClick={handleSetWorkspaceRoot}
+                className="p-1 hover:bg-gray-800 rounded transition-colors"
+                title="Set current directory as workspace root"
+              >
+                <Home size={16} className="text-green-400" />
+              </button>
+              <button
+                onClick={loadFiles}
+                disabled={isLoading}
+                className="p-1 hover:bg-gray-800 rounded transition-colors"
+                title="Refresh"
+              >
+                <RefreshCw size={16} className={`text-gray-400 ${isLoading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+          </div>
+          
+          {/* Current directory display and controls */}
+          <div className="flex items-center space-x-2 text-sm">
+            <button
+              onClick={handleGoUp}
+              className="p-1 rounded transition-colors text-gray-400 hover:bg-gray-800"
+              title="Go up one directory"
+            >
+              <ArrowUp size={14} />
+            </button>
+            
+            <button
+              onClick={handleChangeDirectory}
+              className="flex-1 text-left p-1 px-2 rounded bg-gray-800 hover:bg-gray-700 transition-colors truncate"
+              title="Click to change directory"
+            >
+              <span className="text-gray-300">{currentDirectory}</span>
+            </button>
+            
+            <button
+              onClick={handleChangeDirectory}
+              className="p-1 hover:bg-gray-800 rounded transition-colors"
+              title="Change directory"
+            >
+              <FolderOpen size={14} className="text-gray-400" />
+            </button>
+          </div>
         </div>
         
         <div className="flex-1 overflow-y-auto p-2">
@@ -338,6 +430,56 @@ export function FileExplorer() {
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
               >
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Directory Change Dialog */}
+      {showDirectoryInput && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 border border-gray-600 rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                <FolderOpen size={20} className="text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-medium text-white">Change Directory</h3>
+                <p className="text-sm text-gray-400">Enter the path to navigate to.</p>
+              </div>
+            </div>
+            
+            <div className="mb-6">
+              <input
+                type="text"
+                value={newDirectoryPath}
+                onChange={(e) => setNewDirectoryPath(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleDirectorySubmit();
+                  if (e.key === 'Escape') handleDirectoryCancel();
+                }}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                placeholder="Enter directory path (e.g., . or src or ../other-project)"
+                autoFocus
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                Use '.' for root, relative paths like 'src', or '..' to go up
+              </p>
+            </div>
+            
+            <div className="flex space-x-3 justify-end">
+              <button
+                onClick={handleDirectoryCancel}
+                className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDirectorySubmit}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+              >
+                Change
               </button>
             </div>
           </div>

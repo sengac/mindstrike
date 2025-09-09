@@ -5,6 +5,7 @@ export interface ConversationMessage {
   timest: Date;
   toolCalls?: ToolCall[];
   toolResults?: Array<{ name: string; result: any }>;
+  status?: 'processing' | 'completed' | 'cancelled';
 }
 
 export interface ToolCall {
