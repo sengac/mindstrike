@@ -2,10 +2,24 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, Trash2, Loader2 } from 'lucide-react';
 import { ChatMessage } from './ChatMessage';
 import { useChat } from '../hooks/useChat';
+import { ConversationMessage } from '../types';
 
-export function ChatPanel() {
+interface ChatPanelProps {
+  threadId?: string;
+  messages?: ConversationMessage[];
+  onMessagesUpdate?: (messages: ConversationMessage[]) => void;
+  onFirstMessage?: () => void;
+  onDeleteMessage?: (messageId: string) => void;
+}
+
+export function ChatPanel({ threadId, messages: initialMessages = [], onMessagesUpdate, onFirstMessage, onDeleteMessage }: ChatPanelProps) {
   const [input, setInput] = useState('');
-  const { messages, isLoading, sendMessage, clearConversation } = useChat();
+  const { messages, isLoading, sendMessage, clearConversation } = useChat({
+    threadId,
+    messages: initialMessages,
+    onMessagesUpdate,
+    onFirstMessage
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -86,7 +100,11 @@ export function ChatPanel() {
         )}
         
         {messages.map((message) => (
-          <ChatMessage key={message.id} message={message} />
+          <ChatMessage 
+            key={message.id} 
+            message={message} 
+            onDelete={onDeleteMessage ? () => onDeleteMessage(message.id) : undefined}
+          />
         ))}
         
         {isLoading && (

@@ -1,11 +1,40 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { ConversationMessage } from '../types';
 
-export function useChat() {
-  const [messages, setMessages] = useState<ConversationMessage[]>([]);
+interface UseChatProps {
+  threadId?: string;
+  messages?: ConversationMessage[];
+  onMessagesUpdate?: (messages: ConversationMessage[]) => void;
+  onFirstMessage?: () => void;
+}
+
+export function useChat({ threadId, messages: initialMessages = [], onMessagesUpdate, onFirstMessage }: UseChatProps = {}) {
+  const [messages, setMessages] = useState<ConversationMessage[]>(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
+  const isUpdatingFromProps = useRef(false);
+
+  // Update messages when initialMessages prop changes
+  useEffect(() => {
+    isUpdatingFromProps.current = true;
+    setMessages(initialMessages);
+    setTimeout(() => {
+      isUpdatingFromProps.current = false;
+    }, 0);
+  }, [initialMessages]);
+
+  // Only call onMessagesUpdate when messages change due to user interaction (not props)
+  const notifyMessagesUpdate = useCallback((newMessages: ConversationMessage[]) => {
+    if (onMessagesUpdate) {
+      onMessagesUpdate(newMessages);
+    }
+  }, [onMessagesUpdate]);
 
   const loadConversation = useCallback(async () => {
+    // If we have a threadId, we're using the new thread system
+    if (threadId) {
+      return;
+    }
+    
     try {
       const response = await fetch('/api/conversation');
       if (response.ok) {
@@ -18,14 +47,23 @@ export function useChat() {
     } catch (error) {
       console.error('Failed to load conversation:', error);
     }
-  }, []);
+  }, [threadId]);
 
   useEffect(() => {
     loadConversation();
   }, [loadConversation]);
 
   const sendMessage = useCallback(async (content: string) => {
+    // Handle /clear command
+    if (content.trim() === '/clear') {
+      await clearConversation();
+      return;
+    }
+
     setIsLoading(true);
+    
+    // Check if this is the first message in the thread
+    const isFirstMessage = messages.length === 0;
     
     // Add user message immediately
     const userMessage: ConversationMessage = {
@@ -34,7 +72,8 @@ export function useChat() {
       content,
       timest: new Date()
     };
-    setMessages(prev => [...prev, userMessage]);
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
 
     try {
       const response = await fetch('/api/message', {
@@ -47,10 +86,18 @@ export function useChat() {
 
       if (response.ok) {
         const assistantMessage = await response.json();
-        setMessages(prev => [...prev, {
+        const assistantMsg = {
           ...assistantMessage,
           timest: new Date(assistantMessage.timest)
-        }]);
+        };
+        const finalMessages = [...newMessages, assistantMsg];
+        setMessages(finalMessages);
+        notifyMessagesUpdate(finalMessages);
+        
+        // Trigger first message callback if this was the first exchange
+        if (isFirstMessage && onFirstMessage) {
+          onFirstMessage();
+        }
       } else {
         const errorData = await response.json();
         const errorMessage: ConversationMessage = {
@@ -59,7 +106,9 @@ export function useChat() {
           content: `Error: ${errorData.error}`,
           timest: new Date()
         };
-        setMessages(prev => [...prev, errorMessage]);
+        const errorMessages = [...newMessages, errorMessage];
+        setMessages(errorMessages);
+        notifyMessagesUpdate(errorMessages);
       }
     } catch (error) {
       const errorMessage: ConversationMessage = {
@@ -68,11 +117,13 @@ export function useChat() {
         content: `Error: Failed to send message - ${error}`,
         timest: new Date()
       };
-      setMessages(prev => [...prev, errorMessage]);
+      const errorMessages = [...newMessages, errorMessage];
+      setMessages(errorMessages);
+      notifyMessagesUpdate(errorMessages);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [messages, onFirstMessage, notifyMessagesUpdate]);
 
   const clearConversation = useCallback(async () => {
     try {
@@ -81,11 +132,12 @@ export function useChat() {
       });
       if (response.ok) {
         setMessages([]);
+        notifyMessagesUpdate([]);
       }
     } catch (error) {
       console.error('Failed to clear conversation:', error);
     }
-  }, []);
+  }, [notifyMessagesUpdate]);
 
   return {
     messages,

@@ -1,12 +1,54 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ChatPanel } from './components/ChatPanel';
+import { ThreadsPanel } from './components/ThreadsPanel';
 import { FileExplorer } from './components/FileExplorer';
+import { useThreads } from './hooks/useThreads';
 import { Menu, X } from 'lucide-react';
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activePanel, setActivePanel] = useState<'chat' | 'files'>('chat');
+  
+  const {
+    threads,
+    activeThreadId,
+    activeThread,
+    isLoaded,
+    createThread,
+    deleteThread,
+    renameThread,
+    selectThread,
+    updateThreadMessages,
+    deleteMessage
+  } = useThreads();
+
+  // Create a default thread if none exist (only after data is loaded)
+  useEffect(() => {
+    if (isLoaded && threads.length === 0 && activePanel === 'chat') {
+      createThread();
+    }
+  }, [isLoaded, threads.length, activePanel, createThread]);
+
+  const handleNewThread = async () => {
+    await createThread();
+  };
+
+  const handleFirstMessage = () => {
+    // Title generation now happens automatically in updateThreadMessages
+  };
+
+  const handleMessagesUpdate = async (messages: any[]) => {
+    if (activeThreadId) {
+      await updateThreadMessages(activeThreadId, messages);
+    }
+  };
+
+  const handleDeleteMessage = async (messageId: string) => {
+    if (activeThreadId) {
+      await deleteMessage(activeThreadId, messageId);
+    }
+  };
 
   return (
     <div className="flex h-screen bg-gray-900 text-gray-100">
@@ -28,9 +70,29 @@ function App() {
         />
       </div>
 
+      {/* Threads Panel (only show when chat is active) */}
+      {activePanel === 'chat' && (
+        <ThreadsPanel
+          threads={threads}
+          activeThreadId={activeThreadId || undefined}
+          onThreadSelect={selectThread}
+          onThreadCreate={handleNewThread}
+          onThreadRename={renameThread}
+          onThreadDelete={deleteThread}
+        />
+      )}
+
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {activePanel === 'chat' && <ChatPanel />}
+        {activePanel === 'chat' && (
+          <ChatPanel
+            threadId={activeThreadId || undefined}
+            messages={activeThread?.messages || []}
+            onMessagesUpdate={handleMessagesUpdate}
+            onFirstMessage={handleFirstMessage}
+            onDeleteMessage={handleDeleteMessage}
+          />
+        )}
         {activePanel === 'files' && <FileExplorer />}
       </div>
 

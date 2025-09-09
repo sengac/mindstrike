@@ -13,6 +13,15 @@ export interface ToolCall {
   parameters: Record<string, any>;
 }
 
+export interface Thread {
+  id: string;
+  name: string;
+  summary?: string;
+  messages: ConversationMessage[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface ApiResponse<T> {
   data?: T;
   error?: string;

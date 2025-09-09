@@ -61,6 +61,79 @@ app.post('/api/conversation/clear', (req, res) => {
   res.json({ success: true });
 });
 
+app.delete('/api/message/:messageId', (req: any, res: any) => {
+  const { messageId } = req.params;
+  if (!messageId) {
+    return res.status(400).json({ error: 'Message ID is required' });
+  }
+
+  const deleted = agent.deleteMessage(messageId);
+  if (deleted) {
+    res.json({ success: true });
+  } else {
+    res.status(404).json({ error: 'Message not found' });
+  }
+});
+
+// Conversations (threads) API
+app.get('/api/conversations', async (req, res) => {
+  try {
+    const fs = await import('fs/promises');
+    const conversationsPath = path.join(workspaceRoot, 'CONVERSATIONS.json');
+    
+    try {
+      const data = await fs.readFile(conversationsPath, 'utf-8');
+      const conversations = JSON.parse(data);
+      res.json(conversations);
+    } catch (error) {
+      // File doesn't exist or is invalid, return empty array
+      res.json([]);
+    }
+  } catch (error: any) {
+    console.error('Error loading conversations:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/conversations', async (req, res) => {
+  try {
+    const fs = await import('fs/promises');
+    const conversations = req.body;
+    const conversationsPath = path.join(workspaceRoot, 'CONVERSATIONS.json');
+    
+    await fs.writeFile(conversationsPath, JSON.stringify(conversations, null, 2));
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error saving conversations:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/generate-title', async (req: any, res: any) => {
+  try {
+    const { context } = req.body;
+    
+    if (!context) {
+      return res.status(400).json({ error: 'Context is required' });
+    }
+
+    // Create a prompt to generate a short title
+    const prompt = `Based on this conversation context, generate a brief, descriptive title (maximum 5 words) that captures the main topic or purpose of the discussion:
+
+${context}
+
+Respond with only the title, no other text.`;
+
+    const response = await agent.processMessage(prompt);
+    const title = response.content.trim();
+    
+    res.json({ title });
+  } catch (error: any) {
+    console.error('Error generating title:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/workspace/files', async (req, res) => {
   try {
     const result = await (agent as any)['toolSystem'].executeTool('list_directory', {});

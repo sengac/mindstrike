@@ -656,7 +656,7 @@ export class ToolSystem {
       
       chromium.use(StealthPlugin.default());
       
-      const browser = await chromium.launch({ headless: false });
+      const browser = await chromium.launch({ headless: true });
       const page = await browser.newPage();
 
       // Use Google Gemini for search

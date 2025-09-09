@@ -1,6 +1,6 @@
 # PowerAgent
 
-A local LLM-powered coding agent built with TypeScript, React, and Vite. 
+A local LLM-powered coding agent built with TypeScript, React, Vite and Express.
 
 ## Features
 
@@ -70,10 +70,7 @@ LLM_API_KEY=your-api-key
 
 ### Recommended Models
 
-- **CodeLlama 7B/13B**: Great for code-related tasks
-- **Mistral 7B**: Good general-purpose model
-- **DeepSeek Coder**: Excellent for coding tasks
-- **Qwen2.5-Coder**: Strong coding performance
+- **devstral:latest**: Ideal for agentic tasks
 
 ## Architecture
 
@@ -157,19 +154,4 @@ npm run typecheck    # Type checking
 3. **Build Errors**
    - Clear `node_modules` and reinstall: `rm -rf node_modules package-lock.json && npm install`
    - Check Node.js version (requires 22+)
-
-### Performance Tips
-
-- Use smaller models (7B) for faster responses
-- Enable model caching in your LLM server
-- Consider using quantized models for better performance
-
-## Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Submit a pull request
 

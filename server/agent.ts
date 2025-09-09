@@ -189,6 +189,12 @@ RULES:
     return this.conversation.filter(msg => msg.role !== 'system');
   }
 
+  deleteMessage(messageId: string): boolean {
+    const initialLength = this.conversation.length;
+    this.conversation = this.conversation.filter(msg => msg.id !== messageId);
+    return this.conversation.length < initialLength;
+  }
+
   clearConversation(): void {
     this.conversation = [{
       id: 'system',

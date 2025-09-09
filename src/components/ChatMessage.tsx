@@ -1,24 +1,104 @@
-import { User, Bot, Wrench, CheckCircle, XCircle, ChevronDown, ChevronRight, FileText, Code } from 'lucide-react';
+import { User, Bot, Wrench, CheckCircle, XCircle, ChevronDown, ChevronRight, FileText, Code, Trash2 } from 'lucide-react';
 import { ConversationMessage } from '../types';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import mermaid from 'mermaid';
 
 interface ChatMessageProps {
   message: ConversationMessage;
+  onDelete?: () => void;
 }
 
-export function ChatMessage({ message }: ChatMessageProps) {
+export function ChatMessage({ message, onDelete }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const [toolCallsExpanded, setToolCallsExpanded] = useState(false);
   const [resultsExpanded, setResultsExpanded] = useState(false);
   const [showMarkdown, setShowMarkdown] = useState(true);
+  const mermaidRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Initialize mermaid
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      securityLevel: 'loose',
+      flowchart: {
+        useMaxWidth: true,
+        htmlLabels: true
+      }
+    });
+    
+    // Re-render mermaid diagrams when content changes
+    if (mermaidRef.current) {
+      const mermaidElements = mermaidRef.current.querySelectorAll('.mermaid');
+      mermaidElements.forEach((element) => {
+        mermaid.run({
+          nodes: [element as HTMLElement]
+        });
+      });
+    }
+  }, [message.content]);
 
   const renderContent = (content: string) => {
     if (showMarkdown) {
-      const html = marked(content);
-      const sanitizedHtml = DOMPurify.sanitize(html);
-      return <div className="prose prose-invert prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />;
+      // Check for mermaid code blocks
+      const mermaidRegex = /```mermaid\n([\s\S]*?)\n```/g;
+      const hasMermaid = mermaidRegex.test(content);
+      
+      if (hasMermaid) {
+        const parts: JSX.Element[] = [];
+        let lastIndex = 0;
+        const regex = /```mermaid\n([\s\S]*?)\n```/g;
+        let match;
+        let mermaidId = 0;
+        
+        while ((match = regex.exec(content)) !== null) {
+          // Add content before mermaid
+          if (match.index > lastIndex) {
+            const beforeContent = content.slice(lastIndex, match.index);
+            if (beforeContent.trim()) {
+              const html = String(marked.parse(beforeContent));
+              const sanitizedHtml = DOMPurify.sanitize(html);
+              parts.push(
+                <div key={`before-${mermaidId}`} className="prose prose-invert prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
+              );
+            }
+          }
+          
+          // Add mermaid diagram
+          const mermaidCode = match[1];
+          const diagramId = `mermaid-${Date.now()}-${mermaidId}`;
+          parts.push(
+            <div key={`mermaid-${mermaidId}`} className="my-4">
+              <div id={diagramId} className="mermaid bg-white p-4 rounded border">
+                {mermaidCode}
+              </div>
+            </div>
+          );
+          
+          lastIndex = match.index + match[0].length;
+          mermaidId++;
+        }
+        
+        // Add remaining content after last mermaid
+        if (lastIndex < content.length) {
+          const afterContent = content.slice(lastIndex);
+          if (afterContent.trim()) {
+            const html = String(marked.parse(afterContent));
+            const sanitizedHtml = DOMPurify.sanitize(html);
+            parts.push(
+              <div key="after" className="prose prose-invert prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
+            );
+          }
+        }
+        
+        return <div ref={mermaidRef}>{parts}</div>;
+      } else {
+        const html = String(marked.parse(content));
+        const sanitizedHtml = DOMPurify.sanitize(html);
+        return <div className="prose prose-invert prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />;
+      }
     }
     return <div className="whitespace-pre-wrap text-sm">{content}</div>;
   };
@@ -34,11 +114,20 @@ export function ChatMessage({ message }: ChatMessageProps) {
       )}
       
       <div className={`max-w-[80%] ${isUser ? 'order-2' : ''}`}>
-        <div className={`rounded-lg px-4 py-2 ${
+        <div className={`rounded-lg px-4 py-2 relative group ${
           isUser 
             ? 'bg-blue-600 text-white' 
             : 'bg-gray-800 border border-gray-700'
         }`}>
+          {onDelete && (
+            <button
+              onClick={onDelete}
+              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-red-600 rounded"
+              title="Delete message"
+            >
+              <Trash2 size={12} />
+            </button>
+          )}
           {!isUser && (
             <div className="flex items-center justify-between mb-2 border-b border-gray-700 pb-2">
               <div className="flex space-x-1">

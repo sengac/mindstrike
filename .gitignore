@@ -81,6 +81,7 @@ temp/
 
 # PowerAgent files
 .poweragent-todos.json
+CONVERSATIONS.json
 
 # Editor directories and files
 .vscode/*
