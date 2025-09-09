@@ -21,19 +21,74 @@ if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../client')));
 }
 
-// Initialize agent
+// Initialize workspace and agent configuration
 let workspaceRoot = process.cwd();
 let currentWorkingDirectory = workspaceRoot;
 const agentConfig: AgentConfig = {
   workspaceRoot,
   llmConfig: {
     baseURL: process.env.LLM_BASE_URL || 'http://localhost:11434',
-    model: process.env.LLM_MODEL || 'devstral:latest',
+    model: process.env.LLM_MODEL || 'qwen2.5-coder:latest',
     apiKey: process.env.LLM_API_KEY
   }
 };
 
-const agent = new Agent(agentConfig);
+// Thread-aware agent pool
+class AgentPool {
+  private agents: Map<string, Agent> = new Map();
+  private currentThreadId: string = 'default';
+
+  setCurrentThread(threadId: string): void {
+    this.currentThreadId = threadId;
+    if (!this.agents.has(threadId)) {
+      this.agents.set(threadId, new Agent(agentConfig));
+    }
+  }
+
+  getCurrentAgent(): Agent {
+    if (!this.agents.has(this.currentThreadId)) {
+      this.agents.set(this.currentThreadId, new Agent(agentConfig));
+    }
+    return this.agents.get(this.currentThreadId)!;
+  }
+
+  getAgent(threadId: string): Agent {
+    if (!this.agents.has(threadId)) {
+      this.agents.set(threadId, new Agent(agentConfig));
+    }
+    return this.agents.get(threadId)!;
+  }
+
+  updateAllAgentsWorkspace(newWorkspaceRoot: string): void {
+    try {
+      if (agentConfig) {
+        agentConfig.workspaceRoot = newWorkspaceRoot;
+      }
+      for (const agent of this.agents.values()) {
+        if (agent && (agent as any).toolSystem) {
+          (agent as any).toolSystem.workspaceRoot = newWorkspaceRoot;
+        }
+        if (agent && (agent as any).config) {
+          (agent as any).config.workspaceRoot = newWorkspaceRoot;
+        }
+      }
+    } catch (error) {
+      logger.error('Error updating agents workspace:', error);
+    }
+  }
+
+  clearThread(threadId: string): void {
+    if (this.agents.has(threadId)) {
+      this.agents.get(threadId)!.clearConversation();
+    }
+  }
+
+  deleteThread(threadId: string): void {
+    this.agents.delete(threadId);
+  }
+}
+
+const agentPool = new AgentPool();
 
 // API Routes
 app.get('/api/health', (req, res) => {
@@ -41,17 +96,22 @@ app.get('/api/health', (req, res) => {
 });
 
 app.get('/api/conversation', (req, res) => {
-  res.json(agent.getConversation());
+  res.json(agentPool.getCurrentAgent().getConversation());
 });
 
 app.post('/api/message', async (req: any, res: any) => {
   try {
-    const { message } = req.body;
+    const { message, threadId } = req.body;
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
     }
 
-    const response = await agent.processMessage(message);
+    // Set current thread if provided
+    if (threadId) {
+      agentPool.setCurrentThread(threadId);
+    }
+
+    const response = await agentPool.getCurrentAgent().processMessage(message);
     res.json(response);
   } catch (error: any) {
     console.error('Error processing message:', error);
@@ -62,9 +122,14 @@ app.post('/api/message', async (req: any, res: any) => {
 // SSE endpoint for real-time message processing
 app.post('/api/message/stream', async (req: any, res: any) => {
   try {
-    const { message } = req.body;
+    const { message, threadId } = req.body;
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
+    }
+
+    // Set current thread if provided
+    if (threadId) {
+      agentPool.setCurrentThread(threadId);
     }
 
     // Set SSE headers
@@ -80,8 +145,8 @@ app.post('/api/message/stream', async (req: any, res: any) => {
     res.write('data: {"type": "connected"}\n\n');
     if (res.flush) res.flush();
 
-    // Process message with real-time updates
-    const response = await agent.processMessage(message, (updatedMessage) => {
+    // Process message with real-time updates using thread-specific agent
+    const response = await agentPool.getCurrentAgent().processMessage(message, (updatedMessage: any) => {
       // Send message update via SSE
       console.log('📡 Sending SSE message-update - Status:', updatedMessage.status, 'Tool calls:', updatedMessage.toolCalls?.length || 0);
       res.write(`data: ${JSON.stringify({
@@ -111,7 +176,7 @@ app.post('/api/message/stream', async (req: any, res: any) => {
 });
 
 app.post('/api/conversation/clear', (req, res) => {
-  agent.clearConversation();
+  agentPool.getCurrentAgent().clearConversation();
   res.json({ success: true });
 });
 
@@ -121,6 +186,9 @@ app.post('/api/load-thread/:threadId', async (req: any, res: any) => {
     if (!threadId) {
       return res.status(400).json({ error: 'Thread ID is required' });
     }
+
+    // Set the current thread in the agent pool
+    agentPool.setCurrentThread(threadId);
 
     const fs = await import('fs/promises');
     const conversationsPath = path.join(workspaceRoot, 'CONVERSATIONS.json');
@@ -134,13 +202,13 @@ app.post('/api/load-thread/:threadId', async (req: any, res: any) => {
         return res.status(404).json({ error: 'Thread not found' });
       }
       
-      // Load the thread's messages into the agent's conversation context
-      agent.loadConversation(thread.messages);
+      // Load the thread's messages into the thread-specific agent's conversation context
+      agentPool.getCurrentAgent().loadConversation(thread.messages);
       res.json({ success: true });
       
     } catch (error) {
       // File doesn't exist or thread not found
-      agent.clearConversation();
+      agentPool.getCurrentAgent().clearConversation();
       res.json({ success: true });
     }
   } catch (error: any) {
@@ -150,12 +218,17 @@ app.post('/api/load-thread/:threadId', async (req: any, res: any) => {
 });
 
 app.post('/api/message/cancel', (req: any, res: any) => {
-  const { messageId } = req.body;
+  const { messageId, threadId } = req.body;
   if (!messageId) {
     return res.status(400).json({ error: 'Message ID is required' });
   }
 
-  const cancelled = agent.cancelMessage(messageId);
+  // Set current thread if provided
+  if (threadId) {
+    agentPool.setCurrentThread(threadId);
+  }
+
+  const cancelled = agentPool.getCurrentAgent().cancelMessage(messageId);
   if (cancelled) {
     res.json({ success: true });
   } else {
@@ -169,7 +242,7 @@ app.delete('/api/message/:messageId', (req: any, res: any) => {
     return res.status(400).json({ error: 'Message ID is required' });
   }
 
-  const deleted = agent.deleteMessage(messageId);
+  const deleted = agentPool.getCurrentAgent().deleteMessage(messageId);
   if (deleted) {
     res.json({ success: true });
   } else {
@@ -226,7 +299,7 @@ ${context}
 
 Respond with only the title, no other text.`;
 
-    const response = await agent.processMessage(prompt);
+    const response = await agentPool.getCurrentAgent().processMessage(prompt);
     const title = response.content.trim();
     
     res.json({ title });
@@ -308,17 +381,8 @@ app.post('/api/workspace/root', (req: any, res: any) => {
     workspaceRoot = fullPath;
     currentWorkingDirectory = workspaceRoot;
     
-    // Update agent's workspace root
-    (agent as any).toolSystem.workspaceRoot = workspaceRoot;
-    
-    // Update agent configuration
-    const newAgentConfig: AgentConfig = {
-      workspaceRoot,
-      llmConfig: agentConfig.llmConfig
-    };
-    
-    // Reinitialize agent with new workspace
-    (agent as any).config = newAgentConfig;
+    // Update workspace root for all agents in the pool
+    agentPool.updateAllAgentsWorkspace(workspaceRoot);
     
     logger.info(`Workspace root changed to: ${workspaceRoot}`);
     
@@ -340,14 +404,15 @@ app.get('/api/workspace/files', async (req, res) => {
       pathToList = path.relative(workspaceRoot, currentWorkingDirectory) || '.';
     } else {
       // When outside workspace, we need to temporarily change the workspace root for this operation
-      const originalRoot = (agent as any).toolSystem.workspaceRoot;
-      (agent as any).toolSystem.workspaceRoot = currentWorkingDirectory;
+      const currentAgent = agentPool.getCurrentAgent();
+      const originalRoot = (currentAgent as any).toolSystem.workspaceRoot;
+      (currentAgent as any).toolSystem.workspaceRoot = currentWorkingDirectory;
       pathToList = '.';
       
-      const result = await (agent as any)['toolSystem'].executeTool('list_directory', { path: pathToList });
+      const result = await (currentAgent as any)['toolSystem'].executeTool('list_directory', { path: pathToList });
       
       // Restore original workspace root
-      (agent as any).toolSystem.workspaceRoot = originalRoot;
+      (currentAgent as any).toolSystem.workspaceRoot = originalRoot;
       
       if (result.success) {
         const files = result.output?.split('\n').filter((f: string) => f) || [];
@@ -358,7 +423,7 @@ app.get('/api/workspace/files', async (req, res) => {
       return;
     }
     
-    const result = await (agent as any)['toolSystem'].executeTool('list_directory', { path: pathToList });
+    const result = await (agentPool.getCurrentAgent() as any)['toolSystem'].executeTool('list_directory', { path: pathToList });
     if (result.success) {
       const files = result.output?.split('\n').filter((f: string) => f) || [];
       res.json(files);
@@ -374,7 +439,7 @@ app.get('/api/workspace/file/:path(*)', async (req, res) => {
   try {
     const filePath = req.params.path;
     // Use raw content for file editor (no line numbers)
-    const result = await (agent as any)['toolSystem'].readFileRaw(filePath);
+    const result = await (agentPool.getCurrentAgent() as any)['toolSystem'].readFileRaw(filePath);
     
     if (result.success) {
       res.json({ content: result.output });
@@ -393,7 +458,7 @@ app.post('/api/workspace/save', async (req: any, res: any) => {
       return res.status(400).json({ error: 'Path and content are required' });
     }
 
-    const result = await (agent as any)['toolSystem'].executeTool('create_file', { 
+    const result = await (agentPool.getCurrentAgent() as any)['toolSystem'].executeTool('create_file', { 
       path: filePath, 
       content 
     });
@@ -415,7 +480,7 @@ app.post('/api/workspace/delete', async (req: any, res: any) => {
       return res.status(400).json({ error: 'Path is required' });
     }
 
-    const result = await (agent as any)['toolSystem'].executeTool('delete_file', { 
+    const result = await (agentPool.getCurrentAgent() as any)['toolSystem'].executeTool('delete_file', { 
       path: filePath
     });
     

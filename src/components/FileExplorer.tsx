@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { File, Folder, RefreshCw, Edit3, Save, Trash2, FolderOpen, ArrowUp, Home } from 'lucide-react';
 import { useWorkspace } from '../hooks/useWorkspace';
+import { usePreferences } from '../hooks/usePreferences';
 import { CodeEditor } from './CodeEditor';
 import { TabbedEditor } from './TabbedEditor';
 
@@ -10,6 +11,8 @@ interface FileExplorerProps {
 
 export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
   const { files, loadFiles, loadDirectory, changeDirectory, setWorkspaceRoot, currentDirectory, getFileContent, isLoading } = useWorkspace();
+  const { setCurrentDirectory: saveCurrentDirectory } = usePreferences();
+  const hasLoadedInitialDirectory = useRef(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string>('');
   const [loadingContent, setLoadingContent] = useState(false);
@@ -19,11 +22,25 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
   const [fileToDelete, setFileToDelete] = useState<string | null>(null);
   const [showDirectoryInput, setShowDirectoryInput] = useState(false);
   const [newDirectoryPath, setNewDirectoryPath] = useState('');
+  const [showWorkspaceConfirm, setShowWorkspaceConfirm] = useState(false);
 
   useEffect(() => {
     loadDirectory();
     loadFiles();
   }, [loadDirectory, loadFiles]);
+
+  // Note: Workspace restoration is now handled at the App level
+
+  // Set flag after initial load and save directory changes
+  useEffect(() => {
+    if (currentDirectory) {
+      if (!hasLoadedInitialDirectory.current) {
+        hasLoadedInitialDirectory.current = true;
+      } else {
+        saveCurrentDirectory(currentDirectory);
+      }
+    }
+  }, [currentDirectory, saveCurrentDirectory]);
 
   const handleFileClick = async (filePath: string) => {
     if (filePath.endsWith('/')) {
@@ -183,43 +200,51 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
     setNewDirectoryPath('');
   };
 
-  const handleSetWorkspaceRoot = async () => {
-    const result = await setWorkspaceRoot('.', onDirectoryChange);
+  const handleSetWorkspaceRoot = () => {
+    setShowWorkspaceConfirm(true);
+  };
+
+  const handleWorkspaceConfirm = async () => {
+    const result = await setWorkspaceRoot(currentDirectory, onDirectoryChange);
     if (result.success) {
       alert(`✅ ${result.message}\n\nThe current directory is now your workspace root. CONVERSATIONS.json will be saved here.`);
     } else {
       alert(`Failed to set workspace root: ${result.error}`);
     }
+    setShowWorkspaceConfirm(false);
+  };
+
+  const handleWorkspaceCancel = () => {
+    setShowWorkspaceConfirm(false);
   };
 
   return (
-    <div className="flex h-full">
-      {/* File list */}
-      <div className="w-1/3 border-r border-gray-700 flex flex-col">
-        <div className="border-b border-gray-700 p-4">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="font-medium">Files</h2>
-            <div className="flex items-center space-x-1">
-              <button
-                onClick={handleSetWorkspaceRoot}
-                className="p-1 hover:bg-gray-800 rounded transition-colors"
-                title="Set current directory as workspace root"
-              >
-                <Home size={16} className="text-green-400" />
-              </button>
-              <button
-                onClick={loadFiles}
-                disabled={isLoading}
-                className="p-1 hover:bg-gray-800 rounded transition-colors"
-                title="Refresh"
-              >
-                <RefreshCw size={16} className={`text-gray-400 ${isLoading ? 'animate-spin' : ''}`} />
-              </button>
-            </div>
+    <div className="h-screen flex flex-col">
+      {/* Header */}
+      <div className="flex-shrink-0 p-6 border-b border-gray-700">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Folder size={24} className="text-blue-400" />
+            <h1 className="text-xl font-semibold text-white">Workspace</h1>
           </div>
-          
-          {/* Current directory display and controls */}
-          <div className="flex items-center space-x-2 text-sm">
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleSetWorkspaceRoot}
+              className="p-1 hover:bg-gray-800 rounded transition-colors"
+              title="Set current directory as workspace root"
+            >
+              <Home size={16} className="text-green-400" />
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      {/* Main content area */}
+      <div className="flex flex-1 min-h-0">
+
+        {/* File list */}
+        <div className="w-1/3 border-r border-gray-700 flex flex-col min-h-0">
+          <div className="flex items-center space-x-2 p-4">
             <button
               onClick={handleGoUp}
               className="p-1 rounded transition-colors text-gray-400 hover:bg-gray-800"
@@ -230,174 +255,174 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
             
             <button
               onClick={handleChangeDirectory}
-              className="flex-1 text-left p-1 px-2 rounded bg-gray-800 hover:bg-gray-700 transition-colors truncate"
+              className="flex-1 text-left p-1 px-2 rounded bg-gray-800 hover:bg-gray-700 transition-colors truncate text-sm"
               title="Click to change directory"
             >
               <span className="text-gray-300">{currentDirectory}</span>
             </button>
             
             <button
-              onClick={handleChangeDirectory}
+              onClick={loadFiles}
+              disabled={isLoading}
               className="p-1 hover:bg-gray-800 rounded transition-colors"
-              title="Change directory"
+              title="Refresh"
             >
-              <FolderOpen size={14} className="text-gray-400" />
+              <RefreshCw size={16} className={`text-gray-400 ${isLoading ? 'animate-spin' : ''}`} />
             </button>
           </div>
-        </div>
-        
-        <div className="flex-1 overflow-y-auto p-2">
-          {isLoading ? (
-            <div className="text-gray-500 text-sm p-2">Loading...</div>
-          ) : (
-            <div className="space-y-1">
-              {files.map((file, index) => (
-                <div
-                  key={index}
-                  className={`flex items-center group rounded text-sm transition-colors ${
-                    selectedFile === file ? 'bg-gray-800' : 'hover:bg-gray-800'
-                  }`}
-                >
-                  <button
-                    onClick={() => handleFileClick(file)}
-                    className="flex-1 text-left p-2 flex items-center space-x-2"
+          <div className="flex-1 overflow-y-auto p-2">
+            {isLoading ? (
+              <div className="text-gray-500 text-sm p-2">Loading...</div>
+            ) : (
+              <div className="space-y-1">
+                {files.map((file, index) => (
+                  <div
+                    key={index}
+                    className={`flex items-center group rounded text-sm transition-colors ${
+                      selectedFile === file ? 'bg-gray-800' : 'hover:bg-gray-800'
+                    }`}
                   >
-                    {file.endsWith('/') ? (
+                    <button
+                      onClick={() => handleFileClick(file)}
+                      className="flex-1 text-left p-2 flex items-center space-x-2"
+                    >
+                      {file.endsWith('/') ? (
+                        <>
+                          <Folder size={16} className="text-blue-400 flex-shrink-0" />
+                          <span className="truncate">{file.slice(0, -1)}</span>
+                        </>
+                      ) : (
+                        <>
+                          <File size={16} className="text-gray-400 flex-shrink-0" />
+                          <span className="truncate">{file}</span>
+                        </>
+                      )}
+                    </button>
+                    {/* Delete button - only show for files, not directories */}
+                    {!file.endsWith('/') && (
+                      <button
+                        onClick={() => handleDeleteClick(file)}
+                        className="p-1 mr-2 opacity-0 group-hover:opacity-100 hover:bg-red-600 rounded transition-all"
+                        title="Delete file"
+                      >
+                        <Trash2 size={14} className="text-red-400 hover:text-white" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* File content */}
+        <div className="flex-1 flex flex-col min-h-0">
+          {selectedFile ? (
+            <>
+              <div className="flex-shrink-0 border-b border-gray-700 p-4 flex items-center justify-between">
+                <h3 className="font-medium truncate">{selectedFile}</h3>
+                {/* Only show edit controls for non-markdown files */}
+                {getLanguageFromExtension(selectedFile) !== 'markdown' && (
+                  <div className="flex items-center space-x-2">
+                    {isEditing ? (
                       <>
-                        <Folder size={16} className="text-blue-400 flex-shrink-0" />
-                        <span className="truncate">{file.slice(0, -1)}</span>
+                        <button
+                          onClick={handleSaveFile}
+                          className="flex items-center space-x-1 px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-sm"
+                        >
+                          <Save size={14} />
+                          <span>Save</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setIsEditing(false);
+                            setEditedContent(fileContent);
+                          }}
+                          className="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded text-sm"
+                        >
+                          Cancel
+                        </button>
                       </>
                     ) : (
-                      <>
-                        <File size={16} className="text-gray-400 flex-shrink-0" />
-                        <span className="truncate">{file}</span>
-                      </>
+                      <button
+                        onClick={() => setIsEditing(true)}
+                        className="flex items-center space-x-1 px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm"
+                      >
+                        <Edit3 size={14} />
+                        <span>Edit</span>
+                      </button>
                     )}
-                  </button>
-                  {/* Delete button - only show for files, not directories */}
-                  {!file.endsWith('/') && (
-                    <button
-                      onClick={() => handleDeleteClick(file)}
-                      className="p-1 mr-2 opacity-0 group-hover:opacity-100 hover:bg-red-600 rounded transition-all"
-                      title="Delete file"
-                    >
-                      <Trash2 size={14} className="text-red-400 hover:text-white" />
-                    </button>
-                  )}
-                </div>
-              ))}
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 overflow-hidden">
+                {loadingContent ? (
+                  <div className="p-4 text-gray-500">Loading...</div>
+                ) : (
+                  (() => {
+                    const language = getLanguageFromExtension(selectedFile);
+                    const isMarkdown = language === 'markdown';
+                    
+                    // Use tabbed editor for markdown files
+                    if (isMarkdown) {
+                      return (
+                        <TabbedEditor
+                          filePath={selectedFile}
+                          content={fileContent}
+                          language={language}
+                          onSave={async (content) => {
+                            setEditedContent(content);
+                            setFileContent(content);
+                            
+                            // Save to server
+                            try {
+                              const response = await fetch('/api/workspace/save', {
+                                method: 'POST',
+                                headers: {
+                                  'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                  path: selectedFile,
+                                  content
+                                })
+                              });
+                              
+                              if (!response.ok) {
+                                console.error('Failed to save file');
+                              }
+                            } catch (error) {
+                              console.error('Error saving file:', error);
+                            }
+                          }}
+                        />
+                      );
+                    }
+                    
+                    // Use regular code editor for other files
+                    return (
+                      <div className="h-full p-4">
+                        <CodeEditor
+                          value={isEditing ? editedContent : fileContent}
+                          language={language}
+                          onChange={isEditing ? setEditedContent : undefined}
+                          readOnly={!isEditing}
+                          height="100%"
+                        />
+                      </div>
+                    );
+                  })()
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-gray-500">
+              <div className="text-center">
+                <File size={48} className="mx-auto mb-4 text-gray-600" />
+                <p>Select a file to view its contents</p>
+              </div>
             </div>
           )}
         </div>
-      </div>
-
-      {/* File content */}
-      <div className="flex-1 flex flex-col">
-        {selectedFile ? (
-          <>
-            <div className="border-b border-gray-700 p-4 flex items-center justify-between">
-              <h3 className="font-medium truncate">{selectedFile}</h3>
-              {/* Only show edit controls for non-markdown files */}
-              {getLanguageFromExtension(selectedFile) !== 'markdown' && (
-                <div className="flex items-center space-x-2">
-                  {isEditing ? (
-                    <>
-                      <button
-                        onClick={handleSaveFile}
-                        className="flex items-center space-x-1 px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-sm"
-                      >
-                        <Save size={14} />
-                        <span>Save</span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          setIsEditing(false);
-                          setEditedContent(fileContent);
-                        }}
-                        className="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded text-sm"
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      onClick={() => setIsEditing(true)}
-                      className="flex items-center space-x-1 px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm"
-                    >
-                      <Edit3 size={14} />
-                      <span>Edit</span>
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="flex-1 overflow-hidden">
-              {loadingContent ? (
-                <div className="p-4 text-gray-500">Loading...</div>
-              ) : (
-                (() => {
-                  const language = getLanguageFromExtension(selectedFile);
-                  const isMarkdown = language === 'markdown';
-                  
-                  // Use tabbed editor for markdown files
-                  if (isMarkdown) {
-                    return (
-                      <TabbedEditor
-                        filePath={selectedFile}
-                        content={fileContent}
-                        language={language}
-                        onSave={async (content) => {
-                          setEditedContent(content);
-                          setFileContent(content);
-                          
-                          // Save to server
-                          try {
-                            const response = await fetch('/api/workspace/save', {
-                              method: 'POST',
-                              headers: {
-                                'Content-Type': 'application/json'
-                              },
-                              body: JSON.stringify({
-                                path: selectedFile,
-                                content
-                              })
-                            });
-                            
-                            if (!response.ok) {
-                              console.error('Failed to save file');
-                            }
-                          } catch (error) {
-                            console.error('Error saving file:', error);
-                          }
-                        }}
-                      />
-                    );
-                  }
-                  
-                  // Use regular code editor for other files
-                  return (
-                    <div className="h-full p-4">
-                      <CodeEditor
-                        value={isEditing ? editedContent : fileContent}
-                        language={language}
-                        onChange={isEditing ? setEditedContent : undefined}
-                        readOnly={!isEditing}
-                        height="100%"
-                      />
-                    </div>
-                  );
-                })()
-              )}
-            </div>
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-500">
-            <div className="text-center">
-              <File size={48} className="mx-auto mb-4 text-gray-600" />
-              <p>Select a file to view its contents</p>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Delete Confirmation Dialog */}
@@ -480,6 +505,43 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
               >
                 Change
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Workspace Root Confirmation Dialog */}
+      {showWorkspaceConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 border border-gray-600 rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                <Home size={20} className="text-green-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-medium text-white">Set Workspace Root</h3>
+                <p className="text-sm text-gray-400">This will change your workspace location.</p>
+              </div>
+            </div>
+            
+            <p className="text-gray-300 mb-6">
+              Are you sure you want to set <span className="font-medium text-white">{currentDirectory}</span> as your workspace root? 
+              CONVERSATIONS.json will be saved here.
+            </p>
+            
+            <div className="flex space-x-3 justify-end">
+              <button
+                onClick={handleWorkspaceCancel}
+                className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleWorkspaceConfirm}
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition-colors"
+              >
+                Set Root
               </button>
             </div>
           </div>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Thread, ConversationMessage } from '../types';
 
-export function useThreads() {
+export function useThreads(workspaceRestored: boolean = true) {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -38,10 +38,12 @@ export function useThreads() {
     }
   }, []);
 
-  // Load threads from CONVERSATIONS.json file on mount
+  // Load threads from CONVERSATIONS.json file on mount (after workspace is restored)
   useEffect(() => {
-    loadThreads();
-  }, [loadThreads]);
+    if (workspaceRestored) {
+      loadThreads();
+    }
+  }, [loadThreads, workspaceRestored]);
 
   // Cleanup timeout on unmount
   useEffect(() => {

@@ -82,7 +82,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ message: content })
+        body: JSON.stringify({ message: content, threadId })
       });
 
       if (!response.ok) {
@@ -211,7 +211,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ messageId })
+        body: JSON.stringify({ messageId, threadId })
       });
 
       if (response.ok) {
@@ -254,7 +254,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ message: userMessage.content })
+        body: JSON.stringify({ message: userMessage.content, threadId })
       });
 
       if (response.ok) {
@@ -321,7 +321,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ message: newContent })
+        body: JSON.stringify({ message: newContent, threadId })
       });
 
       if (!response.ok) {

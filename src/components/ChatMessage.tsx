@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import mermaid from 'mermaid';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 interface ChatMessageProps {
   message: ConversationMessage;
@@ -11,9 +13,10 @@ interface ChatMessageProps {
   onRegenerate?: () => void;
   onCancelToolCalls?: () => void;
   onEdit?: (newContent: string) => void;
+  fontSize?: number;
 }
 
-export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls, onEdit }: ChatMessageProps) {
+export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls, onEdit, fontSize = 14 }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const [toolCallsExpanded, setToolCallsExpanded] = useState(false);
   const [resultsExpanded, setResultsExpanded] = useState(false);
@@ -77,55 +80,90 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
     }
   };
 
+  const renderCodeBlock = (code: string, language?: string) => {
+    if (language === 'mermaid') {
+      const diagramId = `mermaid-${Date.now()}-${Math.random()}`;
+      return (
+        <div className="my-4">
+          <div id={diagramId} className="mermaid bg-white p-4 rounded border">
+            {code}
+          </div>
+        </div>
+      );
+    }
+
+    // For other languages, use syntax highlighting
+    return (
+      <div className="my-4">
+        <SyntaxHighlighter
+          language={language || 'text'}
+          style={vscDarkPlus}
+          customStyle={{
+            margin: 0,
+            borderRadius: '0.375rem',
+            fontSize: `${fontSize}px`,
+            overflowX: 'auto',
+            maxWidth: '100%',
+          }}
+          codeTagProps={{
+            style: { fontSize: `${fontSize}px` }
+          }}
+          wrapLines={true}
+          wrapLongLines={true}
+        >
+          {code}
+        </SyntaxHighlighter>
+      </div>
+    );
+  };
+
   const renderContent = (content: string) => {
     if (showMarkdown) {
-      // Check for mermaid code blocks
-      const mermaidRegex = /```mermaid\n([\s\S]*?)\n```/g;
-      const hasMermaid = mermaidRegex.test(content);
+      // Check for any code blocks
+      const codeBlockRegex = /```(\w+)?\n([\s\S]*?)\n```/g;
+      const hasCodeBlocks = codeBlockRegex.test(content);
       
-      if (hasMermaid) {
+      if (hasCodeBlocks) {
         const parts: JSX.Element[] = [];
         let lastIndex = 0;
-        const regex = /```mermaid\n([\s\S]*?)\n```/g;
+        const regex = /```(\w+)?\n([\s\S]*?)\n```/g;
         let match;
-        let mermaidId = 0;
+        let blockId = 0;
         
         while ((match = regex.exec(content)) !== null) {
-          // Add content before mermaid
+          // Add content before code block
           if (match.index > lastIndex) {
             const beforeContent = content.slice(lastIndex, match.index);
             if (beforeContent.trim()) {
               const html = String(marked.parse(beforeContent));
               const sanitizedHtml = DOMPurify.sanitize(html);
               parts.push(
-                <div key={`before-${mermaidId}`} className="prose prose-invert prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
+                <div key={`before-${blockId}`} className="prose prose-invert prose-sm max-w-full overflow-hidden" style={{ fontSize: `${fontSize}px` }} dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
               );
             }
           }
           
-          // Add mermaid diagram
-          const mermaidCode = match[1];
-          const diagramId = `mermaid-${Date.now()}-${mermaidId}`;
+          // Add code block with appropriate rendering
+          const language = match[1];
+          const code = match[2];
           parts.push(
-            <div key={`mermaid-${mermaidId}`} className="my-4">
-              <div id={diagramId} className="mermaid bg-white p-4 rounded border">
-                {mermaidCode}
-              </div>
+            <div key={`code-${blockId}`}>
+              {renderCodeBlock(code, language)}
             </div>
           );
           
           lastIndex = match.index + match[0].length;
-          mermaidId++;
+          blockId++;
         }
         
-        // Add remaining content after last mermaid
+        // Add remaining content after last code block
         if (lastIndex < content.length) {
           const afterContent = content.slice(lastIndex);
           if (afterContent.trim()) {
             const html = String(marked.parse(afterContent));
             const sanitizedHtml = DOMPurify.sanitize(html);
             parts.push(
-              <div key="after" className="prose prose-invert prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
+              <div key="after" className="prose prose-invert prose-sm max-w-full overflow-hidden" style={{ fontSize: `${fontSize}px` }} dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
             );
           }
         }
@@ -134,10 +172,10 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
       } else {
         const html = String(marked.parse(content));
         const sanitizedHtml = DOMPurify.sanitize(html);
-        return <div className="prose prose-invert prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />;
+        return <div className="prose prose-invert prose-sm max-w-full overflow-hidden" style={{ fontSize: `${fontSize}px` }} dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />;
       }
     }
-    return <div className="whitespace-pre-wrap text-sm">{content}</div>;
+    return <div className="whitespace-pre-wrap text-sm break-words" style={{ fontSize: `${fontSize}px` }}>{content}</div>;
   };
 
   return (
@@ -150,8 +188,8 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
         </div>
       )}
       
-      <div className={`max-w-[80%] ${isUser ? 'order-2' : ''}`}>
-        <div className={`rounded-lg px-4 py-2 relative group ${
+      <div className={`max-w-[80%] min-w-0 ${isUser ? 'order-2' : ''}`}>
+        <div className={`rounded-lg px-4 py-2 relative group overflow-hidden ${
           isUser 
             ? 'bg-blue-600 text-white' 
             : 'bg-gray-800 border border-gray-700'
@@ -251,7 +289,7 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
                     {Object.keys(toolCall.parameters).length > 0 && (
                       <div className="mt-2 text-xs text-gray-300">
                         <div className="font-medium mb-1">Parameters:</div>
-                        <pre className="text-gray-400 overflow-x-auto bg-gray-800 p-2 rounded">
+                        <pre className="text-gray-400 overflow-x-auto bg-gray-800 p-2 rounded break-all whitespace-pre-wrap">
                           {JSON.stringify(toolCall.parameters, null, 2)}
                         </pre>
                       </div>
@@ -320,7 +358,7 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
                     <Wrench size={12} />
                     <span className="font-medium">{toolCall.name}</span>
                   </div>
-                  <pre className="text-gray-300 overflow-x-auto">
+                  <pre className="text-gray-300 overflow-x-auto break-all whitespace-pre-wrap">
                     {JSON.stringify(toolCall.parameters, null, 2)}
                   </pre>
                 </div>
@@ -354,7 +392,7 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
                   </div>
                   <div className="text-gray-300">
                     {result.result.success ? (
-                      <pre className="overflow-x-auto whitespace-pre-wrap">
+                      <pre className="overflow-x-auto whitespace-pre-wrap break-all">
                         {result.result.output || 'Success'}
                       </pre>
                     ) : (

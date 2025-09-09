@@ -51,21 +51,7 @@ export function ThreadsPanel({
   };
 
   return (
-    <div className="w-64 bg-gray-800 border-r border-gray-700 flex flex-col">
-      {/* Header */}
-      <div className="p-4 border-b border-gray-700">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-medium text-gray-300">Conversations</h2>
-          <button
-            onClick={onThreadCreate}
-            className="p-1.5 hover:bg-gray-700 rounded-md transition-colors text-gray-400 hover:text-gray-200"
-            title="New conversation"
-          >
-            <Plus size={16} />
-          </button>
-        </div>
-      </div>
-
+    <div className="w-64 bg-gray-800 border-r border-gray-700 flex flex-col relative">
       {/* Threads List */}
       <div className="flex-1 overflow-y-auto">
         {threads.length === 0 ? (
@@ -147,6 +133,15 @@ export function ThreadsPanel({
           </div>
         )}
       </div>
+
+      {/* Floating New Conversation Button */}
+      <button
+        onClick={onThreadCreate}
+        className="absolute bottom-4 right-4 p-3 bg-blue-600 hover:bg-blue-700 rounded-full shadow-lg transition-colors text-white z-10"
+        title="New conversation"
+      >
+        <Plus size={20} />
+      </button>
     </div>
   );
 }

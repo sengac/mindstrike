@@ -1,7 +1,7 @@
 {
   "name": "poweragent",
   "version": "1.0.0",
-  "description": "Local LLM-powered coding agent",
+  "description": "An Agentic AI coding assistant",
   "type": "module",
   "scripts": {
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",
+    "@types/react-syntax-highlighter": "^15.5.13",
     "chokidar": "^4.0.1",
     "clsx": "^2.1.1",
     "cors": "^2.8.5",
@@ -31,6 +32,7 @@
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-syntax-highlighter": "^15.6.1",
     "winston": "^3.17.0",
     "ws": "^8.18.0"
   },

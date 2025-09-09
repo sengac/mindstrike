@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Trash2, Loader2 } from 'lucide-react';
+import { Send, Loader2 } from 'lucide-react';
 import { ChatMessage } from './ChatMessage';
 import { useChat } from '../hooks/useChat';
+import { usePreferences } from '../hooks/usePreferences';
 import { ConversationMessage } from '../types';
 
 interface ChatPanelProps {
@@ -14,6 +15,7 @@ interface ChatPanelProps {
 
 export function ChatPanel({ threadId, messages: initialMessages = [], onMessagesUpdate, onFirstMessage, onDeleteMessage }: ChatPanelProps) {
   const [input, setInput] = useState('');
+  const { fontSize, setFontSize } = usePreferences();
   const { messages, isLoading, sendMessage, clearConversation, regenerateMessage, cancelToolCalls, editMessage } = useChat({
     threadId,
     messages: initialMessages,
@@ -59,25 +61,13 @@ export function ChatPanel({ threadId, messages: initialMessages = [], onMessages
     adjustTextareaHeight();
   }, [input]);
 
+
+
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="border-b border-gray-700 p-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold">PowerAgent</h1>
-          <p className="text-sm text-gray-400">AI coding assistant with local LLM</p>
-        </div>
-        <button
-          onClick={clearConversation}
-          className="p-2 hover:bg-gray-800 rounded-lg transition-colors text-gray-400 hover:text-gray-200"
-          title="Clear conversation"
-        >
-          <Trash2 size={16} />
-        </button>
-      </div>
+    <div className="flex flex-col h-full flex-1">
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ fontSize: `${fontSize}px` }}>
         {messages.length === 0 && (
           <div className="text-center text-gray-500 mt-8">
             <div className="mb-4">
@@ -103,6 +93,7 @@ export function ChatPanel({ threadId, messages: initialMessages = [], onMessages
           <ChatMessage 
             key={message.id} 
             message={message} 
+            fontSize={fontSize}
             onDelete={onDeleteMessage ? () => onDeleteMessage(message.id) : undefined}
             onRegenerate={message.role === 'assistant' ? () => regenerateMessage(message.id) : undefined}
             onEdit={message.role === 'user' ? (newContent: string) => editMessage(message.id, newContent) : undefined}

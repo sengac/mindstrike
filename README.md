@@ -1,6 +1,6 @@
 # PowerAgent
 
-A local LLM-powered coding agent built with TypeScript, React, Vite and Express.
+An Agentic AI coding assistant built with TypeScript, React, Vite and Express.
 
 ## Features
 
