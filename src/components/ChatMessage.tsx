@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { User, Bot, Wrench, CheckCircle, XCircle, ChevronDown, ChevronRight, FileText, Code, Trash2, RotateCcw, Loader2, X, Edit2, Check, Copy, Download, Maximize2, Brain } from 'lucide-react';
 import { ConversationMessage } from '../types';
 import { useState, useEffect, useRef } from 'react';
@@ -68,14 +68,14 @@ const getSupportedLanguage = (language?: string): string => {
 
 interface ChatMessageProps {
   message: ConversationMessage;
-  onDelete?: () => void;
-  onRegenerate?: () => void;
-  onCancelToolCalls?: () => void;
-  onEdit?: (newContent: string) => void;
+  onDelete?: (messageId: string) => void;
+  onRegenerate?: (messageId: string) => void;
+  onCancelToolCalls?: (messageId: string) => void;
+  onEdit?: (messageId: string, newContent: string) => void;
   fontSize?: number;
 }
 
-export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls, onEdit, fontSize = 14 }: ChatMessageProps) {
+function ChatMessageComponent({ message, onDelete, onRegenerate, onCancelToolCalls, onEdit, fontSize = 14 }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const [toolCallsExpanded, setToolCallsExpanded] = useState(false);
   const [resultsExpanded, setResultsExpanded] = useState(false);
@@ -87,6 +87,8 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
   const [thinkingExpanded, setThinkingExpanded] = useState<{[key: number]: boolean}>({});
   const mermaidRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Note: This component is memoized to prevent unnecessary re-renders
 
   useEffect(() => {
     // Initialize mermaid
@@ -125,15 +127,48 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
         fillType7: '#e5e7eb'
       }
     });
-    
+  }, []);
+
+  // Separate effect for re-rendering mermaid diagrams when content changes
+  useEffect(() => {
     // Re-render mermaid diagrams when content changes or when switching to markdown view
     if (mermaidRef.current && showMarkdown) {
-      const mermaidElements = mermaidRef.current.querySelectorAll('.mermaid');
-      mermaidElements.forEach((element) => {
-        mermaid.run({
-          nodes: [element as HTMLElement]
-        });
-      });
+      // Add a small delay to ensure DOM is updated
+      const timer = setTimeout(() => {
+        const mermaidElements = mermaidRef.current?.querySelectorAll('.mermaid');
+        if (mermaidElements && mermaidElements.length > 0) {
+          mermaidElements.forEach((element) => {
+            try {
+              // Only re-render if the element doesn't already have a valid SVG
+              const existingSvg = element.querySelector('svg');
+              const hasValidSvg = existingSvg && existingSvg.children.length > 0;
+              
+              if (!hasValidSvg) {
+                // Get the original mermaid code from data attribute or text content
+                const originalCode = element.getAttribute('data-mermaid-code') || element.textContent || '';
+                if (originalCode.trim()) {
+                  element.innerHTML = originalCode;
+                  
+                  // Run mermaid rendering
+                  mermaid.run({
+                    nodes: [element as HTMLElement]
+                  }).catch((error) => {
+                    console.error('Mermaid rendering failed:', error);
+                    // Restore original code on error
+                    if (originalCode) {
+                      element.innerHTML = `<pre><code>${originalCode}</code></pre>`;
+                    }
+                  });
+                }
+              }
+            } catch (error) {
+              console.error('Error preparing mermaid element:', error);
+            }
+          });
+        }
+      }, 50);
+      
+      return () => clearTimeout(timer);
     }
   }, [message.content, showMarkdown]);
 
@@ -148,7 +183,7 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
 
   const handleEditSubmit = () => {
     if (onEdit && editContent.trim() !== message.content) {
-      onEdit(editContent.trim());
+      onEdit(message.id, editContent.trim());
     }
     setIsEditing(false);
   };
@@ -227,8 +262,8 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
     if (language === 'mermaid') {
       const diagramId = `mermaid-${Date.now()}-${Math.random()}`;
       return (
-        <div className="my-4 relative group">
-          <div id={diagramId} className="mermaid bg-gray-800 p-4 rounded border border-gray-700">
+        <div key={`${diagramId}-${code.substring(0, 20)}`} className="my-4 relative group">
+          <div id={diagramId} className="mermaid bg-gray-800 p-4 rounded border border-gray-700" data-mermaid-code={code}>
             {code}
           </div>
           <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10 flex space-x-1">
@@ -533,7 +568,7 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
             <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1">
               {onRegenerate && !isUser && (
                 <button
-                  onClick={onRegenerate}
+                  onClick={() => onRegenerate(message.id)}
                   className="p-1 hover:bg-blue-600 rounded"
                   title="Regenerate response"
                 >
@@ -551,7 +586,7 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
               )}
               {onDelete && isUser && (
                 <button
-                  onClick={onDelete}
+                  onClick={() => onDelete(message.id)}
                   className="p-1 hover:bg-red-600 rounded"
                   title="Delete message"
                 >
@@ -599,7 +634,7 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
                 </div>
                 {onCancelToolCalls && (
                   <button
-                    onClick={onCancelToolCalls}
+                    onClick={() => onCancelToolCalls(message.id)}
                     className="flex items-center space-x-1 px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-xs transition-colors ml-4"
                   >
                     <X size={12} />
@@ -805,3 +840,18 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
     </>
   );
 }
+
+// Memoize the component to prevent unnecessary re-renders when parent state changes
+export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => {
+  // Only re-render if message content, ID, or callbacks actually change
+  return (
+    prevProps.message.id === nextProps.message.id &&
+    prevProps.message.content === nextProps.message.content &&
+    prevProps.message.status === nextProps.message.status &&
+    prevProps.fontSize === nextProps.fontSize &&
+    prevProps.onDelete === nextProps.onDelete &&
+    prevProps.onRegenerate === nextProps.onRegenerate &&
+    prevProps.onCancelToolCalls === nextProps.onCancelToolCalls &&
+    prevProps.onEdit === nextProps.onEdit
+  );
+});

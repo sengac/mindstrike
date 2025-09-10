@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { ConversationMessage, ImageAttachment } from '../types';
+import { useResponseValidation } from './useResponseValidation';
 
 interface UseChatProps {
   threadId?: string;
@@ -13,6 +14,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
   const [messages, setMessages] = useState<ConversationMessage[]>(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
   const isUpdatingFromProps = useRef(false);
+  const validation = useResponseValidation();
 
   // Update messages when initialMessages prop changes
   useEffect(() => {
@@ -29,6 +31,25 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
       onMessagesUpdate(newMessages);
     }
   }, [onMessagesUpdate]);
+
+  // Validate and potentially fix a message before displaying
+  const validateAndProcessMessage = useCallback(async (message: ConversationMessage): Promise<ConversationMessage> => {
+    if (message.role === 'assistant') {
+      try {
+        const { message: validatedMessage, hasChanges } = await validation.validateMessage(message);
+        
+        if (hasChanges) {
+          console.log('✅ Message content was automatically corrected during validation');
+        }
+        
+        return validatedMessage;
+      } catch (error) {
+        console.error('Message validation failed:', error);
+        return message; // Return original if validation fails
+      }
+    }
+    return message;
+  }, [validation]);
 
   const loadConversation = useCallback(async () => {
     // If we have a threadId, we're using the new thread system
@@ -127,6 +148,8 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
                 
                 console.log('🔄 Message update - Status:', updatedMsg.status, 'Tool calls:', updatedMsg.toolCalls?.length || 0, updatedMsg);
                 
+                // For streaming updates, we'll validate on completion instead of every update
+                // This prevents validation from running on partial content
                 if (!assistantMessage) {
                 // First update - add the message
                   console.log('➕ Adding new assistant message');
@@ -150,12 +173,15 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
                 timest: new Date(data.message.timest)
                  };
                 
+                // Validate final message
+                const validatedFinalMsg = await validateAndProcessMessage(finalMsg);
+                
                 if (assistantMessage) {
                   currentMessages = currentMessages.map(msg => 
-                    msg.id === finalMsg.id ? finalMsg : msg
+                    msg.id === validatedFinalMsg.id ? validatedFinalMsg : msg
                   );
                 } else {
-                  currentMessages = [...currentMessages, finalMsg];
+                  currentMessages = [...currentMessages, validatedFinalMsg];
                 }
                 
                 setMessages([...currentMessages]);
@@ -350,35 +376,41 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
             
             console.log('🔄 Message update - Status:', updatedMsg.status, 'Tool calls:', updatedMsg.toolCalls?.length || 0, updatedMsg);
             
+            // Validate message before adding/updating
+            const validatedMsg = await validateAndProcessMessage(updatedMsg);
+            
             if (!assistantMessage) {
               // First update - add the message
             console.log('➕ Adding new assistant message');
-            assistantMessage = updatedMsg;
-            currentMessages = [...currentMessages, updatedMsg];
+            assistantMessage = validatedMsg;
+            currentMessages = [...currentMessages, validatedMsg];
             } else {
             // Update existing message
               console.log('🔄 Updating existing message');
-              assistantMessage = updatedMsg;
+              assistantMessage = validatedMsg;
                    currentMessages = currentMessages.map(msg => 
-                     msg.id === updatedMsg.id ? updatedMsg : msg
+                     msg.id === validatedMsg.id ? validatedMsg : msg
                    );
                  }
                  console.log('📝 Setting messages state, total:', currentMessages.length);
                  setMessages([...currentMessages]);
                 
               } else if (data.type === 'completed') {
-              console.log('✅ Message completed (regenerate)');
+              console.log('✅ Message completed (edit)');
               const finalMsg = {
               ...data.message,
                 timest: new Date(data.message.timest)
                  };
                 
+                // Validate final message
+                const validatedFinalMsg = await validateAndProcessMessage(finalMsg);
+                
                 if (assistantMessage) {
                   currentMessages = currentMessages.map(msg => 
-                    msg.id === finalMsg.id ? finalMsg : msg
+                    msg.id === validatedFinalMsg.id ? validatedFinalMsg : msg
                   );
                 } else {
-                  currentMessages = [...currentMessages, finalMsg];
+                  currentMessages = [...currentMessages, validatedFinalMsg];
                 }
                 
                 setMessages([...currentMessages]);
@@ -413,6 +445,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
     clearConversation,
     regenerateMessage,
     cancelToolCalls,
-    editMessage
+    editMessage,
+    validation
   };
 }

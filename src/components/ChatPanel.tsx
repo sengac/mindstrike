@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
+import React, { useState, useRef, useEffect, useImperativeHandle, forwardRef, useCallback } from 'react';
 import { Send, Loader2, Github, Youtube, Trash2, User, Paperclip, X } from 'lucide-react';
 import { MindStrikeIcon } from './MindStrikeIcon';
 import { ChatMessage } from './ChatMessage';
 import { PersonalityModal } from './PersonalityModal';
+import { ValidationStatusNotification } from './ValidationStatusNotification';
 
 import { useChat } from '../hooks/useChat';
 import { useAppStore } from '../store/useAppStore';
@@ -30,12 +31,14 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
   const [defaultRole, setDefaultRole] = useState('');
   const [attachedImages, setAttachedImages] = useState<ImageAttachment[]>([]);
   const { fontSize, workspaceRoot, defaultCustomRole } = useAppStore();
-  const { messages, isLoading, sendMessage, clearConversation, regenerateMessage, cancelToolCalls, editMessage } = useChat({
+  const { messages, isLoading, sendMessage, clearConversation, regenerateMessage, cancelToolCalls, editMessage, validation } = useChat({
     threadId,
     messages: initialMessages,
     onMessagesUpdate,
     onFirstMessage
   });
+
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -48,17 +51,83 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // Create truly stable callbacks that don't change on re-renders
+  const stableCallbacks = useRef({
+    onDelete: onDeleteMessage,
+    onRegenerate: regenerateMessage,
+    onEdit: editMessage,
+    onCancelToolCalls: cancelToolCalls
+  });
+
+  // Update refs when the actual functions change
+  useEffect(() => {
+    stableCallbacks.current = {
+      onDelete: onDeleteMessage,
+      onRegenerate: regenerateMessage, 
+      onEdit: editMessage,
+      onCancelToolCalls: cancelToolCalls
+    };
+  }, [onDeleteMessage, regenerateMessage, editMessage, cancelToolCalls]);
+
+  // Create stable callback functions that never change reference
+  const handleDeleteMessage = useCallback((messageId: string) => {
+    stableCallbacks.current.onDelete?.(messageId);
+  }, []);
+
+  const handleRegenerateMessage = useCallback((messageId: string) => {
+    stableCallbacks.current.onRegenerate(messageId);
+  }, []);
+
+  const handleEditMessage = useCallback((messageId: string, newContent: string) => {
+    stableCallbacks.current.onEdit(messageId, newContent);
+  }, []);
+
+  const handleCancelToolCalls = useCallback((messageId: string) => {
+    stableCallbacks.current.onCancelToolCalls(messageId);
+  }, []);
+
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // Scroll to bottom when thread changes (with delay for mermaid rendering)
+  // Scroll to bottom when thread changes (wait for mermaid rendering)
   useEffect(() => {
     if (threadId) {
-      // Delay scroll to allow mermaid diagrams to render
-      setTimeout(() => {
-        scrollToBottom();
-      }, 100);
+      const waitForMermaidAndScroll = async () => {
+        // Wait for DOM to update first
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
+        // Check for mermaid elements and wait for them to render
+        const mermaidElements = document.querySelectorAll('.mermaid');
+        
+        if (mermaidElements.length > 0) {
+          // Wait for all mermaid diagrams to render
+          const checkInterval = 50;
+          const maxWaitTime = 3000; // 3 seconds max wait
+          let elapsed = 0;
+          
+          const waitForRendering = () => {
+            const allRendered = Array.from(mermaidElements).every(element => {
+              const svg = element.querySelector('svg');
+              return svg && svg.children.length > 0;
+            });
+            
+            if (allRendered || elapsed >= maxWaitTime) {
+              scrollToBottom();
+            } else {
+              elapsed += checkInterval;
+              setTimeout(waitForRendering, checkInterval);
+            }
+          };
+          
+          waitForRendering();
+        } else {
+          // No mermaid elements, scroll immediately
+          scrollToBottom();
+        }
+      };
+      
+      waitForMermaidAndScroll();
     }
   }, [threadId]);
 
@@ -286,9 +355,22 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
 
   return (
     <div className="flex flex-col h-full flex-1 relative" key={`chat-panel-${fontSize}`}>
+      {/* Floating Validation Status Notification */}
+      <div className="absolute top-4 left-4 right-4 z-20 pointer-events-none">
+        <div className="pointer-events-auto">
+          <ValidationStatusNotification
+            isVisible={validation.showNotification}
+            progress={validation.validationProgress}
+            onDismiss={validation.dismissNotification}
+            onToggleValidation={validation.setValidationEnabled}
+            validationEnabled={validation.validationEnabled}
+          />
+        </div>
+      </div>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 relative" style={{ '--dynamic-font-size': `${fontSize}px` } as React.CSSProperties}>
+
         {messages.length === 0 && (
           <div className="text-center text-gray-500 mt-8">
             <div className="mb-4">
@@ -307,7 +389,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
               </h3>
               <div className="flex justify-center space-x-4 mb-4">
                 <a 
-                  href="https://github.com/rquast/mindstrike" 
+                  href="https://github.com/sengac/mindstrike" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="text-gray-400 hover:text-white transition-colors"
@@ -316,7 +398,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
                   <Github size={24} />
                 </a>
                 <a 
-                  href="https://www.youtube.com/@mindstrike" 
+                  href="https://www.youtube.com/@agiledestruction" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="text-gray-400 hover:text-red-500 transition-colors"
@@ -355,12 +437,12 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
             key={message.id} 
             message={message} 
             fontSize={fontSize}
-            onDelete={onDeleteMessage ? () => onDeleteMessage(message.id) : undefined}
-            onRegenerate={message.role === 'assistant' ? () => regenerateMessage(message.id) : undefined}
-            onEdit={message.role === 'user' ? (newContent: string) => editMessage(message.id, newContent) : undefined}
+            onDelete={onDeleteMessage ? handleDeleteMessage : undefined}
+            onRegenerate={message.role === 'assistant' ? handleRegenerateMessage : undefined}
+            onEdit={message.role === 'user' ? handleEditMessage : undefined}
             onCancelToolCalls={
               message.status === 'processing' && message.toolCalls && message.toolCalls.length > 0 
-                ? () => cancelToolCalls(message.id) 
+                ? handleCancelToolCalls 
                 : undefined
             }
           />
@@ -521,6 +603,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
           onRoleChange={handleRoleChange}
         />
       )}
+
     </div>
   );
 });

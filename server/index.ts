@@ -415,6 +415,138 @@ app.post('/api/conversation/clear', (req, res) => {
   res.json({ success: true });
 });
 
+// Debug LLM endpoint for fixing rendering errors
+app.post('/api/debug-fix', async (req: any, res: any) => {
+  try {
+    const { request, retryCount = 0 } = req.body;
+    
+    if (!request) {
+      return res.status(400).json({ error: 'Debug request is required' });
+    }
+    
+    const { originalContent, errorMessage, contentType, language } = request;
+    
+    // Generate fix prompt
+    const fixPrompt = generateDebugFixPrompt(request);
+    
+    // Create a simple agent instance for debugging
+    const agent = agentPool.getCurrentAgent();
+    
+    // Send request to LLM with debugging context
+    const result = await agent.processMessage(fixPrompt);
+    
+    // Extract the fixed content from the response
+    const fixedContent = extractFixedContent(result.content, contentType, language);
+    
+    if (fixedContent) {
+      res.json({
+        success: true,
+        fixedContent,
+        explanation: 'Content has been automatically corrected',
+        retryCount
+      });
+    } else {
+      res.json({
+        success: false,
+        error: 'Failed to extract valid fixed content from LLM response',
+        retryCount
+      });
+    }
+    
+  } catch (error) {
+    logger.error('Debug fix request failed:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error instanceof Error ? error.message : 'Internal server error',
+      retryCount: req.body.retryCount || 0
+    });
+  }
+});
+
+function generateDebugFixPrompt(request: any): string {
+  const basePrompt = `You are a debugging assistant helping to fix rendering errors in content. A piece of ${request.contentType} content failed to render with the following error:
+
+ERROR: ${request.errorMessage}
+
+ORIGINAL CONTENT:
+\`\`\`${request.language || request.contentType}
+${request.originalContent}
+\`\`\`
+
+Please analyze the error and provide a corrected version of the content. Focus only on fixing the specific issue mentioned in the error while preserving the original intent and structure as much as possible.
+
+Your response should contain ONLY the corrected content within a code block of the same type. Do not include explanations, comments, or additional text outside the code block.`;
+
+  switch (request.contentType) {
+    case 'mermaid':
+      return basePrompt + `
+
+Common Mermaid issues to check:
+- Syntax errors in node definitions
+- Missing arrows or connections
+- Invalid characters in node names
+- Incorrect diagram type declarations
+- Missing quotes around labels with spaces
+
+Respond with only the corrected Mermaid diagram:
+\`\`\`mermaid
+[corrected diagram here]
+\`\`\``;
+
+    case 'latex':
+      return basePrompt + `
+
+Common LaTeX issues to check:
+- Unmatched braces or brackets
+- Invalid command syntax
+- Missing required packages/commands
+- Incorrect mathematical notation
+- Invalid escape sequences
+
+Respond with only the corrected LaTeX:
+\`\`\`latex
+[corrected LaTeX here]
+\`\`\``;
+
+    case 'code':
+      return basePrompt + `
+
+Common ${request.language || 'code'} issues to check:
+- Syntax errors
+- Missing brackets, parentheses, or quotes
+- Invalid indentation
+- Typos in keywords or function names
+- Missing semicolons or other required punctuation
+
+Respond with only the corrected code:
+\`\`\`${request.language || 'text'}
+[corrected code here]
+\`\`\``;
+
+    default:
+      return basePrompt;
+  }
+}
+
+function extractFixedContent(llmResponse: string, contentType: string, language?: string): string | null {
+  const codeBlockRegex = new RegExp(`\`\`\`${language || contentType}\\n([\\s\\S]*?)\\n\`\`\``, 'i');
+  const match = llmResponse.match(codeBlockRegex);
+  
+  if (match && match[1]) {
+    return match[1].trim();
+  }
+  
+  // Fallback: try to extract any code block
+  const anyCodeBlockRegex = /```[\w]*\n([\s\S]*?)\n```/;
+  const fallbackMatch = llmResponse.match(anyCodeBlockRegex);
+  
+  if (fallbackMatch && fallbackMatch[1]) {
+    return fallbackMatch[1].trim();
+  }
+  
+  return null;
+}
+
 app.post('/api/load-thread/:threadId', async (req: any, res: any) => {
   try {
     const { threadId } = req.params;
