@@ -500,7 +500,7 @@ export class ToolSystem {
   // Todo management methods
   private async loadTodos(): Promise<void> {
     try {
-      const todoPath = path.join(this.workspaceRoot, '.poweragent-todos.json');
+      const todoPath = path.join(this.workspaceRoot, '.mindstrike-todos.json');
       const content = await fs.readFile(todoPath, 'utf-8');
       this.todos = JSON.parse(content);
     } catch (error) {
@@ -511,7 +511,7 @@ export class ToolSystem {
 
   private async saveTodos(): Promise<void> {
     try {
-      const todoPath = path.join(this.workspaceRoot, '.poweragent-todos.json');
+      const todoPath = path.join(this.workspaceRoot, '.mindstrike-todos.json');
       await fs.writeFile(todoPath, JSON.stringify(this.todos, null, 2), 'utf-8');
     } catch (error) {
       console.error('Failed to save todos:', error);

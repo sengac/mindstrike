@@ -1,5 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Send, Loader2 } from 'lucide-react';
+import React, { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
+import { Send, Loader2, Github, Youtube } from 'lucide-react';
+import { MindStrikeIcon } from './MindStrikeIcon';
 import { ChatMessage } from './ChatMessage';
 import { useChat } from '../hooks/useChat';
 import { usePreferences } from '../hooks/usePreferences';
@@ -11,11 +12,18 @@ interface ChatPanelProps {
   onMessagesUpdate?: (messages: ConversationMessage[]) => void;
   onFirstMessage?: () => void;
   onDeleteMessage?: (messageId: string) => void;
+  fontSize?: number;
+  workspaceRoot?: string;
 }
 
-export function ChatPanel({ threadId, messages: initialMessages = [], onMessagesUpdate, onFirstMessage, onDeleteMessage }: ChatPanelProps) {
+export interface ChatPanelRef {
+  clearConversation: () => void;
+}
+
+export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, messages: initialMessages = [], onMessagesUpdate, onFirstMessage, onDeleteMessage, fontSize: propFontSize, workspaceRoot }, ref) => {
   const [input, setInput] = useState('');
-  const { fontSize, setFontSize } = usePreferences();
+  const { fontSize: defaultFontSize } = usePreferences();
+  const fontSize = propFontSize ?? defaultFontSize;
   const { messages, isLoading, sendMessage, clearConversation, regenerateMessage, cancelToolCalls, editMessage } = useChat({
     threadId,
     messages: initialMessages,
@@ -24,6 +32,10 @@ export function ChatPanel({ threadId, messages: initialMessages = [], onMessages
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    clearConversation
+  }));
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -64,18 +76,48 @@ export function ChatPanel({ threadId, messages: initialMessages = [], onMessages
 
 
   return (
-    <div className="flex flex-col h-full flex-1">
+    <div className="flex flex-col h-full flex-1" key={`chat-panel-${fontSize}`}>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ fontSize: `${fontSize}px` }}>
+      <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ '--dynamic-font-size': `${fontSize}px` } as React.CSSProperties}>
         {messages.length === 0 && (
           <div className="text-center text-gray-500 mt-8">
             <div className="mb-4">
-              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-white font-bold text-xl">P</span>
+              <div className="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <MindStrikeIcon className="text-white" size={64} />
               </div>
-              <h3 className="text-lg font-medium mb-2">Welcome to PowerAgent</h3>
-              <p className="text-sm">Start a conversation with your local AI coding assistant</p>
+              <h3 className="text-lg font-medium mb-2">
+                Welcome to <a 
+                  href="https://mindstrike.ai" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-blue-500 hover:text-blue-600 underline"
+                >
+                  MindStrike
+                </a>
+              </h3>
+              <div className="flex justify-center space-x-4 mb-4">
+                <a 
+                  href="https://github.com/rquast/mindstrike" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-gray-400 hover:text-white transition-colors"
+                  title="MindStrike GitHub Repository"
+                >
+                  <Github size={24} />
+                </a>
+                <a 
+                  href="https://www.youtube.com/@mindstrike" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-gray-400 hover:text-red-500 transition-colors"
+                  title="MindStrike YouTube Channel"
+                >
+                  <Youtube size={24} />
+                </a>
+              </div>
+              <p className="text-sm">Start a conversation with your current workspace:</p>
+              <p className="text-xs font-mono text-gray-400 mt-1">{workspaceRoot || 'No workspace selected'}</p>
             </div>
             <div className="text-left max-w-md mx-auto space-y-2 text-sm">
               <p className="font-medium">Try asking:</p>
@@ -108,7 +150,7 @@ export function ChatPanel({ threadId, messages: initialMessages = [], onMessages
         {isLoading && (
           <div className="flex items-center space-x-2 text-gray-400">
             <Loader2 size={16} className="animate-spin" />
-            <span className="text-sm">PowerAgent is thinking...</span>
+            <span className="text-sm">MindStrike is thinking...</span>
           </div>
         )}
         
@@ -124,7 +166,7 @@ export function ChatPanel({ threadId, messages: initialMessages = [], onMessages
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask PowerAgent anything..."
+              placeholder="Ask MindStrike anything..."
               className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 pr-12 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent overflow-y-auto"
               style={{ overflowY: input.includes('\n') ? 'auto' : 'hidden' }}
               rows={1}
@@ -145,4 +187,4 @@ export function ChatPanel({ threadId, messages: initialMessages = [], onMessages
       </div>
     </div>
   );
-}
+});

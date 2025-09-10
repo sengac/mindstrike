@@ -19,6 +19,7 @@ export interface ConversationMessage {
   toolCalls?: ToolCall[];
   toolResults?: Array<{ name: string; result: any }>;
   status?: 'processing' | 'completed' | 'cancelled';
+  model?: string; // LLM model used for assistant messages
 }
 
 export class Agent {
@@ -27,8 +28,10 @@ export class Agent {
   private conversation: ConversationMessage[] = [];
   private cancelledMessages: Set<string> = new Set();
   private systemPrompt: string;
+  private config: AgentConfig;
 
   constructor(config: AgentConfig) {
+    this.config = config;
     this.llmClient = new LLMClient(config.llmConfig);
     this.toolSystem = new ToolSystem(config.workspaceRoot);
     this.systemPrompt = this.createSystemPrompt();
@@ -43,7 +46,7 @@ export class Agent {
   }
 
   private createSystemPrompt(): string {
-    return `You are PowerAgent, a powerful AI coding agent. You help users with software engineering tasks.
+    return `You are MindStrike, a powerful AI coding agent. You help users with software engineering tasks.
 
 CRITICAL: You MUST use tools to answer questions. When a user asks you to do something, respond IMMEDIATELY with the appropriate tool call in the "TOOL CALL FORMAT" detailed below.
 
@@ -124,7 +127,8 @@ RULES:
         content: toolCalls && toolCalls.length > 0 ? '' : content, // Don't show content if there are tool calls
         timest: new Date(),
         toolCalls,
-        status: toolCalls && toolCalls.length > 0 ? 'processing' : 'completed'
+        status: toolCalls && toolCalls.length > 0 ? 'processing' : 'completed',
+        model: this.config.llmConfig.model
       };
 
       console.log('🔧 Created assistant message - Status:', assistantMsg.status, 'Tool calls:', assistantMsg.toolCalls?.length || 0);
@@ -189,14 +193,9 @@ RULES:
       return assistantMsg;
 
     } catch (error: any) {
-      const errorMsg: ConversationMessage = {
-        id: this.generateId(),
-        role: 'assistant',
-        content: `Error: ${error.message}`,
-        timest: new Date()
-      };
-      this.conversation.push(errorMsg);
-      return errorMsg;
+      logger.error('Error in processMessage:', error);
+      // Don't add error to conversation, let it propagate to be handled as a proper error
+      throw error;
     }
   }
 

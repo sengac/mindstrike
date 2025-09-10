@@ -6,6 +6,7 @@ export interface ConversationMessage {
   toolCalls?: ToolCall[];
   toolResults?: Array<{ name: string; result: any }>;
   status?: 'processing' | 'completed' | 'cancelled';
+  model?: string; // LLM model used for assistant messages
 }
 
 export interface ToolCall {

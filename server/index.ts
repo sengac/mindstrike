@@ -5,6 +5,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { Agent, AgentConfig } from './agent.js';
 import { logger } from './logger.js';
+import { LLMScanner } from './llm-scanner.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,14 +25,16 @@ if (process.env.NODE_ENV === 'production') {
 // Initialize workspace and agent configuration
 let workspaceRoot = process.cwd();
 let currentWorkingDirectory = workspaceRoot;
-const agentConfig: AgentConfig = {
-  workspaceRoot,
-  llmConfig: {
-    baseURL: process.env.LLM_BASE_URL || 'http://localhost:11434',
-    model: process.env.LLM_MODEL || 'qwen2.5-coder:latest',
-    apiKey: process.env.LLM_API_KEY
-  }
+let currentLlmConfig = {
+  baseURL: 'http://localhost:11434',
+  model: 'devstral:latest',
+  apiKey: undefined
 };
+
+const getAgentConfig = (): AgentConfig => ({
+  workspaceRoot,
+  llmConfig: currentLlmConfig
+});
 
 // Thread-aware agent pool
 class AgentPool {
@@ -41,29 +44,32 @@ class AgentPool {
   setCurrentThread(threadId: string): void {
     this.currentThreadId = threadId;
     if (!this.agents.has(threadId)) {
-      this.agents.set(threadId, new Agent(agentConfig));
+      this.agents.set(threadId, new Agent(getAgentConfig()));
     }
   }
 
   getCurrentAgent(): Agent {
     if (!this.agents.has(this.currentThreadId)) {
-      this.agents.set(this.currentThreadId, new Agent(agentConfig));
+      this.agents.set(this.currentThreadId, new Agent(getAgentConfig()));
     }
     return this.agents.get(this.currentThreadId)!;
   }
 
+  clearAllAgents(): void {
+    this.agents.clear();
+  }
+
   getAgent(threadId: string): Agent {
     if (!this.agents.has(threadId)) {
-      this.agents.set(threadId, new Agent(agentConfig));
+      this.agents.set(threadId, new Agent(getAgentConfig()));
     }
     return this.agents.get(threadId)!;
   }
 
   updateAllAgentsWorkspace(newWorkspaceRoot: string): void {
     try {
-      if (agentConfig) {
-        agentConfig.workspaceRoot = newWorkspaceRoot;
-      }
+      // Update global workspace root
+      workspaceRoot = newWorkspaceRoot;
       for (const agent of this.agents.values()) {
         if (agent && (agent as any).toolSystem) {
           (agent as any).toolSystem.workspaceRoot = newWorkspaceRoot;
@@ -89,10 +95,59 @@ class AgentPool {
 }
 
 const agentPool = new AgentPool();
+const llmScanner = new LLMScanner();
+
+// Scan for available LLM services on startup
+llmScanner.scanAvailableServices().catch(error => {
+  logger.error('Error scanning LLM services on startup:', error);
+});
 
 // API Routes
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', workspace: workspaceRoot });
+});
+
+// LLM Configuration
+app.get('/api/llm-config', (req, res) => {
+  res.json(currentLlmConfig);
+});
+
+app.post('/api/llm-config', (req: any, res: any) => {
+  try {
+    const { baseURL, model, apiKey } = req.body;
+    if (baseURL) currentLlmConfig.baseURL = baseURL;
+    if (model) currentLlmConfig.model = model;
+    if (apiKey !== undefined) currentLlmConfig.apiKey = apiKey;
+    
+    // Clear existing agents to force recreation with new config
+    agentPool.clearAllAgents();
+    
+    res.json({ success: true, config: currentLlmConfig });
+  } catch (error) {
+    logger.error('Error updating LLM config:', error);
+    res.status(500).json({ error: 'Failed to update LLM configuration' });
+  }
+});
+
+// Available LLM Models
+app.get('/api/llm/available', (req, res) => {
+  try {
+    const services = llmScanner.getAllServices();
+    res.json(services);
+  } catch (error) {
+    logger.error('Error getting available LLM services:', error);
+    res.status(500).json({ error: 'Failed to get available LLM services' });
+  }
+});
+
+app.post('/api/llm/rescan', async (req, res) => {
+  try {
+    const services = await llmScanner.rescanServices();
+    res.json(services);
+  } catch (error) {
+    logger.error('Error rescanning LLM services:', error);
+    res.status(500).json({ error: 'Failed to rescan LLM services' });
+  }
 });
 
 app.get('/api/conversation', (req, res) => {
@@ -504,7 +559,7 @@ if (process.env.NODE_ENV === 'production') {
 app.listen(PORT, () => {
   logger.info(`Server running on port ${PORT}`);
   logger.info(`Workspace: ${workspaceRoot}`);
-  logger.info(`LLM: ${agentConfig.llmConfig.baseURL} (${agentConfig.llmConfig.model})`);
+  logger.info(`LLM: ${currentLlmConfig.baseURL} (${currentLlmConfig.model})`);
 });
 
 export default app;

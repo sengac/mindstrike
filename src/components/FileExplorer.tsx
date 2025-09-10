@@ -4,6 +4,7 @@ import { useWorkspace } from '../hooks/useWorkspace';
 import { usePreferences } from '../hooks/usePreferences';
 import { CodeEditor } from './CodeEditor';
 import { TabbedEditor } from './TabbedEditor';
+import toast from 'react-hot-toast';
 
 interface FileExplorerProps {
   onDirectoryChange?: () => void;
@@ -11,7 +12,7 @@ interface FileExplorerProps {
 
 export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
   const { files, loadFiles, loadDirectory, changeDirectory, setWorkspaceRoot, currentDirectory, getFileContent, isLoading } = useWorkspace();
-  const { setCurrentDirectory: saveCurrentDirectory } = usePreferences();
+  const { setWorkspaceRoot: saveWorkspaceRoot } = usePreferences();
   const hasLoadedInitialDirectory = useRef(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string>('');
@@ -31,16 +32,14 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
 
   // Note: Workspace restoration is now handled at the App level
 
-  // Set flag after initial load and save directory changes
+  // Set flag after initial load (removed automatic directory saving)
   useEffect(() => {
     if (currentDirectory) {
       if (!hasLoadedInitialDirectory.current) {
         hasLoadedInitialDirectory.current = true;
-      } else {
-        saveCurrentDirectory(currentDirectory);
       }
     }
-  }, [currentDirectory, saveCurrentDirectory]);
+  }, [currentDirectory]);
 
   const handleFileClick = async (filePath: string) => {
     if (filePath.endsWith('/')) {
@@ -207,9 +206,10 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
   const handleWorkspaceConfirm = async () => {
     const result = await setWorkspaceRoot(currentDirectory, onDirectoryChange);
     if (result.success) {
-      alert(`✅ ${result.message}\n\nThe current directory is now your workspace root. CONVERSATIONS.json will be saved here.`);
+      saveWorkspaceRoot(currentDirectory);
+      toast.success(`${result.message}\n\nThe current directory is now your workspace root. CONVERSATIONS.json will be saved here.`);
     } else {
-      alert(`Failed to set workspace root: ${result.error}`);
+      toast.error(`Failed to set workspace root: ${result.error}`);
     }
     setShowWorkspaceConfirm(false);
   };
@@ -221,8 +221,8 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
   return (
     <div className="h-screen flex flex-col">
       {/* Header */}
-      <div className="flex-shrink-0 p-6 border-b border-gray-700">
-        <div className="flex items-center justify-between">
+      <div className="flex-shrink-0 px-6 border-b border-gray-700 flex items-center" style={{height: 'var(--header-height)'}}>
+        <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-3">
             <Folder size={24} className="text-blue-400" />
             <h1 className="text-xl font-semibold text-white">Workspace</h1>
@@ -230,10 +230,11 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
           <div className="flex items-center space-x-2">
             <button
               onClick={handleSetWorkspaceRoot}
-              className="p-1 hover:bg-gray-800 rounded transition-colors"
+              className="px-4 py-1 border border-gray-600 hover:bg-gray-800 rounded-lg transition-colors text-gray-400 hover:text-gray-200 flex items-center gap-1"
               title="Set current directory as workspace root"
             >
-              <Home size={16} className="text-green-400" />
+              <Home size={16} className="text-gray-400" />
+              <span className="text-xs">Set workspace root</span>
             </button>
           </div>
         </div>
@@ -243,7 +244,7 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
       <div className="flex flex-1 min-h-0">
 
         {/* File list */}
-        <div className="w-1/3 border-r border-gray-700 flex flex-col min-h-0">
+        <div className="w-[20%] min-w-[200px] max-w-[500px] border-r border-gray-700 flex flex-col min-h-0">
           <div className="flex items-center space-x-2 p-4">
             <button
               onClick={handleGoUp}
@@ -417,8 +418,14 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
           ) : (
             <div className="flex-1 flex items-center justify-center text-gray-500">
               <div className="text-center">
-                <File size={48} className="mx-auto mb-4 text-gray-600" />
-                <p>Select a file to view its contents</p>
+                <p className="flex items-center justify-center">
+                  <File size={16} className="mr-2" />
+                  Select a file to view its contents
+                </p>
+                <p className="flex items-center justify-center mt-2">
+                  <Home size={16} className="mr-2" />
+                  Navigate to other directories and click the "Set workspace root" button to change the workspace root
+                </p>
               </div>
             </div>
           )}

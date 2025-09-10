@@ -1,5 +1,5 @@
 {
-  "name": "poweragent",
+  "name": "mindstrike",
   "version": "1.0.0",
   "description": "An Agentic AI coding assistant",
   "type": "module",
@@ -32,6 +32,7 @@
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-hot-toast": "^2.5.2",
     "react-syntax-highlighter": "^15.6.1",
     "winston": "^3.17.0",
     "ws": "^8.18.0"

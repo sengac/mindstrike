@@ -51,7 +51,7 @@ export function ThreadsPanel({
   };
 
   return (
-    <div className="w-64 bg-gray-800 border-r border-gray-700 flex flex-col relative">
+    <div className="w-[20%] min-w-[200px] max-w-[500px] bg-gray-800 border-r border-gray-700 flex flex-col relative">
       {/* Threads List */}
       <div className="flex-1 overflow-y-auto">
         {threads.length === 0 ? (

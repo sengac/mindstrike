@@ -1,4 +1,4 @@
-import { User, Bot, Wrench, CheckCircle, XCircle, ChevronDown, ChevronRight, FileText, Code, Trash2, RotateCcw, Loader2, X, Edit2, Check } from 'lucide-react';
+import { User, Bot, Wrench, CheckCircle, XCircle, ChevronDown, ChevronRight, FileText, Code, Trash2, RotateCcw, Loader2, X, Edit2, Check, Copy } from 'lucide-react';
 import { ConversationMessage } from '../types';
 import { useState, useEffect, useRef } from 'react';
 import { marked } from 'marked';
@@ -80,6 +80,20 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
     }
   };
 
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (err) {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+    }
+  };
+
   const renderCodeBlock = (code: string, language?: string) => {
     if (language === 'mermaid') {
       const diagramId = `mermaid-${Date.now()}-${Math.random()}`;
@@ -92,21 +106,35 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
       );
     }
 
+    // Check if this is a supported code language for copy button
+    const supportedLanguages = ['javascript', 'typescript', 'python', 'java', 'c', 'cpp', 'csharp', 'php', 'ruby', 'go', 'rust', 'swift', 'kotlin', 'scala', 'clojure', 'elixir', 'erlang', 'haskell', 'ocaml', 'fsharp', 'dart', 'lua', 'perl', 'r', 'matlab', 'julia', 'bash', 'shell', 'powershell', 'sql', 'html', 'css', 'scss', 'sass', 'less', 'xml', 'json', 'yaml', 'yml', 'toml', 'ini', 'properties', 'dockerfile', 'makefile', 'cmake', 'text', 'plaintext'];
+    const showCopyButton = !language || supportedLanguages.includes(language.toLowerCase()) || language === 'json' || language === 'yaml' || language === 'xml';
+
     // For other languages, use syntax highlighting
     return (
-      <div className="my-4">
+      <div className="my-4 relative group">
+        {showCopyButton && (
+          <button
+            onClick={() => copyToClipboard(code)}
+            className="absolute top-2 right-2 p-2 bg-gray-700 hover:bg-gray-600 rounded opacity-0 group-hover:opacity-100 transition-opacity z-10 flex items-center space-x-1 text-xs text-gray-300 hover:text-white"
+            title="Copy code"
+          >
+            <Copy size={14} />
+            <span>Copy code</span>
+          </button>
+        )}
         <SyntaxHighlighter
           language={language || 'text'}
           style={vscDarkPlus}
           customStyle={{
             margin: 0,
             borderRadius: '0.375rem',
-            fontSize: `${fontSize}px`,
+            fontSize: `var(--dynamic-font-size, ${fontSize}px)`,
             overflowX: 'auto',
             maxWidth: '100%',
           }}
           codeTagProps={{
-            style: { fontSize: `${fontSize}px` }
+            style: { fontSize: `var(--dynamic-font-size, ${fontSize}px)` }
           }}
           wrapLines={true}
           wrapLongLines={true}
@@ -138,7 +166,7 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
               const html = String(marked.parse(beforeContent));
               const sanitizedHtml = DOMPurify.sanitize(html);
               parts.push(
-                <div key={`before-${blockId}`} className="prose prose-invert prose-sm max-w-full overflow-hidden" style={{ fontSize: `${fontSize}px` }} dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
+                <div key={`before-${blockId}`} className="prose prose-invert prose-sm max-w-full overflow-hidden" style={{ fontSize: `var(--dynamic-font-size, ${fontSize}px)` }} dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
               );
             }
           }
@@ -163,7 +191,7 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
             const html = String(marked.parse(afterContent));
             const sanitizedHtml = DOMPurify.sanitize(html);
             parts.push(
-              <div key="after" className="prose prose-invert prose-sm max-w-full overflow-hidden" style={{ fontSize: `${fontSize}px` }} dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
+              <div key="after" className="prose prose-invert prose-sm max-w-full overflow-hidden" style={{ fontSize: `var(--dynamic-font-size, ${fontSize}px)` }} dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
             );
           }
         }
@@ -172,10 +200,10 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
       } else {
         const html = String(marked.parse(content));
         const sanitizedHtml = DOMPurify.sanitize(html);
-        return <div className="prose prose-invert prose-sm max-w-full overflow-hidden" style={{ fontSize: `${fontSize}px` }} dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />;
+        return <div className="prose prose-invert prose-sm max-w-full overflow-hidden" style={{ fontSize: `var(--dynamic-font-size, ${fontSize}px)` }} dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />;
       }
     }
-    return <div className="whitespace-pre-wrap text-sm break-words" style={{ fontSize: `${fontSize}px` }}>{content}</div>;
+    return <div className="whitespace-pre-wrap text-sm break-words" style={{ fontSize: `var(--dynamic-font-size, ${fontSize}px)` }}>{content}</div>;
   };
 
   return (
@@ -408,7 +436,12 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
         </div>
         
         <div className={`text-xs text-gray-500 mt-1 ${isUser ? 'text-right' : 'text-left'}`}>
-          {message.timest.toLocaleTimeString()}
+          <span>{message.timest.toLocaleTimeString()}</span>
+          {!isUser && message.model && (
+            <span className="ml-2 text-gray-400">
+              via {message.model}
+            </span>
+          )}
         </div>
       </div>
       

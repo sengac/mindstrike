@@ -4,7 +4,7 @@ export function AgentsPanel() {
   return (
     <div className="flex-1 flex flex-col bg-gray-900 overflow-hidden">
       {/* Header */}
-      <div className="p-6 border-b border-gray-700">
+      <div className="px-6 border-b border-gray-700 flex items-center" style={{height: 'var(--header-height)'}}>
         <div className="flex items-center gap-3">
           <Bot size={24} className="text-blue-400" />
           <h1 className="text-xl font-semibold text-white">Agents</h1>

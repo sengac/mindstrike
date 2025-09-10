@@ -1,6 +1,7 @@
 
 import { MessageSquare, Files, Settings, Bot } from 'lucide-react';
 import { clsx } from 'clsx';
+import { MindStrikeIcon } from './MindStrikeIcon';
 
 interface SidebarProps {
   activePanel: 'chat' | 'files' | 'agents' | 'settings';
@@ -17,10 +18,15 @@ export function Sidebar({ activePanel, onPanelChange }: SidebarProps) {
   return (
     <div className="w-16 bg-gray-800 border-r border-gray-700 flex flex-col h-screen">
       {/* Logo */}
-      <div className="h-16 flex items-center justify-center border-b border-gray-700">
-        <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-          <span className="text-white font-bold text-sm">P</span>
-        </div>
+      <div className="h-16 flex items-center justify-center border-b border-gray-700 bg-blue-600">
+        <a 
+          href="https://mindstrike.ai" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="hover:opacity-80 transition-opacity"
+        >
+          <MindStrikeIcon className="text-white" size={32} />
+        </a>
       </div>
 
       {/* Menu items */}

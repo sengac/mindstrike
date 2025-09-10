@@ -2,15 +2,25 @@ import { useState, useEffect } from 'react';
 
 interface AppPreferences {
   fontSize: number;
-  currentDirectory?: string;
+  workspaceRoot?: string;
+  llmConfig: {
+    baseURL: string;
+    model: string;
+    apiKey?: string;
+  };
 }
 
 const defaultPreferences: AppPreferences = {
   fontSize: 14,
-  currentDirectory: undefined,
+  workspaceRoot: undefined,
+  llmConfig: {
+    baseURL: 'http://localhost:11434',
+    model: 'devstral:latest',
+    apiKey: undefined,
+  },
 };
 
-const PREFERENCES_KEY = 'poweragent-preferences';
+const PREFERENCES_KEY = 'mindstrike-preferences';
 
 export function usePreferences() {
   const [preferences, setPreferences] = useState<AppPreferences>(defaultPreferences);
@@ -45,7 +55,10 @@ export function usePreferences() {
     updatePreferences,
     fontSize: preferences.fontSize,
     setFontSize: (fontSize: number) => updatePreferences({ fontSize }),
-    currentDirectory: preferences.currentDirectory,
-    setCurrentDirectory: (currentDirectory: string) => updatePreferences({ currentDirectory }),
+    workspaceRoot: preferences.workspaceRoot,
+    setWorkspaceRoot: (workspaceRoot: string) => updatePreferences({ workspaceRoot }),
+    llmConfig: preferences.llmConfig,
+    setLlmConfig: (llmConfig: Partial<AppPreferences['llmConfig']>) => 
+      updatePreferences({ llmConfig: { ...preferences.llmConfig, ...llmConfig } }),
   };
 }

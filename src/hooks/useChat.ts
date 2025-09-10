@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import toast from 'react-hot-toast';
 import { ConversationMessage } from '../types';
 
 interface UseChatProps {
@@ -165,7 +166,9 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
                 }
                 
               } else if (data.type === 'error') {
-                throw new Error(data.error);
+                toast.error(`Connection Error: ${data.error}`);
+                setIsLoading(false);
+                return;
               }
             } catch (parseError) {
               console.error('Error parsing SSE data:', parseError);
@@ -176,15 +179,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
 
     } catch (error) {
       console.error('SSE Error:', error);
-      const errorMessage: ConversationMessage = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: `Error: Failed to send message - ${error}`,
-        timest: new Date()
-      };
-      const errorMessages = [...currentMessages, errorMessage];
-      setMessages(errorMessages);
-      notifyMessagesUpdate(errorMessages);
+      toast.error(`Failed to send message: ${error}`);
     } finally {
       setIsLoading(false);
     }
@@ -268,26 +263,14 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
         notifyMessagesUpdate(finalMessages);
       } else {
         const errorData = await response.json();
-        const errorMessage: ConversationMessage = {
-          id: Date.now().toString(),
-          role: 'assistant',
-          content: `Error: ${errorData.error}`,
-          timest: new Date()
-        };
-        const errorMessages = [...messagesBeforeRegeneration, errorMessage];
-        setMessages(errorMessages);
-        notifyMessagesUpdate(errorMessages);
+        toast.error(`Failed to regenerate: ${errorData.error}`);
+        setMessages(messagesBeforeRegeneration);
+        notifyMessagesUpdate(messagesBeforeRegeneration);
       }
     } catch (error) {
-      const errorMessage: ConversationMessage = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: `Error: Failed to regenerate message - ${error}`,
-        timest: new Date()
-      };
-      const errorMessages = [...messagesBeforeRegeneration, errorMessage];
-      setMessages(errorMessages);
-      notifyMessagesUpdate(errorMessages);
+      toast.error(`Failed to regenerate message: ${error}`);
+      setMessages(messagesBeforeRegeneration);
+      notifyMessagesUpdate(messagesBeforeRegeneration);
     } finally {
       setIsLoading(false);
     }
@@ -397,7 +380,9 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
                 notifyMessagesUpdate([...currentMessages]);
                 
               } else if (data.type === 'error') {
-                throw new Error(data.error);
+                toast.error(`Edit Error: ${data.error}`);
+                setIsLoading(false);
+                return;
               }
             } catch (parseError) {
               console.error('Error parsing SSE data:', parseError);
@@ -408,15 +393,9 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
 
     } catch (error) {
       console.error('SSE Error:', error);
-      const errorMessage: ConversationMessage = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: `Error: Failed to regenerate response - ${error}`,
-        timest: new Date()
-      };
-      const errorMessages = [...messagesBeforeRegeneration, errorMessage];
-      setMessages(errorMessages);
-      notifyMessagesUpdate(errorMessages);
+      toast.error(`Failed to edit message: ${error}`);
+      setMessages(messagesBeforeRegeneration);
+      notifyMessagesUpdate(messagesBeforeRegeneration);
     } finally {
       setIsLoading(false);
     }

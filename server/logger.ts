@@ -7,7 +7,7 @@ export const logger = winston.createLogger({
     winston.format.errors({ stack: true }),
     winston.format.json()
   ),
-  defaultMeta: { service: 'poweragent' },
+  defaultMeta: { service: 'mindstrike' },
   transports: [
     new winston.transports.Console({
       format: winston.format.combine(

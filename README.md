@@ -1,21 +1,6 @@
-# PowerAgent
+# MindStrike
 
 An Agentic AI coding assistant built with TypeScript, React, Vite and Express.
-
-## Features
-
-- 🤖 **Local LLM Integration**: Works with Ollama, LM Studio, or any OpenAI-compatible API
-- 🛠️ **Comprehensive Tool System**: File operations, terminal commands, code search, and more
-- 💬 **Chat Interface**: Clean, modern web-based chat interface
-- 📁 **File Explorer**: Browse, view, and edit workspace files with syntax highlighting
-- 🔧 **Tool Execution**: See real-time tool calls and results
-- 📝 **Code Editor**: Monaco Editor with syntax highlighting for 20+ languages
-- 📋 **Task Management**: Built-in todo system for tracking work
-- 🌐 **Web Search**: Search the web for information
-- 📊 **Mermaid Diagrams**: Render diagrams from code
-- 🔍 **Diagnostics**: Get TypeScript/ESLint errors and warnings
-- ✨ **Code Formatting**: Format files with Prettier
-- 🚀 **Fast Development**: Built with Vite for instant hot reloading
 
 ## Prerequisites
 
@@ -30,7 +15,7 @@ An Agentic AI coding assistant built with TypeScript, React, Vite and Express.
 1. **Clone and install dependencies:**
    ```bash
    git clone <repo-url>
-   cd poweragent
+   cd mindstrike
    npm install
    ```
 
@@ -75,7 +60,7 @@ LLM_API_KEY=your-api-key
 ## Architecture
 
 ```
-poweragent/
+mindstrike/
 ├── src/                    # React frontend
 │   ├── components/         # UI components
 │   ├── hooks/             # React hooks for API calls
@@ -117,7 +102,7 @@ npm run typecheck    # Type checking
 - **Frontend**: React + TypeScript + Tailwind CSS
 - **Backend**: Node.js + Express + TypeScript
 - **Build Tool**: Vite for fast development and builds
-- **Communication**: REST API between frontend and backend
+- **Communication**: REST + SSE API between frontend and backend
 
 ## Production Deployment
 
@@ -137,21 +122,4 @@ npm run typecheck    # Type checking
    ```bash
    node dist/server/index.js
    ```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **LLM Connection Failed**
-   - Ensure your LLM server is running
-   - Check the `LLM_BASE_URL` in your `.env` file
-   - Verify the model name is correct
-
-2. **Tool Execution Errors**
-   - Check file permissions in your workspace
-   - Ensure the server has access to the workspace directory
-
-3. **Build Errors**
-   - Clear `node_modules` and reinstall: `rm -rf node_modules package-lock.json && npm install`
-   - Check Node.js version (requires 22+)
 

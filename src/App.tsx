@@ -1,30 +1,36 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
-import { ChatPanel } from './components/ChatPanel';
+import { ChatPanel, ChatPanelRef } from './components/ChatPanel';
 import { ThreadsPanel } from './components/ThreadsPanel';
 import { FileExplorer } from './components/FileExplorer';
 import { AgentsPanel } from './components/AgentsPanel';
 import { SettingsPanel } from './components/SettingsPanel';
+import { ModelSelector } from './components/ModelSelector';
 import { useThreads } from './hooks/useThreads';
 import { usePreferences } from './hooks/usePreferences';
 import { useWorkspace } from './hooks/useWorkspace';
+import { useLlmConfig } from './hooks/useLlmConfig';
+import { LLMModel } from './hooks/useAvailableModels';
 import { Menu, X, MessageSquare, Minus, Plus, Trash2 } from 'lucide-react';
+import { Toaster } from 'react-hot-toast';
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activePanel, setActivePanel] = useState<'chat' | 'files' | 'agents' | 'settings'>('chat');
   const [workspaceRestored, setWorkspaceRestored] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<LLMModel | undefined>(undefined);
   
-  const { currentDirectory: savedDirectory, fontSize, setFontSize } = usePreferences();
-  const { setWorkspaceRoot, changeDirectory } = useWorkspace();
+  const { workspaceRoot: savedWorkspaceRoot, fontSize, setFontSize } = usePreferences();
+  const { setWorkspaceRoot } = useWorkspace();
+  const { setLlmConfig } = useLlmConfig();
+  const chatPanelRef = useRef<ChatPanelRef>(null);
   
   // Restore workspace before loading threads
   useEffect(() => {
     const restoreWorkspace = async () => {
-      if (savedDirectory) {
+      if (savedWorkspaceRoot) {
         try {
-          await setWorkspaceRoot(savedDirectory);
-          await changeDirectory(savedDirectory);
+          await setWorkspaceRoot(savedWorkspaceRoot);
         } catch (error) {
           console.error('Failed to restore workspace:', error);
         }
@@ -32,7 +38,7 @@ function App() {
       setWorkspaceRestored(true);
     };
     restoreWorkspace();
-  }, [savedDirectory, setWorkspaceRoot, changeDirectory]);
+  }, [savedWorkspaceRoot, setWorkspaceRoot]);
   
   const {
     threads,
@@ -84,9 +90,20 @@ function App() {
   };
 
   const clearConversation = () => {
-    // This will be handled by the ChatPanel's clearConversation function
-    // For now, we'll just create a new thread
-    handleNewThread();
+    chatPanelRef.current?.clearConversation();
+  };
+
+  const handleModelSelect = async (model: LLMModel) => {
+    setSelectedModel(model);
+    try {
+      setLlmConfig({
+        baseURL: model.baseURL,
+        model: model.model,
+        apiKey: model.apiKey
+      });
+    } catch (error) {
+      console.error('Failed to update LLM config:', error);
+    }
   };
 
   return (
@@ -114,13 +131,17 @@ function App() {
         {activePanel === 'chat' && (
           <div className="flex flex-col h-full">
             {/* Chat Header spanning across threads and messages */}
-            <div className="flex-shrink-0 p-6 border-b border-gray-700">
-              <div className="flex items-center justify-between">
+            <div className="flex-shrink-0 px-6 border-b border-gray-700 flex items-center" style={{height: 'var(--header-height)'}}>
+              <div className="flex items-center justify-between w-full">
                 <div className="flex items-center gap-3">
                   <MessageSquare size={24} className="text-blue-400" />
                   <h1 className="text-xl font-semibold text-white">Chat</h1>
                 </div>
               <div className="flex items-center space-x-2">
+                <ModelSelector 
+                  selectedModel={selectedModel}
+                  onModelSelect={handleModelSelect}
+                />
                 <div className="flex items-center space-x-1 bg-gray-800 rounded-lg p-1">
                   <button
                     onClick={decreaseFontSize}
@@ -140,10 +161,11 @@ function App() {
                 </div>
                 <button
                   onClick={clearConversation}
-                  className="p-2 hover:bg-gray-800 rounded-lg transition-colors text-gray-400 hover:text-gray-200"
+                  className="px-4 py-1 border border-gray-600 hover:bg-gray-800 rounded-lg transition-colors text-gray-400 hover:text-gray-200 flex items-center gap-1"
                   title="Clear conversation"
                 >
                   <Trash2 size={16} />
+                  <span className="text-xs">Clear chat</span>
                 </button>
                 </div>
               </div>
@@ -160,11 +182,14 @@ function App() {
                 onThreadDelete={deleteThread}
               />
               <ChatPanel
+                ref={chatPanelRef}
                 threadId={activeThreadId || undefined}
                 messages={activeThread?.messages || []}
                 onMessagesUpdate={handleMessagesUpdate}
                 onFirstMessage={handleFirstMessage}
                 onDeleteMessage={handleDeleteMessage}
+                fontSize={fontSize}
+                workspaceRoot={savedWorkspaceRoot}
               />
             </div>
           </div>
@@ -181,6 +206,17 @@ function App() {
           onClick={() => setSidebarOpen(false)}
         />
       )}
+      <Toaster 
+        position="bottom-center"
+        toastOptions={{
+          duration: 3000,
+          style: {
+            background: '#374151',
+            color: '#fff',
+            border: '1px solid #4b5563',
+          },
+        }}
+      />
     </div>
   );
 }
