@@ -38,6 +38,9 @@ interface AppState {
   // Personality/Role Configuration
   defaultCustomRole?: string; // fallback custom role for new threads
   
+  // MindMap Preferences
+  mindMapKeyBindings?: Record<string, string>;
+  
   // Actions
   setFontSize: (fontSize: number) => void;
   setSidebarOpen: (open: boolean) => void;
@@ -53,6 +56,9 @@ interface AppState {
   
   // Role/Personality Actions
   setDefaultCustomRole: (role?: string) => void;
+  
+  // MindMap Actions  
+  setMindMapKeyBindings: (keyBindings: Record<string, string>) => void;
 }
 
 const defaultLlmConfig: LLMConfig = {
@@ -76,6 +82,7 @@ export const useAppStore = create<AppState>()(
       llmConfig: defaultLlmConfig,
       selectedModel: undefined,
       defaultCustomRole: undefined,
+      mindMapKeyBindings: undefined,
       
       // Actions
       setFontSize: (fontSize: number) => set({ fontSize }),
@@ -101,6 +108,9 @@ export const useAppStore = create<AppState>()(
       
       // Role/Personality Actions
       setDefaultCustomRole: (defaultCustomRole?: string) => set({ defaultCustomRole }),
+      
+      // MindMap Actions
+      setMindMapKeyBindings: (mindMapKeyBindings: Record<string, string>) => set({ mindMapKeyBindings }),
     }),
     {
       name: 'mindstrike-preferences',
@@ -110,6 +120,7 @@ export const useAppStore = create<AppState>()(
         llmConfig: state.llmConfig,
         selectedModel: state.selectedModel,
         defaultCustomRole: state.defaultCustomRole,
+        mindMapKeyBindings: state.mindMapKeyBindings,
       }),
     }
   )

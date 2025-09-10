@@ -206,7 +206,6 @@ function ChatMessageComponent({ message, onDelete, onRegenerate, onCancelToolCal
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      console.log('Code copied to clipboard');
     } catch (err) {
       console.error('Clipboard API failed, trying fallback:', err);
       try {
@@ -221,9 +220,7 @@ function ChatMessageComponent({ message, onDelete, onRegenerate, onCancelToolCal
         textArea.select();
         const successful = document.execCommand('copy');
         document.body.removeChild(textArea);
-        if (successful) {
-          console.log('Code copied to clipboard (fallback)');
-        } else {
+        if (!successful) {
           console.error('Fallback copy failed');
         }
       } catch (fallbackErr) {

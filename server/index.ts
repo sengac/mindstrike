@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
@@ -720,10 +720,101 @@ app.post('/api/knowledge-graphs', async (req, res) => {
     const knowledgeGraphs = req.body;
     const knowledgeGraphsPath = path.join(workspaceRoot, 'mindstrike-graphs.json');
     
-    await fs.writeFile(knowledgeGraphsPath, JSON.stringify(knowledgeGraphs, null, 2));
+    // Read existing data to preserve mindmap data
+    let existingGraphs = [];
+    try {
+      const existingData = await fs.readFile(knowledgeGraphsPath, 'utf-8');
+      existingGraphs = JSON.parse(existingData);
+    } catch (error: any) {
+      if (error.code !== 'ENOENT') {
+        throw error;
+      }
+      // File doesn't exist, that's fine
+    }
+    
+    // Create a map of existing mindmap data
+    const existingMindmapData = new Map();
+    existingGraphs.forEach((graph: any) => {
+      if (graph.mindmapData) {
+        existingMindmapData.set(graph.id, graph.mindmapData);
+      }
+    });
+    
+    // Merge new knowledge graphs with existing mindmap data
+    const mergedGraphs = knowledgeGraphs.map((graph: any) => {
+      const existingMindmap = existingMindmapData.get(graph.id);
+      return existingMindmap ? { ...graph, mindmapData: existingMindmap } : graph;
+    });
+    
+    await fs.writeFile(knowledgeGraphsPath, JSON.stringify(mergedGraphs, null, 2));
     res.json({ success: true });
   } catch (error: any) {
     console.error('Error saving knowledge graphs:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// MindMap data API for Knowledge Graphs
+app.get('/api/knowledge-graphs/:graphId/mindmap', async (req: Request, res: Response) => {
+  try {
+    const { graphId } = req.params;
+    const fs = await import('fs/promises');
+    const graphsPath = path.join(workspaceRoot, 'mindstrike-graphs.json');
+    
+    try {
+      const data = await fs.readFile(graphsPath, 'utf-8');
+      const graphs = JSON.parse(data);
+      const graph = graphs.find((g: any) => g.id === graphId);
+      
+      if (!graph) {
+        return res.status(404).json({ error: 'Mindmap data not found' });
+      }
+      
+      res.json(graph.mindmapData);
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        return res.status(404).json({ error: 'Mindmap data not found' });
+      }
+      throw error;
+    }
+  } catch (error: any) {
+    console.error('Error loading mindmap data:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/knowledge-graphs/:graphId/mindmap', async (req: Request, res: Response) => {
+  try {
+    const { graphId } = req.params;
+    const mindmapData = req.body;
+    const fs = await import('fs/promises');
+    const graphsPath = path.join(workspaceRoot, 'mindstrike-graphs.json');
+    
+    let graphs = [];
+    try {
+      const data = await fs.readFile(graphsPath, 'utf-8');
+      graphs = JSON.parse(data);
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        // File doesn't exist, start with empty array
+        graphs = [];
+      } else {
+        throw error;
+      }
+    }
+    
+    const existingGraphIndex = graphs.findIndex((g: any) => g.id === graphId);
+    if (existingGraphIndex >= 0) {
+      graphs[existingGraphIndex].mindmapData = mindmapData;
+    } else {
+      graphs.push({ id: graphId, mindmapData });
+    }
+    
+    await fs.writeFile(graphsPath, JSON.stringify(graphs, null, 2));
+
+    res.json({ success: true });
+  } catch (error: any) {
+    logger.error('Error saving mindmap data:', error);
     res.status(500).json({ error: error.message });
   }
 });

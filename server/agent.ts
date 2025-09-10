@@ -11,6 +11,7 @@ export interface AgentConfig {
     baseURL: string;
     model: string;
     apiKey?: string;
+    type?: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic';
   };
   customRole?: string;
 }

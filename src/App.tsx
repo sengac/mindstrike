@@ -231,6 +231,12 @@ function App() {
                   <Workflow size={24} className="text-blue-400" />
                   <h1 className="text-xl font-semibold text-white">Workflows</h1>
                 </div>
+                <div className="flex items-center space-x-4">
+                  <ModelSelector 
+                    selectedModel={selectedModel}
+                    onModelSelect={handleModelSelect}
+                  />
+                </div>
               </div>
             </div>
             
@@ -257,6 +263,12 @@ function App() {
                   <Network size={24} className="text-blue-400" />
                   <h1 className="text-xl font-semibold text-white">Knowledge Graphs</h1>
                 </div>
+                <div className="flex items-center space-x-4">
+                  <ModelSelector 
+                    selectedModel={selectedModel}
+                    onModelSelect={handleModelSelect}
+                  />
+                </div>
               </div>
             </div>
             
@@ -270,7 +282,9 @@ function App() {
                 onKnowledgeGraphRename={renameKnowledgeGraph}
                 onKnowledgeGraphDelete={deleteKnowledgeGraph}
               />
-              <KnowledgeGraphsView activeKnowledgeGraph={activeKnowledgeGraph} />
+              <KnowledgeGraphsView 
+                activeKnowledgeGraph={activeKnowledgeGraph}
+              />
             </div>
           </div>
         )}

@@ -39,7 +39,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
         const { message: validatedMessage, hasChanges } = await validation.validateMessage(message);
         
         if (hasChanges) {
-          console.log('✅ Message content was automatically corrected during validation');
+    
         }
         
         return validatedMessage;
@@ -136,38 +136,30 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
           if (line.startsWith('data: ')) {
             try {
               const data = JSON.parse(line.slice(6));
-              console.log('📡 SSE Message received (sendMessage):', data.type, data);
-              
               if (data.type === 'connected') {
-                 console.log('✅ SSE connected');
+                // SSE connected
               } else if (data.type === 'message-update') {
                 const updatedMsg = {
                 ...data.message,
                 timest: new Date(data.message.timest)
                 };
                 
-                console.log('🔄 Message update - Status:', updatedMsg.status, 'Tool calls:', updatedMsg.toolCalls?.length || 0, updatedMsg);
-                
                 // For streaming updates, we'll validate on completion instead of every update
                 // This prevents validation from running on partial content
                 if (!assistantMessage) {
                 // First update - add the message
-                  console.log('➕ Adding new assistant message');
                 assistantMessage = updatedMsg;
                 currentMessages = [...currentMessages, updatedMsg];
                 } else {
                 // Update existing message
-                console.log('🔄 Updating existing message');
                   assistantMessage = updatedMsg;
                   currentMessages = currentMessages.map(msg => 
-                     msg.id === updatedMsg.id ? updatedMsg : msg
-                   );
-                 }
-                 console.log('📝 Setting messages state, total:', currentMessages.length);
-                 setMessages([...currentMessages]);
+                   msg.id === updatedMsg.id ? updatedMsg : msg
+                 );
+                }
+                setMessages([...currentMessages]);
                 
-              } else if (data.type === 'completed') {
-              console.log('✅ Message completed');
+                } else if (data.type === 'completed') {
               const finalMsg = {
               ...data.message,
                 timest: new Date(data.message.timest)
@@ -242,7 +234,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
       if (response.ok) {
         // The SSE stream will send the cancelled update automatically
         // so we don't need to manually update the message here
-        console.log('Tool calls cancelled for message:', messageId);
+        
       }
     } catch (error) {
       console.error('Failed to cancel tool calls:', error);
@@ -364,39 +356,32 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
           if (line.startsWith('data: ')) {
             try {
             const data = JSON.parse(line.slice(6));
-            console.log('📡 SSE Message received (regenerate):', data.type, data);
-            
             if (data.type === 'connected') {
-              console.log('✅ SSE connected');
+              // SSE connected
             } else if (data.type === 'message-update') {
             const updatedMsg = {
             ...data.message,
               timest: new Date(data.message.timest)
             };
             
-            console.log('🔄 Message update - Status:', updatedMsg.status, 'Tool calls:', updatedMsg.toolCalls?.length || 0, updatedMsg);
-            
             // Validate message before adding/updating
             const validatedMsg = await validateAndProcessMessage(updatedMsg);
             
             if (!assistantMessage) {
               // First update - add the message
-            console.log('➕ Adding new assistant message');
             assistantMessage = validatedMsg;
             currentMessages = [...currentMessages, validatedMsg];
             } else {
             // Update existing message
-              console.log('🔄 Updating existing message');
               assistantMessage = validatedMsg;
                    currentMessages = currentMessages.map(msg => 
                      msg.id === validatedMsg.id ? validatedMsg : msg
                    );
                  }
-                 console.log('📝 Setting messages state, total:', currentMessages.length);
                  setMessages([...currentMessages]);
                 
               } else if (data.type === 'completed') {
-              console.log('✅ Message completed (edit)');
+
               const finalMsg = {
               ...data.message,
                 timest: new Date(data.message.timest)

@@ -145,7 +145,7 @@ export function useThreads(workspaceRestored: boolean = true) {
         const thread = latestThreads.find((t: any) => t.id === threadId);
         
         if (!thread || thread.messages.length < 2) {
-          console.log('Not enough messages for title generation');
+  
           return;
         }
 

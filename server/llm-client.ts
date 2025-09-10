@@ -1,10 +1,15 @@
 export interface LLMMessage {
   role: 'system' | 'user' | 'assistant';
   content: string | Array<{
-    type: 'text' | 'image_url';
+    type: 'text' | 'image_url' | 'image';
     text?: string;
     image_url?: {
       url: string;
+    };
+    source?: {
+      type: 'base64';
+      media_type: string;
+      data: string;
     };
   }>;
   images?: string[]; // For Ollama vision models - array of base64 strings

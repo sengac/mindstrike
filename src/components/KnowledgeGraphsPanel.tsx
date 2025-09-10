@@ -51,7 +51,7 @@ export function KnowledgeGraphsPanel({
   };
 
   return (
-    <div className="w-[20%] min-w-[200px] max-w-[500px] bg-gray-800 border-r border-gray-700 flex flex-col relative">
+    <div className="w-[300px] bg-gray-800 border-r border-gray-700 flex flex-col relative shrink-0">
       {/* Knowledge Graphs List */}
       <div className="flex-1 overflow-y-auto">
         {knowledgeGraphs.length === 0 ? (
