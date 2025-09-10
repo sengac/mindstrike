@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Thread, ConversationMessage } from '../types';
+import { cleanContentForLLM } from '../utils/content-filter';
 
 export function useThreads(workspaceRestored: boolean = true) {
   const [threads, setThreads] = useState<Thread[]>([]);
@@ -122,6 +123,16 @@ export function useThreads(workspaceRestored: boolean = true) {
     await saveThreads(updatedThreads);
   }, [threads, saveThreads]);
 
+  const updateThreadRole = useCallback(async (threadId: string, customRole?: string) => {
+    const updatedThreads = threads.map(thread =>
+      thread.id === threadId
+        ? { ...thread, customRole, updatedAt: new Date() }
+        : thread
+    );
+    setThreads(updatedThreads);
+    await saveThreads(updatedThreads);
+  }, [threads, saveThreads]);
+
   const generateThreadSummary = useCallback(async (threadId: string) => {
     // Find the thread with updated messages by refreshing from state
     setTimeout(async () => {
@@ -149,13 +160,13 @@ export function useThreads(workspaceRestored: boolean = true) {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            context: `User asked: ${userMsg.content.slice(0, 200)}`
+            context: `User asked: ${cleanContentForLLM(userMsg.content).slice(0, 200)}`
           })
         });
 
         if (titleResponse.ok) {
           const result = await titleResponse.json();
-          const title = result.title?.trim();
+          const title = cleanContentForLLM(result.title || '').trim();
           
           if (title && title.length > 0) {
             // Update the thread with the new title
@@ -270,6 +281,7 @@ export function useThreads(workspaceRestored: boolean = true) {
     createThread,
     deleteThread,
     renameThread,
+    updateThreadRole,
     selectThread,
     updateThreadMessages,
     deleteMessage,

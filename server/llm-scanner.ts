@@ -9,6 +9,11 @@ export interface AvailableLLMService {
   available: boolean;
 }
 
+export interface ModelMetadata {
+  name: string;
+  context_length?: number;
+}
+
 export class LLMScanner {
   private services: AvailableLLMService[] = [];
 
@@ -141,5 +146,90 @@ export class LLMScanner {
 
   async rescanServices(): Promise<AvailableLLMService[]> {
     return this.scanAvailableServices();
+  }
+
+  async getModelMetadata(service: AvailableLLMService, modelName: string): Promise<ModelMetadata | null> {
+    if (service.type !== 'ollama') {
+      logger.debug(`Model metadata only supported for Ollama services, service type: ${service.type}`);
+      return null;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+    try {
+      const response = await fetch(`${service.baseURL}/api/show`, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: modelName
+        })
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      // Extract context length from model_info
+      let contextLength: number | undefined;
+      
+      if (data?.model_info) {
+        const modelInfo = data.model_info;
+        
+        // Search for any field ending with 'context_length' (most robust approach)
+        for (const key of Object.keys(modelInfo)) {
+          if (key.endsWith('context_length')) {
+            contextLength = modelInfo[key];
+            break;
+          }
+        }
+        
+        // Fallback to direct property access if needed
+        if (!contextLength) {
+          contextLength = modelInfo['context_length'] || modelInfo.context_length;
+        }
+      }
+
+      return {
+        name: modelName,
+        context_length: contextLength
+      };
+
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === 'AbortError') {
+        logger.debug(`Timeout getting metadata for model ${modelName}`);
+      } else {
+        logger.debug(`Error getting metadata for model ${modelName}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      return null;
+    }
+  }
+
+  async getAllModelsWithMetadata(service: AvailableLLMService): Promise<ModelMetadata[]> {
+    if (service.type !== 'ollama') {
+      return service.models.map(name => ({ name }));
+    }
+
+    const modelsWithMetadata: ModelMetadata[] = [];
+    
+    for (const modelName of service.models) {
+      const metadata = await this.getModelMetadata(service, modelName);
+      if (metadata) {
+        modelsWithMetadata.push(metadata);
+      } else {
+        modelsWithMetadata.push({ name: modelName });
+      }
+    }
+
+    return modelsWithMetadata;
   }
 }

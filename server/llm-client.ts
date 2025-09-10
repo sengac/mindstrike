@@ -32,6 +32,10 @@ export class LLMClient {
     tools?: any[],
     stream = false
   ): Promise<LLMResponse> {
+    if (!this.config.model || this.config.model.trim() === '') {
+      throw new Error('No LLM model configured. Please select a model from the available options.');
+    }
+
     const requestBody: any = {
       model: this.config.model,
       messages,
@@ -119,6 +123,10 @@ export class LLMClient {
     messages: LLMMessage[],
     tools?: any[]
   ): AsyncGenerator<string> {
+    if (!this.config.model || this.config.model.trim() === '') {
+      throw new Error('No LLM model configured. Please select a model from the available options.');
+    }
+
     const isOllama = this.config.baseURL.includes('11434') || this.config.baseURL.includes('ollama');
     const endpoint = isOllama ? '/api/chat' : '/v1/chat/completions';
     

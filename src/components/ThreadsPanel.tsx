@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Edit2, Trash2, Plus, MessageSquare } from 'lucide-react';
+import { Edit2, Trash2, Plus, MessageSquare, UserCheck } from 'lucide-react';
 import { Thread } from '../types';
 import { clsx } from 'clsx';
 
@@ -88,9 +88,18 @@ export function ThreadsPanel({
                   <>
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
-                        <h3 className="text-sm font-medium text-gray-200 truncate">
-                          {thread.name}
-                        </h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-sm font-medium text-gray-200 truncate">
+                            {thread.name}
+                          </h3>
+                          {thread.customRole && (
+                            <UserCheck 
+                              size={14} 
+                              className="text-purple-400 flex-shrink-0" 
+                              title="Custom personality applied"
+                            />
+                          )}
+                        </div>
                         {thread.summary && (
                           <p className="text-xs text-gray-400 mt-1 line-cl-2">
                             {thread.summary}

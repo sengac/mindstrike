@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import * as monaco from 'monaco-editor';
+import { useAppStore } from '../store/useAppStore';
 
 interface CodeEditorProps {
   value: string;
@@ -13,6 +14,7 @@ export function CodeEditor({ value, language = 'typescript', onChange, readOnly 
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const subscriptionRef = useRef<monaco.IDisposable | null>(null);
+  const { fontSize } = useAppStore();
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -26,7 +28,7 @@ export function CodeEditor({ value, language = 'typescript', onChange, readOnly 
       automaticLayout: true,
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
-      fontSize: 14,
+      fontSize: fontSize,
       lineNumbers: 'on',
       roundedSelection: false,
       scrollbar: {
@@ -82,6 +84,13 @@ export function CodeEditor({ value, language = 'typescript', onChange, readOnly 
       });
     }
   }, [onChange, readOnly]);
+
+  // Update fontSize when it changes
+  useEffect(() => {
+    if (editorRef.current) {
+      editorRef.current.updateOptions({ fontSize });
+    }
+  }, [fontSize]);
 
   return (
     <div 

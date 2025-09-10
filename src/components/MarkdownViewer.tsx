@@ -18,6 +18,20 @@ export function MarkdownViewer({ content }: MarkdownViewerProps) {
           gfm: true, // GitHub Flavored Markdown
         });
 
+        // Configure renderer to open external links in new window
+        const renderer = new marked.Renderer();
+        const originalLinkRenderer = renderer.link;
+        renderer.link = function(href, title, text) {
+          const link = originalLinkRenderer.call(this, href, title, text);
+          // Check if it's an external link (starts with http:// or https://)
+          if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
+            return link.replace('<a ', '<a target="_blank" rel="noopener noreferrer" ');
+          }
+          return link;
+        };
+
+        marked.setOptions({ renderer });
+
         const rawHtml = await marked(content);
         const cleanHtml = DOMPurify.sanitize(rawHtml);
         setHtml(cleanHtml);

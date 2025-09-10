@@ -18,6 +18,7 @@ export interface LLMModel {
   displayName: string;
   apiKey?: string;
   type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai';
+  contextLength?: number;
 }
 
 export function useAvailableModels() {
@@ -31,13 +32,13 @@ export function useAvailableModels() {
       setIsLoading(true);
       setError(null);
       
-      // Get detected services from server
-      const response = await fetch('/api/llm/available');
+      // Get detected services with metadata from server
+      const response = await fetch('/api/llm/available-with-metadata');
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       
-      const detectedServices: AvailableLLMService[] = await response.json();
+      const detectedServices: any[] = await response.json();
       
       // Get custom services from localStorage
       const loadCustomServices = (): CustomLLMService[] => {
@@ -74,19 +75,38 @@ export function useAvailableModels() {
       // Flatten services into individual models
       const allModels: LLMModel[] = [];
       allServices.forEach(service => {
-        if (service.available && service.models.length > 0) {
+        if (service.available) {
           const customService = customServices.find(cs => cs.id === service.id);
-          service.models.forEach(model => {
-            allModels.push({
-              serviceId: service.id,
-              serviceName: service.name,
-              model,
-              baseURL: service.baseURL,
-              displayName: `${model} (${service.name})`,
-              apiKey: customService?.apiKey,
-              type: service.type
+          
+          // Handle services with metadata (from new API)
+          if (service.modelsWithMetadata) {
+            service.modelsWithMetadata.forEach((modelMeta: any) => {
+              allModels.push({
+                serviceId: service.id,
+                serviceName: service.name,
+                model: modelMeta.name,
+                baseURL: service.baseURL,
+                displayName: `${modelMeta.name} | ${service.name}`,
+                apiKey: customService?.apiKey,
+                type: service.type,
+                contextLength: modelMeta.context_length
+              });
             });
-          });
+          }
+          // Fallback for services without metadata (legacy)
+          else if (service.models && service.models.length > 0) {
+            service.models.forEach((model: string) => {
+              allModels.push({
+                serviceId: service.id,
+                serviceName: service.name,
+                model,
+                baseURL: service.baseURL,
+                displayName: `${model} | ${service.name}`,
+                apiKey: customService?.apiKey,
+                type: service.type
+              });
+            });
+          }
         }
       });
       

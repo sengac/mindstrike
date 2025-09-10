@@ -1,9 +1,9 @@
 import { useEffect } from 'react';
-import { usePreferences } from './usePreferences';
+import { useAppStore } from '../store/useAppStore';
 import { updateLlmConfig, getLlmConfig } from '../api/llmConfig';
 
 export function useLlmConfig() {
-  const { llmConfig, setLlmConfig } = usePreferences();
+  const { llmConfig, setLlmConfig } = useAppStore();
 
   // Sync preferences to backend when they change
   useEffect(() => {

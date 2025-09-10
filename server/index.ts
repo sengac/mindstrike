@@ -2,9 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import { fileURLToPath } from 'url';
 import { Agent, AgentConfig } from './agent.js';
 import { logger } from './logger.js';
+import { cleanContentForLLM } from './utils/content-filter.js';
 import { LLMScanner } from './llm-scanner.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -15,25 +17,44 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../client')));
 }
 
+// Get the system home directory cross-platform
+function getHomeDirectory(): string {
+  // Use environment variables first (most reliable)
+  if (process.env.HOME) return process.env.HOME; // Unix/Linux/macOS
+  if (process.env.USERPROFILE) return process.env.USERPROFILE; // Windows
+  if (process.env.HOMEDRIVE && process.env.HOMEPATH) {
+    return path.join(process.env.HOMEDRIVE, process.env.HOMEPATH); // Windows fallback
+  }
+  
+  // Use Node.js os module as fallback
+  return os.homedir();
+}
+
 // Initialize workspace and agent configuration
-let workspaceRoot = process.cwd();
+// Default to home directory if no working root is set
+const defaultWorkspaceRoot = process.env.WORKSPACE_ROOT || getHomeDirectory();
+let workspaceRoot = defaultWorkspaceRoot;
 let currentWorkingDirectory = workspaceRoot;
 let currentLlmConfig = {
   baseURL: 'http://localhost:11434',
-  model: 'devstral:latest',
+  model: '',
   apiKey: undefined
 };
 
-const getAgentConfig = (): AgentConfig => ({
+// Store custom roles per thread
+const threadRoles = new Map<string, string>();
+
+const getAgentConfig = (threadId?: string): AgentConfig => ({
   workspaceRoot,
-  llmConfig: currentLlmConfig
+  llmConfig: currentLlmConfig,
+  customRole: threadId ? threadRoles.get(threadId) : undefined
 });
 
 // Thread-aware agent pool
@@ -44,13 +65,13 @@ class AgentPool {
   setCurrentThread(threadId: string): void {
     this.currentThreadId = threadId;
     if (!this.agents.has(threadId)) {
-      this.agents.set(threadId, new Agent(getAgentConfig()));
+      this.agents.set(threadId, new Agent(getAgentConfig(threadId)));
     }
   }
 
   getCurrentAgent(): Agent {
     if (!this.agents.has(this.currentThreadId)) {
-      this.agents.set(this.currentThreadId, new Agent(getAgentConfig()));
+      this.agents.set(this.currentThreadId, new Agent(getAgentConfig(this.currentThreadId)));
     }
     return this.agents.get(this.currentThreadId)!;
   }
@@ -59,9 +80,15 @@ class AgentPool {
     this.agents.clear();
   }
 
+  updateAllAgentsLLMConfig(newLlmConfig: any): void {
+    for (const agent of this.agents.values()) {
+      agent.updateLLMConfig(newLlmConfig);
+    }
+  }
+
   getAgent(threadId: string): Agent {
     if (!this.agents.has(threadId)) {
-      this.agents.set(threadId, new Agent(getAgentConfig()));
+      this.agents.set(threadId, new Agent(getAgentConfig(threadId)));
     }
     return this.agents.get(threadId)!;
   }
@@ -92,6 +119,10 @@ class AgentPool {
   deleteThread(threadId: string): void {
     this.agents.delete(threadId);
   }
+
+  hasAgent(threadId: string): boolean {
+    return this.agents.has(threadId);
+  }
 }
 
 const agentPool = new AgentPool();
@@ -115,12 +146,20 @@ app.get('/api/llm-config', (req, res) => {
 app.post('/api/llm-config', (req: any, res: any) => {
   try {
     const { baseURL, model, apiKey } = req.body;
+    logger.info('Updating LLM config:', { baseURL, model, apiKey: apiKey ? '[REDACTED]' : undefined });
+    
     if (baseURL) currentLlmConfig.baseURL = baseURL;
     if (model) currentLlmConfig.model = model;
     if (apiKey !== undefined) currentLlmConfig.apiKey = apiKey;
     
-    // Clear existing agents to force recreation with new config
-    agentPool.clearAllAgents();
+    logger.info('Updated LLM config:', { 
+      baseURL: currentLlmConfig.baseURL, 
+      model: currentLlmConfig.model, 
+      apiKey: currentLlmConfig.apiKey ? '[REDACTED]' : undefined 
+    });
+    
+    // Update existing agents with new LLM config while preserving conversation history
+    agentPool.updateAllAgentsLLMConfig(currentLlmConfig);
     
     res.json({ success: true, config: currentLlmConfig });
   } catch (error) {
@@ -137,6 +176,35 @@ app.get('/api/llm/available', (req, res) => {
   } catch (error) {
     logger.error('Error getting available LLM services:', error);
     res.status(500).json({ error: 'Failed to get available LLM services' });
+  }
+});
+
+// Available LLM Models with metadata
+app.get('/api/llm/available-with-metadata', async (req, res) => {
+  try {
+    const services = llmScanner.getAvailableServices();
+    const servicesWithMetadata = [];
+
+    for (const service of services) {
+      if (service.type === 'ollama') {
+        const modelsWithMetadata = await llmScanner.getAllModelsWithMetadata(service);
+        servicesWithMetadata.push({
+          ...service,
+          modelsWithMetadata
+        });
+      } else {
+        // For non-Ollama services, just return basic model list
+        servicesWithMetadata.push({
+          ...service,
+          modelsWithMetadata: service.models.map(name => ({ name }))
+        });
+      }
+    }
+
+    res.json(servicesWithMetadata);
+  } catch (error) {
+    logger.error('Error getting available LLM services with metadata:', error);
+    res.status(500).json({ error: 'Failed to get available LLM services with metadata' });
   }
 });
 
@@ -161,6 +229,11 @@ app.post('/api/message', async (req: any, res: any) => {
       return res.status(400).json({ error: 'Message is required' });
     }
 
+    // Check if LLM model is configured
+    if (!currentLlmConfig.model || currentLlmConfig.model.trim() === '') {
+      return res.status(400).json({ error: 'No LLM model configured. Please select a model from the available options.' });
+    }
+
     // Set current thread if provided
     if (threadId) {
       agentPool.setCurrentThread(threadId);
@@ -180,6 +253,17 @@ app.post('/api/message/stream', async (req: any, res: any) => {
     const { message, threadId } = req.body;
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
+    }
+
+    // Check if LLM model is configured
+    logger.info('Stream message request received, current LLM config:', { 
+      baseURL: currentLlmConfig.baseURL, 
+      model: currentLlmConfig.model, 
+      apiKey: currentLlmConfig.apiKey ? '[REDACTED]' : undefined 
+    });
+    
+    if (!currentLlmConfig.model || currentLlmConfig.model.trim() === '') {
+      return res.status(400).json({ error: 'No LLM model configured. Please select a model from the available options.' });
     }
 
     // Set current thread if provided
@@ -259,6 +343,15 @@ app.post('/api/load-thread/:threadId', async (req: any, res: any) => {
       
       // Load the thread's messages into the thread-specific agent's conversation context
       agentPool.getCurrentAgent().loadConversation(thread.messages);
+      
+      // Set the custom role if it exists in the thread
+      if (thread.customRole) {
+        threadRoles.set(threadId, thread.customRole);
+        agentPool.getCurrentAgent().updateRole(thread.customRole);
+      } else {
+        threadRoles.delete(threadId);
+        agentPool.getCurrentAgent().updateRole(undefined);
+      }
       res.json({ success: true });
       
     } catch (error) {
@@ -347,15 +440,21 @@ app.post('/api/generate-title', async (req: any, res: any) => {
       return res.status(400).json({ error: 'Context is required' });
     }
 
-    // Create a prompt to generate a short title
+    // Check if LLM model is configured
+    if (!currentLlmConfig.model || currentLlmConfig.model.trim() === '') {
+      return res.status(400).json({ error: 'No LLM model configured. Please select a model from the available options.' });
+    }
+
+    // Create a prompt to generate a short title (filter out think tags from context)
+    const cleanContext = cleanContentForLLM(context);
     const prompt = `Based on this conversation context, generate a brief, descriptive title (maximum 5 words) that captures the main topic or purpose of the discussion:
 
-${context}
+${cleanContext}
 
 Respond with only the title, no other text.`;
 
     const response = await agentPool.getCurrentAgent().processMessage(prompt);
-    const title = response.content.trim();
+    const title = cleanContentForLLM(response.content).trim();
     
     res.json({ title });
   } catch (error: any) {
@@ -363,6 +462,88 @@ Respond with only the title, no other text.`;
     res.status(500).json({ error: error.message });
   }
 });
+
+app.post('/api/generate-role', async (req: any, res: any) => {
+  try {
+    const { personality } = req.body;
+    
+    if (!personality) {
+      return res.status(400).json({ error: 'Personality description is required' });
+    }
+
+    // Check if LLM model is configured
+    if (!currentLlmConfig.model || currentLlmConfig.model.trim() === '') {
+      return res.status(400).json({ error: 'No LLM model configured. Please select a model from the available options.' });
+    }
+
+    // Create a prompt to generate a role definition based on the personality description
+    const prompt = `Create a role definition for an AI assistant based on the user's description. Use their exact words and phrasing as much as possible while making it a proper role definition.
+
+User's Description: "${personality}"
+
+Transform this into a role definition that:
+- Preserves the user's specific words, terminology, and meaning
+- Incorporates their exact phrasing wherever possible
+- Starts with "You are..." format
+- Maintains the user's intended tone and characteristics
+- Only adds minimal connecting words if needed for grammar
+
+Exle transformation:
+User says: "friendly, enthusiastic coding mentor who explains things clearly"
+Result: "You are a friendly, enthusiastic coding mentor who explains things clearly and helps users learn through clear guidance."
+
+Generate only the role definition using the user's words as the foundation.`;
+
+    const response = await agentPool.getCurrentAgent().processMessage(prompt);
+    const role = cleanContentForLLM(response.content).trim();
+    
+    res.json({ role });
+  } catch (error: any) {
+    console.error('Error generating role:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/role/:threadId?', (req, res) => {
+  try {
+    const threadId = req.params.threadId || 'default';
+    const agent = agentPool.getAgent(threadId);
+    
+    res.json({
+      currentRole: agent.getCurrentRole(),
+      defaultRole: agent.getDefaultRole(),
+      isDefault: agent.getCurrentRole() === agent.getDefaultRole(),
+      hasCustomRole: threadRoles.has(threadId)
+    });
+  } catch (error: any) {
+    console.error('Error getting role:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/role/:threadId?', (req: any, res: any) => {
+  try {
+    const threadId = req.params.threadId || 'default';
+    const { customRole } = req.body;
+    
+    // Store the custom role for the thread
+    if (customRole) {
+      threadRoles.set(threadId, customRole);
+    } else {
+      threadRoles.delete(threadId);
+    }
+    
+    // Update the agent's role
+    const agent = agentPool.getAgent(threadId);
+    agent.updateRole(customRole);
+    
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error updating role:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 // Get current working directory
 app.get('/api/workspace/directory', (req, res) => {

@@ -22,6 +22,7 @@ export interface Thread {
   messages: ConversationMessage[];
   createdAt: Date;
   updatedAt: Date;
+  customRole?: string;
 }
 
 export interface ApiResponse<T> {

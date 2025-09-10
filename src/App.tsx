@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ChatPanel, ChatPanelRef } from './components/ChatPanel';
 import { ThreadsPanel } from './components/ThreadsPanel';
@@ -6,39 +6,55 @@ import { FileExplorer } from './components/FileExplorer';
 import { AgentsPanel } from './components/AgentsPanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { ModelSelector } from './components/ModelSelector';
+import { HeaderStats } from './components/HeaderStats';
 import { useThreads } from './hooks/useThreads';
-import { usePreferences } from './hooks/usePreferences';
-import { useWorkspace } from './hooks/useWorkspace';
+import { useWorkspaceStore } from './hooks/useWorkspaceStore';
+import { useAppStore } from './store/useAppStore';
 import { useLlmConfig } from './hooks/useLlmConfig';
 import { LLMModel } from './hooks/useAvailableModels';
-import { Menu, X, MessageSquare, Minus, Plus, Trash2 } from 'lucide-react';
+import { Menu, X, MessageSquare } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 
 function App() {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [activePanel, setActivePanel] = useState<'chat' | 'files' | 'agents' | 'settings'>('chat');
   const [workspaceRestored, setWorkspaceRestored] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<LLMModel | undefined>(undefined);
   
-  const { workspaceRoot: savedWorkspaceRoot, fontSize, setFontSize } = usePreferences();
-  const { setWorkspaceRoot } = useWorkspace();
-  const { setLlmConfig } = useLlmConfig();
+  const { 
+    sidebarOpen, 
+    setSidebarOpen, 
+    activePanel, 
+    setActivePanel, 
+    workspaceRoot, 
+    setLlmConfig,
+    selectedModel,
+    setSelectedModel
+  } = useAppStore();
+  const { setWorkspaceRoot } = useWorkspaceStore();
   const chatPanelRef = useRef<ChatPanelRef>(null);
+  
+  // Initialize LLM config synchronization
+  useLlmConfig();
   
   // Restore workspace before loading threads
   useEffect(() => {
     const restoreWorkspace = async () => {
-      if (savedWorkspaceRoot) {
+      if (workspaceRoot) {
         try {
-          await setWorkspaceRoot(savedWorkspaceRoot);
+          await setWorkspaceRoot(workspaceRoot);
         } catch (error) {
           console.error('Failed to restore workspace:', error);
+        }
+      } else {
+        // Set workspace to current working directory if none is selected
+        try {
+          await setWorkspaceRoot();
+        } catch (error) {
+          console.error('Failed to set initial workspace:', error);
         }
       }
       setWorkspaceRestored(true);
     };
     restoreWorkspace();
-  }, [savedWorkspaceRoot, setWorkspaceRoot]);
+  }, [workspaceRoot, setWorkspaceRoot]);
   
   const {
     threads,
@@ -49,6 +65,7 @@ function App() {
     createThread,
     deleteThread,
     renameThread,
+    updateThreadRole,
     selectThread,
     updateThreadMessages,
     deleteMessage
@@ -81,19 +98,11 @@ function App() {
     }
   };
 
-  const increaseFontSize = () => {
-    setFontSize(Math.min(fontSize + 2, 24));
-  };
 
-  const decreaseFontSize = () => {
-    setFontSize(Math.max(fontSize - 2, 10));
-  };
 
-  const clearConversation = () => {
-    chatPanelRef.current?.clearConversation();
-  };
 
-  const handleModelSelect = async (model: LLMModel) => {
+
+  const handleModelSelect = useCallback(async (model: LLMModel) => {
     setSelectedModel(model);
     try {
       setLlmConfig({
@@ -104,7 +113,7 @@ function App() {
     } catch (error) {
       console.error('Failed to update LLM config:', error);
     }
-  };
+  }, [setSelectedModel, setLlmConfig]);
 
   return (
     <div className="flex h-screen bg-gray-900 text-gray-100">
@@ -137,36 +146,15 @@ function App() {
                   <MessageSquare size={24} className="text-blue-400" />
                   <h1 className="text-xl font-semibold text-white">Chat</h1>
                 </div>
-              <div className="flex items-center space-x-2">
-                <ModelSelector 
-                  selectedModel={selectedModel}
-                  onModelSelect={handleModelSelect}
-                />
-                <div className="flex items-center space-x-1 bg-gray-800 rounded-lg p-1">
-                  <button
-                    onClick={decreaseFontSize}
-                    className="p-1 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-gray-200"
-                    title="Decrease font size"
-                  >
-                    <Minus size={14} />
-                  </button>
-                  <span className="text-xs text-gray-400 px-2">{fontSize}px</span>
-                  <button
-                    onClick={increaseFontSize}
-                    className="p-1 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-gray-200"
-                    title="Increase font size"
-                  >
-                    <Plus size={14} />
-                  </button>
-                </div>
-                <button
-                  onClick={clearConversation}
-                  className="px-4 py-1 border border-gray-600 hover:bg-gray-800 rounded-lg transition-colors text-gray-400 hover:text-gray-200 flex items-center gap-1"
-                  title="Clear conversation"
-                >
-                  <Trash2 size={16} />
-                  <span className="text-xs">Clear chat</span>
-                </button>
+                <div className="flex items-center space-x-4">
+                  <HeaderStats 
+                    messages={activeThread?.messages || []}
+                    selectedModel={selectedModel}
+                  />
+                  <ModelSelector 
+                    selectedModel={selectedModel}
+                    onModelSelect={handleModelSelect}
+                  />
                 </div>
               </div>
             </div>
@@ -188,8 +176,8 @@ function App() {
                 onMessagesUpdate={handleMessagesUpdate}
                 onFirstMessage={handleFirstMessage}
                 onDeleteMessage={handleDeleteMessage}
-                fontSize={fontSize}
-                workspaceRoot={savedWorkspaceRoot}
+                activeThread={activeThread}
+                onRoleUpdate={updateThreadRole}
               />
             </div>
           </div>

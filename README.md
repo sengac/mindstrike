@@ -55,7 +55,7 @@ LLM_API_KEY=your-api-key
 
 ### Recommended Models
 
-- **devstral:latest**: Ideal for agentic tasks
+The system will automatically detect and use the first available model from your LLM services.
 
 ## Architecture
 

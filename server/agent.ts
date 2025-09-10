@@ -1,6 +1,9 @@
 import { LLMClient, LLMMessage, ToolCall } from './llm-client.js';
 import { ToolSystem } from './tools.js';
 import { logger } from './logger.js';
+import { cleanContentForLLM } from './utils/content-filter.js';
+
+const DEFAULT_ROLE = `You are an autonomous support agent responsible for resolving user requests by independently determining the necessary steps and invoking appropriate tools when required.`;
 
 export interface AgentConfig {
   workspaceRoot: string;
@@ -9,6 +12,7 @@ export interface AgentConfig {
     model: string;
     apiKey?: string;
   };
+  customRole?: string;
 }
 
 export interface ConversationMessage {
@@ -45,54 +49,88 @@ export class Agent {
     });
   }
 
+  private createRoleDefinition(): string {
+    return this.config.customRole || DEFAULT_ROLE;
+  }
+
+  private createGoalSpecification(): string {
+    return `Your goal is to fully resolve the user's issue without human intervention whenever possible, ensuring a seamless and efficient experience.`;
+  }
+
+  private createExplicitToolUsage(): string {
+    return `Use the following tools as needed:
+    - "list_directory(directory)": Lists all the files in a specified directory.
+    - "read_file(file)": Reads the contents of a specified file.
+    - "web_search(query)": Asks another AI assistant a question that knows the answer to everything.
+
+    All tools must be invoked in the following format, with the tool and parameters as specified in this format:
+
+    \`\`\`json
+    {
+      "tool": "tool_name",
+      "parameters": {"param": "value"}
+    }
+    \`\`\`
+
+    For exle, to list the files in the current directory, you would use:
+    
+    \`\`\`json
+    {
+      "tool": "list_directory",
+      "parameters": {"directory": "."}
+    }
+    \`\`\`
+    `;
+  }
+
+  private createStepByStepInstructions(): string {
+    return [
+      "Step-by-step process:",
+      "1. Receive the user's request.",
+      "2. Determine which tools are required for resolution.",
+      "3. Sequentially invoke the necessary tools, handling outputs as needed.",
+      "4. If all steps succeed, confirm resolution to the user.",
+      "5. If a step fails and cannot be resolved, escalate the issue back to the user, providing a summary of actions taken and the error encountered."
+    ].join('\n');
+  }
+
+  private createErrorHandling(): string {
+    return [
+      "If a tool call fails or you encounter an error:",
+      "- Retry the operation once if appropriate.",
+      "- If the issue persists, escalate the issue back to the user, providing a summary of actions taken and the error encountered."
+    ].join('\n');
+  }
+
+  private createOutputRequirements(): string {
+    return [
+      "For each user interaction:",
+      "- Clearly summarize the actions you have taken.",
+      "- Provide the outcome or next steps.",
+      "- If a tool was used, mention which tool and the result.",
+      "- If escalation occurs, summarize the context for the human agent.",
+      "- Don't mention that you used a tool to resolve the issue unless it's relevant to the user.",
+      "- Don't explain how you got the information unless it's relevant to the user.",
+      "- All code should be wrapped with ```(language) at the beginning and ``` at the end.",
+      "- All diagrams are to be rendered with Mermaid and should be wrapped with ```mermaid and ``` at the beginning and end.",
+      "- All mathematical formulas are to be written in LaTeX"
+    ].join('\n');
+  }
+
   private createSystemPrompt(): string {
-    return `You are MindStrike, a powerful AI coding agent. You help users with software engineering tasks.
-
-CRITICAL: You MUST use tools to answer questions. When a user asks you to do something, respond IMMEDIATELY with the appropriate tool call in the "TOOL CALL FORMAT" detailed below.
-
-MANDATORY TOOL RESPONSES:
-- User asks about files/directories → use the tools "list_directory" or "read_file"
-- User asks to search, lookup, or requests unavailable information → use the tool "web_search"
-- User asks about code → use the "read_file", "grep", or "glob" tools to find the code
-- User asks to create/edit files → use the "create_file" or "edit_file" tools
-
-TOOL CALL FORMAT - RESPOND EXACTLY LIKE THIS:
-\`\`\`json
-{
-  "tool": "tool_name",
-  "parameters": {"param": "value"}
-}
-\`\`\`
-
-WEB SEARCH EXLES:
-User: "search the web for code"
-Response:
-\`\`\`json
-{
-  "tool": "web_search",
-  "parameters": {"query": "code"}
-}
-\`\`\`
-
-User: "look up react documentation online"  
-Response:
-\`\`\`json
-{
-  "tool": "web_search", 
-  "parameters": {"query": "react documentation"}
-}
-\`\`\`
-
-NEVER say "I don't know or I don't have the capability" - ALWAYS use tools first!
-
-NEVER forget to prefix tool JSON with \`\`\`json and suffix with \`\`\`
-
-Available tools: read_file, create_file, edit_file, list_directory, bash, glob, grep, todo_write, todo_read, mermaid, get_diagnostics, format_file, undo_edit, web_search, delete_file
-
-RULES:
-1. ALWAYS use tools when asked to do something
-2. Respond with JSON tool calls immediately 
-3. Don't explain unless asked - just execute tools`;
+    return [
+      this.createRoleDefinition(),
+      '',
+      this.createGoalSpecification(),
+      '',
+      this.createExplicitToolUsage(),
+      '',
+      this.createErrorHandling(),
+      '',
+      this.createOutputRequirements(),
+      '',
+      this.createStepByStepInstructions()
+    ].join('\n');
   }
 
   async processMessage(userMessage: string, onUpdate?: (message: ConversationMessage) => void): Promise<ConversationMessage> {
@@ -107,10 +145,10 @@ RULES:
     };
     this.conversation.push(userMsg);
 
-    // Convert conversation to LLM format
+    // Convert conversation to LLM format, filtering out think tags
     const llmMessages: LLMMessage[] = this.conversation.map(msg => ({
       role: msg.role,
-      content: msg.content
+      content: cleanContentForLLM(msg.content)
     }));
 
     try {
@@ -164,7 +202,28 @@ RULES:
 
         // Add tool results to conversation and get follow-up response
         const toolResultContent = toolResults
-          .map(result => `Tool ${result.name} result:\n${JSON.stringify(result.result, null, 2)}`)
+          .map(result => {
+            let resultText = '';
+            if (typeof result.result === 'string') {
+              resultText = result.result;
+            } else if (result.result && typeof result.result === 'object') {
+              if (result.result.success === false && result.result.error) {
+                resultText = `Error: ${result.result.error}`;
+              } else if (result.result.content) {
+                resultText = result.result.content;
+              } else if (result.result.text) {
+                resultText = result.result.text;
+              } else {
+                // Convert object to readable format without raw JSON
+                resultText = Object.entries(result.result)
+                  .map(([key, value]) => `${key}: ${value}`)
+                  .join(', ');
+              }
+            } else {
+              resultText = String(result.result);
+            }
+            return `Tool ${result.name} result:\n${resultText}`;
+          })
           .join('\n\n');
 
         llmMessages.push({
@@ -174,7 +233,7 @@ RULES:
         
         llmMessages.push({
           role: 'user',
-          content: `Tool execution results:\n${toolResultContent}\n\nPlease provide a summary of what you accomplished.`
+          content: `Tool execution results:\n${toolResultContent}\n\nPlease respond to the user with the relevant information from the tool results. Include the actual content/data from the tools when it's helpful to the user.`
         });
 
         // Get follow-up response after tool execution
@@ -365,6 +424,30 @@ RULES:
       content: cleanContent || content,
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined
     };
+  }
+
+  updateLLMConfig(newLlmConfig: AgentConfig['llmConfig']): void {
+    this.config.llmConfig = newLlmConfig;
+    this.llmClient = new LLMClient(newLlmConfig);
+  }
+
+  updateRole(customRole?: string): void {
+    this.config.customRole = customRole;
+    this.systemPrompt = this.createSystemPrompt();
+    
+    // Update the system message in the current conversation
+    const systemMessage = this.conversation.find(msg => msg.role === 'system');
+    if (systemMessage) {
+      systemMessage.content = this.systemPrompt;
+    }
+  }
+
+  getCurrentRole(): string {
+    return this.config.customRole || DEFAULT_ROLE;
+  }
+
+  getDefaultRole(): string {
+    return DEFAULT_ROLE;
   }
 
   private generateId(): string {

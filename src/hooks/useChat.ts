@@ -87,7 +87,8 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
 
       const reader = response.body?.getReader();
@@ -308,7 +309,8 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
 
       const reader = response.body?.getReader();

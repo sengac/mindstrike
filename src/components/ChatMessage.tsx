@@ -1,11 +1,70 @@
-import { User, Bot, Wrench, CheckCircle, XCircle, ChevronDown, ChevronRight, FileText, Code, Trash2, RotateCcw, Loader2, X, Edit2, Check, Copy } from 'lucide-react';
+import React from 'react';
+import { User, Bot, Wrench, CheckCircle, XCircle, ChevronDown, ChevronRight, FileText, Code, Trash2, RotateCcw, Loader2, X, Edit2, Check, Copy, Download, Maximize2, Brain } from 'lucide-react';
 import { ConversationMessage } from '../types';
 import { useState, useEffect, useRef } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import mermaid from 'mermaid';
+import 'katex/dist/katex.min.css';
+import katex from 'katex';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { MermaidModal } from './MermaidModal';
+
+// Common language mappings for syntax highlighting
+const languageMap: Record<string, string> = {
+  'sh': 'bash',
+  'shell': 'bash',
+  'console': 'bash',
+  'js': 'javascript',
+  'ts': 'typescript',
+  'py': 'python',
+  'rb': 'ruby',
+  'yml': 'yaml',
+  'json': 'json',
+  'md': 'markdown',
+  'html': 'markup',
+  'xml': 'markup',
+  'css': 'css',
+  'scss': 'scss',
+  'sass': 'sass',
+  'less': 'less',
+  'sql': 'sql',
+  'c': 'c',
+  'cpp': 'cpp',
+  'cxx': 'cpp',
+  'c++': 'cpp',
+  'cs': 'csharp',
+  'java': 'java',
+  'php': 'php',
+  'go': 'go',
+  'rust': 'rust',
+  'swift': 'swift',
+  'kotlin': 'kotlin',
+  'scala': 'scala',
+  'r': 'r',
+  'matlab': 'matlab',
+  'lua': 'lua',
+  'perl': 'perl',
+  'powershell': 'powershell',
+  'dockerfile': 'docker',
+  'makefile': 'makefile',
+  'ini': 'ini',
+  'toml': 'toml',
+  'graphql': 'graphql',
+  'diff': 'diff',
+  'patch': 'diff'
+};
+
+// Function to map language aliases to supported languages or fallback to 'text'
+const getSupportedLanguage = (language?: string): string => {
+  if (!language) return 'text';
+  
+  const lowerLang = language.toLowerCase();
+  
+  // Return mapped language or original if it exists in common languages
+  return languageMap[lowerLang] || language || 'text';
+};
 
 interface ChatMessageProps {
   message: ConversationMessage;
@@ -23,6 +82,9 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
   const [showMarkdown, setShowMarkdown] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
+  const [modalMermaidCode, setModalMermaidCode] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [thinkingExpanded, setThinkingExpanded] = useState<{[key: number]: boolean}>({});
   const mermaidRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -35,11 +97,37 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
       flowchart: {
         useMaxWidth: true,
         htmlLabels: true
+      },
+      themeVariables: {
+        darkMode: true,
+        background: 'transparent',
+        primaryColor: '#3b82f6',
+        primaryTextColor: '#e5e7eb',
+        primaryBorderColor: '#374151',
+        lineColor: '#6b7280',
+        secondaryColor: '#1f2937',
+        tertiaryColor: '#111827',
+        mainBkg: 'transparent',
+        secondBkg: '#1f2937',
+        tertiaryBkg: '#111827',
+        // Override specific node colors to prevent purple/pink
+        nodeBkg: '#374151',
+        nodeTextColor: '#e5e7eb',
+        clusterBkg: '#1f2937',
+        clusterTextColor: '#e5e7eb',
+        fillType0: '#374151',
+        fillType1: '#1f2937',
+        fillType2: '#111827',
+        fillType3: '#4b5563',
+        fillType4: '#6b7280',
+        fillType5: '#9ca3af',
+        fillType6: '#d1d5db',
+        fillType7: '#e5e7eb'
       }
     });
     
-    // Re-render mermaid diagrams when content changes
-    if (mermaidRef.current) {
+    // Re-render mermaid diagrams when content changes or when switching to markdown view
+    if (mermaidRef.current && showMarkdown) {
       const mermaidElements = mermaidRef.current.querySelectorAll('.mermaid');
       mermaidElements.forEach((element) => {
         mermaid.run({
@@ -47,7 +135,7 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
         });
       });
     }
-  }, [message.content]);
+  }, [message.content, showMarkdown]);
 
   useEffect(() => {
     // Focus and auto-resize textarea when editing starts
@@ -83,14 +171,55 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
+      console.log('Code copied to clipboard');
     } catch (err) {
-      // Fallback for older browsers
-      const textArea = document.createElement('textarea');
-      textArea.value = text;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
+      console.error('Clipboard API failed, trying fallback:', err);
+      try {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        if (successful) {
+          console.log('Code copied to clipboard (fallback)');
+        } else {
+          console.error('Fallback copy failed');
+        }
+      } catch (fallbackErr) {
+        console.error('Both copy methods failed:', fallbackErr);
+      }
+    }
+  };
+
+  const downloadMermaidDiagram = async (diagramId: string) => {
+    try {
+      const diagramElement = document.getElementById(diagramId);
+      if (!diagramElement) return;
+
+      const svgElement = diagramElement.querySelector('svg');
+      if (!svgElement) return;
+
+      // Get SVG string
+      const svgData = new XMLSerializer().serializeToString(svgElement);
+      const svgBlob = new Blob([svgData], { type: 'image/svg+xml' });
+      
+      // Create download link
+      const url = URL.createObjectURL(svgBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `mermaid-diagram-${Date.now()}.svg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to download diagram:', err);
     }
   };
 
@@ -98,17 +227,35 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
     if (language === 'mermaid') {
       const diagramId = `mermaid-${Date.now()}-${Math.random()}`;
       return (
-        <div className="my-4">
-          <div id={diagramId} className="mermaid bg-white p-4 rounded border">
+        <div className="my-4 relative group">
+          <div id={diagramId} className="mermaid bg-gray-800 p-4 rounded border border-gray-700">
             {code}
+          </div>
+          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10 flex space-x-1">
+            <button
+              onClick={() => {
+                setModalMermaidCode(code);
+                setIsModalOpen(true);
+              }}
+              className="p-2 bg-gray-700 hover:bg-gray-600 rounded flex items-center space-x-1 text-xs text-gray-300 hover:text-white"
+              title="View fullscreen"
+            >
+              <Maximize2 size={12} />
+            </button>
+            <button
+              onClick={() => downloadMermaidDiagram(diagramId)}
+              className="p-2 bg-gray-700 hover:bg-gray-600 rounded flex items-center space-x-1 text-xs text-gray-300 hover:text-white"
+              title="Download diagram"
+            >
+              <Download size={12} />
+            </button>
           </div>
         </div>
       );
     }
 
-    // Check if this is a supported code language for copy button
-    const supportedLanguages = ['javascript', 'typescript', 'python', 'java', 'c', 'cpp', 'csharp', 'php', 'ruby', 'go', 'rust', 'swift', 'kotlin', 'scala', 'clojure', 'elixir', 'erlang', 'haskell', 'ocaml', 'fsharp', 'dart', 'lua', 'perl', 'r', 'matlab', 'julia', 'bash', 'shell', 'powershell', 'sql', 'html', 'css', 'scss', 'sass', 'less', 'xml', 'json', 'yaml', 'yml', 'toml', 'ini', 'properties', 'dockerfile', 'makefile', 'cmake', 'text', 'plaintext'];
-    const showCopyButton = !language || supportedLanguages.includes(language.toLowerCase()) || language === 'json' || language === 'yaml' || language === 'xml';
+    // Always show copy button for all code blocks
+    const showCopyButton = true;
 
     // For other languages, use syntax highlighting
     return (
@@ -116,15 +263,15 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
         {showCopyButton && (
           <button
             onClick={() => copyToClipboard(code)}
-            className="absolute top-2 right-2 p-2 bg-gray-700 hover:bg-gray-600 rounded opacity-0 group-hover:opacity-100 transition-opacity z-10 flex items-center space-x-1 text-xs text-gray-300 hover:text-white"
+            className="absolute top-2 right-2 p-2 bg-gray-700 hover:bg-gray-600 rounded opacity-80 hover:opacity-100 transition-opacity z-10 flex items-center space-x-1 text-xs text-gray-300 hover:text-white"
             title="Copy code"
           >
             <Copy size={14} />
-            <span>Copy code</span>
+            <span>Copy</span>
           </button>
         )}
         <SyntaxHighlighter
-          language={language || 'text'}
+          language={getSupportedLanguage(language)}
           style={vscDarkPlus}
           customStyle={{
             margin: 0,
@@ -145,78 +292,253 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
     );
   };
 
+  const renderThinkingBlock = (content: string, blockId: number) => {
+    const isExpanded = thinkingExpanded[blockId] || false;
+    
+    const toggleExpanded = () => {
+      setThinkingExpanded(prev => ({
+        ...prev,
+        [blockId]: !prev[blockId]
+      }));
+    };
+
+    return (
+      <div key={`think-${blockId}`} className="my-4 bg-amber-900/20 border border-amber-700/50 rounded-lg relative">
+        <button
+          onClick={toggleExpanded}
+          className="w-full flex items-center justify-between p-4 text-left hover:bg-amber-900/30 transition-colors rounded-lg"
+        >
+          <div className="flex items-center space-x-2">
+            <Brain size={16} className="text-amber-400" />
+            <span className="text-sm font-medium text-amber-300">AI Thinking</span>
+          </div>
+          <div className="flex items-center space-x-1">
+            {isExpanded ? (
+              <ChevronDown size={14} className="text-amber-400" />
+            ) : (
+              <ChevronRight size={14} className="text-amber-400" />
+            )}
+          </div>
+        </button>
+        {isExpanded && (
+          <div className="px-4 pb-4">
+            <div className="text-sm text-amber-100/90 leading-relaxed whitespace-pre-wrap break-words" style={{ fontSize: `var(--dynamic-font-size, ${fontSize}px)` }}>
+              {content}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderLatex = (latex: string, isBlock: boolean = false) => {
+    try {
+      const html = katex.renderToString(latex, {
+        throwOnError: false,
+        displayMode: isBlock,
+        strict: false
+      });
+      
+      if (isBlock) {
+        return (
+          <div className="my-4 text-center" dangerouslySetInnerHTML={{ __html: html }} />
+        );
+      } else {
+        return (
+          <span className="inline" dangerouslySetInnerHTML={{ __html: html }} />
+        );
+      }
+    } catch (error) {
+      return <span className="text-red-400 bg-red-900/20 px-1 rounded">{`$${isBlock ? '$' : ''}${latex}${isBlock ? '$' : ''}$`}</span>;
+    }
+  };
+
+  const processLatexInContent = (content: string): React.ReactNode => {
+    // Check if content has LaTeX expressions
+    const hasBlockLatex = /\$\$([^$]+)\$\$/.test(content);
+    const hasInlineLatex = /\$([^$\n]+)\$/.test(content);
+    
+    if (!hasBlockLatex && !hasInlineLatex) {
+      // No LaTeX, just process markdown normally
+      const html = String(marked.parse(content));
+      const sanitizedHtml = DOMPurify.sanitize(html);
+      return <div dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />;
+    }
+    
+    // Replace LaTeX with placeholders, process markdown, then restore LaTeX
+    const latexExpressions: Array<{ latex: string; isBlock: boolean }> = [];
+    let processedContent = content;
+    
+    // First replace block LaTeX
+    processedContent = processedContent.replace(/\$\$([^$]+)\$\$/g, (_, latex) => {
+      const index = latexExpressions.length;
+      latexExpressions.push({ latex: latex.trim(), isBlock: true });
+      return `LATEXPLACEHOLDER${index}ENDLATEX`;
+    });
+    
+    // Then replace inline LaTeX
+    processedContent = processedContent.replace(/\$([^$\n]+)\$/g, (_, latex) => {
+      const index = latexExpressions.length;
+      latexExpressions.push({ latex: latex.trim(), isBlock: false });
+      return `LATEXPLACEHOLDER${index}ENDLATEX`;
+    });
+    
+    // Process markdown
+    const html = String(marked.parse(processedContent));
+    let sanitizedHtml = DOMPurify.sanitize(html);
+    
+    // Create a component that will replace placeholders with LaTeX
+    const LatexProcessor = ({ html }: { html: string }) => {
+      // Replace placeholders directly in the HTML string with rendered LaTeX
+      let processedHtml = html;
+      
+      latexExpressions.forEach((latexInfo, index) => {
+        const placeholder = `LATEXPLACEHOLDER${index}ENDLATEX`;
+        if (processedHtml.includes(placeholder)) {
+          try {
+            const latexHtml = katex.renderToString(latexInfo.latex, {
+              throwOnError: false,
+              displayMode: latexInfo.isBlock,
+              strict: false
+            });
+            
+            if (latexInfo.isBlock) {
+              // For block LaTeX, wrap in a div with proper spacing
+              processedHtml = processedHtml.replace(placeholder, `<div class="my-4 text-center">${latexHtml}</div>`);
+            } else {
+              // For inline LaTeX, insert directly without wrapper
+              processedHtml = processedHtml.replace(placeholder, latexHtml);
+            }
+          } catch (error) {
+            const fallback = `$${latexInfo.isBlock ? '$' : ''}${latexInfo.latex}${latexInfo.isBlock ? '$' : ''}$`;
+            processedHtml = processedHtml.replace(placeholder, `<span class="text-red-400 bg-red-900/20 px-1 rounded">${fallback}</span>`);
+          }
+        }
+      });
+      
+      return <div dangerouslySetInnerHTML={{ __html: processedHtml }} />;
+    };
+    
+    return <LatexProcessor html={sanitizedHtml} />;
+  };
+
   const renderContent = (content: string) => {
     if (showMarkdown) {
-      // Check for any code blocks
+      // Check for code blocks and think blocks
       const codeBlockRegex = /```(\w+)?\n([\s\S]*?)\n```/g;
+      const thinkBlockRegex = /<think>([\s\S]*?)<\/think>/g;
       const hasCodeBlocks = codeBlockRegex.test(content);
+      const hasThinkBlocks = thinkBlockRegex.test(content);
       
-      if (hasCodeBlocks) {
+      if (hasCodeBlocks || hasThinkBlocks) {
         const parts: JSX.Element[] = [];
         let lastIndex = 0;
-        const regex = /```(\w+)?\n([\s\S]*?)\n```/g;
-        let match;
+        
+        // Find all blocks (code and think) and sort by position
+        const allBlocks: Array<{
+          type: 'code' | 'think';
+          match: RegExpExecArray;
+          language?: string;
+          content: string;
+        }> = [];
+        
+        // Find code blocks
+        const codeRegex = /```(\w+)?\n([\s\S]*?)\n```/g;
+        let codeMatch;
+        while ((codeMatch = codeRegex.exec(content)) !== null) {
+          allBlocks.push({
+            type: 'code',
+            match: codeMatch,
+            language: codeMatch[1],
+            content: codeMatch[2]
+          });
+        }
+        
+        // Find think blocks
+        const thinkRegex = /<think>([\s\S]*?)<\/think>/g;
+        let thinkMatch;
+        while ((thinkMatch = thinkRegex.exec(content)) !== null) {
+          allBlocks.push({
+            type: 'think',
+            match: thinkMatch,
+            content: thinkMatch[1]
+          });
+        }
+        
+        // Sort blocks by position
+        allBlocks.sort((a, b) => a.match.index - b.match.index);
+        
         let blockId = 0;
         
-        while ((match = regex.exec(content)) !== null) {
-          // Add content before code block
-          if (match.index > lastIndex) {
-            const beforeContent = content.slice(lastIndex, match.index);
+        for (const block of allBlocks) {
+          // Add content before this block
+          if (block.match.index > lastIndex) {
+            const beforeContent = content.slice(lastIndex, block.match.index);
             if (beforeContent.trim()) {
-              const html = String(marked.parse(beforeContent));
-              const sanitizedHtml = DOMPurify.sanitize(html);
               parts.push(
-                <div key={`before-${blockId}`} className="prose prose-invert prose-sm max-w-full overflow-hidden" style={{ fontSize: `var(--dynamic-font-size, ${fontSize}px)` }} dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
+                <div key={`before-${blockId}`} className={`prose prose-invert prose-sm max-w-full overflow-hidden ${isUser ? 'prose-p:my-0 prose-headings:my-0 prose-ul:my-0 prose-ol:my-0' : ''}`} style={{ fontSize: `var(--dynamic-font-size, ${fontSize}px)` }}>
+                  {processLatexInContent(beforeContent)}
+                </div>
               );
             }
           }
           
-          // Add code block with appropriate rendering
-          const language = match[1];
-          const code = match[2];
-          parts.push(
-            <div key={`code-${blockId}`}>
-              {renderCodeBlock(code, language)}
-            </div>
-          );
+          // Add the block
+          if (block.type === 'code') {
+            parts.push(
+              <div key={`code-${blockId}`}>
+                {renderCodeBlock(block.content, block.language)}
+              </div>
+            );
+          } else if (block.type === 'think') {
+            parts.push(renderThinkingBlock(block.content, blockId));
+          }
           
-          lastIndex = match.index + match[0].length;
+          lastIndex = block.match.index + block.match[0].length;
           blockId++;
         }
         
-        // Add remaining content after last code block
+        // Add remaining content after last block
         if (lastIndex < content.length) {
           const afterContent = content.slice(lastIndex);
           if (afterContent.trim()) {
-            const html = String(marked.parse(afterContent));
-            const sanitizedHtml = DOMPurify.sanitize(html);
             parts.push(
-              <div key="after" className="prose prose-invert prose-sm max-w-full overflow-hidden" style={{ fontSize: `var(--dynamic-font-size, ${fontSize}px)` }} dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
+              <div key="after" className={`prose prose-invert prose-sm max-w-full overflow-hidden ${isUser ? 'prose-p:my-0 prose-headings:my-0 prose-ul:my-0 prose-ol:my-0' : ''}`} style={{ fontSize: `var(--dynamic-font-size, ${fontSize}px)` }}>
+                {processLatexInContent(afterContent)}
+              </div>
             );
           }
         }
         
         return <div ref={mermaidRef}>{parts}</div>;
       } else {
-        const html = String(marked.parse(content));
-        const sanitizedHtml = DOMPurify.sanitize(html);
-        return <div className="prose prose-invert prose-sm max-w-full overflow-hidden" style={{ fontSize: `var(--dynamic-font-size, ${fontSize}px)` }} dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />;
+        return (
+          <div className={`prose prose-invert prose-sm max-w-full overflow-hidden ${isUser ? 'prose-p:my-0 prose-headings:my-0 prose-ul:my-0 prose-ol:my-0' : ''}`} style={{ fontSize: `var(--dynamic-font-size, ${fontSize}px)` }}>
+            {processLatexInContent(content)}
+          </div>
+        );
       }
     }
     return <div className="whitespace-pre-wrap text-sm break-words" style={{ fontSize: `var(--dynamic-font-size, ${fontSize}px)` }}>{content}</div>;
   };
 
   return (
-    <div className={`flex space-x-3 ${isUser ? 'justify-end' : 'justify-start'}`}>
-      {!isUser && (
-        <div className="flex-shrink-0">
-          <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-            <Bot size={16} className="text-white" />
+    <>
+      <MermaidModal 
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        mermaidCode={modalMermaidCode}
+      />
+      <div className={`flex space-x-3 ${isUser ? 'justify-end' : 'justify-start'}`}>
+        {!isUser && (
+          <div className="flex-shrink-0">
+            <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+              <Bot size={16} className="text-white" />
+            </div>
           </div>
-        </div>
-      )}
+        )}
       
-      <div className={`max-w-[80%] min-w-0 ${isUser ? 'order-2' : ''}`}>
+      <div className={`max-w-[80%] ${isUser ? 'min-w-0 order-2' : 'min-w-[80%]'}`}>
         <div className={`rounded-lg px-4 py-2 relative group overflow-hidden ${
           isUser 
             ? 'bg-blue-600 text-white' 
@@ -445,13 +767,14 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
         </div>
       </div>
       
-      {isUser && (
-        <div className="flex-shrink-0">
-          <div className="w-8 h-8 mr-3 bg-gray-600 rounded-full flex items-center justify-center">
-            <User size={16} className="text-white" />
+        {isUser && (
+          <div className="flex-shrink-0">
+            <div className="w-8 h-8 mr-3 bg-gray-600 rounded-full flex items-center justify-center">
+              <User size={16} className="text-white" />
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </>
   );
 }

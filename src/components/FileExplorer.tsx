@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { File, Folder, RefreshCw, Edit3, Save, Trash2, FolderOpen, ArrowUp, Home } from 'lucide-react';
-import { useWorkspace } from '../hooks/useWorkspace';
-import { usePreferences } from '../hooks/usePreferences';
+import { useWorkspaceStore } from '../hooks/useWorkspaceStore';
 import { CodeEditor } from './CodeEditor';
 import { TabbedEditor } from './TabbedEditor';
 import toast from 'react-hot-toast';
@@ -11,8 +10,7 @@ interface FileExplorerProps {
 }
 
 export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
-  const { files, loadFiles, loadDirectory, changeDirectory, setWorkspaceRoot, currentDirectory, getFileContent, isLoading } = useWorkspace();
-  const { setWorkspaceRoot: saveWorkspaceRoot } = usePreferences();
+  const { files, loadFiles, loadDirectory, changeDirectory, setWorkspaceRoot, currentDirectory, getFileContent, isLoading } = useWorkspaceStore();
   const hasLoadedInitialDirectory = useRef(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string>('');
@@ -206,7 +204,6 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
   const handleWorkspaceConfirm = async () => {
     const result = await setWorkspaceRoot(currentDirectory, onDirectoryChange);
     if (result.success) {
-      saveWorkspaceRoot(currentDirectory);
       toast.success(`${result.message}\n\nThe current directory is now your workspace root. CONVERSATIONS.json will be saved here.`);
     } else {
       toast.error(`Failed to set workspace root: ${result.error}`);
