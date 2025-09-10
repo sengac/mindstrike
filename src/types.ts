@@ -7,6 +7,18 @@ export interface ConversationMessage {
   toolResults?: Array<{ name: string; result: any }>;
   status?: 'processing' | 'completed' | 'cancelled';
   model?: string; // LLM model used for assistant messages
+  images?: ImageAttachment[]; // Image attachments for user messages
+}
+
+export interface ImageAttachment {
+  id: string;
+  filename: string;
+  filepath: string;
+  mimeType: string;
+  size: number;
+  thumbnail: string; // base64 encoded thumbnail for UI display
+  fullImage: string; // base64 encoded full-size image for LLM
+  uploadedAt: Date;
 }
 
 export interface ToolCall {

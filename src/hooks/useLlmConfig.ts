@@ -18,7 +18,8 @@ export function useLlmConfig() {
         if (
           serverConfig.baseURL !== llmConfig.baseURL ||
           serverConfig.model !== llmConfig.model ||
-          serverConfig.apiKey !== llmConfig.apiKey
+          serverConfig.apiKey !== llmConfig.apiKey ||
+          serverConfig.type !== llmConfig.type
         ) {
           setLlmConfig(serverConfig);
         }

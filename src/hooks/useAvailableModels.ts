@@ -6,7 +6,7 @@ export interface AvailableLLMService {
   name: string;
   baseURL: string;
   models: string[];
-  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai';
+  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic';
   available: boolean;
 }
 
@@ -17,7 +17,7 @@ export interface LLMModel {
   baseURL: string;
   displayName: string;
   apiKey?: string;
-  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai';
+  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic';
   contextLength?: number;
 }
 
@@ -55,18 +55,40 @@ export function useAvailableModels() {
       // Combine both detected and custom services
       const allServices = [...detectedServices];
       
-      // Add custom services that are enabled
+      // Add custom services that are enabled and fetch their models
       for (const customService of customServices) {
         if (customService.enabled) {
-          // Test if custom service has models (simplified)
-          allServices.push({
-            id: customService.id,
-            name: customService.name,
-            baseURL: customService.baseURL,
-            type: customService.type,
-            available: true,
-            models: ['default'] // We'll assume at least one model for now
-          });
+          try {
+            // Test the service and get its actual models
+            const testResponse = await fetch('/api/llm/test-service', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                baseURL: customService.baseURL,
+                type: customService.type,
+                apiKey: customService.apiKey
+              })
+            });
+
+            if (testResponse.ok) {
+              const testResult = await testResponse.json();
+              if (testResult.success && testResult.models && testResult.models.length > 0) {
+                allServices.push({
+                  id: customService.id,
+                  name: customService.name,
+                  baseURL: customService.baseURL,
+                  type: customService.type,
+                  available: true,
+                  models: testResult.models
+                });
+              }
+            }
+          } catch (error) {
+            // If testing fails, skip this service or add with default model
+            console.warn(`Failed to test custom service ${customService.name}:`, error);
+          }
         }
       }
       

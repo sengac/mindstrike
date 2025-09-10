@@ -39,7 +39,7 @@ export function useThreads(workspaceRestored: boolean = true) {
     }
   }, []);
 
-  // Load threads from CONVERSATIONS.json file on mount (after workspace is restored)
+  // Load threads from mindstrike-chats.json file on mount (after workspace is restored)
   useEffect(() => {
     if (workspaceRestored) {
       loadThreads();
@@ -55,7 +55,7 @@ export function useThreads(workspaceRestored: boolean = true) {
     };
   }, []);
 
-  // Save threads to CONVERSATIONS.json file with debouncing
+  // Save threads to mindstrike-chats.json file with debouncing
   const saveThreads = useCallback(async (threadsToSave: Thread[]) => {
     // Clear any existing timeout
     if (saveTimeoutRef.current) {

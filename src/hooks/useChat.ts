@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { ConversationMessage } from '../types';
+import { ConversationMessage, ImageAttachment } from '../types';
 
 interface UseChatProps {
   threadId?: string;
@@ -54,7 +54,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
     loadConversation();
   }, [loadConversation]);
 
-  const sendMessage = useCallback(async (content: string) => {
+  const sendMessage = useCallback(async (content: string, images?: ImageAttachment[]) => {
     // Handle /clear command
     if (content.trim() === '/clear') {
       await clearConversation();
@@ -71,19 +71,22 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
       id: Date.now().toString(),
       role: 'user',
       content,
-      timest: new Date()
+      timest: new Date(),
+      images: images || []
     };
     let currentMessages = [...messages, userMessage];
     setMessages(currentMessages);
 
     try {
+      const requestBody = { message: content, threadId, images: images || [] };
+      
       // Use SSE for real-time updates
       const response = await fetch('/api/message/stream', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ message: content, threadId })
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
@@ -305,7 +308,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ message: newContent, threadId })
+        body: JSON.stringify({ message: newContent, threadId, images: [] })
       });
 
       if (!response.ok) {

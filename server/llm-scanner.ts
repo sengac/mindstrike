@@ -5,7 +5,7 @@ export interface AvailableLLMService {
   name: string;
   baseURL: string;
   models: string[];
-  type: 'ollama' | 'vllm' | 'openai-compatible';
+  type: 'ollama' | 'vllm' | 'openai-compatible' | 'anthropic';
   available: boolean;
 }
 
@@ -102,6 +102,16 @@ export class LLMScanner {
           expectedResponseStructure = (data) => {
             if (data?.data && Array.isArray(data.data)) {
               return data.data.map((model: any) => model.id || model.model || '').filter(Boolean);
+            }
+            return [];
+          };
+          break;
+        
+        case 'anthropic':
+          endpoint = '/v1/models';
+          expectedResponseStructure = (data) => {
+            if (data?.data && Array.isArray(data.data)) {
+              return data.data.map((model: any) => model.id || model.name || '').filter(Boolean);
             }
             return [];
           };

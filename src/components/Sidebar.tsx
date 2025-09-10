@@ -1,16 +1,18 @@
 
-import { MessageSquare, Files, Settings, Bot } from 'lucide-react';
+import { MessageSquare, Files, Settings, Bot, Workflow, Network } from 'lucide-react';
 import { clsx } from 'clsx';
 import { MindStrikeIcon } from './MindStrikeIcon';
 
 interface SidebarProps {
-  activePanel: 'chat' | 'files' | 'agents' | 'settings';
-  onPanelChange: (panel: 'chat' | 'files' | 'agents' | 'settings') => void;
+  activePanel: 'chat' | 'files' | 'agents' | 'workflows' | 'knowledge-graphs' | 'settings';
+  onPanelChange: (panel: 'chat' | 'files' | 'agents' | 'workflows' | 'knowledge-graphs' | 'settings') => void;
 }
 
 export function Sidebar({ activePanel, onPanelChange }: SidebarProps) {
   const menuItems = [
     { id: 'chat' as const, icon: MessageSquare, label: 'Chat' },
+    { id: 'workflows' as const, icon: Workflow, label: 'Workflows' },
+    { id: 'knowledge-graphs' as const, icon: Network, label: 'Knowledge Graphs' },
     { id: 'files' as const, icon: Files, label: 'Workspace' },
     { id: 'agents' as const, icon: Bot, label: 'Agents' }
   ];

@@ -4,7 +4,7 @@ export interface CustomLLMService {
   id: string;
   name: string;
   baseURL: string;
-  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai';
+  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic';
   apiKey?: string;
   enabled: boolean;
   custom: boolean; // Whether this was manually added by user
@@ -128,48 +128,24 @@ export function useLlmServices() {
   // Test a service connection
   const testService = async (service: CustomLLMService): Promise<{ success: boolean; error?: string; models?: string[] }> => {
     try {
-      let endpoint: string;
-      
-      switch (service.type) {
-        case 'ollama':
-          endpoint = '/api/tags';
-          break;
-        case 'vllm':
-        case 'openai-compatible':
-        case 'openai':
-          endpoint = '/v1/models';
-          break;
-        default:
-          throw new Error(`Unknown service type: ${service.type}`);
-      }
-
-      const headers: Record<string, string> = {
-        'Accept': 'application/json',
-      };
-      
-      if (service.apiKey && (service.type === 'openai' || service.type === 'openai-compatible')) {
-        headers['Authorization'] = `Bearer ${service.apiKey}`;
-      }
-
-      const response = await fetch(`${service.baseURL}${endpoint}`, {
-        headers,
-        signal: AbortSignal.timeout(5000) // 5 second timeout
+      const response = await fetch('/api/llm/test-service', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          baseURL: service.baseURL,
+          type: service.type,
+          apiKey: service.apiKey
+        })
       });
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const data = await response.json();
-      
-      let models: string[] = [];
-      if (service.type === 'ollama') {
-        models = data?.models?.map((m: any) => m.name || m.model || '').filter(Boolean) || [];
-      } else {
-        models = data?.data?.map((m: any) => m.id || m.model || '').filter(Boolean) || [];
-      }
-
-      return { success: true, models };
+      const result = await response.json();
+      return result;
     } catch (error) {
       return { 
         success: false, 

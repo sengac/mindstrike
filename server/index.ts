@@ -15,6 +15,12 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Check for debug flag
+const DEBUG_MODE = process.argv.includes('--debug');
+if (DEBUG_MODE) {
+  console.log('🐛 Debug mode enabled - verbose image logging active');
+}
+
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -45,7 +51,9 @@ let currentWorkingDirectory = workspaceRoot;
 let currentLlmConfig = {
   baseURL: 'http://localhost:11434',
   model: '',
-  apiKey: undefined
+  apiKey: undefined,
+  type: undefined,
+  debug: DEBUG_MODE
 };
 
 // Store custom roles per thread
@@ -145,16 +153,18 @@ app.get('/api/llm-config', (req, res) => {
 
 app.post('/api/llm-config', (req: any, res: any) => {
   try {
-    const { baseURL, model, apiKey } = req.body;
-    logger.info('Updating LLM config:', { baseURL, model, apiKey: apiKey ? '[REDACTED]' : undefined });
+    const { baseURL, model, apiKey, type } = req.body;
+    logger.info('Updating LLM config:', { baseURL, model, type, apiKey: apiKey ? '[REDACTED]' : undefined });
     
     if (baseURL) currentLlmConfig.baseURL = baseURL;
     if (model) currentLlmConfig.model = model;
     if (apiKey !== undefined) currentLlmConfig.apiKey = apiKey;
+    if (type !== undefined) currentLlmConfig.type = type;
     
     logger.info('Updated LLM config:', { 
       baseURL: currentLlmConfig.baseURL, 
       model: currentLlmConfig.model, 
+      type: currentLlmConfig.type,
       apiKey: currentLlmConfig.apiKey ? '[REDACTED]' : undefined 
     });
     
@@ -218,13 +228,99 @@ app.post('/api/llm/rescan', async (req, res) => {
   }
 });
 
+// Test a custom LLM service
+app.post('/api/llm/test-service', async (req: any, res: any) => {
+  try {
+    const { baseURL, type, apiKey } = req.body;
+    
+    if (!baseURL || !type) {
+      return res.status(400).json({ error: 'baseURL and type are required' });
+    }
+
+    let endpoint: string;
+    switch (type) {
+      case 'ollama':
+        endpoint = '/api/tags';
+        break;
+      case 'vllm':
+      case 'openai-compatible':
+      case 'openai':
+      case 'anthropic':
+        endpoint = '/v1/models';
+        break;
+      default:
+        return res.status(400).json({ error: `Unknown service type: ${type}` });
+    }
+
+    const headers: Record<string, string> = {
+      'Accept': 'application/json',
+    };
+    
+    if (apiKey && (type === 'openai' || type === 'openai-compatible')) {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    }
+    
+    if (apiKey && type === 'anthropic') {
+      headers['x-api-key'] = apiKey;
+      headers['anthropic-version'] = '2023-06-01';
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    try {
+      const response = await fetch(`${baseURL}${endpoint}`, {
+        headers,
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        return res.json({ 
+          success: false, 
+          error: `HTTP ${response.status}: ${response.statusText}` 
+        });
+      }
+
+      const data = await response.json();
+      
+      let models: string[] = [];
+      if (type === 'ollama') {
+        models = data?.models?.map((m: any) => m.name || m.model || '').filter(Boolean) || [];
+      } else if (type === 'anthropic') {
+        models = data?.data?.map((m: any) => m.id || m.name || '').filter(Boolean) || [];
+      } else {
+        models = data?.data?.map((m: any) => m.id || m.model || '').filter(Boolean) || [];
+      }
+
+      res.json({ success: true, models });
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === 'AbortError') {
+        res.json({ success: false, error: 'Request timeout' });
+      } else {
+        res.json({ 
+          success: false, 
+          error: error instanceof Error ? error.message : 'Connection failed' 
+        });
+      }
+    }
+  } catch (error) {
+    logger.error('Error testing LLM service:', error);
+    res.status(500).json({ error: 'Failed to test LLM service' });
+  }
+});
+
 app.get('/api/conversation', (req, res) => {
   res.json(agentPool.getCurrentAgent().getConversation());
 });
 
+
+
 app.post('/api/message', async (req: any, res: any) => {
   try {
-    const { message, threadId } = req.body;
+    const { message, threadId, images } = req.body;
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
     }
@@ -239,7 +335,7 @@ app.post('/api/message', async (req: any, res: any) => {
       agentPool.setCurrentThread(threadId);
     }
 
-    const response = await agentPool.getCurrentAgent().processMessage(message);
+    const response = await agentPool.getCurrentAgent().processMessage(message, images);
     res.json(response);
   } catch (error: any) {
     console.error('Error processing message:', error);
@@ -250,7 +346,7 @@ app.post('/api/message', async (req: any, res: any) => {
 // SSE endpoint for real-time message processing
 app.post('/api/message/stream', async (req: any, res: any) => {
   try {
-    const { message, threadId } = req.body;
+    const { message, threadId, images } = req.body;
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
     }
@@ -285,7 +381,7 @@ app.post('/api/message/stream', async (req: any, res: any) => {
     if (res.flush) res.flush();
 
     // Process message with real-time updates using thread-specific agent
-    const response = await agentPool.getCurrentAgent().processMessage(message, (updatedMessage: any) => {
+    const response = await agentPool.getCurrentAgent().processMessage(message, images, (updatedMessage: any) => {
       // Send message update via SSE
       console.log('📡 Sending SSE message-update - Status:', updatedMessage.status, 'Tool calls:', updatedMessage.toolCalls?.length || 0);
       res.write(`data: ${JSON.stringify({
@@ -330,7 +426,7 @@ app.post('/api/load-thread/:threadId', async (req: any, res: any) => {
     agentPool.setCurrentThread(threadId);
 
     const fs = await import('fs/promises');
-    const conversationsPath = path.join(workspaceRoot, 'CONVERSATIONS.json');
+    const conversationsPath = path.join(workspaceRoot, 'mindstrike-chats.json');
     
     try {
       const data = await fs.readFile(conversationsPath, 'utf-8');
@@ -402,7 +498,7 @@ app.delete('/api/message/:messageId', (req: any, res: any) => {
 app.get('/api/conversations', async (req, res) => {
   try {
     const fs = await import('fs/promises');
-    const conversationsPath = path.join(workspaceRoot, 'CONVERSATIONS.json');
+    const conversationsPath = path.join(workspaceRoot, 'mindstrike-chats.json');
     
     try {
       const data = await fs.readFile(conversationsPath, 'utf-8');
@@ -422,12 +518,80 @@ app.post('/api/conversations', async (req, res) => {
   try {
     const fs = await import('fs/promises');
     const conversations = req.body;
-    const conversationsPath = path.join(workspaceRoot, 'CONVERSATIONS.json');
+    const conversationsPath = path.join(workspaceRoot, 'mindstrike-chats.json');
     
     await fs.writeFile(conversationsPath, JSON.stringify(conversations, null, 2));
     res.json({ success: true });
   } catch (error: any) {
     console.error('Error saving conversations:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Workflows API
+app.get('/api/workflows', async (req, res) => {
+  try {
+    const fs = await import('fs/promises');
+    const workflowsPath = path.join(workspaceRoot, 'mindstrike-workflows.json');
+    
+    try {
+      const data = await fs.readFile(workflowsPath, 'utf-8');
+      const workflows = JSON.parse(data);
+      res.json(workflows);
+    } catch (error) {
+      // File doesn't exist or is invalid, return empty array
+      res.json([]);
+    }
+  } catch (error: any) {
+    console.error('Error loading workflows:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/workflows', async (req, res) => {
+  try {
+    const fs = await import('fs/promises');
+    const workflows = req.body;
+    const workflowsPath = path.join(workspaceRoot, 'mindstrike-workflows.json');
+    
+    await fs.writeFile(workflowsPath, JSON.stringify(workflows, null, 2));
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error saving workflows:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Knowledge Graphs API
+app.get('/api/knowledge-graphs', async (req, res) => {
+  try {
+    const fs = await import('fs/promises');
+    const knowledgeGraphsPath = path.join(workspaceRoot, 'mindstrike-graphs.json');
+    
+    try {
+      const data = await fs.readFile(knowledgeGraphsPath, 'utf-8');
+      const knowledgeGraphs = JSON.parse(data);
+      res.json(knowledgeGraphs);
+    } catch (error) {
+      // File doesn't exist or is invalid, return empty array
+      res.json([]);
+    }
+  } catch (error: any) {
+    console.error('Error loading knowledge graphs:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/knowledge-graphs', async (req, res) => {
+  try {
+    const fs = await import('fs/promises');
+    const knowledgeGraphs = req.body;
+    const knowledgeGraphsPath = path.join(workspaceRoot, 'mindstrike-graphs.json');
+    
+    await fs.writeFile(knowledgeGraphsPath, JSON.stringify(knowledgeGraphs, null, 2));
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error saving knowledge graphs:', error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -204,7 +204,7 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
   const handleWorkspaceConfirm = async () => {
     const result = await setWorkspaceRoot(currentDirectory, onDirectoryChange);
     if (result.success) {
-      toast.success(`${result.message}\n\nThe current directory is now your workspace root. CONVERSATIONS.json will be saved here.`);
+      toast.success(`${result.message}\n\nThe current directory is now your workspace root. All workspace files will be saved here.`);
     } else {
       toast.error(`Failed to set workspace root: ${result.error}`);
     }
@@ -531,7 +531,7 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
             
             <p className="text-gray-300 mb-6">
               Are you sure you want to set <span className="font-medium text-white">{currentDirectory}</span> as your workspace root? 
-              CONVERSATIONS.json will be saved here.
+              All workspace files will be saved here.
             </p>
             
             <div className="flex space-x-3 justify-end">

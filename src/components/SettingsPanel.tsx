@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 interface AddServiceFormData {
   name: string;
   baseURL: string;
-  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai';
+  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic';
   apiKey: string;
 }
 
@@ -145,6 +145,7 @@ const ServiceCard = React.memo<ServiceCardProps>(({
               <option value="vllm">vLLM</option>
               <option value="openai-compatible">OpenAI Compatible</option>
               <option value="openai">OpenAI</option>
+                      <option value="anthropic">Anthropic</option>
             </select>
           </div>
           <div className="col-span-2">
@@ -374,6 +375,7 @@ export function SettingsPanel() {
                         <option value="vllm">vLLM</option>
                         <option value="openai-compatible">OpenAI Compatible</option>
                         <option value="openai">OpenAI</option>
+                        <option value="anthropic">Anthropic</option>
                       </select>
                     </div>
                   </div>

@@ -270,6 +270,11 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
             <span>Copy</span>
           </button>
         )}
+        {language && (
+          <div className="absolute bottom-2 right-2 bg-gray-800/90 backdrop-blur-sm border border-gray-600 px-2 py-1 rounded text-xs text-gray-300 font-mono opacity-80 transition-opacity z-10">
+            {language}
+          </div>
+        )}
         <SyntaxHighlighter
           language={getSupportedLanguage(language)}
           style={vscDarkPlus}
@@ -331,27 +336,7 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
     );
   };
 
-  const renderLatex = (latex: string, isBlock: boolean = false) => {
-    try {
-      const html = katex.renderToString(latex, {
-        throwOnError: false,
-        displayMode: isBlock,
-        strict: false
-      });
-      
-      if (isBlock) {
-        return (
-          <div className="my-4 text-center" dangerouslySetInnerHTML={{ __html: html }} />
-        );
-      } else {
-        return (
-          <span className="inline" dangerouslySetInnerHTML={{ __html: html }} />
-        );
-      }
-    } catch (error) {
-      return <span className="text-red-400 bg-red-900/20 px-1 rounded">{`$${isBlock ? '$' : ''}${latex}${isBlock ? '$' : ''}$`}</span>;
-    }
-  };
+
 
   const processLatexInContent = (content: string): React.ReactNode => {
     // Check if content has LaTeX expressions
@@ -683,7 +668,49 @@ export function ChatMessage({ message, onDelete, onRegenerate, onCancelToolCalls
                   </div>
                 </div>
               ) : (
-                renderContent(message.content)
+                <>
+                  {/* Display attached images for user messages */}
+                  {isUser && message.images && message.images.length > 0 && (
+                    <div className="mb-3">
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                        {message.images.map((image) => (
+                          <div key={image.id} className="relative group">
+                            <img
+                              src={image.thumbnail}
+                              alt={image.filename}
+                              className="w-full h-32 object-cover rounded border border-gray-600 hover:border-gray-400 transition-colors cursor-pointer"
+                              onClick={() => {
+                                // Open image in new tab or modal
+                                const newWindow = window.open();
+                                if (newWindow) {
+                                  newWindow.document.write(`<img src="${image.thumbnail}" alt="${image.filename}" style="max-width: 100%; height: auto;" />`);
+                                }
+                              }}
+                            />
+                            <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-60 text-xs text-white p-1 rounded-b truncate">
+                              {image.filename}
+                            </div>
+                            <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={() => {
+                                  const newWindow = window.open();
+                                  if (newWindow) {
+                                    newWindow.document.write(`<img src="${image.thumbnail}" alt="${image.filename}" style="max-width: 100%; height: auto;" />`);
+                                  }
+                                }}
+                                className="p-1 bg-black bg-opacity-70 hover:bg-opacity-90 rounded text-white"
+                                title="View full size"
+                              >
+                                <Maximize2 size={12} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {renderContent(message.content)}
+                </>
               )}
             </>
           )}

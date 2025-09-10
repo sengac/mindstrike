@@ -15,6 +15,17 @@ export interface AgentConfig {
   customRole?: string;
 }
 
+export interface ImageAttachment {
+  id: string;
+  filename: string;
+  filepath: string;
+  mimeType: string;
+  size: number;
+  thumbnail: string; // base64 encoded thumbnail for UI display
+  fullImage: string; // base64 encoded full-size image for LLM
+  uploadedAt: Date;
+}
+
 export interface ConversationMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -24,6 +35,7 @@ export interface ConversationMessage {
   toolResults?: Array<{ name: string; result: any }>;
   status?: 'processing' | 'completed' | 'cancelled';
   model?: string; // LLM model used for assistant messages
+  images?: ImageAttachment[]; // Image attachments for user messages
 }
 
 export class Agent {
@@ -112,8 +124,9 @@ export class Agent {
       "- Don't mention that you used a tool to resolve the issue unless it's relevant to the user.",
       "- Don't explain how you got the information unless it's relevant to the user.",
       "- All code should be wrapped with ```(language) at the beginning and ``` at the end.",
-      "- All diagrams are to be rendered with Mermaid and should be wrapped with ```mermaid and ``` at the beginning and end.",
-      "- All mathematical formulas are to be written in LaTeX"
+      "- All diagrams are to be rendered with Mermaid and should be wrapped with ```mermaid and ``` at the beginning and end and the syntax should be heavily checked for its validity first.",
+      "- All mathematical formulas are to be written in LaTeX",
+      "- When writing code exles, preference them to be written in TypeScript unless otherwise specified or it makes sense to use a different language."
     ].join('\n');
   }
 
@@ -133,7 +146,7 @@ export class Agent {
     ].join('\n');
   }
 
-  async processMessage(userMessage: string, onUpdate?: (message: ConversationMessage) => void): Promise<ConversationMessage> {
+  async processMessage(userMessage: string, images?: ImageAttachment[], onUpdate?: (message: ConversationMessage) => void): Promise<ConversationMessage> {
     console.log('🚀 processMessage called with onUpdate callback:', !!onUpdate);
     
     // Add user message to conversation
@@ -141,15 +154,155 @@ export class Agent {
       id: this.generateId(),
       role: 'user',
       content: userMessage,
-      timest: new Date()
+      timest: new Date(),
+      images: images || []
     };
     this.conversation.push(userMsg);
 
+
+
     // Convert conversation to LLM format, filtering out think tags
-    const llmMessages: LLMMessage[] = this.conversation.map(msg => ({
-      role: msg.role,
-      content: cleanContentForLLM(msg.content)
-    }));
+    const isOllama = this.config.llmConfig.baseURL.includes('11434') || this.config.llmConfig.baseURL.includes('ollama');
+    
+    // Get the latest user message ID to determine which message can have images
+    const latestUserMessage = this.conversation[this.conversation.length - 1];
+    const isLatestUserMessage = latestUserMessage && latestUserMessage.role === 'user';
+    
+    const llmMessages: LLMMessage[] = this.conversation.map(msg => {
+      // For user messages with images
+      if (msg.role === 'user' && msg.images && msg.images.length > 0) {
+        // Only include images if this is the latest user message
+        // Historical messages should have images stripped but keep text analysis from assistant responses
+        if (isLatestUserMessage && msg.id === latestUserMessage.id) {
+          if (isOllama) {
+            // For Ollama vision models, include images directly in the message
+            const images: string[] = [];
+            
+            for (const image of msg.images) {
+              let imageData = image.fullImage || image.thumbnail;
+              
+              // Extract base64 data from data URL
+              if (imageData.startsWith('data:')) {
+                const base64Data = imageData.split(',')[1];
+                images.push(base64Data);
+              } else {
+                // Assume it's already base64
+                images.push(imageData);
+              }
+            }
+            
+            // For Ollama, return the message with images array at message level
+            return {
+              role: msg.role,
+              content: cleanContentForLLM(msg.content),
+              images: images
+            };
+          } else {
+            // Check if this is Anthropic vs OpenAI-compatible
+            const isAnthropic = this.config.llmConfig.baseURL.includes('anthropic') || this.config.llmConfig.type === 'anthropic';
+            
+            if (isAnthropic) {
+              // For Anthropic APIs, use their specific image format
+              const contentArray: Array<{type: 'text' | 'image'; text?: string; source?: {type: 'base64'; media_type: string; data: string}}> = [];
+              
+              // Add text content if present
+              if (msg.content && msg.content.trim()) {
+                contentArray.push({
+                  type: 'text',
+                  text: cleanContentForLLM(msg.content)
+                });
+              }
+              
+              // Add images - use full-size image for better LLM analysis
+              for (const image of msg.images) {
+                let imageData = image.fullImage || image.thumbnail; // Fallback to thumbnail if fullImage not available
+                let mediaType = image.mimeType || 'image/jpeg';
+                
+                // Extract base64 data if it's a data URL
+                if (imageData.startsWith('data:')) {
+                  const parts = imageData.split(',');
+                  if (parts.length === 2) {
+                    // Extract media type from data URL if available
+                    const dataUrlMatch = parts[0].match(/data:([^;]+)/);
+                    if (dataUrlMatch) {
+                      mediaType = dataUrlMatch[1];
+                    }
+                    imageData = parts[1];
+                  }
+                }
+                
+                contentArray.push({
+                  type: 'image',
+                  source: {
+                    type: 'base64',
+                    media_type: mediaType,
+                    data: imageData
+                  }
+                });
+              }
+              
+              return {
+                role: msg.role,
+                content: contentArray
+              };
+            } else {
+              // For OpenAI-compatible APIs, use proper image format
+              const contentArray: Array<{type: 'text' | 'image_url'; text?: string; image_url?: {url: string}}> = [];
+              
+              // Add text content if present
+              if (msg.content && msg.content.trim()) {
+                contentArray.push({
+                  type: 'text',
+                  text: cleanContentForLLM(msg.content)
+                });
+              }
+              
+              // Add images - use full-size image for better LLM analysis
+              for (const image of msg.images) {
+                let imageUrl = image.fullImage || image.thumbnail; // Fallback to thumbnail if fullImage not available
+                
+                // Ensure it's a proper data URL
+                if (!imageUrl.startsWith('data:')) {
+                  imageUrl = `data:${image.mimeType || 'image/jpeg'};base64,${imageUrl}`;
+                }
+                
+                contentArray.push({
+                  type: 'image_url',
+                  image_url: {
+                    url: imageUrl
+                  }
+                });
+              }
+              
+              return {
+                role: msg.role,
+                content: contentArray
+              };
+            }
+          }
+        } else {
+          // For historical messages, strip images and just send text content
+          // Add a note that images were provided but are being converted to text context
+          const textContent = msg.content || 'Please analyze the uploaded image.';
+          const imageNote = msg.images.length === 1 
+            ? '\n[Note: An image was uploaded with this message. The assistant response that follows should contain the image analysis.]'
+            : `\n[Note: ${msg.images.length} images were uploaded with this message. The assistant response that follows should contain the image analysis.]`;
+          
+          return {
+            role: msg.role,
+            content: cleanContentForLLM(textContent + imageNote)
+          };
+        }
+      } else {
+        // Regular text message
+        return {
+          role: msg.role,
+          content: cleanContentForLLM(msg.content)
+        };
+      }
+    });
+
+
 
     try {
       // Get initial response from LLM
@@ -168,8 +321,6 @@ export class Agent {
         status: toolCalls && toolCalls.length > 0 ? 'processing' : 'completed',
         model: this.config.llmConfig.model
       };
-
-      console.log('🔧 Created assistant message - Status:', assistantMsg.status, 'Tool calls:', assistantMsg.toolCalls?.length || 0);
 
       this.conversation.push(assistantMsg);
 
@@ -291,6 +442,8 @@ export class Agent {
     return this.conversation.filter(msg => msg.role !== 'system');
   }
 
+
+
   deleteMessage(messageId: string): boolean {
     const initialLength = this.conversation.length;
     this.conversation = this.conversation.filter(msg => msg.id !== messageId);
@@ -327,6 +480,7 @@ export class Agent {
     // Add provided messages
     this.conversation.push(...messages);
   }
+
 
   private parseToolCalls(content: string): { content: string; toolCalls?: ToolCall[] } {
     logger.debug('Parsing content for tool calls:', { content });
