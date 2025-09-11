@@ -694,37 +694,37 @@ app.post('/api/workflows', async (req, res) => {
   }
 });
 
-// Knowledge Graphs API
-app.get('/api/knowledge-graphs', async (req, res) => {
+// MindMaps API
+app.get('/api/mindmaps', async (req, res) => {
   try {
     const fs = await import('fs/promises');
-    const knowledgeGraphsPath = path.join(workspaceRoot, 'mindstrike-graphs.json');
+    const mindMapsPath = path.join(workspaceRoot, 'mindstrike-mindmaps.json');
     
     try {
-      const data = await fs.readFile(knowledgeGraphsPath, 'utf-8');
-      const knowledgeGraphs = JSON.parse(data);
-      res.json(knowledgeGraphs);
+      const data = await fs.readFile(mindMapsPath, 'utf-8');
+      const mindMaps = JSON.parse(data);
+      res.json(mindMaps);
     } catch (error) {
       // File doesn't exist or is invalid, return empty array
       res.json([]);
     }
   } catch (error: any) {
-    console.error('Error loading knowledge graphs:', error);
+    console.error('Error loading mindmaps:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/knowledge-graphs', async (req, res) => {
+app.post('/api/mindmaps', async (req, res) => {
   try {
     const fs = await import('fs/promises');
-    const knowledgeGraphs = req.body;
-    const knowledgeGraphsPath = path.join(workspaceRoot, 'mindstrike-graphs.json');
+    const mindMaps = req.body;
+    const mindMapsPath = path.join(workspaceRoot, 'mindstrike-mindmaps.json');
     
     // Read existing data to preserve mindmap data
-    let existingGraphs = [];
+    let existingMindMaps = [];
     try {
-      const existingData = await fs.readFile(knowledgeGraphsPath, 'utf-8');
-      existingGraphs = JSON.parse(existingData);
+      const existingData = await fs.readFile(mindMapsPath, 'utf-8');
+      existingMindMaps = JSON.parse(existingData);
     } catch (error: any) {
       if (error.code !== 'ENOENT') {
         throw error;
@@ -734,83 +734,140 @@ app.post('/api/knowledge-graphs', async (req, res) => {
     
     // Create a map of existing mindmap data
     const existingMindmapData = new Map();
-    existingGraphs.forEach((graph: any) => {
-      if (graph.mindmapData) {
-        existingMindmapData.set(graph.id, graph.mindmapData);
+    existingMindMaps.forEach((mindMap: any) => {
+      if (mindMap.mindmapData) {
+        existingMindmapData.set(mindMap.id, mindMap.mindmapData);
       }
     });
     
-    // Merge new knowledge graphs with existing mindmap data
-    const mergedGraphs = knowledgeGraphs.map((graph: any) => {
-      const existingMindmap = existingMindmapData.get(graph.id);
-      return existingMindmap ? { ...graph, mindmapData: existingMindmap } : graph;
+    // Merge new mindmaps with existing mindmap data
+    const mergedMindMaps = mindMaps.map((mindMap: any) => {
+      const existingMindmap = existingMindmapData.get(mindMap.id);
+      if (existingMindmap) {
+        return { ...mindMap, mindmapData: existingMindmap };
+      } else {
+        // Initialize new mindmaps with default mindmapData structure containing root node
+        const initialMindmapData = {
+          root: {
+            id: `node-${Date.now()}-${mindMap.id}`,
+            text: 'Central Idea',
+            notes: null,
+            layout: 'graph-right'
+          }
+        };
+        return { ...mindMap, mindmapData: initialMindmapData };
+      }
     });
     
-    await fs.writeFile(knowledgeGraphsPath, JSON.stringify(mergedGraphs, null, 2));
+    await fs.writeFile(mindMapsPath, JSON.stringify(mergedMindMaps, null, 2));
     res.json({ success: true });
   } catch (error: any) {
-    console.error('Error saving knowledge graphs:', error);
+    console.error('Error saving mindmaps:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// MindMap data API for Knowledge Graphs
-app.get('/api/knowledge-graphs/:graphId/mindmap', async (req: Request, res: Response) => {
+// MindMap data API for MindMaps
+app.get('/api/mindmaps/:mindMapId/mindmap', async (req: Request, res: Response) => {
   try {
-    const { graphId } = req.params;
+    const { mindMapId } = req.params;
     const fs = await import('fs/promises');
-    const graphsPath = path.join(workspaceRoot, 'mindstrike-graphs.json');
+    const mindMapsPath = path.join(workspaceRoot, 'mindstrike-mindmaps.json');
     
-    try {
-      const data = await fs.readFile(graphsPath, 'utf-8');
-      const graphs = JSON.parse(data);
-      const graph = graphs.find((g: any) => g.id === graphId);
-      
-      if (!graph) {
-        return res.status(404).json({ error: 'Mindmap data not found' });
+    const result = await withFileLock(mindMapsPath, async () => {
+      try {
+        const data = await fs.readFile(mindMapsPath, 'utf-8');
+        if (!data.trim()) {
+          return null;
+        }
+        const mindMaps = JSON.parse(data);
+        return mindMaps.find((m: any) => m.id === mindMapId);
+      } catch (error: any) {
+        if (error.code === 'ENOENT') {
+          return null;
+        } else if (error instanceof SyntaxError) {
+          logger.warn(`Corrupted mindmaps file detected during read: ${error.message}`);
+          return null;
+        }
+        throw error;
       }
-      
-      res.json(graph.mindmapData);
-    } catch (error: any) {
-      if (error.code === 'ENOENT') {
-        return res.status(404).json({ error: 'Mindmap data not found' });
-      }
-      throw error;
+    });
+    
+    if (!result) {
+      return res.status(404).json({ error: 'Mindmap data not found' });
     }
+    
+    res.json(result.mindmapData);
   } catch (error: any) {
     console.error('Error loading mindmap data:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/knowledge-graphs/:graphId/mindmap', async (req: Request, res: Response) => {
+// In-memory lock to prevent concurrent file operations
+const fileLocks = new Map<string, Promise<any>>();
+
+async function withFileLock<T>(filePath: string, operation: () => Promise<T>): Promise<T> {
+  const existingLock = fileLocks.get(filePath);
+  
+  const lockPromise = existingLock 
+    ? existingLock.then(() => operation()).catch(() => operation())
+    : operation();
+  
+  fileLocks.set(filePath, lockPromise);
+  
   try {
-    const { graphId } = req.params;
+    const result = await lockPromise;
+    // Clean up completed lock
+    if (fileLocks.get(filePath) === lockPromise) {
+      fileLocks.delete(filePath);
+    }
+    return result;
+  } catch (error) {
+    // Clean up failed lock
+    if (fileLocks.get(filePath) === lockPromise) {
+      fileLocks.delete(filePath);
+    }
+    throw error;
+  }
+}
+
+app.post('/api/mindmaps/:mindMapId/mindmap', async (req: Request, res: Response) => {
+  try {
+    const { mindMapId } = req.params;
     const mindmapData = req.body;
     const fs = await import('fs/promises');
-    const graphsPath = path.join(workspaceRoot, 'mindstrike-graphs.json');
+    const mindMapsPath = path.join(workspaceRoot, 'mindstrike-mindmaps.json');
     
-    let graphs = [];
-    try {
-      const data = await fs.readFile(graphsPath, 'utf-8');
-      graphs = JSON.parse(data);
-    } catch (error: any) {
-      if (error.code === 'ENOENT') {
-        // File doesn't exist, start with empty array
-        graphs = [];
-      } else {
-        throw error;
+    await withFileLock(mindMapsPath, async () => {
+      let mindMaps = [];
+      try {
+        const data = await fs.readFile(mindMapsPath, 'utf-8');
+        if (data.trim()) {
+          mindMaps = JSON.parse(data);
+        }
+      } catch (error: any) {
+        if (error.code === 'ENOENT') {
+          // File doesn't exist, start with empty array
+          mindMaps = [];
+        } else if (error instanceof SyntaxError) {
+          // Corrupted JSON, log and start fresh
+          logger.warn(`Corrupted mindmaps file detected, recreating: ${error.message}`);
+          mindMaps = [];
+        } else {
+          throw error;
+        }
       }
-    }
-    
-    const existingGraphIndex = graphs.findIndex((g: any) => g.id === graphId);
-    if (existingGraphIndex >= 0) {
-      graphs[existingGraphIndex].mindmapData = mindmapData;
-    } else {
-      graphs.push({ id: graphId, mindmapData });
-    }
-    
-    await fs.writeFile(graphsPath, JSON.stringify(graphs, null, 2));
+      
+      const existingMindMapIndex = mindMaps.findIndex((m: any) => m.id === mindMapId);
+      if (existingMindMapIndex >= 0) {
+        mindMaps[existingMindMapIndex].mindmapData = mindmapData;
+      } else {
+        mindMaps.push({ id: mindMapId, mindmapData });
+      }
+      
+      await fs.writeFile(mindMapsPath, JSON.stringify(mindMaps, null, 2));
+    });
 
     res.json({ success: true });
   } catch (error: any) {

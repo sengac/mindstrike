@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { Plus, Minus, Brain, MoreVertical, Edit, Trash2, Share } from 'lucide-react';
+import { Plus, Minus, Brain, Edit, Trash2, Share } from 'lucide-react';
 import { clsx } from 'clsx';
 
 export interface MindMapNodeData {
@@ -9,6 +9,8 @@ export interface MindMapNodeData {
   label: string;
   isRoot: boolean;
   parentId?: string; // Parent node ID for hierarchy (not saved, computed dynamically)
+  notes?: string | null;
+  chatId?: string | null;
   isEditing?: boolean;
   level?: number;
   isCollapsed?: boolean;
@@ -26,6 +28,7 @@ export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) 
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
   const [nodeWidth, setNodeWidth] = useState(data.width || 120);
+  const [isInferenceActive, setIsInferenceActive] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLSpanElement>(null);
@@ -48,59 +51,52 @@ export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) 
     }
   }, [data.isEditing]);
 
-  // Calculate text width and update node width (debounced)
+  // Calculate text width for display purposes only
   useEffect(() => {
     const measureTextWidth = () => {
-      if (measureRef.current) {
+      if (measureRef.current && !data.isDragging) {
         const textWidth = measureRef.current.scrollWidth;
         const padding = 32; // 16px padding on each side
         const minWidth = 120;
         const maxWidth = 800;
         const calculatedWidth = Math.min(Math.max(textWidth + padding, minWidth), maxWidth);
         
-        if (calculatedWidth !== nodeWidth) {
+        if (Math.abs(calculatedWidth - nodeWidth) > 5) { // Only update if difference > 5px
           setNodeWidth(calculatedWidth);
         }
       }
     };
 
-    // Use requestAnimationFrame for immediate visual feedback
-    requestAnimationFrame(measureTextWidth);
-
-    // Debounce the layout update event to prevent overwhelming React Flow
-    const debounceTimeout = setTimeout(() => {
-      if (measureRef.current) {
-        const textWidth = measureRef.current.scrollWidth;
-        const padding = 32;
-        const minWidth = 120;
-        const maxWidth = 800;
-        const calculatedWidth = Math.min(Math.max(textWidth + padding, minWidth), maxWidth);
-        
-        // Only emit the event if we're not actively editing (to avoid constant layout updates)
-        if (!isEditing) {
-          window.dispatchEvent(new CustomEvent('mindmap-node-width-change', {
-            detail: { nodeId: id, width: calculatedWidth }
-          }));
-        }
-      }
-    }, 750); // Increased to 750ms for better performance
-
-    return () => clearTimeout(debounceTimeout);
-  }, [label, id, nodeWidth, isEditing]);
+    // Only measure width when not dragging to prevent flicker
+    if (!data.isDragging) {
+      requestAnimationFrame(measureTextWidth);
+    }
+  }, [label, data.isDragging, data.label]); // Removed nodeWidth dependency to prevent infinite loop
 
   // Update width when data.width changes (from parent)
   useEffect(() => {
-    if (data.width && data.width !== nodeWidth) {
+    if (data.width && Math.abs(data.width - nodeWidth) > 5) { // Only update if difference > 5px
       setNodeWidth(data.width);
     }
-  }, [data.width, nodeWidth]);
+  }, [data.width, data.label, data.isDragging]); // Removed nodeWidth dependency to prevent infinite loop
 
   // Close context menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (contextMenuRef.current && !contextMenuRef.current.contains(event.target as Node)) {
-        setShowContextMenu(false);
+      const target = event.target as Node;
+      
+      // Don't close if clicking on the context menu itself
+      if (contextMenuRef.current && contextMenuRef.current.contains(target)) {
+        return;
       }
+      
+      // Don't close if clicking on this node (let the node handle its own events)
+      const nodeElement = document.querySelector(`[data-id="${id}"]`);
+      if (nodeElement && nodeElement.contains(target)) {
+        return;
+      }
+      
+      setShowContextMenu(false);
     };
 
     const handleEscapeKey = (event: KeyboardEvent) => {
@@ -110,18 +106,22 @@ export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) 
     };
 
     if (showContextMenu) {
-      // Use capture phase to ensure we catch the event before other handlers
-      document.addEventListener('mousedown', handleClickOutside, true);
-      document.addEventListener('click', handleClickOutside, true);
-      document.addEventListener('keydown', handleEscapeKey);
+      // Add a longer delay before registering outside click handlers
+      // This prevents touchpad right-click gestures from immediately closing the menu
+      const timeoutId = setTimeout(() => {
+        document.addEventListener('mousedown', handleClickOutside, true);
+        document.addEventListener('click', handleClickOutside, true);
+        document.addEventListener('keydown', handleEscapeKey);
+      }, 500);
       
       return () => {
+        clearTimeout(timeoutId);
         document.removeEventListener('mousedown', handleClickOutside, true);
         document.removeEventListener('click', handleClickOutside, true);
         document.removeEventListener('keydown', handleEscapeKey);
       };
     }
-  }, [showContextMenu]);
+  }, [showContextMenu, id]);
 
   // Listen for global context menu close events
   useEffect(() => {
@@ -136,27 +136,35 @@ export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) 
     };
   }, []);
 
+  // Listen for inference active state changes
+  useEffect(() => {
+    const handleInferenceActive = (event: CustomEvent) => {
+      const { activeNodeId } = event.detail;
+      setIsInferenceActive(activeNodeId === id);
+    };
+
+    window.addEventListener('mindmap-inference-active', handleInferenceActive as EventListener);
+    
+    return () => {
+      window.removeEventListener('mindmap-inference-active', handleInferenceActive as EventListener);
+    };
+  }, [id]);
+
   const handleSubmit = () => {
     setIsEditing(false);
+    const finalLabel = label.trim() || 'Untitled';
+    
     // Emit custom event to update node data
     window.dispatchEvent(new CustomEvent('mindmap-node-update', {
-      detail: { nodeId: id, label: label.trim() || 'Untitled' }
+      detail: { nodeId: id, label: finalLabel }
     }));
 
-    // Trigger immediate layout update when editing finishes
+    // Emit event to trigger layout recalculation after editing finishes
     setTimeout(() => {
-      if (measureRef.current) {
-        const textWidth = measureRef.current.scrollWidth;
-        const padding = 32;
-        const minWidth = 120;
-        const maxWidth = 800;
-        const calculatedWidth = Math.min(Math.max(textWidth + padding, minWidth), maxWidth);
-        
-        window.dispatchEvent(new CustomEvent('mindmap-node-width-change', {
-          detail: { nodeId: id, width: calculatedWidth }
-        }));
-      }
-    }, 100);
+      window.dispatchEvent(new CustomEvent('mindmap-node-update-finished', {
+        detail: { nodeId: id, label: finalLabel }
+      }));
+    }, 50);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -192,6 +200,7 @@ export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) 
       detail: { 
         nodeId: id, 
         label: data.label,
+        chatId: data.chatId,
         position
       }
     }));
@@ -289,13 +298,23 @@ export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) 
       )}
 
       {/* Inference Button */}
-      <button
-        onClick={handleInferenceClick}
-        className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-full w-10 h-8 bg-blue-600 border border-blue-500 rounded-l-lg flex items-center justify-center hover:bg-blue-700 transition-colors z-10 shadow-lg mr-1"
-        title="AI Inferences"
-      >
-        <Brain size={16} className="text-white" />
-      </button>
+      <div className="absolute left-2 top-1/2 transform -translate-y-1/2 -translate-x-full mr-1 z-20">
+        {/* Ripple Effects */}
+        {isInferenceActive && (
+          <>
+            <div className="absolute inset-0 w-8 h-8 bg-blue-400 rounded-full animate-ripple z-0" />
+            <div className="absolute inset-0 w-8 h-8 bg-blue-300 rounded-full animate-ripple-delayed z-0" />
+          </>
+        )}
+        
+        <button
+          onClick={handleInferenceClick}
+          className="relative w-8 h-8 bg-blue-600 border border-blue-500 rounded-full flex items-center justify-center hover:bg-blue-700 transition-colors z-10 shadow-lg"
+          title="AI Inferences"
+        >
+          <Brain size={16} className="text-white" />
+        </button>
+      </div>
 
       <div
         className={clsx(
@@ -308,15 +327,62 @@ export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) 
           data.isDropTarget && (data.dropPosition === 'above' || data.dropPosition === 'below') ? 'ring-2 ring-blue-400 ring-offset-2 ring-offset-gray-900 shadow-lg' : '',
           !isEditing ? 'select-none' : ''
         )}
-        style={{ width: `${nodeWidth}px`, minWidth: '120px', maxWidth: '800px', touchAction: 'manipulation' }}
+        style={{ width: `${nodeWidth}px`, minWidth: '120px', maxWidth: '800px' }}
         onContextMenu={handleContextMenu}
-        onTouchEnd={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          // Emit custom event to trigger selection
+        onClick={(e) => {
+          // Don't handle clicks if context menu is open
+          if (showContextMenu) {
+            return;
+          }
+          
+          // Don't handle clicks that are part of a right-click gesture (touchpad)
+          // These have button 0 but detail 1, and a contextmenu event will follow shortly
+          if (e.button === 0 && e.detail === 1) {
+            // Wait to see if a contextmenu event follows
+            setTimeout(() => {
+              if (!showContextMenu) {
+                window.dispatchEvent(new CustomEvent('mindmap-node-select', {
+                  detail: { nodeId: id }
+                }))
+              }
+            }, 100); // Longer delay to let contextmenu event fire
+            return;
+          }
+          
+          // Handle trackpad taps and regular clicks
+          e.preventDefault()
+          e.stopPropagation()
           window.dispatchEvent(new CustomEvent('mindmap-node-select', {
             detail: { nodeId: id }
-          }));
+          }))
+        }}
+        onPointerDown={(e) => {
+          // Don't handle pointer events if context menu is open
+          if (showContextMenu) {
+            return;
+          }
+          
+          // Don't handle pointer events that are part of a right-click gesture
+          if (e.button === 2 || (e.button === 0 && e.pointerType === 'mouse' && e.pressure === 0)) {
+            return;
+          }
+          
+          // Capture all pointer events including light trackpad taps
+          if (e.pointerType === 'mouse' && e.pressure === 0) {
+            // This is likely a trackpad tap with no pressure
+            setTimeout(() => {
+              if (!showContextMenu) {
+                window.dispatchEvent(new CustomEvent('mindmap-node-select', {
+                  detail: { nodeId: id }
+                }))
+              }
+            }, 50)
+          }
+        }}
+        onDoubleClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsEditing(true);
         }}
       >
       {/* Hidden handles for automatic connections only */}
@@ -393,7 +459,7 @@ export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) 
           />
         ) : (
           <span 
-            className="text-white text-sm font-medium flex-1 min-w-0 break-words cursor-pointer"
+            className="text-white text-sm font-medium flex-1 min-w-0 break-words cursor-pointer select-none"
             onDoubleClick={() => setIsEditing(true)}
           >
             {data.label}
@@ -426,7 +492,8 @@ export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) 
       {showContextMenu && createPortal(
         <div
           ref={contextMenuRef}
-          className="fixed bg-gray-800 border border-gray-600 rounded-lg shadow-lg py-2 min-w-[160px]"
+          className="fixed bg-gray-800 border border-gray-600 rounded-lg shadow-lg py-2 min-w-[160px] context-menu"
+          data-context-menu="true"
           style={{
             left: contextMenuPosition.x,
             top: contextMenuPosition.y,

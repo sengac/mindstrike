@@ -4,8 +4,8 @@ import { ChatPanel, ChatPanelRef } from './components/ChatPanel';
 import { ThreadsPanel } from './components/ThreadsPanel';
 import { WorkflowsPanel } from './components/WorkflowsPanel';
 import { WorkflowsView } from './components/WorkflowsView';
-import { KnowledgeGraphsPanel } from './components/KnowledgeGraphsPanel';
-import { KnowledgeGraphsView } from './components/KnowledgeGraphsView';
+import { MindMapsPanel } from './components/MindMapsPanel';
+import { MindMapsView } from './components/MindMapsView';
 import { FileExplorer } from './components/FileExplorer';
 import { AgentsPanel } from './components/AgentsPanel';
 import { SettingsPanel } from './components/SettingsPanel';
@@ -13,16 +13,18 @@ import { ModelSelector } from './components/ModelSelector';
 import { HeaderStats } from './components/HeaderStats';
 import { useThreads } from './hooks/useThreads';
 import { useWorkflows } from './hooks/useWorkflows';
-import { useKnowledgeGraphs } from './hooks/useKnowledgeGraphs';
+import { useMindMaps } from './hooks/useMindMaps';
 import { useWorkspaceStore } from './hooks/useWorkspaceStore';
 import { useAppStore } from './store/useAppStore';
 import { useLlmConfig } from './hooks/useLlmConfig';
 import { LLMModel } from './hooks/useAvailableModels';
+import { ConversationMessage } from './types';
 import { Menu, X, MessageSquare, Workflow, Network } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 
 function App() {
   const [workspaceRestored, setWorkspaceRestored] = useState(false);
+  const [updateNodeChatIdFn, setUpdateNodeChatIdFn] = useState<((nodeId: string, chatId: string | null) => void) | null>(null);
   
   const { 
     sidebarOpen, 
@@ -89,15 +91,15 @@ function App() {
   } = useWorkflows(workspaceRestored);
 
   const {
-    knowledgeGraphs,
-    activeKnowledgeGraphId,
-    activeKnowledgeGraph,
-    isLoaded: knowledgeGraphsLoaded,
-    createKnowledgeGraph,
-    deleteKnowledgeGraph,
-    renameKnowledgeGraph,
-    selectKnowledgeGraph
-  } = useKnowledgeGraphs(workspaceRestored);
+    mindMaps,
+    activeMindMapId,
+    activeMindMap,
+    isLoaded: mindMapsLoaded,
+    createMindMap,
+    deleteMindMap,
+    renameMindMap,
+    selectMindMap
+  } = useMindMaps(workspaceRestored);
 
   // Create a default thread if none exist (only after data is loaded)
   useEffect(() => {
@@ -116,8 +118,8 @@ function App() {
     await createWorkflow();
   };
 
-  const handleNewKnowledgeGraph = async () => {
-    await createKnowledgeGraph();
+  const handleNewMindMap = async () => {
+    await createMindMap();
   };
 
   const handleFirstMessage = () => {
@@ -254,14 +256,14 @@ function App() {
             </div>
           </div>
         )}
-        {activePanel === 'knowledge-graphs' && (
+        {activePanel === 'mind-maps' && (
           <div className="flex flex-col h-full">
-            {/* Knowledge Graphs Header */}
+            {/* MindMaps Header */}
             <div className="flex-shrink-0 px-6 border-b border-gray-700 flex items-center" style={{height: 'var(--header-height)'}}>
               <div className="flex items-center justify-between w-full">
                 <div className="flex items-center gap-3">
                   <Network size={24} className="text-blue-400" />
-                  <h1 className="text-xl font-semibold text-white">Knowledge Graphs</h1>
+                  <h1 className="text-xl font-semibold text-white">MindMaps</h1>
                 </div>
                 <div className="flex items-center space-x-4">
                   <ModelSelector 
@@ -272,18 +274,51 @@ function App() {
               </div>
             </div>
             
-            {/* Knowledge Graphs content area */}
+            {/* MindMaps content area */}
             <div className="flex flex-1 min-h-0">
-              <KnowledgeGraphsPanel
-                knowledgeGraphs={knowledgeGraphs}
-                activeKnowledgeGraphId={activeKnowledgeGraphId || undefined}
-                onKnowledgeGraphSelect={selectKnowledgeGraph}
-                onKnowledgeGraphCreate={handleNewKnowledgeGraph}
-                onKnowledgeGraphRename={renameKnowledgeGraph}
-                onKnowledgeGraphDelete={deleteKnowledgeGraph}
+              <MindMapsPanel
+                mindMaps={mindMaps}
+                activeMindMapId={activeMindMapId || undefined}
+                onMindMapSelect={selectMindMap}
+                onMindMapCreate={handleNewMindMap}
+                onMindMapRename={renameMindMap}
+                onMindMapDelete={deleteMindMap}
+                threads={threads}
+                onThreadAssociate={(nodeId: string, threadId: string) => {
+                  // Use the stored function if available, otherwise fallback to global
+                  if (updateNodeChatIdFn) {
+                    updateNodeChatIdFn(nodeId, threadId);
+                  } else if ((window as any).updateNodeChatId) {
+                    (window as any).updateNodeChatId(nodeId, threadId);
+                  } else {
+                    console.error('updateNodeChatId function not available');
+                  }
+                }}
+                onThreadUnassign={(nodeId: string) => {
+                  // Use the stored function if available, otherwise fallback to global
+                  if (updateNodeChatIdFn) {
+                    updateNodeChatIdFn(nodeId, null);
+                  } else if ((window as any).updateNodeChatId) {
+                    (window as any).updateNodeChatId(nodeId, null);
+                  } else {
+                    console.error('updateNodeChatId function not available');
+                  }
+                }}
+                onNavigateToChat={() => setActivePanel('chat')}
+                onDeleteMessage={(threadId: string, messageId: string) => {
+                  console.log('Deleting message:', { threadId, messageId });
+                  deleteMessage(threadId, messageId);
+                }}
+                onMessagesUpdate={(threadId: string, messages) => {
+                  console.log('Updating messages for thread:', { threadId, messageCount: messages.length });
+                  updateThreadMessages(threadId, messages);
+                }}
+                onFirstMessage={() => {}}
+                onRoleUpdate={updateThreadRole}
               />
-              <KnowledgeGraphsView 
-                activeKnowledgeGraph={activeKnowledgeGraph}
+              <MindMapsView 
+                activeMindMap={activeMindMap}
+                onUpdateNodeChatIdReady={setUpdateNodeChatIdFn}
               />
             </div>
           </div>

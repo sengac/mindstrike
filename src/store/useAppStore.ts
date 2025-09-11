@@ -23,7 +23,7 @@ interface AppState {
   // UI State
   fontSize: number;
   sidebarOpen: boolean;
-  activePanel: 'chat' | 'files' | 'agents' | 'workflows' | 'knowledge-graphs' | 'settings';
+  activePanel: 'chat' | 'files' | 'agents' | 'workflows' | 'mind-maps' | 'settings';
   
   // Workspace State
   workspaceRoot?: string;
@@ -44,7 +44,7 @@ interface AppState {
   // Actions
   setFontSize: (fontSize: number) => void;
   setSidebarOpen: (open: boolean) => void;
-  setActivePanel: (panel: 'chat' | 'files' | 'agents' | 'workflows' | 'knowledge-graphs' | 'settings') => void;
+  setActivePanel: (panel: 'chat' | 'files' | 'agents' | 'workflows' | 'mind-maps' | 'settings') => void;
   setWorkspaceRoot: (root?: string) => void;
   setCurrentDirectory: (dir: string) => void;
   setFiles: (files: string[]) => void;
@@ -87,7 +87,7 @@ export const useAppStore = create<AppState>()(
       // Actions
       setFontSize: (fontSize: number) => set({ fontSize }),
       setSidebarOpen: (sidebarOpen: boolean) => set({ sidebarOpen }),
-      setActivePanel: (activePanel: 'chat' | 'files' | 'agents' | 'workflows' | 'knowledge-graphs' | 'settings') => set({ activePanel }),
+      setActivePanel: (activePanel: 'chat' | 'files' | 'agents' | 'workflows' | 'mind-maps' | 'settings') => set({ activePanel }),
       setWorkspaceRoot: (workspaceRoot?: string) => set({ workspaceRoot }),
       setCurrentDirectory: (currentDirectory: string) => set({ currentDirectory }),
       setFiles: (files: string[]) => set({ files }),

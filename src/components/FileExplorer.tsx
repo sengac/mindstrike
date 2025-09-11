@@ -99,13 +99,15 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
     if (!selectedFile) return;
     
     try {
+      // Construct full path relative to workspace root
+      const fullPath = currentDirectory === '.' ? selectedFile : `${currentDirectory}/${selectedFile}`;
       const response = await fetch('/api/workspace/save', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          path: selectedFile,
+          path: fullPath,
           content: editedContent
         })
       });
@@ -131,12 +133,14 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
     if (!fileToDelete) return;
     
     try {
+      // Construct full path relative to workspace root
+      const fullPath = currentDirectory === '.' ? fileToDelete : `${currentDirectory}/${fileToDelete}`;
       const response = await fetch('/api/workspace/delete', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ path: fileToDelete })
+        body: JSON.stringify({ path: fullPath })
       });
       
       if (response.ok) {
@@ -241,7 +245,7 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
       <div className="flex flex-1 min-h-0">
 
         {/* File list */}
-        <div className="w-[20%] min-w-[200px] max-w-[500px] border-r border-gray-700 flex flex-col min-h-0">
+        <div className="w-[20%] min-w-[200px] max-w-[500px] border-r border-gray-700 flex flex-col min-h-0"  data-testid="workspace-slider">
           <div className="flex items-center space-x-2 p-4">
             <button
               onClick={handleGoUp}
@@ -374,13 +378,15 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
                             
                             // Save to server
                             try {
+                              // Construct full path relative to workspace root
+                              const fullPath = currentDirectory === '.' ? selectedFile : `${currentDirectory}/${selectedFile}`;
                               const response = await fetch('/api/workspace/save', {
                                 method: 'POST',
                                 headers: {
                                   'Content-Type': 'application/json'
                                 },
                                 body: JSON.stringify({
-                                  path: selectedFile,
+                                  path: fullPath,
                                   content
                                 })
                               });

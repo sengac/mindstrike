@@ -108,7 +108,9 @@ export function useWorkspaceStore() {
   }, [setCurrentDirectory, setStoreWorkspaceRoot, loadDirectory, loadFiles]);
 
   const getFileContent = useCallback(async (filePath: string): Promise<string> => {
-    const response = await fetch(`/api/workspace/file/${encodeURIComponent(filePath)}`);
+    // Construct full path relative to workspace root
+    const fullPath = currentDirectory === '.' ? filePath : `${currentDirectory}/${filePath}`;
+    const response = await fetch(`/api/workspace/file/${encodeURIComponent(fullPath)}`);
     if (response.ok) {
       const data = await response.json();
       return data.content || '';
@@ -116,7 +118,7 @@ export function useWorkspaceStore() {
       const errorData = await response.json();
       throw new Error(errorData.error || 'Failed to load file');
     }
-  }, []);
+  }, [currentDirectory]);
 
   return {
     files,

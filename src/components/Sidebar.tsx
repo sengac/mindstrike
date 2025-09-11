@@ -4,17 +4,17 @@ import { clsx } from 'clsx';
 import { MindStrikeIcon } from './MindStrikeIcon';
 
 interface SidebarProps {
-  activePanel: 'chat' | 'files' | 'agents' | 'workflows' | 'knowledge-graphs' | 'settings';
-  onPanelChange: (panel: 'chat' | 'files' | 'agents' | 'workflows' | 'knowledge-graphs' | 'settings') => void;
+  activePanel: 'chat' | 'files' | 'agents' | 'workflows' | 'mind-maps' | 'settings';
+  onPanelChange: (panel: 'chat' | 'files' | 'agents' | 'workflows' | 'mind-maps' | 'settings') => void;
 }
 
 export function Sidebar({ activePanel, onPanelChange }: SidebarProps) {
   const menuItems = [
     { id: 'chat' as const, icon: MessageSquare, label: 'Chat' },
+    { id: 'mind-maps' as const, icon: Network, label: 'MindMaps' },
     { id: 'workflows' as const, icon: Workflow, label: 'Workflows' },
-    { id: 'knowledge-graphs' as const, icon: Network, label: 'Knowledge Graphs' },
-    { id: 'files' as const, icon: Files, label: 'Workspace' },
-    { id: 'agents' as const, icon: Bot, label: 'Agents' }
+    { id: 'agents' as const, icon: Bot, label: 'Agents' },
+    { id: 'files' as const, icon: Files, label: 'Workspace' }
   ];
 
   return (
