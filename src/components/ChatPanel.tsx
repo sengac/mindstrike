@@ -18,13 +18,14 @@ interface ChatPanelProps {
   activeThread?: Thread | null;
   onRoleUpdate?: (threadId: string, customRole?: string) => void;
   onNavigateToWorkspaces?: () => void;
+  onCopyToNotes?: (content: string) => void;
 }
 
 export interface ChatPanelRef {
   clearConversation: () => void;
 }
 
-export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, messages: initialMessages = [], onMessagesUpdate, onFirstMessage, onDeleteMessage, activeThread, onRoleUpdate, onNavigateToWorkspaces }, ref) => {
+export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, messages: initialMessages = [], onMessagesUpdate, onFirstMessage, onDeleteMessage, activeThread, onRoleUpdate, onNavigateToWorkspaces, onCopyToNotes }, ref) => {
   const [input, setInput] = useState('');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showPersonalityModal, setShowPersonalityModal] = useState(false);
@@ -90,44 +91,10 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
     scrollToBottom();
   }, [messages]);
 
-  // Scroll to bottom when thread changes (wait for mermaid rendering)
+  // Scroll to bottom when thread changes
   useEffect(() => {
     if (threadId) {
-      const waitForMermaidAndScroll = async () => {
-        // Wait for DOM to update first
-        await new Promise(resolve => setTimeout(resolve, 50));
-        
-        // Check for mermaid elements and wait for them to render
-        const mermaidElements = document.querySelectorAll('.mermaid');
-        
-        if (mermaidElements.length > 0) {
-          // Wait for all mermaid diagrams to render
-          const checkInterval = 50;
-          const maxWaitTime = 3000; // 3 seconds max wait
-          let elapsed = 0;
-          
-          const waitForRendering = () => {
-            const allRendered = Array.from(mermaidElements).every(element => {
-              const svg = element.querySelector('svg');
-              return svg && svg.children.length > 0;
-            });
-            
-            if (allRendered || elapsed >= maxWaitTime) {
-              scrollToBottom();
-            } else {
-              elapsed += checkInterval;
-              setTimeout(waitForRendering, checkInterval);
-            }
-          };
-          
-          waitForRendering();
-        } else {
-          // No mermaid elements, scroll immediately
-          scrollToBottom();
-        }
-      };
-      
-      waitForMermaidAndScroll();
+      scrollToBottom();
     }
   }, [threadId]);
 
@@ -445,6 +412,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
                 ? handleCancelToolCalls 
                 : undefined
             }
+            onCopyToNotes={message.role === 'assistant' ? onCopyToNotes : undefined}
           />
         ))}
         

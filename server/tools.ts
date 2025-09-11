@@ -539,11 +539,16 @@ export class ToolSystem {
 
   // Mermaid diagram rendering
   private async renderMermaid(code: string): Promise<ToolResult> {
-    // For now, just return the code as we don't have a renderer
-    // In a full implementation, this would generate an image or HTML
+    // Clean any inline style attributes that override theme colors
+    const cleanedCode = code
+      .replace(/style\s+\w+\s+fill:[^,\n]+/g, '') // Remove fill styles
+      .replace(/style\s+\w+\s+[^,\n]+/g, '') // Remove other styles  
+      .replace(/\n\s*\n/g, '\n') // Clean up extra blank lines
+      .trim();
+    
     return {
       success: true,
-      output: `Mermaid diagram saved:\n\`\`\`mermaid\n${code}\n\`\`\``
+      output: `Mermaid diagram saved:\n\`\`\`mermaid\n${cleanedCode}\n\`\`\``
     };
   }
 

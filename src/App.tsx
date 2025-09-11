@@ -24,7 +24,12 @@ import { Toaster } from 'react-hot-toast';
 
 function App() {
   const [workspaceRestored, setWorkspaceRestored] = useState(false);
-  const [updateNodeChatIdFn, setUpdateNodeChatIdFn] = useState<((nodeId: string, chatId: string | null) => void) | null>(null);
+  const [pendingNodeUpdate, setPendingNodeUpdate] = useState<{
+    nodeId: string
+    chatId?: string | null
+    notes?: string | null
+    timest: number
+  } | undefined>(undefined);
   
   const { 
     sidebarOpen, 
@@ -137,6 +142,33 @@ function App() {
       await deleteMessage(activeThreadId, messageId);
     }
   };
+
+  // Helper functions for node updates using the new props-based approach
+  const updateNodeChatId = useCallback((nodeId: string, chatId: string | null) => {
+    setPendingNodeUpdate({
+      nodeId,
+      chatId,
+      timest: Date.now()
+    });
+  }, []);
+
+  const updateNodeNotes = useCallback((nodeId: string, notes: string | null) => {
+    setPendingNodeUpdate({
+      nodeId,
+      notes,
+      timest: Date.now()
+    });
+  }, []);
+
+  // Clear pending node update after a short delay to ensure it's been processed
+  useEffect(() => {
+    if (pendingNodeUpdate) {
+      const timeout = setTimeout(() => {
+        setPendingNodeUpdate(undefined);
+      }, 100);
+      return () => clearTimeout(timeout);
+    }
+  }, [pendingNodeUpdate]);
 
 
 
@@ -285,25 +317,14 @@ function App() {
                 onMindMapDelete={deleteMindMap}
                 threads={threads}
                 onThreadAssociate={(nodeId: string, threadId: string) => {
-                  // Use the stored function if available, otherwise fallback to global
-                  if (updateNodeChatIdFn) {
-                    updateNodeChatIdFn(nodeId, threadId);
-                  } else if ((window as any).updateNodeChatId) {
-                    (window as any).updateNodeChatId(nodeId, threadId);
-                  } else {
-                    console.error('updateNodeChatId function not available');
-                  }
+                  updateNodeChatId(nodeId, threadId);
                 }}
                 onThreadUnassign={(nodeId: string) => {
-                  // Use the stored function if available, otherwise fallback to global
-                  if (updateNodeChatIdFn) {
-                    updateNodeChatIdFn(nodeId, null);
-                  } else if ((window as any).updateNodeChatId) {
-                    (window as any).updateNodeChatId(nodeId, null);
-                  } else {
-                    console.error('updateNodeChatId function not available');
-                  }
+                  updateNodeChatId(nodeId, null);
                 }}
+                onThreadCreate={handleNewThread}
+                onThreadRename={renameThread}
+                onThreadDelete={deleteThread}
                 onNavigateToChat={() => setActivePanel('chat')}
                 onDeleteMessage={(threadId: string, messageId: string) => {
                   console.log('Deleting message:', { threadId, messageId });
@@ -315,10 +336,11 @@ function App() {
                 }}
                 onFirstMessage={() => {}}
                 onRoleUpdate={updateThreadRole}
+                onNodeNotesUpdate={updateNodeNotes}
               />
               <MindMapsView 
                 activeMindMap={activeMindMap}
-                onUpdateNodeChatIdReady={setUpdateNodeChatIdFn}
+                pendingNodeUpdate={pendingNodeUpdate}
               />
             </div>
           </div>

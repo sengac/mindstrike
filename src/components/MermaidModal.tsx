@@ -1,6 +1,8 @@
 import { X, Maximize2, Loader2, Download } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import mermaid from 'mermaid';
+import { MERMAID_CONFIG } from '../utils/mermaidConfig';
 
 interface MermaidModalProps {
   isOpen: boolean;
@@ -13,62 +15,58 @@ export function MermaidModal({ isOpen, onClose, mermaidCode }: MermaidModalProps
   const [isRendering, setIsRendering] = useState(true);
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && mermaidCode) {
       const id = `modal-mermaid-${Date.now()}-${Math.random()}`;
       setModalId(id);
       setIsRendering(true);
-      
-      // Initialize mermaid for modal
-      mermaid.initialize({
-        startOnLoad: true,
-        theme: 'dark',
-        securityLevel: 'loose',
-        flowchart: {
-          useMaxWidth: true,
-          htmlLabels: true
-        },
-        themeVariables: {
-          darkMode: true,
-          background: 'transparent',
-          primaryColor: '#3b82f6',
-          primaryTextColor: '#e5e7eb',
-          primaryBorderColor: '#374151',
-          lineColor: '#6b7280',
-          secondaryColor: '#1f2937',
-          tertiaryColor: '#111827',
-          mainBkg: 'transparent',
-          secondBkg: '#1f2937',
-          tertiaryBkg: '#111827',
-          nodeBkg: '#374151',
-          nodeTextColor: '#e5e7eb',
-          clusterBkg: '#1f2937',
-          clusterTextColor: '#e5e7eb',
-          fillType0: '#374151',
-          fillType1: '#1f2937',
-          fillType2: '#111827',
-          fillType3: '#4b5563',
-          fillType4: '#6b7280',
-          fillType5: '#9ca3af',
-          fillType6: '#d1d5db',
-          fillType7: '#e5e7eb'
-        }
-      });
 
-      // Render the diagram after a short delay to ensure DOM is ready
-      setTimeout(async () => {
-        const element = document.getElementById(id);
-        if (element) {
-          try {
-            await mermaid.run({
-              nodes: [element as HTMLElement]
-            });
+      // Simple direct rendering approach
+      const renderMermaid = async () => {
+        try {
+          // Initialize mermaid with our config
+          mermaid.initialize(MERMAID_CONFIG);
+          
+          // Wait for DOM to be ready
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          const element = document.getElementById(id);
+          if (!element) {
             setIsRendering(false);
-          } catch (error) {
-            console.error('Mermaid rendering error:', error);
-            setIsRendering(false);
+            return;
           }
+
+          // Clean the mermaid code (remove style overrides)
+          const cleanCode = mermaidCode
+            .replace(/style\s+\w+\s+fill:[^,\n]+/g, '')
+            .replace(/style\s+\w+\s+[^,\n]+/g, '')
+            .replace(/\n\s*\n/g, '\n')
+            .trim();
+
+          // Set the code as text content
+          element.textContent = cleanCode;
+          
+          // Render with mermaid
+          await mermaid.run({
+            nodes: [element as HTMLElement]
+          });
+
+          // Scale the SVG to fit the container
+          const svg = element.querySelector('svg');
+          if (svg) {
+            svg.style.maxWidth = '100%';
+            svg.style.maxHeight = '100%';
+            svg.style.width = 'auto';
+            svg.style.height = 'auto';
+          }
+
+          setIsRendering(false);
+        } catch (error) {
+          console.error('Modal mermaid rendering failed:', error);
+          setIsRendering(false);
         }
-      }, 100);
+      };
+
+      renderMermaid();
     }
   }, [isOpen, mermaidCode]);
 
@@ -118,16 +116,16 @@ export function MermaidModal({ isOpen, onClose, mermaidCode }: MermaidModalProps
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] bg-black bg-opacity-75 backdrop-blur-sm flex items-center justify-center">
       {/* Backdrop */}
       <div 
-        className="absolute inset-0 bg-black bg-opacity-75 backdrop-blur-sm"
+        className="absolute inset-0"
         onClick={onClose}
       />
       
       {/* Modal */}
-      <div className="relative bg-gray-900 rounded-lg border border-gray-700 w-[98vw] h-[98vh] flex flex-col">
+      <div className="relative bg-gray-900 w-[100vw] h-[100vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
           <div className="flex items-center space-x-2">
@@ -154,8 +152,8 @@ export function MermaidModal({ isOpen, onClose, mermaidCode }: MermaidModalProps
         </div>
         
         {/* Content */}
-        <div className="p-6 flex-1 overflow-hidden flex flex-col">
-          <div className="bg-gray-800 p-4 rounded border border-gray-700 flex-1 overflow-auto relative">
+        <div className="flex-1 overflow-hidden flex flex-col">
+          <div className="bg-gray-900 flex-1 overflow-hidden relative flex items-center justify-center">
             {isRendering && (
               <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
                 <div className="flex items-center space-x-3">
@@ -167,13 +165,21 @@ export function MermaidModal({ isOpen, onClose, mermaidCode }: MermaidModalProps
             <div 
               id={modalId}
               className="mermaid"
-              style={{ opacity: isRendering ? 0 : 1 }}
+              style={{ 
+                opacity: isRendering ? 0 : 1,
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
             >
-              {mermaidCode}
+              {/* Content will be set by the rendering effect */}
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

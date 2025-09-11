@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { Plus, Minus, Brain, Edit, Trash2, Share } from 'lucide-react';
+import { Plus, Minus, Brain, Edit, Trash2, Share, FileText } from 'lucide-react';
 import { clsx } from 'clsx';
 
 export interface MindMapNodeData {
@@ -143,7 +143,18 @@ export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) 
       setIsInferenceActive(activeNodeId === id);
     };
 
+    // Check if this node is currently active when component mounts
+    // by dispatching a request for current active state
+    const checkCurrentActiveState = () => {
+      window.dispatchEvent(new CustomEvent('mindmap-inference-get-active', {
+        detail: { requestingNodeId: id }
+      }));
+    };
+
     window.addEventListener('mindmap-inference-active', handleInferenceActive as EventListener);
+    
+    // Check current state on mount
+    setTimeout(checkCurrentActiveState, 0);
     
     return () => {
       window.removeEventListener('mindmap-inference-active', handleInferenceActive as EventListener);
@@ -201,6 +212,7 @@ export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) 
         nodeId: id, 
         label: data.label,
         chatId: data.chatId,
+        notes: data.notes,
         position
       }
     }));
@@ -385,6 +397,27 @@ export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) 
           setIsEditing(true);
         }}
       >
+        {/* Notes watermark icon */}
+        {data.notes && data.notes.trim() && (
+          <div 
+            className="absolute -bottom-2.5 -right-2.5 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center cursor-pointer hover:bg-red-600 transition-colors z-10"
+            onClick={(e) => {
+              e.stopPropagation();
+              window.dispatchEvent(new CustomEvent('mindmap-inference-open', {
+                detail: { 
+                  nodeId: id, 
+                  label: data.label,
+                  chatId: data.chatId,
+                  notes: data.notes,
+                  focusNotes: true
+                }
+              }));
+            }}
+            title="View notes"
+          >
+            <FileText size={12} className="text-white" />
+          </div>
+        )}
       {/* Hidden handles for automatic connections only */}
       <Handle 
         type="target" 

@@ -350,4 +350,21 @@ export class MindMapActionsManager {
       return node;
     });
   }
+
+  // Update node notes
+  updateNodeNotes(
+    nodes: Node<MindMapNodeData>[],
+    nodeId: string,
+    notes: string | null
+  ): Node<MindMapNodeData>[] {
+    return nodes.map(node => {
+      if (node.id === nodeId) {
+        return {
+          ...node,
+          data: { ...node.data, notes }
+        };
+      }
+      return node;
+    });
+  }
 }

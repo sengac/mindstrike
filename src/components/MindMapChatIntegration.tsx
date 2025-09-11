@@ -2,36 +2,49 @@ import React, { useState, useRef } from 'react';
 import { Thread, ConversationMessage } from '../types';
 import { ChatThreadSelector } from './shared/ChatThreadSelector';
 import { ChatContentViewer } from './shared/ChatContentViewer';
+import { MindMapInferenceViewer } from './shared/MindMapInferenceViewer';
 import { ChatPanelRef } from './ChatPanel';
 
 interface MindMapChatIntegrationProps {
   nodeId: string;
   nodeLabel: string;
   chatId?: string | null;
+  nodeNotes?: string | null;
+  focusNotes?: boolean;
   threads: Thread[];
   onThreadAssociate: (nodeId: string, threadId: string) => void;
   onThreadUnassign: (nodeId: string) => void;
+  onThreadCreate?: () => void;
+  onThreadRename?: (threadId: string, newName: string) => void;
+  onThreadDelete?: (threadId: string) => void;
   onClose?: () => void;
   onNavigateToChat?: () => void;
   onDeleteMessage?: (messageId: string) => void;
   onMessagesUpdate?: (messages: ConversationMessage[]) => void;
   onFirstMessage?: () => void;
   onRoleUpdate?: (threadId: string, customRole?: string) => void;
+  onNotesUpdate?: (nodeId: string, notes: string) => void;
 }
 
 export function MindMapChatIntegration({
   nodeId,
   nodeLabel,
   chatId,
+  nodeNotes,
+  focusNotes,
   threads,
   onThreadAssociate,
   onThreadUnassign,
+  onThreadCreate,
+  onThreadRename,
+  onThreadDelete,
   onClose,
   onNavigateToChat,
   onDeleteMessage,
   onMessagesUpdate,
   onFirstMessage,
-  onRoleUpdate
+  onRoleUpdate,
+  onNotesUpdate
 }: MindMapChatIntegrationProps) {
   const chatPanelRef = useRef<ChatPanelRef>(null);
 
@@ -65,13 +78,21 @@ export function MindMapChatIntegration({
     }
   };
 
-  // If no chatId or thread not found, show thread selector
+  // If no chatId or thread not found, show inference viewer
   if (!chatId || !associatedThread) {
     return (
-      <ChatThreadSelector
+      <MindMapInferenceViewer
+        nodeId={nodeId}
+        nodeLabel={nodeLabel}
+        nodeNotes={nodeNotes}
+        focusNotes={focusNotes}
         threads={threads}
         onThreadSelect={handleThreadSelect}
+        onThreadCreate={onThreadCreate}
+        onThreadRename={onThreadRename}
+        onThreadDelete={onThreadDelete}
         onClose={onClose}
+        onNotesUpdate={onNotesUpdate}
       />
     );
   }
@@ -82,6 +103,8 @@ export function MindMapChatIntegration({
       ref={chatPanelRef}
       thread={associatedThread}
       nodeLabel={nodeLabel}
+      nodeNotes={nodeNotes}
+      focusNotes={focusNotes}
       onNavigateToChat={onNavigateToChat}
       onUnassignThread={handleThreadUnassign}
       onClose={onClose}
@@ -89,6 +112,11 @@ export function MindMapChatIntegration({
       onMessagesUpdate={handleMessagesUpdateForThread}
       onFirstMessage={onFirstMessage}
       onRoleUpdate={handleRoleUpdateForThread}
+      onNotesUpdate={(notes) => {
+        if (onNotesUpdate) {
+          onNotesUpdate(nodeId, notes);
+        }
+      }}
     />
   );
 }

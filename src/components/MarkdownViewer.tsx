@@ -1,13 +1,13 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import mermaid from 'mermaid';
 import 'katex/dist/katex.min.css';
 import katex from 'katex';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Copy, Download, Maximize2 } from 'lucide-react';
 import { MermaidModal } from './MermaidModal';
+import { renderMermaidDiagramsDelayed } from '../utils/mermaidRenderer';
 
 interface MarkdownViewerProps {
   content: string;
@@ -73,77 +73,9 @@ export function MarkdownViewer({ content }: MarkdownViewerProps) {
   const mermaidRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Initialize mermaid
-    mermaid.initialize({
-      startOnLoad: true,
-      theme: 'dark',
-      securityLevel: 'loose',
-      flowchart: {
-        useMaxWidth: true,
-        htmlLabels: true
-      },
-      themeVariables: {
-        darkMode: true,
-        background: 'transparent',
-        primaryColor: '#3b82f6',
-        primaryTextColor: '#e5e7eb',
-        primaryBorderColor: '#374151',
-        lineColor: '#6b7280',
-        secondaryColor: '#1f2937',
-        tertiaryColor: '#111827',
-        mainBkg: 'transparent',
-        secondBkg: '#1f2937',
-        tertiaryBkg: '#111827',
-        nodeBkg: '#374151',
-        nodeTextColor: '#e5e7eb',
-        clusterBkg: '#1f2937',
-        clusterTextColor: '#e5e7eb',
-        fillType0: '#374151',
-        fillType1: '#1f2937',
-        fillType2: '#111827',
-        fillType3: '#4b5563',
-        fillType4: '#6b7280',
-        fillType5: '#9ca3af',
-        fillType6: '#d1d5db',
-        fillType7: '#e5e7eb'
-      }
-    });
-  }, []);
-
-  useEffect(() => {
-    // Re-render mermaid diagrams when content changes
+    // Render mermaid diagrams when content changes
     if (mermaidRef.current) {
-      const timer = setTimeout(() => {
-        const mermaidElements = mermaidRef.current?.querySelectorAll('.mermaid');
-        if (mermaidElements && mermaidElements.length > 0) {
-          mermaidElements.forEach((element) => {
-            try {
-              const existingSvg = element.querySelector('svg');
-              const hasValidSvg = existingSvg && existingSvg.children.length > 0;
-              
-              if (!hasValidSvg) {
-                const originalCode = element.getAttribute('data-mermaid-code') || element.textContent || '';
-                if (originalCode.trim()) {
-                  element.innerHTML = originalCode;
-                  
-                  mermaid.run({
-                    nodes: [element as HTMLElement]
-                  }).catch((error) => {
-                    console.error('Mermaid rendering failed:', error);
-                    if (originalCode) {
-                      element.innerHTML = `<pre><code>${originalCode}</code></pre>`;
-                    }
-                  });
-                }
-              }
-            } catch (error) {
-              console.error('Error preparing mermaid element:', error);
-            }
-          });
-        }
-      }, 50);
-      
-      return () => clearTimeout(timer);
+      renderMermaidDiagramsDelayed(mermaidRef.current);
     }
   }, [content]);
 
@@ -237,7 +169,7 @@ export function MarkdownViewer({ content }: MarkdownViewerProps) {
           <Copy size={14} />
           <span>Copy</span>
         </button>
-        {language && (
+        {language && code.includes('\n') && (
           <div className="absolute bottom-2 right-2 bg-gray-800/90 backdrop-blur-sm border border-gray-600 px-2 py-1 rounded text-xs text-gray-300 font-mono opacity-80 transition-opacity z-10">
             {language}
           </div>

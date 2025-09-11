@@ -25,7 +25,6 @@ export interface MindMapControls {
   redo: () => void
   resetLayout: () => void
   changeLayout: (layout: 'LR' | 'RL' | 'TB' | 'BT') => void
-  updateNodeChatId: (nodeId: string, chatId: string | null) => void
   canUndo: boolean
   canRedo: boolean
   currentLayout: 'LR' | 'RL' | 'TB' | 'BT'
@@ -37,6 +36,13 @@ interface MindMapProps {
   initialData?: MindMapData
   onControlsReady?: (controls: MindMapControls) => void
   keyBindings?: Record<string, string>
+  // Props for external updates instead of imperative functions
+  externalNodeUpdates?: {
+    nodeId: string
+    chatId?: string | null
+    notes?: string | null
+    timest: number // to ensure React detects changes
+  }
 }
 
 function MindMapInner ({
@@ -44,7 +50,8 @@ function MindMapInner ({
   onSave,
   initialData,
   onControlsReady,
-  keyBindings = {}
+  keyBindings = {},
+  externalNodeUpdates
 }: MindMapProps) {
   const reactFlowInstance = useReactFlow()
   const nodesInitialized = useNodesInitialized()
@@ -96,6 +103,24 @@ function MindMapInner ({
       if (updates.selectedNodeId !== undefined) setSelectedNodeId(updates.selectedNodeId)
     })
   }, [])
+
+  // Global click handler to deselect nodes when clicking outside
+  useEffect(() => {
+    const handleGlobalClick = (e: MouseEvent) => {
+      // Check if click is outside the mindmap container
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        if (selectedNodeId) {
+          setSelectedNodeId(null)
+          const updatedNodes = nodes.map(n => ({ ...n, selected: false }))
+          setNodes(updatedNodes)
+          window.dispatchEvent(new CustomEvent('mindmap-close-context-menu'))
+        }
+      }
+    }
+
+    document.addEventListener('click', handleGlobalClick)
+    return () => document.removeEventListener('click', handleGlobalClick)
+  }, [selectedNodeId, nodes])
 
   // Debounce fit view function with reset - each call resets the 200ms timer
   const fitViewRef = useRef<NodeJS.Timeout>()
@@ -150,15 +175,15 @@ function MindMapInner ({
             result.layout
           )
           
-          // Use direct state setters with setTimeout to ensure they happen after render
-          setTimeout(() => {
-            if (!isCancelled) {
-              setNodes(layoutResult.nodes)
-              setEdges(layoutResult.edges)
-              setRootNodeId(result.rootNodeId)
-              setLayout(result.layout)
-            }
-          }, 0)
+          // Update state directly since we're already in a useEffect
+          if (!isCancelled) {
+            updateState({
+              nodes: layoutResult.nodes,
+              edges: layoutResult.edges,
+              rootNodeId: result.rootNodeId,
+              layout: result.layout
+            })
+          }
           
           // Update our tracking
           lastInitializedData.current = { mindMapId, dataHash }
@@ -177,6 +202,61 @@ function MindMapInner ({
       isCurrentlyInitializing.current = false
     }
   }, [mindMapId, initialData])
+
+  // Handle external node updates via props instead of imperative functions
+  useEffect(() => {
+    if (externalNodeUpdates) {
+      const { nodeId, chatId, notes } = externalNodeUpdates
+      const { nodes: currentNodes, rootNodeId: currentRootId, layout: currentLayout } = stateRef.current
+      
+      let updatedNodes = currentNodes
+      let hasChanges = false
+      
+      if (chatId !== undefined) {
+        const newNodes = actionsManager.updateNodeChatId(currentNodes, nodeId, chatId)
+        if (newNodes !== currentNodes) {
+          updatedNodes = newNodes
+          hasChanges = true
+        }
+      }
+      
+      if (notes !== undefined) {
+        const newNodes = actionsManager.updateNodeNotes(updatedNodes, nodeId, notes)
+        if (newNodes !== updatedNodes) {
+          updatedNodes = newNodes
+          hasChanges = true
+        }
+      }
+      
+      if (hasChanges) {
+        dataManager.saveToHistory(updatedNodes, currentRootId, currentLayout)
+        updateState({ nodes: updatedNodes })
+        
+        // If notes were updated, notify the chat panel to refresh
+        if (notes !== undefined) {
+          const updatedNode = updatedNodes.find(n => n.id === nodeId)
+          if (updatedNode) {
+            window.dispatchEvent(new CustomEvent('mindmap-node-notes-updated', {
+              detail: { 
+                nodeId, 
+                notes: updatedNode.data.notes 
+              }
+            }))
+          }
+        }
+        
+        // Save the changes
+        try {
+          if (currentRootId && updatedNodes.find(n => n.id === currentRootId)) {
+            const treeData = dataManager.convertNodesToTree(updatedNodes, currentRootId, currentLayout)
+            onSave(treeData)
+          }
+        } catch (error) {
+          console.error('Error saving external node update:', error)
+        }
+      }
+    }
+  }, [externalNodeUpdates, actionsManager, dataManager, updateState, onSave])
 
   // Optimized auto-save with debouncing and memoized dependency
   const saveData = useCallback(() => {
@@ -442,6 +522,31 @@ function MindMapInner ({
         onSave(treeData)
       } catch (error) {
         console.error('Error saving chatId update:', error)
+      }
+    }, 100)
+  }, [actionsManager, updateState, dataManager, onSave])
+
+  // Update node notes handler
+  const handleUpdateNodeNotes = useCallback((nodeId: string, notes: string | null) => {
+    const { nodes: currentNodes, rootNodeId: currentRootId, layout: currentLayout } = stateRef.current
+    
+    const updatedNodes = actionsManager.updateNodeNotes(currentNodes, nodeId, notes)
+    
+    dataManager.saveToHistory(updatedNodes, currentRootId, currentLayout)
+    updateState({ nodes: updatedNodes })
+    
+    // Force immediate save to ensure notes are persisted
+    setTimeout(() => {
+      try {
+        // Check if root node exists before converting
+        if (!currentRootId || !updatedNodes.find(n => n.id === currentRootId)) {
+          console.warn('Root node not found, skipping save for notes update')
+          return
+        }
+        const treeData = dataManager.convertNodesToTree(updatedNodes, currentRootId, currentLayout)
+        onSave(treeData)
+      } catch (error) {
+        console.error('Error saving notes update:', error)
       }
     }, 100)
   }, [actionsManager, updateState, dataManager, onSave])
@@ -746,9 +851,17 @@ function MindMapInner ({
     }
   }), [nodes])
 
-  // Memoize undo/redo states to prevent excessive re-creation
-  const canUndo = useMemo(() => dataManager.canUndo, [dataManager.canUndo])
-  const canRedo = useMemo(() => dataManager.canRedo, [dataManager.canRedo])
+  // Track undo/redo state separately to avoid excessive re-creation
+  const [undoRedoState, setUndoRedoState] = useState({ canUndo: false, canRedo: false })
+  
+  // Update undo/redo state when necessary
+  useEffect(() => {
+    const newCanUndo = dataManager.canUndo
+    const newCanRedo = dataManager.canRedo
+    if (newCanUndo !== undoRedoState.canUndo || newCanRedo !== undoRedoState.canRedo) {
+      setUndoRedoState({ canUndo: newCanUndo, canRedo: newCanRedo })
+    }
+  }, [dataManager.canUndo, dataManager.canRedo, undoRedoState.canUndo, undoRedoState.canRedo])
 
   // Expose controls to parent - memoized
   const controls = useMemo((): MindMapControls => ({
@@ -756,30 +869,19 @@ function MindMapInner ({
     redo: handleRedo,
     resetLayout: handleResetLayout,
     changeLayout: handleChangeLayout,
-    updateNodeChatId: handleUpdateNodeChatId,
-    canUndo,
-    canRedo,
+    canUndo: undoRedoState.canUndo,
+    canRedo: undoRedoState.canRedo,
     currentLayout: layout
-  }), [handleUndo, handleRedo, handleResetLayout, handleChangeLayout, handleUpdateNodeChatId, canUndo, canRedo, layout])
+  }), [handleUndo, handleRedo, handleResetLayout, handleChangeLayout, undoRedoState.canUndo, undoRedoState.canRedo, layout])
 
   // Use ref to prevent excessive callback calls and potential render warnings
   const lastControlsRef = useRef<MindMapControls | null>(null)
   const controlsCallbackTimeoutRef = useRef<NodeJS.Timeout>()
   
   useEffect(() => {
-    if (onControlsReady) {
-      // Clear any pending timeout
-      if (controlsCallbackTimeoutRef.current) {
-        clearTimeout(controlsCallbackTimeoutRef.current)
-      }
-      
-      // Use setTimeout to ensure this happens after render and debounce rapid calls
-      controlsCallbackTimeoutRef.current = setTimeout(() => {
-        if (controls !== lastControlsRef.current) {
-          lastControlsRef.current = controls
-          onControlsReady(controls)
-        }
-      }, 0)
+    if (onControlsReady && controls !== lastControlsRef.current) {
+      lastControlsRef.current = controls
+      onControlsReady(controls)
     }
   }, [onControlsReady, controls])
   

@@ -1,15 +1,15 @@
 import React, { memo } from 'react';
-import { User, Bot, Wrench, CheckCircle, XCircle, ChevronDown, ChevronRight, FileText, Code, Trash2, RotateCcw, Loader2, X, Edit2, Check, Copy, Download, Maximize2, Brain } from 'lucide-react';
+import { User, Bot, Wrench, CheckCircle, XCircle, ChevronDown, ChevronRight, FileText, Code, Trash2, RotateCcw, Loader2, X, Edit2, Check, Copy, Download, Maximize2, Brain, StickyNote } from 'lucide-react';
 import { ConversationMessage } from '../types';
 import { useState, useEffect, useRef } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import mermaid from 'mermaid';
 import 'katex/dist/katex.min.css';
 import katex from 'katex';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { MermaidModal } from './MermaidModal';
+import { renderMermaidDiagramsDelayed } from '../utils/mermaidRenderer';
 
 // Common language mappings for syntax highlighting
 const languageMap: Record<string, string> = {
@@ -72,10 +72,11 @@ interface ChatMessageProps {
   onRegenerate?: (messageId: string) => void;
   onCancelToolCalls?: (messageId: string) => void;
   onEdit?: (messageId: string, newContent: string) => void;
+  onCopyToNotes?: (content: string) => void;
   fontSize?: number;
 }
 
-function ChatMessageComponent({ message, onDelete, onRegenerate, onCancelToolCalls, onEdit, fontSize = 14 }: ChatMessageProps) {
+function ChatMessageComponent({ message, onDelete, onRegenerate, onCancelToolCalls, onEdit, onCopyToNotes, fontSize = 14 }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const [toolCallsExpanded, setToolCallsExpanded] = useState(false);
   const [resultsExpanded, setResultsExpanded] = useState(false);
@@ -91,84 +92,9 @@ function ChatMessageComponent({ message, onDelete, onRegenerate, onCancelToolCal
   // Note: This component is memoized to prevent unnecessary re-renders
 
   useEffect(() => {
-    // Initialize mermaid
-    mermaid.initialize({
-      startOnLoad: true,
-      theme: 'dark',
-      securityLevel: 'loose',
-      flowchart: {
-        useMaxWidth: true,
-        htmlLabels: true
-      },
-      themeVariables: {
-        darkMode: true,
-        background: 'transparent',
-        primaryColor: '#3b82f6',
-        primaryTextColor: '#e5e7eb',
-        primaryBorderColor: '#374151',
-        lineColor: '#6b7280',
-        secondaryColor: '#1f2937',
-        tertiaryColor: '#111827',
-        mainBkg: 'transparent',
-        secondBkg: '#1f2937',
-        tertiaryBkg: '#111827',
-        // Override specific node colors to prevent purple/pink
-        nodeBkg: '#374151',
-        nodeTextColor: '#e5e7eb',
-        clusterBkg: '#1f2937',
-        clusterTextColor: '#e5e7eb',
-        fillType0: '#374151',
-        fillType1: '#1f2937',
-        fillType2: '#111827',
-        fillType3: '#4b5563',
-        fillType4: '#6b7280',
-        fillType5: '#9ca3af',
-        fillType6: '#d1d5db',
-        fillType7: '#e5e7eb'
-      }
-    });
-  }, []);
-
-  // Separate effect for re-rendering mermaid diagrams when content changes
-  useEffect(() => {
-    // Re-render mermaid diagrams when content changes or when switching to markdown view
+    // Render mermaid diagrams when content changes or when switching to markdown view
     if (mermaidRef.current && showMarkdown) {
-      // Add a small delay to ensure DOM is updated
-      const timer = setTimeout(() => {
-        const mermaidElements = mermaidRef.current?.querySelectorAll('.mermaid');
-        if (mermaidElements && mermaidElements.length > 0) {
-          mermaidElements.forEach((element) => {
-            try {
-              // Only re-render if the element doesn't already have a valid SVG
-              const existingSvg = element.querySelector('svg');
-              const hasValidSvg = existingSvg && existingSvg.children.length > 0;
-              
-              if (!hasValidSvg) {
-                // Get the original mermaid code from data attribute or text content
-                const originalCode = element.getAttribute('data-mermaid-code') || element.textContent || '';
-                if (originalCode.trim()) {
-                  element.innerHTML = originalCode;
-                  
-                  // Run mermaid rendering
-                  mermaid.run({
-                    nodes: [element as HTMLElement]
-                  }).catch((error) => {
-                    console.error('Mermaid rendering failed:', error);
-                    // Restore original code on error
-                    if (originalCode) {
-                      element.innerHTML = `<pre><code>${originalCode}</code></pre>`;
-                    }
-                  });
-                }
-              }
-            } catch (error) {
-              console.error('Error preparing mermaid element:', error);
-            }
-          });
-        }
-      }, 50);
-      
-      return () => clearTimeout(timer);
+      renderMermaidDiagramsDelayed(mermaidRef.current);
     }
   }, [message.content, showMarkdown]);
 
@@ -191,6 +117,12 @@ function ChatMessageComponent({ message, onDelete, onRegenerate, onCancelToolCal
   const handleEditCancel = () => {
     setEditContent(message.content);
     setIsEditing(false);
+  };
+
+  const handleCopyToNotes = () => {
+    if (onCopyToNotes) {
+      onCopyToNotes(message.content);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -302,7 +234,7 @@ function ChatMessageComponent({ message, onDelete, onRegenerate, onCancelToolCal
             <span>Copy</span>
           </button>
         )}
-        {language && (
+        {language && code.includes('\n') && (
           <div className="absolute bottom-2 right-2 bg-gray-800/90 backdrop-blur-sm border border-gray-600 px-2 py-1 rounded text-xs text-gray-300 font-mono opacity-80 transition-opacity z-10">
             {language}
           </div>
@@ -816,12 +748,24 @@ function ChatMessageComponent({ message, onDelete, onRegenerate, onCancelToolCal
           )}
         </div>
         
-        <div className={`text-xs text-gray-500 mt-1 ${isUser ? 'text-right' : 'text-left'}`}>
-          <span>{message.timest.toLocaleTimeString()}</span>
-          {!isUser && message.model && (
-            <span className="ml-2 text-gray-400">
-              via {message.model}
-            </span>
+        <div className={`text-xs text-gray-500 mt-1 ${isUser ? 'text-right' : 'flex items-center justify-between'}`}>
+          <div>
+            <span>{message.timest.toLocaleTimeString()}</span>
+            {!isUser && message.model && (
+              <span className="ml-2 text-gray-400">
+                via {message.model}
+              </span>
+            )}
+          </div>
+          {!isUser && onCopyToNotes && (
+            <button
+              onClick={handleCopyToNotes}
+              className="flex items-center space-x-1 px-2 py-1 rounded text-xs transition-colors text-gray-400 hover:text-gray-200 hover:bg-gray-700"
+              title="Copy to Notes"
+            >
+              <StickyNote size={12} />
+              <span>Copy to Notes</span>
+            </button>
           )}
         </div>
       </div>
@@ -849,6 +793,7 @@ export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => 
     prevProps.onDelete === nextProps.onDelete &&
     prevProps.onRegenerate === nextProps.onRegenerate &&
     prevProps.onCancelToolCalls === nextProps.onCancelToolCalls &&
-    prevProps.onEdit === nextProps.onEdit
+    prevProps.onEdit === nextProps.onEdit &&
+    prevProps.onCopyToNotes === nextProps.onCopyToNotes
   );
 });

@@ -7,10 +7,16 @@ import { useAppStore } from '../store/useAppStore';
 
 interface MindMapsViewProps {
   activeMindMap: MindMapType | null;
-  onUpdateNodeChatIdReady?: (updateFn: (nodeId: string, chatId: string | null) => void) => void;
+  // Props for external node updates
+  pendingNodeUpdate?: {
+    nodeId: string
+    chatId?: string | null
+    notes?: string | null
+    timest: number
+  }
 }
 
-export function MindMapsView({ activeMindMap, onUpdateNodeChatIdReady }: MindMapsViewProps) {
+export function MindMapsView({ activeMindMap, pendingNodeUpdate }: MindMapsViewProps) {
   const [mindMapData, setMindMapData] = useState<MindMapData | undefined>();
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [mindMapControls, setMindMapControls] = useState<MindMapControls | null>(null);
@@ -33,20 +39,7 @@ export function MindMapsView({ activeMindMap, onUpdateNodeChatIdReady }: MindMap
     setMindMapKeyBindings(newBindings);
   }, [setMindMapKeyBindings]);
 
-  // Expose updateNodeChatId function when controls are ready AND mindmap is loaded
-  useEffect(() => {
-    if (mindMapControls && mindMapData) {
-      // Store the function globally so it can be accessed by other components
-      (window as any).updateNodeChatId = mindMapControls.updateNodeChatId;
-      
-      // Call the callback to provide the function to the parent
-      if (onUpdateNodeChatIdReady) {
-        setTimeout(() => {
-          onUpdateNodeChatIdReady(mindMapControls.updateNodeChatId);
-        }, 0);
-      }
-    }
-  }, [mindMapControls, mindMapData, onUpdateNodeChatIdReady]);
+  // No longer need to expose imperative functions - using props instead
 
   const loadMindMapData = async (mindMapId: string) => {
     try {
@@ -228,6 +221,7 @@ export function MindMapsView({ activeMindMap, onUpdateNodeChatIdReady }: MindMap
                 initialData={mindMapData}
                 onControlsReady={setMindMapControls}
                 keyBindings={mindMapKeyBindings || {}}
+                externalNodeUpdates={pendingNodeUpdate}
               />
             ) : (
               <div className="flex items-center justify-center h-full text-gray-500">

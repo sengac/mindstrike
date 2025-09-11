@@ -8,9 +8,10 @@ interface CodeEditorProps {
   onChange?: (value: string) => void;
   readOnly?: boolean;
   height?: string;
+  noBorder?: boolean;
 }
 
-export function CodeEditor({ value, language = 'typescript', onChange, readOnly = false, height = '400px' }: CodeEditorProps) {
+export function CodeEditor({ value, language = 'typescript', onChange, readOnly = false, height = '400px', noBorder = false }: CodeEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const subscriptionRef = useRef<monaco.IDisposable | null>(null);
@@ -96,7 +97,7 @@ export function CodeEditor({ value, language = 'typescript', onChange, readOnly 
     <div 
       ref={containerRef} 
       style={{ height }} 
-      className="border border-gray-600 rounded-lg overflow-hidden"
+      className={noBorder ? "overflow-hidden" : "border border-gray-600 rounded-lg overflow-hidden"}
     />
   );
 }
