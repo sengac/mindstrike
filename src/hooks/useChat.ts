@@ -63,7 +63,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
         const data = await response.json();
         setMessages(data.map((msg: any) => ({
           ...msg,
-          timest: new Date(msg.timest)
+          timestamp: new Date(msg.timestamp)
         })));
       }
     } catch (error) {
@@ -92,7 +92,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
       id: Date.now().toString(),
       role: 'user',
       content,
-      timest: new Date(),
+      timestamp: new Date(),
       images: images || []
     };
     let currentMessages = [...messages, userMessage];
@@ -141,7 +141,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
               } else if (data.type === 'message-update') {
                 const updatedMsg = {
                 ...data.message,
-                timest: new Date(data.message.timest)
+                timestamp: new Date(data.message.timestamp)
                 };
                 
                 // For streaming updates, we'll validate on completion instead of every update
@@ -162,7 +162,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
                 } else if (data.type === 'completed') {
               const finalMsg = {
               ...data.message,
-                timest: new Date(data.message.timest)
+                timestamp: new Date(data.message.timestamp)
                  };
                 
                 // Validate final message
@@ -278,7 +278,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
         const assistantMessage = await response.json();
         const assistantMsg = {
           ...assistantMessage,
-          timest: new Date(assistantMessage.timest)
+          timestamp: new Date(assistantMessage.timestamp)
         };
         const finalMessages = [...messagesBeforeRegeneration, assistantMsg];
         setMessages(finalMessages);
@@ -361,7 +361,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
             } else if (data.type === 'message-update') {
             const updatedMsg = {
             ...data.message,
-              timest: new Date(data.message.timest)
+              timestamp: new Date(data.message.timestamp)
             };
             
             // Validate message before adding/updating
@@ -384,7 +384,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
 
               const finalMsg = {
               ...data.message,
-                timest: new Date(data.message.timest)
+                timestamp: new Date(data.message.timestamp)
                  };
                 
                 // Validate final message

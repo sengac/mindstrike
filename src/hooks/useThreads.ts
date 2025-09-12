@@ -19,7 +19,7 @@ export function useThreads(workspaceRestored: boolean = true) {
           updatedAt: new Date(thread.updatedAt),
           messages: thread.messages.map((msg: any) => ({
             ...msg,
-            timest: new Date(msg.timest)
+            timestamp: new Date(msg.timestamp)
           }))
         }));
         setThreads(parsedThreads);
@@ -192,7 +192,7 @@ export function useThreads(workspaceRestored: boolean = true) {
               updatedAt: new Date(thread.updatedAt),
               messages: thread.messages.map((msg: any) => ({
                 ...msg,
-                timest: new Date(msg.timest)
+                timestamp: new Date(msg.timestamp)
               }))
             }));
             setThreads(formattedThreads);

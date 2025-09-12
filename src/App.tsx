@@ -28,7 +28,7 @@ function App() {
     nodeId: string
     chatId?: string | null
     notes?: string | null
-    timest: number
+    timestamp: number
   } | undefined>(undefined);
   
   const { 
@@ -148,7 +148,7 @@ function App() {
     setPendingNodeUpdate({
       nodeId,
       chatId,
-      timest: Date.now()
+      timestamp: Date.now()
     });
   }, []);
 
@@ -156,7 +156,7 @@ function App() {
     setPendingNodeUpdate({
       nodeId,
       notes,
-      timest: Date.now()
+      timestamp: Date.now()
     });
   }, []);
 

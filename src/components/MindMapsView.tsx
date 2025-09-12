@@ -12,7 +12,7 @@ interface MindMapsViewProps {
     nodeId: string
     chatId?: string | null
     notes?: string | null
-    timest: number
+    timestamp: number
   }
 }
 

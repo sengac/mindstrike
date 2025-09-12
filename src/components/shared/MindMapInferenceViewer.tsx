@@ -173,7 +173,7 @@ export const MindMapInferenceViewer = forwardRef<HTMLDivElement, MindMapInferenc
                           {editingThreadId !== thread.id && (
                             <>
                               {thread.summary && (
-                                <p className="text-xs text-gray-400 mt-1 line-cl-2">
+                                <p className="text-xs text-gray-400 mt-1 line-clamp-2">
                                   {thread.summary}
                                 </p>
                               )}

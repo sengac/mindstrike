@@ -2,7 +2,7 @@ export interface ConversationMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
-  timest: Date;
+  timestamp: Date;
   toolCalls?: ToolCall[];
   toolResults?: Array<{ name: string; result: any }>;
   status?: 'processing' | 'completed' | 'cancelled';

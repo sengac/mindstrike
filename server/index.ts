@@ -932,7 +932,7 @@ Transform this into a role definition that:
 - Maintains the user's intended tone and characteristics
 - Only adds minimal connecting words if needed for grammar
 
-Exle transformation:
+Example transformation:
 User says: "friendly, enthusiastic coding mentor who explains things clearly"
 Result: "You are a friendly, enthusiastic coding mentor who explains things clearly and helps users learn through clear guidance."
 

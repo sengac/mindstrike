@@ -750,7 +750,7 @@ function ChatMessageComponent({ message, onDelete, onRegenerate, onCancelToolCal
         
         <div className={`text-xs text-gray-500 mt-1 ${isUser ? 'text-right' : 'flex items-center justify-between'}`}>
           <div>
-            <span>{message.timest.toLocaleTimeString()}</span>
+            <span>{message.timestamp.toLocaleTimeString()}</span>
             {!isUser && message.model && (
               <span className="ml-2 text-gray-400">
                 via {message.model}

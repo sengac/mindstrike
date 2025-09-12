@@ -41,7 +41,7 @@ interface MindMapProps {
     nodeId: string
     chatId?: string | null
     notes?: string | null
-    timest: number // to ensure React detects changes
+    timestamp: number // to ensure React detects changes
   }
 }
 

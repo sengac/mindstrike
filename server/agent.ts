@@ -31,7 +31,7 @@ export interface ConversationMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
-  timest: Date;
+  timestamp: Date;
   toolCalls?: ToolCall[];
   toolResults?: Array<{ name: string; result: any }>;
   status?: 'processing' | 'completed' | 'cancelled';
@@ -58,7 +58,7 @@ export class Agent {
       id: 'system',
       role: 'system',
       content: this.systemPrompt,
-      timest: new Date()
+      timestamp: new Date()
     });
   }
 
@@ -85,7 +85,7 @@ export class Agent {
     }
     \`\`\`
 
-    For exle, to list the files in the current directory, you would use:
+    For example, to list the files in the current directory, you would use:
     
     \`\`\`json
     {
@@ -127,7 +127,7 @@ export class Agent {
       "- All code should be wrapped with ```(language) at the beginning and ``` at the end.",
       "- All diagrams are to be rendered with Mermaid and should be wrapped with ```mermaid and ``` at the beginning and end and the syntax should be heavily checked for its validity first.",
       "- All mathematical formulas are to be written in LaTeX",
-      "- When writing code exles, preference them to be written in TypeScript unless otherwise specified or it makes sense to use a different language."
+      "- When writing code examples, preference them to be written in TypeScript unless otherwise specified or it makes sense to use a different language."
     ].join('\n');
   }
 
@@ -155,7 +155,7 @@ export class Agent {
       id: this.generateId(),
       role: 'user',
       content: userMessage,
-      timest: new Date(),
+      timestamp: new Date(),
       images: images || []
     };
     this.conversation.push(userMsg);
@@ -317,7 +317,7 @@ export class Agent {
         id: this.generateId(),
         role: 'assistant',
         content: toolCalls && toolCalls.length > 0 ? '' : content, // Don't show content if there are tool calls
-        timest: new Date(),
+        timestamp: new Date(),
         toolCalls,
         status: toolCalls && toolCalls.length > 0 ? 'processing' : 'completed',
         model: this.config.llmConfig.model
@@ -465,7 +465,7 @@ export class Agent {
       id: 'system',
       role: 'system',
       content: this.systemPrompt,
-      timest: new Date()
+      timestamp: new Date()
     }];
   }
 
@@ -475,7 +475,7 @@ export class Agent {
       id: 'system',
       role: 'system',
       content: this.systemPrompt,
-      timest: new Date()
+      timestamp: new Date()
     }];
     
     // Add provided messages

@@ -72,7 +72,7 @@ export function ChatThreadSelector({ threads, onThreadSelect, onClose }: ChatThr
                       )}
                     </div>
                     {thread.summary && (
-                      <p className="text-xs text-gray-400 mt-1 line-cl-2">
+                      <p className="text-xs text-gray-400 mt-1 line-clamp-2">
                         {thread.summary}
                       </p>
                     )}

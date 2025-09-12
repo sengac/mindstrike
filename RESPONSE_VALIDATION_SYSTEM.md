@@ -172,7 +172,7 @@ To test the system:
 3. Check console for validation logs
 4. Verify the corrected content renders properly
 
-Exle broken Mermaid:
+Example broken Mermaid:
 ```
 ```mermaid
 graph TD
