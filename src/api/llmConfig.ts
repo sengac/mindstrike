@@ -1,8 +1,9 @@
 interface LlmConfig {
   baseURL: string;
   model: string;
+  displayName?: string;
   apiKey?: string;
-  type?: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic';
+  type?: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'local';
 }
 
 export async function getLlmConfig(): Promise<LlmConfig> {

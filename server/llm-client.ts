@@ -29,16 +29,26 @@ export interface ToolCall {
 export interface LLMConfig {
   baseURL: string;
   model: string;
+  displayName?: string;
   apiKey?: string;
-  type?: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic';
+  type?: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'local';
   debug?: boolean;
 }
 
 export class LLMClient {
   private config: LLMConfig;
+  private localLLMManager?: any; // Import LocalLLMManager when needed
 
   constructor(config: LLMConfig) {
     this.config = config;
+  }
+
+  private async getLocalLLMManager() {
+    if (!this.localLLMManager) {
+      const { getLocalLLMManager } = await import('./local-llm-singleton.js');
+      this.localLLMManager = getLocalLLMManager();
+    }
+    return this.localLLMManager;
   }
 
   async generateResponse(
@@ -78,6 +88,39 @@ export class LLMClient {
       // Determine service type
       const isOllama = this.config.type === 'ollama' || this.config.baseURL.includes('11434') || this.config.baseURL.includes('ollama');
       const isAnthropic = this.config.type === 'anthropic';
+      const isLocal = this.config.type === 'local';
+
+      // Handle local models directly without HTTP requests
+      if (isLocal) {
+        const localManager = await this.getLocalLLMManager();
+        
+        // Convert LLMMessage format to simple array for local manager
+        const localMessages = messages.map(msg => ({
+          role: msg.role,
+          content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
+        }));
+
+        try {
+          const response = await localManager.generateResponse(this.config.model, localMessages, {
+            temperature: 0.7,
+            maxTokens: 2048
+          });
+
+          return {
+            content: response,
+            toolCalls: undefined // Local models don't support tool calls yet
+          };
+        } catch (error) {
+          if (error instanceof Error && error.message === 'Model not loaded. Please load the model first.') {
+            // Throw a more specific error that the frontend can catch
+            const customError = new Error('LOCAL_MODEL_NOT_LOADED');
+            (customError as any).modelId = this.config.model;
+            (customError as any).originalMessage = error.message;
+            throw customError;
+          }
+          throw error;
+        }
+      }
       
       // Check if this is a vision request (has images)
       const hasImages = messages.some(msg => msg.images && msg.images.length > 0);
@@ -231,6 +274,25 @@ export class LLMClient {
 
     const isOllama = this.config.type === 'ollama' || this.config.baseURL.includes('11434') || this.config.baseURL.includes('ollama');
     const isAnthropic = this.config.type === 'anthropic';
+    const isLocal = this.config.type === 'local';
+
+    // Handle local models directly for streaming
+    if (isLocal) {
+      const localManager = await this.getLocalLLMManager();
+      
+      // Convert LLMMessage format to simple array for local manager
+      const localMessages = messages.map(msg => ({
+        role: msg.role,
+        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
+      }));
+
+      // Use the streaming generator from local manager
+      yield* localManager.generateStreamResponse(this.config.model, localMessages, {
+        temperature: 0.7,
+        maxTokens: 2048
+      });
+      return;
+    }
     
     let endpoint: string;
     if (isOllama) {

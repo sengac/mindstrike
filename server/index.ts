@@ -8,6 +8,7 @@ import { Agent, AgentConfig } from './agent.js';
 import { logger } from './logger.js';
 import { cleanContentForLLM } from './utils/content-filter.js';
 import { LLMScanner } from './llm-scanner.js';
+import localLlmRoutes from './routes/local-llm.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,10 +26,11 @@ if (DEBUG_MODE) {
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
-// Serve static files in production
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../client')));
-}
+// Mount local LLM routes
+app.use('/api/local-llm', localLlmRoutes);
+
+// Serve static files from the built client
+app.use(express.static(path.join(__dirname, '../client')));
 
 // Get the system home directory cross-platform
 function getHomeDirectory(): string {
@@ -51,6 +53,7 @@ let currentWorkingDirectory = workspaceRoot;
 let currentLlmConfig = {
   baseURL: 'http://localhost:11434',
   model: '',
+  displayName: undefined,
   apiKey: undefined,
   type: undefined,
   debug: DEBUG_MODE
@@ -153,17 +156,19 @@ app.get('/api/llm-config', (req, res) => {
 
 app.post('/api/llm-config', (req: any, res: any) => {
   try {
-    const { baseURL, model, apiKey, type } = req.body;
-    logger.info('Updating LLM config:', { baseURL, model, type, apiKey: apiKey ? '[REDACTED]' : undefined });
+    const { baseURL, model, displayName, apiKey, type } = req.body;
+    logger.info('Updating LLM config:', { baseURL, model, displayName, type, apiKey: apiKey ? '[REDACTED]' : undefined });
     
     if (baseURL) currentLlmConfig.baseURL = baseURL;
     if (model) currentLlmConfig.model = model;
+    if (displayName !== undefined) currentLlmConfig.displayName = displayName;
     if (apiKey !== undefined) currentLlmConfig.apiKey = apiKey;
     if (type !== undefined) currentLlmConfig.type = type;
     
     logger.info('Updated LLM config:', { 
       baseURL: currentLlmConfig.baseURL, 
       model: currentLlmConfig.model, 
+      displayName: currentLlmConfig.displayName,
       type: currentLlmConfig.type,
       apiKey: currentLlmConfig.apiKey ? '[REDACTED]' : undefined 
     });
@@ -402,10 +407,20 @@ app.post('/api/message/stream', async (req: any, res: any) => {
 
   } catch (error: any) {
     console.error('Error processing message stream:', error);
-    res.write(`data: ${JSON.stringify({
-      type: 'error',
-      error: error.message
-    })}\n\n`);
+    
+    // Check if this is a local model not loaded error
+    if (error.message === 'LOCAL_MODEL_NOT_LOADED') {
+      res.write(`data: ${JSON.stringify({
+        type: 'local-model-not-loaded',
+        error: error.originalMessage || 'Model not loaded. Please load the model first.',
+        modelId: error.modelId
+      })}\n\n`);
+    } else {
+      res.write(`data: ${JSON.stringify({
+        type: 'error',
+        error: error.message
+      })}\n\n`);
+    }
     res.end();
   }
 });
@@ -1174,17 +1189,18 @@ app.post('/api/workspace/delete', async (req: any, res: any) => {
   }
 });
 
-// Serve React app in production
-if (process.env.NODE_ENV === 'production') {
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../client/index.html'));
+// Serve React app for all non-API routes (SPA catch-all)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../client/index.html'));
+});
+
+// Only start the server if this file is run directly (not imported)
+if (import.meta.url === `file://${process.argv[1]}`) {
+  app.listen(PORT, () => {
+    logger.info(`Server running on port ${PORT}`);
+    logger.info(`Workspace: ${workspaceRoot}`);
+    logger.info(`LLM: ${currentLlmConfig.baseURL} (${currentLlmConfig.model})`);
   });
 }
-
-app.listen(PORT, () => {
-  logger.info(`Server running on port ${PORT}`);
-  logger.info(`Workspace: ${workspaceRoot}`);
-  logger.info(`LLM: ${currentLlmConfig.baseURL} (${currentLlmConfig.model})`);
-});
 
 export default app;

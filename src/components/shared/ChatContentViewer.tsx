@@ -1,15 +1,27 @@
 import { forwardRef, useState, useEffect } from 'react';
-import { MessageSquare, ExternalLink, Unlink, X, StickyNote } from 'lucide-react';
+import { MessageSquare, ExternalLink, Unlink, X, StickyNote, BookOpen, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Thread, ConversationMessage } from '../../types';
 import { ChatPanel, ChatPanelRef } from '../ChatPanel';
 import { MarkdownEditor } from './MarkdownEditor';
+import { ThreadList } from './ThreadList';
+import { SourcesList } from './SourcesList';
+
+export interface Source {
+  id: string;
+  name: string;
+  directory: string;
+  type: 'file' | 'url' | 'document' | 'reference';
+}
 
 interface ChatContentViewerProps {
-  thread: Thread;
+  thread?: Thread;
+  threads?: Thread[];
   nodeLabel: string;
   nodeNotes?: string | null;
+  nodeSources?: Source[];
   focusNotes?: boolean;
+  focusSources?: boolean;
   onNavigateToChat?: () => void;
   onUnassignThread?: () => void;
   onClose?: () => void;
@@ -18,13 +30,21 @@ interface ChatContentViewerProps {
   onFirstMessage?: () => void;
   onRoleUpdate?: (threadId: string, customRole?: string) => void;
   onNotesUpdate?: (notes: string) => Promise<void>;
+  onSourcesUpdate?: (sources: Source[]) => Promise<void>;
+  onThreadSelect?: (threadId: string) => void;
+  onThreadCreate?: () => void;
+  onThreadRename?: (threadId: string, newName: string) => void;
+  onThreadDelete?: (threadId: string) => void;
 }
 
 export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps>(({
   thread,
+  threads,
   nodeLabel,
   nodeNotes,
+  nodeSources,
   focusNotes,
+  focusSources,
   onNavigateToChat,
   onUnassignThread,
   onClose,
@@ -32,19 +52,28 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
   onMessagesUpdate,
   onFirstMessage,
   onRoleUpdate,
-  onNotesUpdate
+  onNotesUpdate,
+  onSourcesUpdate,
+  onThreadSelect,
+  onThreadCreate,
+  onThreadRename,
+  onThreadDelete
 }, ref) => {
-  const [activeTab, setActiveTab] = useState<'chat' | 'notes'>(focusNotes ? 'notes' : 'chat');
+  const [activeTab, setActiveTab] = useState<'chat' | 'notes' | 'sources' | 'refactor'>(
+    focusNotes ? 'notes' : focusSources ? 'sources' : 'chat'
+  );
   const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false);
   const [pendingContent, setPendingContent] = useState('');
   const [notesActiveMode, setNotesActiveMode] = useState<'preview' | 'edit'>();
 
-  // Update active tab when focusNotes prop changes
+  // Update active tab when focusNotes or focusSources prop changes
   useEffect(() => {
     if (focusNotes) {
       setActiveTab('notes');
+    } else if (focusSources) {
+      setActiveTab('sources');
     }
-  }, [focusNotes]);
+  }, [focusNotes, focusSources]);
 
   const handleSaveNotes = async (value: string) => {
     if (onNotesUpdate) {
@@ -102,14 +131,6 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
     setPendingContent('');
   };
 
-  // Format node label for tab title with 40 character limit
-  const formatNodeTitle = (label: string) => {
-    if (label.length <= 40) {
-      return label;
-    }
-    return label.substring(0, 37) + '...';
-  };
-
   return (
     <div className="flex flex-col h-full">
       {/* Confirmation Dialog Overlay */}
@@ -158,7 +179,7 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
               }`}
             >
               <MessageSquare size={16} className="text-blue-400" />
-              <span>{thread.name}</span>
+              <span>Chat</span>
             </button>
             <button
               onClick={() => setActiveTab('notes')}
@@ -169,7 +190,39 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
               }`}
             >
               <StickyNote size={16} className="text-green-400" />
-              <span>{formatNodeTitle(nodeLabel)}</span>
+              <span>Notes</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('sources')}
+              className={`flex items-center gap-2 px-3 py-1 rounded-t text-sm font-medium transition-colors ml-1 ${
+                activeTab === 'sources'
+                  ? 'text-white bg-gray-700'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <BookOpen size={16} className="text-orange-400" />
+              <span>Sources</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('refactor')}
+              data-testid="generative-refactor-tab-button"
+              className={`flex items-center gap-2 px-3 py-1 rounded-t text-sm font-medium transition-all duration-300 ml-1 relative overflow-hidden ${
+                activeTab === 'refactor'
+                  ? 'text-white bg-gray-700 animate-shimmer-inset bg-gradient-to-r from-purple-500/20 via-blue-500/20 to-cyan-500/20 animate-shine'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+              style={{
+                backgroundImage: activeTab === 'refactor' 
+                  ? 'linear-gradient(45deg, rgba(168, 85, 247, 0.1), rgba(59, 130, 246, 0.1), rgba(6, 182, 212, 0.1)), linear-gradient(135deg, transparent 25%, rgba(255, 255, 255, 0.1) 50%, transparent 75%)'
+                  : undefined,
+                backgroundSize: activeTab === 'refactor' ? '200% 200%, 200% 200%' : undefined,
+                animation: activeTab === 'refactor' 
+                  ? 'shimmer-inset 2s linear infinite, shine 2s ease-in-out infinite'
+                  : undefined
+              }}
+            >
+              <Sparkles size={16} className="text-purple-400" />
+              <span>Generative Refactor</span>
             </button>
           </div>
 
@@ -190,8 +243,8 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
 
       {/* Tab Content */}
       <div className="flex-1 min-h-0 relative">
-        {/* Floating Action Buttons - Only show when chat tab is active */}
-        {activeTab === 'chat' && (
+        {/* Floating Action Buttons - Only show when chat tab is active and thread exists */}
+        {activeTab === 'chat' && thread && (
           <div className="absolute top-4 right-4 z-10 flex gap-2">
             {onUnassignThread && (
               <button
@@ -215,26 +268,39 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
         )}
         
         {activeTab === 'chat' ? (
-          <ChatPanel
-            ref={ref}
-            threadId={thread.id}
-            messages={thread.messages}
-            onMessagesUpdate={(messages) => {
-              if (onMessagesUpdate) {
-                onMessagesUpdate(messages);
-              }
-            }}
-            onFirstMessage={onFirstMessage}
-            onDeleteMessage={(messageId) => {
-              if (onDeleteMessage) {
-                onDeleteMessage(messageId);
-              }
-            }}
-            activeThread={thread}
-            onRoleUpdate={onRoleUpdate}
-            onCopyToNotes={handleCopyToNotes}
-          />
-        ) : (
+          thread ? (
+            <ChatPanel
+              ref={ref}
+              threadId={thread.id}
+              messages={thread.messages}
+              onMessagesUpdate={(messages) => {
+                if (onMessagesUpdate) {
+                  onMessagesUpdate(messages);
+                }
+              }}
+              onFirstMessage={onFirstMessage}
+              onDeleteMessage={(messageId) => {
+                if (onDeleteMessage) {
+                  onDeleteMessage(messageId);
+                }
+              }}
+              activeThread={thread}
+              onRoleUpdate={onRoleUpdate}
+              onCopyToNotes={handleCopyToNotes}
+            />
+          ) : (
+            <ThreadList
+              threads={threads || []}
+              onThreadSelect={onThreadSelect || (() => {})}
+              onThreadCreate={onThreadCreate}
+              onThreadRename={onThreadRename}
+              onThreadDelete={onThreadDelete}
+              emptyStateTitle="No chat threads yet"
+              emptyStateSubtitle="Create a new conversation to get started"
+              createButtonTitle="New Chat"
+            />
+          )
+        ) : activeTab === 'notes' ? (
           <div className="flex flex-col h-full">
             <MarkdownEditor
               value={nodeNotes || ''}
@@ -246,6 +312,18 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
               onSave={handleSaveNotes}
               className="flex-1"
             />
+          </div>
+        ) : activeTab === 'sources' ? (
+          <SourcesList
+            sources={nodeSources || []}
+            onSourcesUpdate={onSourcesUpdate}
+          />
+        ) : (
+          <div className="flex flex-col h-full p-4">
+            <h3 className="text-lg font-medium text-white mb-4">Refactor MindMap</h3>
+            <div className="text-gray-400 text-center">
+              MindMap refactoring functionality coming soon!
+            </div>
           </div>
         )}
       </div>

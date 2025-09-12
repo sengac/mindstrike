@@ -13,6 +13,7 @@ interface UseChatProps {
 export function useChat({ threadId, messages: initialMessages = [], onMessagesUpdate, onFirstMessage }: UseChatProps = {}) {
   const [messages, setMessages] = useState<ConversationMessage[]>(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
+  const [localModelError, setLocalModelError] = useState<{ modelId: string; error: string } | null>(null);
   const isUpdatingFromProps = useRef(false);
   const validation = useResponseValidation();
 
@@ -189,6 +190,14 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
                 
               } else if (data.type === 'error') {
                 toast.error(`Connection Error: ${data.error}`);
+                setIsLoading(false);
+                return;
+              } else if (data.type === 'local-model-not-loaded') {
+                // Set the error to trigger the dialog which will auto-load the model
+                setLocalModelError({
+                  modelId: data.modelId,
+                  error: data.error
+                });
                 setIsLoading(false);
                 return;
               }
@@ -423,6 +432,10 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
     }
   }, [messages, notifyMessagesUpdate]);
 
+  const clearLocalModelError = useCallback(() => {
+    setLocalModelError(null);
+  }, []);
+
   return {
     messages,
     isLoading,
@@ -431,6 +444,8 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
     regenerateMessage,
     cancelToolCalls,
     editMessage,
-    validation
+    validation,
+    localModelError,
+    clearLocalModelError
   };
 }

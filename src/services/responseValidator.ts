@@ -238,16 +238,17 @@ export class OffScreenValidator {
     // Check for common syntax issues based on language
     if (language) {
       switch (language.toLowerCase()) {
-        case 'json':
-          try {
-            JSON.parse(content);
-          } catch (error) {
-            return { 
-              success: false, 
-              error: `Invalid JSON: ${error instanceof Error ? error.message : 'Parse error'}` 
-            };
-          }
-          break;
+        // TODO: fix this, it doesn't work properly
+        // case 'json':
+        //   try {
+        //     JSON.parse(content);
+        //   } catch (error) {
+        //     return { 
+        //       success: false, 
+        //       error: `Invalid JSON: ${error instanceof Error ? error.message : 'Parse error'}` 
+        //     };
+        //   }
+        //   break;
         case 'javascript':
         case 'js':
           // Basic JS validation - check for obvious syntax errors

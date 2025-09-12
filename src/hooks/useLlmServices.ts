@@ -4,7 +4,7 @@ export interface CustomLLMService {
   id: string;
   name: string;
   baseURL: string;
-  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic';
+  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'local';
   apiKey?: string;
   enabled: boolean;
   custom: boolean; // Whether this was manually added by user

@@ -11,6 +11,7 @@ import { AgentsPanel } from './components/AgentsPanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { ModelSelector } from './components/ModelSelector';
 import { HeaderStats } from './components/HeaderStats';
+import { LocalModelLoadDialog } from './components/LocalModelLoadDialog';
 import { useThreads } from './hooks/useThreads';
 import { useWorkflows } from './hooks/useWorkflows';
 import { useMindMaps } from './hooks/useMindMaps';
@@ -19,15 +20,18 @@ import { useAppStore } from './store/useAppStore';
 import { useLlmConfig } from './hooks/useLlmConfig';
 import { LLMModel } from './hooks/useAvailableModels';
 import { ConversationMessage } from './types';
-import { Menu, X, MessageSquare, Workflow, Network } from 'lucide-react';
+import { Source } from './components/shared/ChatContentViewer';
+import { Menu, X, MessageSquare, Workflow, Network, Settings, Cpu } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 
 function App() {
   const [workspaceRestored, setWorkspaceRestored] = useState(false);
+  const [showLocalModelDialog, setShowLocalModelDialog] = useState(false);
   const [pendingNodeUpdate, setPendingNodeUpdate] = useState<{
     nodeId: string
     chatId?: string | null
     notes?: string | null
+    sources?: Source[]
     timestamp: number
   } | undefined>(undefined);
   
@@ -178,6 +182,32 @@ function App() {
     });
   }, [pendingNodeUpdate]);
 
+  const updateNodeSources = useCallback(async (nodeId: string, sources: Source[]) => {
+    setPendingNodeUpdate({
+      nodeId,
+      sources,
+      timestamp: Date.now()
+    });
+    
+    // Wait for the save to complete
+    return new Promise<void>((resolve) => {
+      const timeout = setTimeout(resolve, 1000); // Max 1 second timeout
+      
+      const checkSave = () => {
+        // Check if the update was processed by checking if pendingNodeUpdate is cleared
+        if (!pendingNodeUpdate || 
+            pendingNodeUpdate.nodeId !== nodeId || 
+            pendingNodeUpdate.sources !== sources) {
+          clearTimeout(timeout);
+          resolve();
+        } else {
+          setTimeout(checkSave, 50);
+        }
+      };
+      checkSave();
+    });
+  }, [pendingNodeUpdate]);
+
   // Clear pending node update after a short delay to ensure it's been processed
   useEffect(() => {
     if (pendingNodeUpdate) {
@@ -198,6 +228,7 @@ function App() {
       setLlmConfig({
         baseURL: model.baseURL,
         model: model.model,
+        displayName: model.displayName,
         apiKey: model.apiKey,
         type: model.type
       });
@@ -242,10 +273,19 @@ function App() {
                     messages={activeThread?.messages || []}
                     selectedModel={selectedModel}
                   />
-                  <ModelSelector 
-                    selectedModel={selectedModel}
-                    onModelSelect={handleModelSelect}
-                  />
+                  <div className="flex items-center gap-2">
+                    <ModelSelector 
+                      selectedModel={selectedModel}
+                      onModelSelect={handleModelSelect}
+                    />
+                    <button
+                      onClick={() => setShowLocalModelDialog(true)}
+                      className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
+                      title="Manage Local Models"
+                    >
+                      <Cpu size={16} />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -284,10 +324,19 @@ function App() {
                   <h1 className="text-xl font-semibold text-white">Workflows</h1>
                 </div>
                 <div className="flex items-center space-x-4">
-                  <ModelSelector 
-                    selectedModel={selectedModel}
-                    onModelSelect={handleModelSelect}
-                  />
+                  <div className="flex items-center gap-2">
+                    <ModelSelector 
+                      selectedModel={selectedModel}
+                      onModelSelect={handleModelSelect}
+                    />
+                    <button
+                      onClick={() => setShowLocalModelDialog(true)}
+                      className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
+                      title="Manage Local Models"
+                    >
+                      <Cpu size={16} />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -316,10 +365,19 @@ function App() {
                   <h1 className="text-xl font-semibold text-white">MindMaps</h1>
                 </div>
                 <div className="flex items-center space-x-4">
-                  <ModelSelector 
-                    selectedModel={selectedModel}
-                    onModelSelect={handleModelSelect}
-                  />
+                  <div className="flex items-center gap-2">
+                    <ModelSelector 
+                      selectedModel={selectedModel}
+                      onModelSelect={handleModelSelect}
+                    />
+                    <button
+                      onClick={() => setShowLocalModelDialog(true)}
+                      className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
+                      title="Manage Local Models"
+                    >
+                      <Cpu size={16} />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -355,6 +413,7 @@ function App() {
                 onFirstMessage={() => {}}
                 onRoleUpdate={updateThreadRole}
                 onNodeNotesUpdate={updateNodeNotes}
+                onNodeSourcesUpdate={updateNodeSources}
               />
               <MindMapsView 
                 activeMindMap={activeMindMap}
@@ -386,6 +445,18 @@ function App() {
           },
         }}
       />
+
+      {/* Local Model Management Dialog */}
+      {showLocalModelDialog && (
+        <LocalModelLoadDialog
+          isOpen={showLocalModelDialog}
+          onClose={() => setShowLocalModelDialog(false)}
+          targetModelId={undefined} // No auto-loading when opened manually
+          onModelLoaded={() => {
+            setShowLocalModelDialog(false);
+          }}
+        />
+      )}
     </div>
   );
 }

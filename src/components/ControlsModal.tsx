@@ -61,8 +61,8 @@ const DEFAULT_KEY_BINDINGS: KeyBinding[] = [
   },
   {
     id: 'openInference',
-    action: 'Open AI Inferences',
-    description: 'Open AI inference chat for the selected node',
+    action: 'Open Node Panel',
+    description: 'Open Node Panel for the selected node',
     defaultKey: '.',
     currentKey: '.'
   }
@@ -301,7 +301,7 @@ export function ControlsModal({ isOpen, onClose, onKeyBindingsChange, initialKey
               <strong>Click on background:</strong> Deselect all
             </div>
             <div className="text-gray-300">
-              <strong>Click brain icon:</strong> Open AI inferences
+              <strong>Click brain icon:</strong> Open Node Panel
             </div>
             <div className="text-gray-300">
               <strong>Double-click node:</strong> Edit node text

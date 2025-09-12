@@ -15,6 +15,7 @@ import { MindMapData, MindMapDataManager } from '../utils/mindMapData'
 import { MindMapLayoutManager } from '../utils/mindMapLayout'
 import { MindMapActionsManager } from '../utils/mindMapActions'
 import { useMindMapDrag } from '../hooks/useMindMapDrag'
+import { Source } from './shared/ChatContentViewer'
 
 const nodeTypes = {
   mindMapNode: MindMapNode
@@ -44,6 +45,7 @@ interface MindMapProps {
     nodeId: string
     chatId?: string | null
     notes?: string | null
+    sources?: Source[]
     timestamp: number // to ensure React detects changes
   }
 }
@@ -219,7 +221,7 @@ function MindMapInner ({
       if (!externalNodeUpdates) return;
       
     if (externalNodeUpdates) {
-      const { nodeId, chatId, notes } = externalNodeUpdates
+      const { nodeId, chatId, notes, sources } = externalNodeUpdates
       const { nodes: currentNodes, rootNodeId: currentRootId, layout: currentLayout } = stateRef.current
       
       let updatedNodes = currentNodes
@@ -240,6 +242,14 @@ function MindMapInner ({
           hasChanges = true
         }
       }
+
+      if (sources !== undefined) {
+        const newNodes = actionsManager.updateNodeSources(updatedNodes, nodeId, sources)
+        if (newNodes !== updatedNodes) {
+          updatedNodes = newNodes
+          hasChanges = true
+        }
+      }
       
       if (hasChanges) {
         dataManager.saveToHistory(updatedNodes, currentRootId, currentLayout)
@@ -253,6 +263,19 @@ function MindMapInner ({
               detail: { 
                 nodeId, 
                 notes: updatedNode.data.notes 
+              }
+            }))
+          }
+        }
+
+        // If sources were updated, notify the chat panel to refresh
+        if (sources !== undefined) {
+          const updatedNode = updatedNodes.find(n => n.id === nodeId)
+          if (updatedNode) {
+            window.dispatchEvent(new CustomEvent('mindmap-node-sources-updated', {
+              detail: { 
+                nodeId, 
+                sources: updatedNode.data.sources 
               }
             }))
           }
@@ -585,6 +608,29 @@ function MindMapInner ({
       onSave(treeData)
     } catch (error) {
       console.error('Error saving notes update:', error)
+    }
+  }, [actionsManager, updateState, dataManager, onSave])
+
+  // Update node sources handler
+  const handleUpdateNodeSources = useCallback((nodeId: string, sources: Source[]) => {
+    const { nodes: currentNodes, rootNodeId: currentRootId, layout: currentLayout } = stateRef.current
+    
+    const updatedNodes = actionsManager.updateNodeSources(currentNodes, nodeId, sources)
+    
+    dataManager.saveToHistory(updatedNodes, currentRootId, currentLayout)
+    updateState({ nodes: updatedNodes })
+    
+    // Force immediate save to ensure sources are persisted
+    try {
+      // Check if root node exists before converting
+      if (!currentRootId || !updatedNodes.find(n => n.id === currentRootId)) {
+        console.warn('Root node not found, skipping save for sources update')
+        return
+      }
+      const treeData = dataManager.convertNodesToTree(updatedNodes, currentRootId, currentLayout)
+      onSave(treeData)
+    } catch (error) {
+      console.error('Error saving sources update:', error)
     }
   }, [actionsManager, updateState, dataManager, onSave])
 

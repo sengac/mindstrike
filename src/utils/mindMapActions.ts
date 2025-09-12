@@ -2,6 +2,7 @@ import { Node, Edge } from 'reactflow'
 import { MindMapNodeData } from '../components/MindMapNode'
 import { MindMapData, MindMapDataManager } from './mindMapData'
 import { MindMapLayoutManager } from './mindMapLayout'
+import { Source } from '../components/shared/ChatContentViewer'
 
 export class MindMapActionsManager {
   constructor(
@@ -362,6 +363,23 @@ export class MindMapActionsManager {
         return {
           ...node,
           data: { ...node.data, notes }
+        };
+      }
+      return node;
+    });
+  }
+
+  // Update node sources
+  updateNodeSources(
+    nodes: Node<MindMapNodeData>[],
+    nodeId: string,
+    sources: Source[]
+  ): Node<MindMapNodeData>[] {
+    return nodes.map(node => {
+      if (node.id === nodeId) {
+        return {
+          ...node,
+          data: { ...node.data, sources }
         };
       }
       return node;

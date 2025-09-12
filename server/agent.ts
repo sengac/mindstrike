@@ -10,8 +10,9 @@ export interface AgentConfig {
   llmConfig: {
     baseURL: string;
     model: string;
+    displayName?: string;
     apiKey?: string;
-    type?: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic';
+    type?: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'local';
   };
   customRole?: string;
 }
@@ -321,7 +322,7 @@ export class Agent {
         timestamp: new Date(),
         toolCalls,
         status: toolCalls && toolCalls.length > 0 ? 'processing' : 'completed',
-        model: this.config.llmConfig.model
+        model: this.config.llmConfig.displayName || this.config.llmConfig.model
       };
 
       this.conversation.push(assistantMsg);

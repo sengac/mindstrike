@@ -1,8 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Thread, ConversationMessage } from '../types';
 import { ChatThreadSelector } from './shared/ChatThreadSelector';
-import { ChatContentViewer } from './shared/ChatContentViewer';
-import { MindMapInferenceViewer } from './shared/MindMapInferenceViewer';
+import { ChatContentViewer, Source } from './shared/ChatContentViewer';
 import { ChatPanelRef } from './ChatPanel';
 
 interface MindMapChatIntegrationProps {
@@ -10,7 +9,9 @@ interface MindMapChatIntegrationProps {
   nodeLabel: string;
   chatId?: string | null;
   nodeNotes?: string | null;
+  nodeSources?: Source[];
   focusNotes?: boolean;
+  focusSources?: boolean;
   threads: Thread[];
   onThreadAssociate: (nodeId: string, threadId: string) => void;
   onThreadUnassign: (nodeId: string) => void;
@@ -24,6 +25,10 @@ interface MindMapChatIntegrationProps {
   onFirstMessage?: () => void;
   onRoleUpdate?: (threadId: string, customRole?: string) => void;
   onNotesUpdate?: (nodeId: string, notes: string) => Promise<void>;
+  onSourcesUpdate?: (nodeId: string, sources: Source[]) => Promise<void>;
+  onNodeAdd?: (parentId: string, text: string) => Promise<void>;
+  onNodeUpdate?: (nodeId: string, text: string) => Promise<void>;
+  onNodeDelete?: (nodeId: string) => Promise<void>;
 }
 
 export function MindMapChatIntegration({
@@ -31,7 +36,9 @@ export function MindMapChatIntegration({
   nodeLabel,
   chatId,
   nodeNotes,
+  nodeSources,
   focusNotes,
+  focusSources,
   threads,
   onThreadAssociate,
   onThreadUnassign,
@@ -44,7 +51,11 @@ export function MindMapChatIntegration({
   onMessagesUpdate,
   onFirstMessage,
   onRoleUpdate,
-  onNotesUpdate
+  onNotesUpdate,
+  onSourcesUpdate,
+  onNodeAdd,
+  onNodeUpdate,
+  onNodeDelete
 }: MindMapChatIntegrationProps) {
   const chatPanelRef = useRef<ChatPanelRef>(null);
 
@@ -78,37 +89,17 @@ export function MindMapChatIntegration({
     }
   };
 
-  // If no chatId or thread not found, show inference viewer
-  if (!chatId || !associatedThread) {
-    return (
-      <MindMapInferenceViewer
-        nodeId={nodeId}
-        nodeLabel={nodeLabel}
-        nodeNotes={nodeNotes}
-        focusNotes={focusNotes}
-        threads={threads}
-        onThreadSelect={handleThreadSelect}
-        onThreadCreate={onThreadCreate}
-        onThreadRename={onThreadRename}
-        onThreadDelete={onThreadDelete}
-        onClose={onClose}
-        onNotesUpdate={async (notes) => {
-          if (onNotesUpdate) {
-            await onNotesUpdate(nodeId, notes);
-          }
-        }}
-      />
-    );
-  }
-
-  // Show the chat content for the associated thread
+  // Always show ChatContentViewer, with or without a thread
   return (
     <ChatContentViewer
       ref={chatPanelRef}
       thread={associatedThread}
+      threads={threads}
       nodeLabel={nodeLabel}
       nodeNotes={nodeNotes}
+      nodeSources={nodeSources}
       focusNotes={focusNotes}
+      focusSources={focusSources}
       onNavigateToChat={onNavigateToChat}
       onUnassignThread={handleThreadUnassign}
       onClose={onClose}
@@ -121,6 +112,15 @@ export function MindMapChatIntegration({
           await onNotesUpdate(nodeId, notes);
         }
       }}
+      onSourcesUpdate={async (sources) => {
+        if (onSourcesUpdate) {
+          await onSourcesUpdate(nodeId, sources);
+        }
+      }}
+      onThreadSelect={handleThreadSelect}
+      onThreadCreate={onThreadCreate}
+      onThreadRename={onThreadRename}
+      onThreadDelete={onThreadDelete}
     />
   );
 }

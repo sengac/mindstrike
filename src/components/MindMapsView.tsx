@@ -5,6 +5,7 @@ import MindMap, { MindMapData, MindMapControls } from './MindMap';
 import { ControlsModal } from './ControlsModal';
 import { ColorPalette } from './ColorPalette';
 import { useAppStore } from '../store/useAppStore';
+import { Source } from './shared/ChatContentViewer';
 
 interface MindMapsViewProps {
   activeMindMap: MindMapType | null;
@@ -13,6 +14,7 @@ interface MindMapsViewProps {
     nodeId: string
     chatId?: string | null
     notes?: string | null
+    sources?: Source[]
     timestamp: number
   }
 }

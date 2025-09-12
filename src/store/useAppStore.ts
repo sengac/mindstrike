@@ -4,8 +4,9 @@ import { persist } from 'zustand/middleware';
 interface LLMConfig {
   baseURL: string;
   model: string;
+  displayName?: string;
   apiKey?: string;
-  type?: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic';
+  type?: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'local';
 }
 
 export interface SelectedModel {
@@ -16,7 +17,7 @@ export interface SelectedModel {
   baseURL: string;
   apiKey?: string;
   contextLength?: number;
-  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic';
+  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'local';
 }
 
 interface AppState {

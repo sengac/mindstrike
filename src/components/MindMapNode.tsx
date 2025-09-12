@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { Plus, Minus, MessageSquare, Edit, Trash2, Share, FileText } from 'lucide-react';
+import { Plus, Minus, PanelRightOpen, Edit, Trash2, Share, FileText, BookOpen } from 'lucide-react';
 import { clsx } from 'clsx';
+import { Source } from './shared/ChatContentViewer';
 
 export interface MindMapNodeData {
   id: string;
@@ -10,6 +11,7 @@ export interface MindMapNodeData {
   isRoot: boolean;
   parentId?: string; // Parent node ID for hierarchy (not saved, computed dynamically)
   notes?: string | null;
+  sources?: Source[];
   chatId?: string | null;
   isEditing?: boolean;
   level?: number;
@@ -217,6 +219,7 @@ export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) 
         label: data.label,
         chatId: data.chatId,
         notes: data.notes,
+        sources: data.sources,
         position
       }
     }));
@@ -258,15 +261,10 @@ export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) 
   };
 
   const nodeLevel = data.level || 0;
-  const nodeColors = [
-    'bg-blue-500 border-blue-400',     // Root
-    'bg-green-500 border-green-400',   // Level 1
-    'bg-purple-500 border-purple-400', // Level 2
-    'bg-orange-500 border-orange-400', // Level 3
-    'bg-pink-500 border-pink-400',     // Level 4+
-  ];
+  const rootColorClass = 'bg-blue-500 border-blue-400';
   
-  const defaultColorClass = nodeColors[Math.min(nodeLevel, nodeColors.length - 1)];
+  // Only apply default color to root node (level 0), others get no color unless user picks one
+  const defaultColorClass = nodeLevel === 0 ? rootColorClass : '';
   const colorClass = data.customColors ? data.customColors.backgroundClass : defaultColorClass;
 
 
@@ -329,9 +327,9 @@ export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) 
         <button
           onClick={handleInferenceClick}
           className="relative w-8 h-8 bg-blue-600 border border-blue-500 rounded-full flex items-center justify-center hover:bg-blue-700 transition-colors z-10 shadow-lg"
-          title="AI Inferences"
+          title="Node Panel"
         >
-          <MessageSquare size={16} className="text-white" />
+          <PanelRightOpen size={16} className="text-white" />
         </button>
       </div>
 
@@ -409,25 +407,54 @@ export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) 
           setIsEditing(true);
         }}
       >
-        {/* Notes watermark icon */}
-        {data.notes && data.notes.trim() && (
-          <div 
-            className="absolute -bottom-2.5 -right-2.5 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center cursor-pointer hover:bg-red-600 transition-colors z-10"
-            onClick={(e) => {
-              e.stopPropagation();
-              window.dispatchEvent(new CustomEvent('mindmap-inference-open', {
-                detail: { 
-                  nodeId: id, 
-                  label: data.label,
-                  chatId: data.chatId,
-                  notes: data.notes,
-                  focusNotes: true
-                }
-              }));
-            }}
-            title="View notes"
-          >
-            <FileText size={12} className="text-white" />
+        {/* Icon container for sources and notes */}
+        {((data.sources && data.sources.length > 0) || (data.notes && data.notes.trim())) && (
+          <div className="absolute -bottom-2.5 -right-2.5 flex items-center gap-1 z-10">
+            {/* Sources watermark icon */}
+            {data.sources && data.sources.length > 0 && (
+              <div 
+                className="w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center cursor-pointer hover:bg-orange-600 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.dispatchEvent(new CustomEvent('mindmap-inference-open', {
+                    detail: { 
+                      nodeId: id, 
+                      label: data.label,
+                      chatId: data.chatId,
+                      notes: data.notes,
+                      sources: data.sources,
+                      focusSources: true
+                    }
+                  }));
+                }}
+                title="View sources"
+              >
+                <BookOpen size={12} className="text-white" />
+              </div>
+            )}
+
+            {/* Notes watermark icon */}
+            {data.notes && data.notes.trim() && (
+              <div 
+                className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center cursor-pointer hover:bg-red-600 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.dispatchEvent(new CustomEvent('mindmap-inference-open', {
+                    detail: { 
+                      nodeId: id, 
+                      label: data.label,
+                      chatId: data.chatId,
+                      notes: data.notes,
+                      sources: data.sources,
+                      focusNotes: true
+                    }
+                  }));
+                }}
+                title="View notes"
+              >
+                <FileText size={12} className="text-white" />
+              </div>
+            )}
           </div>
         )}
       {/* Hidden handles for automatic connections only */}
@@ -593,8 +620,8 @@ export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) 
             }}
             className="w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700 flex items-center gap-2"
           >
-            <MessageSquare size={14} />
-            AI Inferences
+            <PanelRightOpen size={14} />
+            Node Panel
           </button>
           {!data.isRoot && (
             <>

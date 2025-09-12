@@ -6,7 +6,7 @@ export interface AvailableLLMService {
   name: string;
   baseURL: string;
   models: string[];
-  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic';
+  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'local';
   available: boolean;
 }
 
@@ -17,7 +17,7 @@ export interface LLMModel {
   baseURL: string;
   displayName: string;
   apiKey?: string;
-  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic';
+  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'local';
   contextLength?: number;
 }
 
@@ -51,6 +51,17 @@ export function useAvailableModels() {
       };
       
       const customServices = loadCustomServices();
+      
+      // Get local models
+      let localModels: any[] = [];
+      try {
+        const localResponse = await fetch('/api/local-llm/models');
+        if (localResponse.ok) {
+          localModels = await localResponse.json();
+        }
+      } catch (error) {
+        console.warn('Failed to fetch local models:', error);
+      }
       
       // Combine both detected and custom services
       const allServices = [...detectedServices];
@@ -92,6 +103,27 @@ export function useAvailableModels() {
         }
       }
       
+      // Add local models as a service if any exist
+      if (localModels.length > 0) {
+        allServices.push({
+          id: 'local-llm',
+          name: 'Local Models (Built-in)',
+          baseURL: '/api/local-llm',
+          type: 'local',
+          available: true,
+          models: localModels.map(model => model.id),
+          modelsWithMetadata: localModels.map(model => ({
+            name: model.id,
+            display_name: model.name,
+            context_length: model.contextLength,
+            parameter_count: model.parameterCount,
+            quantization: model.quantization,
+            model_type: model.modelType,
+            loaded: false // We'll check this separately
+          }))
+        });
+      }
+      
       setServices(allServices);
       
       // Flatten services into individual models
@@ -108,7 +140,7 @@ export function useAvailableModels() {
                 serviceName: service.name,
                 model: modelMeta.name,
                 baseURL: service.baseURL,
-                displayName: `${modelMeta.name} | ${service.name}`,
+                displayName: `${modelMeta.display_name || modelMeta.name} | ${service.name}`,
                 apiKey: customService?.apiKey,
                 type: service.type,
                 contextLength: modelMeta.context_length

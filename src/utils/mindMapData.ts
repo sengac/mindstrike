@@ -1,10 +1,12 @@
 import { Node, Edge } from 'reactflow'
 import { MindMapNodeData } from '../components/MindMapNode'
+import { Source } from '../components/shared/ChatContentViewer'
 
 export interface MindMapNode {
   id: string
   text: string
   notes?: string | null
+  sources?: Source[]
   chatId?: string | null
   side?: 'left' | 'right'
   children?: MindMapNode[]
@@ -63,6 +65,7 @@ export class MindMapDataManager {
           hasChildren: (treeNode.children && treeNode.children.length > 0) || false,
           chatId: treeNode.chatId || undefined,
           notes: treeNode.notes || undefined,
+          sources: treeNode.sources || undefined,
           customColors: treeNode.customColors || undefined
         }
       }
@@ -123,6 +126,11 @@ export class MindMapDataManager {
       // Include chatId if it exists
       if (node.data.chatId) {
         nodeData.chatId = node.data.chatId;
+      }
+
+      // Include sources if they exist
+      if (node.data.sources && node.data.sources.length > 0) {
+        nodeData.sources = node.data.sources;
       }
 
       // Include customColors if they exist

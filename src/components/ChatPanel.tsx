@@ -4,6 +4,7 @@ import { MindStrikeIcon } from './MindStrikeIcon';
 import { ChatMessage } from './ChatMessage';
 import { PersonalityModal } from './PersonalityModal';
 import { ValidationStatusNotification } from './ValidationStatusNotification';
+import { LocalModelLoadDialog } from './LocalModelLoadDialog';
 
 import { useChat } from '../hooks/useChat';
 import { useAppStore } from '../store/useAppStore';
@@ -33,7 +34,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
   const [attachedImages, setAttachedImages] = useState<ImageAttachment[]>([]);
   const [chatLoadTime, setChatLoadTime] = useState<number>(0);
   const { fontSize, workspaceRoot, defaultCustomRole } = useAppStore();
-  const { messages, isLoading, sendMessage, clearConversation, regenerateMessage, cancelToolCalls, editMessage, validation } = useChat({
+  const { messages, isLoading, sendMessage, clearConversation, regenerateMessage, cancelToolCalls, editMessage, validation, localModelError, clearLocalModelError } = useChat({
     threadId,
     messages: initialMessages,
     onMessagesUpdate,
@@ -402,11 +403,11 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
                   className="text-blue-500 hover:text-blue-600 underline"
                 >
                   MindStrike
-                </a>
+                </a>&trade;
               </h3>
               <div className="flex justify-center space-x-4 mb-4">
                 <a 
-                  href="https://github.com/sengac/mindstrike" 
+                  href="https://github.com/mindstrikeai/mindstrike" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="text-gray-400 hover:text-white transition-colors"
@@ -415,7 +416,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
                   <Github size={24} />
                 </a>
                 <a 
-                  href="https://www.youtube.com/@agiledestruction" 
+                  href="https://www.youtube.com/@agiledestructionai" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="text-gray-400 hover:text-red-500 transition-colors"
@@ -509,14 +510,14 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
         )}
         
         <form onSubmit={handleSubmit} className="flex items-center space-x-4">
-          <div className="flex-1 relative">
+          <div className="flex-1 flex items-center bg-gray-800 border border-gray-600 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
             <textarea
               ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Ask MindStrike anything..."
-              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 pr-12 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent overflow-y-auto"
+              className="flex-1 bg-transparent px-4 py-3 text-sm resize-none focus:outline-none overflow-y-auto"
               style={{ overflowY: input.includes('\n') ? 'auto' : 'hidden' }}
               rows={1}
               disabled={isLoading}
@@ -524,7 +525,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
             <button
               type="submit"
               disabled={(!input.trim() && attachedImages.length === 0) || isLoading}
-              className="absolute right-2 bottom-2 p-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg transition-colors"
+              className="flex-shrink-0 mr-2 p-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg transition-colors"
             >
               <Send size={16} className="text-white" />
             </button>
@@ -619,6 +620,25 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
           currentRole={currentRole}
           defaultRole={defaultRole}
           onRoleChange={handleRoleChange}
+        />
+      )}
+
+      {/* Local Model Load Dialog */}
+      {localModelError && (
+        <LocalModelLoadDialog
+          isOpen={!!localModelError}
+          onClose={clearLocalModelError}
+          targetModelId={localModelError.modelId}
+          onModelLoaded={() => {
+            clearLocalModelError();
+            // Automatically retry the last message after model is loaded
+            if (messages.length > 0) {
+              const lastMessage = messages[messages.length - 1];
+              if (lastMessage.role === 'user') {
+                sendMessage(lastMessage.content, lastMessage.images || []);
+              }
+            }
+          }}
         />
       )}
 

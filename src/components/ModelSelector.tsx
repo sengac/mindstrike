@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, RefreshCw, Cpu } from 'lucide-react';
+import { ChevronDown, RefreshCw, Cpu, Settings } from 'lucide-react';
 import { useAvailableModels, LLMModel } from '../hooks/useAvailableModels';
 import { getContextDescription } from '../utils/tokenUtils';
+import { useAppStore } from '../store/useAppStore';
 import toast from 'react-hot-toast';
 
 interface ModelSelectorProps {
@@ -14,6 +15,7 @@ export function ModelSelector({ selectedModel, onModelSelect, className = '' }: 
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const { models, isLoading, error, rescanModels } = useAvailableModels();
+    const { setActivePanel } = useAppStore();
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -117,8 +119,20 @@ export function ModelSelector({ selectedModel, onModelSelect, className = '' }: 
                     )}
 
                     {!isLoading && models.length === 0 && (
-                        <div className="px-3 py-2 text-xs text-gray-400">
-                            No models found. Make sure Ollama, vLLM, or other compatible services are running.
+                        <div className="px-3 py-3 space-y-3">
+                            <div className="text-xs text-gray-400 text-center">
+                                No models available. You can download LLMs from the settings area and run them locally.
+                            </div>
+                            <button
+                                onClick={() => {
+                                    setActivePanel('settings');
+                                    setIsOpen(false);
+                                }}
+                                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
+                            >
+                                <Settings size={12} />
+                                Download Models
+                            </button>
                         </div>
                     )}
 
@@ -135,7 +149,7 @@ export function ModelSelector({ selectedModel, onModelSelect, className = '' }: 
                                 title={`${model.displayName}${contextInfo ? ` - ${contextInfo}` : ''}`}
                             >
                                 <div className="flex flex-col gap-0.5">
-                                    <div className="font-medium truncate">{model.model}</div>
+                                    <div className="font-medium truncate">{model.displayName.split(' | ')[0]}</div>
                                     <div className="text-xs text-gray-400 truncate flex items-center gap-1">
                                         <span>{model.serviceName}</span>
                                         {contextInfo && (

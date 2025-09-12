@@ -206,7 +206,7 @@ export function InferenceChatPopup({ isOpen, onClose, nodeLabel, nodeId, positio
         <div className="p-3 border-b border-gray-600 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Brain size={16} className="text-blue-400" />
-            <span className="text-white text-sm font-medium">AI Inferences</span>
+            <span className="text-white text-sm font-medium">Node Panel</span>
             <span className="text-gray-400 text-xs">• {nodeLabel}</span>
           </div>
           <button

@@ -4,6 +4,7 @@ import { MindMap } from '../hooks/useMindMaps';
 import { Thread, ConversationMessage } from '../types';
 import { ListPanel } from './shared/ListPanel';
 import { MindMapChatIntegration } from './MindMapChatIntegration';
+import { Source } from './shared/ChatContentViewer';
 
 interface MindMapsPanelProps {
   mindMaps: MindMap[];
@@ -25,6 +26,11 @@ interface MindMapsPanelProps {
   onFirstMessage?: () => void;
   onRoleUpdate?: (threadId: string, customRole?: string) => void;
   onNodeNotesUpdate?: (nodeId: string, notes: string) => Promise<void>;
+  onNodeSourcesUpdate?: (nodeId: string, sources: Source[]) => Promise<void>;
+  // MindMap node operations
+  onNodeAdd?: (parentId: string, text: string) => Promise<void>;
+  onNodeUpdate?: (nodeId: string, text: string) => Promise<void>;
+  onNodeDelete?: (nodeId: string) => Promise<void>;
 }
 
 export function MindMapsPanel({
@@ -45,7 +51,11 @@ export function MindMapsPanel({
   onMessagesUpdate,
   onFirstMessage,
   onRoleUpdate,
-  onNodeNotesUpdate
+  onNodeNotesUpdate,
+  onNodeSourcesUpdate,
+  onNodeAdd,
+  onNodeUpdate,
+  onNodeDelete
 }: MindMapsPanelProps) {
   const [showInferenceChat, setShowInferenceChat] = useState(false);
   const [inferenceChatNode, setInferenceChatNode] = useState<{
@@ -53,14 +63,16 @@ export function MindMapsPanel({
     label: string;
     chatId?: string | null;
     notes?: string | null;
+    sources?: Source[];
     focusNotes?: boolean;
+    focusSources?: boolean;
   } | null>(null);
 
   // Listen for mindmap inference events
   useEffect(() => {
     const handleInferenceOpen = (event: CustomEvent) => {
-      const { nodeId, label, chatId, notes, focusNotes } = event.detail;
-      setInferenceChatNode({ id: nodeId, label, chatId, notes, focusNotes });
+      const { nodeId, label, chatId, notes, sources, focusNotes, focusSources } = event.detail;
+      setInferenceChatNode({ id: nodeId, label, chatId, notes, sources, focusNotes, focusSources });
       setShowInferenceChat(true);
       
       // Broadcast the active inference node ID for UI updates
@@ -101,6 +113,18 @@ export function MindMapsPanel({
       }
     };
 
+    const handleNodeSourcesUpdated = (event: CustomEvent) => {
+      const { nodeId, sources } = event.detail;
+      
+      // Update the inferenceChatNode if it's the same node
+      if (inferenceChatNode && inferenceChatNode.id === nodeId) {
+        setInferenceChatNode({
+          ...inferenceChatNode,
+          sources
+        });
+      }
+    };
+
     const handleNodeLabelUpdated = (event: CustomEvent) => {
       const { nodeId, label } = event.detail;
       
@@ -133,6 +157,7 @@ export function MindMapsPanel({
     window.addEventListener('mindmap-inference-close', handleInferenceClose as EventListener);
     window.addEventListener('mindmap-inference-get-active', handleGetActiveState as EventListener);
     window.addEventListener('mindmap-node-notes-updated', handleNodeNotesUpdated as EventListener);
+    window.addEventListener('mindmap-node-sources-updated', handleNodeSourcesUpdated as EventListener);
     window.addEventListener('mindmap-node-update-finished', handleNodeLabelUpdated as EventListener);
     window.addEventListener('mindmap-inference-check-and-close', handleInferenceCheckAndClose as EventListener);
 
@@ -141,6 +166,7 @@ export function MindMapsPanel({
       window.removeEventListener('mindmap-inference-close', handleInferenceClose as EventListener);
       window.removeEventListener('mindmap-inference-get-active', handleGetActiveState as EventListener);
       window.removeEventListener('mindmap-node-notes-updated', handleNodeNotesUpdated as EventListener);
+      window.removeEventListener('mindmap-node-sources-updated', handleNodeSourcesUpdated as EventListener);
       window.removeEventListener('mindmap-node-update-finished', handleNodeLabelUpdated as EventListener);
       window.removeEventListener('mindmap-inference-check-and-close', handleInferenceCheckAndClose as EventListener);
     };
@@ -222,7 +248,9 @@ export function MindMapsPanel({
             nodeLabel={inferenceChatNode.label}
             chatId={inferenceChatNode.chatId}
             nodeNotes={inferenceChatNode.notes}
+            nodeSources={inferenceChatNode.sources}
             focusNotes={inferenceChatNode.focusNotes}
+            focusSources={inferenceChatNode.focusSources}
             threads={threads}
             onThreadAssociate={handleThreadAssociate}
             onThreadUnassign={handleThreadUnassign}
@@ -240,6 +268,14 @@ export function MindMapsPanel({
                 await onNodeNotesUpdate(nodeId, notes);
               }
             }}
+            onSourcesUpdate={async (nodeId, sources) => {
+              if (onNodeSourcesUpdate) {
+                await onNodeSourcesUpdate(nodeId, sources);
+              }
+            }}
+            onNodeAdd={onNodeAdd}
+            onNodeUpdate={onNodeUpdate}
+            onNodeDelete={onNodeDelete}
           />
         ) : null
       }

@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { Settings, Cpu, Plus, Trash2, RefreshCw, TestTube, Check, X, Eye, EyeOff, Edit2, Minus, Type } from 'lucide-react';
+import { Settings, Cpu, Plus, Trash2, RefreshCw, TestTube, Check, X, Eye, EyeOff, Edit2, Minus, Type, HardDrive, Info } from 'lucide-react';
 import { useLlmServices, CustomLLMService } from '../hooks/useLlmServices';
 import { useAppStore } from '../store/useAppStore';
+import { LocalLLMManager } from './LocalLLMManager';
 import toast from 'react-hot-toast';
 
 interface AddServiceFormData {
   name: string;
   baseURL: string;
-  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic';
+  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'local';
   apiKey: string;
 }
 
@@ -145,7 +146,8 @@ const ServiceCard = React.memo<ServiceCardProps>(({
               <option value="vllm">vLLM</option>
               <option value="openai-compatible">OpenAI Compatible</option>
               <option value="openai">OpenAI</option>
-                      <option value="anthropic">Anthropic</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="local">Local (Built-in)</option>
             </select>
           </div>
           <div className="col-span-2">
@@ -190,9 +192,12 @@ const ServiceCard = React.memo<ServiceCardProps>(({
 ));
 
 
+type SettingsTab = 'builtin-llm' | 'local-llm' | 'external-llm' | 'general-preferences';
+
 export function SettingsPanel() {
   const { config, isLoading, error, addCustomService, removeCustomService, updateCustomService, testService, rescanServices } = useLlmServices();
   const { fontSize, increaseFontSize, decreaseFontSize } = useAppStore();
+  const [activeTab, setActiveTab] = useState<SettingsTab>('builtin-llm');
   const [showAddForm, setShowAddForm] = useState(false);
   const [testingService, setTestingService] = useState<string | null>(null);
   const [formData, setFormData] = useState<AddServiceFormData>({
@@ -308,40 +313,196 @@ export function SettingsPanel() {
         </div>
       </div>
 
+      {/* Tab Navigation */}
+      <div className="border-b border-gray-700">
+        <div className="px-6">
+          <nav className="flex space-x-8">
+            {[
+              { id: 'builtin-llm', label: 'Built-in LLM', icon: HardDrive },
+              { id: 'local-llm', label: 'Local LLM', icon: Cpu },
+              { id: 'external-llm', label: 'External LLM', icon: Cpu },
+              { id: 'general-preferences', label: 'General Preferences', icon: Settings }
+            ].map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as SettingsTab)}
+                  className={`flex items-center gap-2 py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
+                    activeTab === tab.id
+                      ? 'border-blue-500 text-blue-400'
+                      : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                  }`}
+                >
+                  <Icon size={16} />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+      </div>
+
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6">
         <div className="max-w-4xl space-y-8">
-          {/* LLM Configuration Section */}
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
+          {/* Built-in LLM Tab */}
+          {activeTab === 'builtin-llm' && (
+            <div className="space-y-6">
               <div className="flex items-center gap-3">
-                <Cpu size={20} className="text-blue-400" />
-                <h2 className="text-lg font-medium text-white">LLM Services</h2>
+                <Cpu size={20} className="text-green-400" />
+                <h2 className="text-lg font-medium text-white">Built-in LLM Models</h2>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleRescan}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-lg text-sm text-gray-200 transition-colors"
-                  title="Rescan for available services"
-                >
-                  <RefreshCw size={14} />
-                  Rescan
-                </button>
-                <button
-                  onClick={() => setShowAddForm(!showAddForm)}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white transition-colors"
-                >
-                  <Plus size={14} />
-                  Add Service
-                </button>
-              </div>
-            </div>
 
-            {error && (
-              <div className="p-3 bg-red-900 border border-red-700 rounded-lg text-red-200 text-sm">
-                {error}
+              {/* Info Notice */}
+              <div className="p-4 bg-blue-900/20 border border-blue-600/30 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <Info size={16} className="text-blue-400 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="text-blue-200 mb-2">
+                      <strong>Built-in LLM Models:</strong> These models run directly on your machine.
+                    </p>
+                    <ul className="text-blue-300 space-y-1 text-xs">
+                      <li>• Models are downloaded to ~/.mindstrike/local-models/</li>
+                      <li>• Loaded models consume system RAM</li>
+                      <li>• Q4_K_M quantization provides good quality/performance balance</li>
+                      <li>• Larger models provide better quality but require more resources</li>
+                    </ul>
+                  </div>
+                </div>
               </div>
-            )}
+              
+              <LocalLLMManager />
+            </div>
+          )}
+
+          {/* Local LLM Tab */}
+          {activeTab === 'local-llm' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <HardDrive size={20} className="text-blue-400" />
+                  <h2 className="text-lg font-medium text-white">Local LLM Services</h2>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleRescan}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-lg text-sm text-gray-200 transition-colors"
+                    title="Rescan for available services"
+                  >
+                    <RefreshCw size={14} />
+                    Rescan
+                  </button>
+                </div>
+              </div>
+
+              {/* Info Notice */}
+              <div className="p-4 bg-blue-900/20 border border-blue-600/30 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <Info size={16} className="text-blue-400 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="text-blue-200 mb-2">
+                      <strong>Local LLM Services:</strong> Connect to locally running AI services.
+                    </p>
+                    <ul className="text-blue-300 space-y-1 text-xs">
+                      <li>• Automatically detects Ollama, vLLM, and other local services</li>
+                      <li>• Services must be running and accessible on your network</li>
+                      <li>• Use "Rescan" to detect newly started services</li>
+                      <li>• Local services typically run on localhost with specific ports</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {error && (
+                <div className="p-3 bg-red-900 border border-red-700 rounded-lg text-red-200 text-sm">
+                  {error}
+                </div>
+              )}
+
+              {/* Detected Services */}
+              {config.detectedServices.length > 0 && (
+                <div className="space-y-4">
+                  <h3 className="text-md font-medium text-white">Detected Services</h3>
+                  <div className="space-y-3">
+                    {config.detectedServices.map((service) => (
+                      <ServiceCard 
+                        key={service.id} 
+                        service={service} 
+                        isCustom={false}
+                        editingService={editingService}
+                        editFormData={editFormData}
+                        setEditFormData={setEditFormData}
+                        startEditing={startEditing}
+                        cancelEditing={cancelEditing}
+                        saveEditing={saveEditing}
+                        handleTestService={handleTestService}
+                        removeCustomService={removeCustomService}
+                        testingService={testingService}
+                        showApiKeys={showApiKeys}
+                        toggleApiKeyVisibility={toggleApiKeyVisibility}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Empty State for Local Services */}
+              {!isLoading && config.detectedServices.length === 0 && (
+                <div className="text-center py-12">
+                  <Cpu size={48} className="text-gray-600 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-400 mb-2">No Local Services Found</h3>
+                  <p className="text-gray-500 mb-4">
+                    No local LLM services (Ollama, vLLM, etc.) were detected automatically.
+                  </p>
+                </div>
+              )}
+
+              {isLoading && (
+                <div className="text-center py-8">
+                  <RefreshCw size={24} className="text-blue-400 animate-spin mx-auto mb-2" />
+                  <p className="text-gray-400">Loading LLM services...</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* External LLM Tab */}
+          {activeTab === 'external-llm' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Cpu size={20} className="text-blue-400" />
+                  <h2 className="text-lg font-medium text-white">External LLM Services</h2>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowAddForm(!showAddForm)}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white transition-colors"
+                  >
+                    <Plus size={14} />
+                    Add Service
+                  </button>
+                </div>
+              </div>
+
+              {/* Info Notice */}
+              <div className="p-4 bg-blue-900/20 border border-blue-600/30 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <Info size={16} className="text-blue-400 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="text-blue-200 mb-2">
+                      <strong>External LLM Services:</strong> Connect to remote AI services and APIs.
+                    </p>
+                    <ul className="text-blue-300 space-y-1 text-xs">
+                      <li>• Add services like OpenAI, Anthropic, or custom API endpoints</li>
+                      <li>• API keys are stored securely and sent only to specified endpoints</li>
+                      <li>• External services typically require internet connectivity</li>
+                      <li>• Usage may incur costs based on the service provider's pricing</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
 
             {/* Add Service Form */}
             {showAddForm && (
@@ -376,6 +537,7 @@ export function SettingsPanel() {
                         <option value="openai-compatible">OpenAI Compatible</option>
                         <option value="openai">OpenAI</option>
                         <option value="anthropic">Anthropic</option>
+                        <option value="local">Local (Built-in)</option>
                       </select>
                     </div>
                   </div>
@@ -425,33 +587,6 @@ export function SettingsPanel() {
               </div>
             )}
 
-            {/* Detected Services */}
-            {config.detectedServices.length > 0 && (
-              <div className="space-y-4">
-                <h3 className="text-md font-medium text-white">Detected Services</h3>
-                <div className="space-y-3">
-                  {config.detectedServices.map((service) => (
-                    <ServiceCard 
-                      key={service.id} 
-                      service={service} 
-                      isCustom={false}
-                      editingService={editingService}
-                      editFormData={editFormData}
-                      setEditFormData={setEditFormData}
-                      startEditing={startEditing}
-                      cancelEditing={cancelEditing}
-                      saveEditing={saveEditing}
-                      handleTestService={handleTestService}
-                      removeCustomService={removeCustomService}
-                      testingService={testingService}
-                      showApiKeys={showApiKeys}
-                      toggleApiKeyVisibility={toggleApiKeyVisibility}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Custom Services */}
             {config.customServices.length > 0 && (
               <div className="space-y-4">
@@ -479,13 +614,13 @@ export function SettingsPanel() {
               </div>
             )}
 
-            {/* Empty State */}
-            {!isLoading && config.detectedServices.length === 0 && config.customServices.length === 0 && (
+            {/* Empty State for External Services */}
+            {!isLoading && config.customServices.length === 0 && (
               <div className="text-center py-12">
                 <Cpu size={48} className="text-gray-600 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-400 mb-2">No LLM Services Found</h3>
+                <h3 className="text-lg font-medium text-gray-400 mb-2">No External Services</h3>
                 <p className="text-gray-500 mb-4">
-                  No LLM services were detected automatically. Add a custom service to get started.
+                  Add external LLM services (OpenAI, Anthropic, etc.) to get started.
                 </p>
                 <button
                   onClick={() => setShowAddForm(true)}
@@ -496,20 +631,35 @@ export function SettingsPanel() {
                 </button>
               </div>
             )}
+            </div>
+          )}
 
-            {isLoading && (
-              <div className="text-center py-8">
-                <RefreshCw size={24} className="text-blue-400 animate-spin mx-auto mb-2" />
-                <p className="text-gray-400">Loading LLM services...</p>
-              </div>
-            )}
-          </div>
 
-          {/* Accessibility Section */}
-          <div className="space-y-6">
+
+          {/* General Preferences Tab */}
+          {activeTab === 'general-preferences' && (
+            <div className="space-y-6">
             <div className="flex items-center gap-3">
               <Type size={20} className="text-green-400" />
-              <h2 className="text-lg font-medium text-white">Accessibility</h2>
+              <h2 className="text-lg font-medium text-white">General Preferences</h2>
+            </div>
+
+            {/* Info Notice */}
+            <div className="p-4 bg-blue-900/20 border border-blue-600/30 rounded-lg">
+              <div className="flex items-start gap-3">
+                <Info size={16} className="text-blue-400 mt-0.5" />
+                <div className="text-sm">
+                  <p className="text-blue-200 mb-2">
+                    <strong>General Preferences:</strong> Configure application-wide settings.
+                  </p>
+                  <ul className="text-blue-300 space-y-1 text-xs">
+                    <li>• Customize the interface for better usability</li>
+                    <li>• Accessibility options to improve readability</li>
+                    <li>• Settings are saved automatically and persist across sessions</li>
+                    <li>• Changes take effect immediately without requiring a restart</li>
+                  </ul>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-4">
@@ -539,7 +689,8 @@ export function SettingsPanel() {
                 </div>
               </div>
             </div>
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
