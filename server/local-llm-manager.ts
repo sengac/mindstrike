@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { createHash } from 'crypto';
+import { getLocalModelsDirectory } from './utils/settings-directory.js';
 
 export interface LocalModelInfo {
   id: string;
@@ -99,7 +100,7 @@ export class LocalLLMManager {
 
   constructor() {
     // Use a dedicated directory for local LLM models
-    this.modelsDir = path.join(os.homedir(), '.mindstrike', 'local-models');
+    this.modelsDir = getLocalModelsDirectory();
     this.ensureModelsDirectory();
   }
 
@@ -319,6 +320,14 @@ export class LocalLLMManager {
     
     if (this.activeModels.has(modelId)) {
       return; // Already loaded
+    }
+
+    // Unload all other models first to free up memory
+    // This ensures only one local model is loaded at a time
+    const otherModelIds = Array.from(this.activeModels.keys()).filter(id => id !== modelId);
+    for (const otherModelId of otherModelIds) {
+      console.log(`Unloading previous model: ${otherModelId}`);
+      await this.unloadModel(otherModelId);
     }
 
     console.log(`Loading model: ${modelInfo.name}`);
@@ -590,16 +599,5 @@ export class LocalLLMManager {
     return `${speed.toFixed(1)} ${units[unitIndex]}`;
   }
 
-  /**
-   * Get memory usage stats
-   */
-  getMemoryStats(): {
-    loadedModels: number;
-    totalMemoryUsage: string;
-  } {
-    return {
-      loadedModels: this.activeModels.size,
-      totalMemoryUsage: 'N/A' // TODO: Implement memory usage tracking
-    };
-  }
+
 }

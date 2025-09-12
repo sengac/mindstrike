@@ -8,6 +8,10 @@ import { Agent, AgentConfig } from './agent.js';
 import { logger } from './logger.js';
 import { cleanContentForLLM } from './utils/content-filter.js';
 import { LLMScanner } from './llm-scanner.js';
+import { LLMConfigManager } from './llm-config-manager.js';
+import { getHomeDirectory } from './utils/settings-directory.js';
+import { sseManager } from './sse-manager.js';
+import { getLocalLLMManager } from './local-llm-singleton.js';
 import localLlmRoutes from './routes/local-llm.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -32,18 +36,7 @@ app.use('/api/local-llm', localLlmRoutes);
 // Serve static files from the built client
 app.use(express.static(path.join(__dirname, '../client')));
 
-// Get the system home directory cross-platform
-function getHomeDirectory(): string {
-  // Use environment variables first (most reliable)
-  if (process.env.HOME) return process.env.HOME; // Unix/Linux/macOS
-  if (process.env.USERPROFILE) return process.env.USERPROFILE; // Windows
-  if (process.env.HOMEDRIVE && process.env.HOMEPATH) {
-    return path.join(process.env.HOMEDRIVE, process.env.HOMEPATH); // Windows fallback
-  }
-  
-  // Use Node.js os module as fallback
-  return os.homedir();
-}
+// Home directory function moved to utils/settings-directory.ts
 
 // Initialize workspace and agent configuration
 // Default to home directory if no working root is set
@@ -53,9 +46,9 @@ let currentWorkingDirectory = workspaceRoot;
 let currentLlmConfig = {
   baseURL: 'http://localhost:11434',
   model: '',
-  displayName: undefined,
-  apiKey: undefined,
-  type: undefined,
+  displayName: undefined as string | undefined,
+  apiKey: undefined as string | undefined,
+  type: undefined as 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'local' | undefined,
   debug: DEBUG_MODE
 };
 
@@ -138,98 +131,256 @@ class AgentPool {
 
 const agentPool = new AgentPool();
 const llmScanner = new LLMScanner();
+let llmConfigManager: LLMConfigManager;
 
-// Scan for available LLM services on startup
-llmScanner.scanAvailableServices().catch(error => {
-  logger.error('Error scanning LLM services on startup:', error);
-});
+// Initialize LLM configuration manager
+async function initializeLLMConfig() {
+  llmConfigManager = new LLMConfigManager();
+  try {
+    await llmConfigManager.loadConfiguration();
+    logger.info('LLM configuration manager initialized');
+  } catch (error) {
+    logger.error('Failed to initialize LLM configuration manager:', error);
+  }
+}
+
+// Scan for available LLM services on startup and refresh models
+async function initializeLLMServices() {
+  try {
+    await initializeLLMConfig();
+    await llmScanner.scanAvailableServices();
+    await refreshModelList();
+    logger.info('LLM services initialized');
+  } catch (error) {
+    logger.error('Error initializing LLM services:', error);
+  }
+}
+
+// Refresh the model list from all sources
+async function refreshModelList() {
+  try {
+    const detectedServices = llmScanner.getAvailableServices();
+    
+    // Get local models directly from the manager
+    let localModels: any[] = [];
+    try {
+      const localLlmManager = getLocalLLMManager();
+      localModels = await localLlmManager.getLocalModels();
+    } catch (error) {
+      logger.debug('Local LLM manager not available:', error);
+    }
+
+    await llmConfigManager.refreshModels(detectedServices, localModels);
+    
+    // Broadcast model updates to connected clients
+    sseManager.broadcast('model-updates', {
+      type: 'models-updated',
+      timestamp: Date.now()
+    });
+  } catch (error) {
+    logger.error('Error refreshing model list:', error);
+  }
+}
+
+initializeLLMServices();
 
 // API Routes
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', workspace: workspaceRoot });
 });
 
-// LLM Configuration
-app.get('/api/llm-config', (req, res) => {
-  res.json(currentLlmConfig);
-});
+// Legacy LLM configuration endpoints removed - now handled by server-side model management
 
-app.post('/api/llm-config', (req: any, res: any) => {
+// Get all available models from server-side configuration
+app.get('/api/llm/models', async (req, res) => {
   try {
-    const { baseURL, model, displayName, apiKey, type } = req.body;
-    logger.info('Updating LLM config:', { baseURL, model, displayName, type, apiKey: apiKey ? '[REDACTED]' : undefined });
-    
-    if (baseURL) currentLlmConfig.baseURL = baseURL;
-    if (model) currentLlmConfig.model = model;
-    if (displayName !== undefined) currentLlmConfig.displayName = displayName;
-    if (apiKey !== undefined) currentLlmConfig.apiKey = apiKey;
-    if (type !== undefined) currentLlmConfig.type = type;
-    
-    logger.info('Updated LLM config:', { 
-      baseURL: currentLlmConfig.baseURL, 
-      model: currentLlmConfig.model, 
-      displayName: currentLlmConfig.displayName,
-      type: currentLlmConfig.type,
-      apiKey: currentLlmConfig.apiKey ? '[REDACTED]' : undefined 
-    });
-    
-    // Update existing agents with new LLM config while preserving conversation history
-    agentPool.updateAllAgentsLLMConfig(currentLlmConfig);
-    
-    res.json({ success: true, config: currentLlmConfig });
+    const models = await llmConfigManager.getModels();
+    res.json(models);
   } catch (error) {
-    logger.error('Error updating LLM config:', error);
-    res.status(500).json({ error: 'Failed to update LLM configuration' });
+    logger.error('Error getting LLM models:', error);
+    res.status(500).json({ error: 'Failed to get LLM models' });
   }
 });
 
-// Available LLM Models
-app.get('/api/llm/available', (req, res) => {
+// Get current default model
+app.get('/api/llm/default-model', async (req, res) => {
   try {
-    const services = llmScanner.getAllServices();
-    res.json(services);
+    const defaultModel = await llmConfigManager.getDefaultModel();
+    res.json(defaultModel);
   } catch (error) {
-    logger.error('Error getting available LLM services:', error);
-    res.status(500).json({ error: 'Failed to get available LLM services' });
+    logger.error('Error getting default LLM model:', error);
+    res.status(500).json({ error: 'Failed to get default LLM model' });
   }
 });
 
-// Available LLM Models with metadata
-app.get('/api/llm/available-with-metadata', async (req, res) => {
+// Set default model
+app.post('/api/llm/default-model', async (req: any, res: any) => {
   try {
-    const services = llmScanner.getAvailableServices();
-    const servicesWithMetadata = [];
-
-    for (const service of services) {
-      if (service.type === 'ollama') {
-        const modelsWithMetadata = await llmScanner.getAllModelsWithMetadata(service);
-        servicesWithMetadata.push({
-          ...service,
-          modelsWithMetadata
-        });
-      } else {
-        // For non-Ollama services, just return basic model list
-        servicesWithMetadata.push({
-          ...service,
-          modelsWithMetadata: service.models.map(name => ({ name }))
-        });
-      }
+    const { modelId } = req.body;
+    if (!modelId) {
+      return res.status(400).json({ error: 'Model ID is required' });
     }
 
-    res.json(servicesWithMetadata);
+    await llmConfigManager.setDefaultModel(modelId);
+    
+    // Update current LLM config for immediate use
+    const defaultModel = await llmConfigManager.getDefaultModel();
+    if (defaultModel) {
+      currentLlmConfig.baseURL = defaultModel.baseURL;
+      currentLlmConfig.model = defaultModel.model;
+      currentLlmConfig.displayName = defaultModel.displayName;
+      currentLlmConfig.apiKey = defaultModel.apiKey;
+      currentLlmConfig.type = defaultModel.type;
+      
+      // Update existing agents with new LLM config
+      agentPool.updateAllAgentsLLMConfig(currentLlmConfig);
+    }
+
+    res.json({ success: true });
   } catch (error) {
-    logger.error('Error getting available LLM services with metadata:', error);
-    res.status(500).json({ error: 'Failed to get available LLM services with metadata' });
+    logger.error('Error setting default LLM model:', error);
+    res.status(500).json({ error: 'Failed to set default LLM model' });
   }
 });
+
+// Legacy endpoint removed - models now managed server-side
 
 app.post('/api/llm/rescan', async (req, res) => {
   try {
     const services = await llmScanner.rescanServices();
-    res.json(services);
+    
+    // Get existing custom services
+    const existingServices = await llmConfigManager.getCustomServices();
+    const existingBaseURLs = new Set(existingServices.map(s => s.baseURL));
+    const availableBaseURLs = new Set(services.filter(s => s.available && s.models.length > 0).map(s => s.baseURL));
+    
+    // Auto-add discovered local services as custom services
+    const availableServices = services.filter(s => s.available && s.models.length > 0);
+    const addedServices = [];
+    
+    for (const service of availableServices) {
+      if (!existingBaseURLs.has(service.baseURL)) {
+        try {
+          const newService = await llmConfigManager.addCustomService({
+            name: service.name,
+            baseURL: service.baseURL,
+            type: service.type,
+            enabled: true
+          });
+          addedServices.push(newService);
+          logger.info(`Auto-added local service: ${service.name}`);
+        } catch (error) {
+          logger.warn(`Failed to auto-add service ${service.name}:`, error);
+        }
+      }
+    }
+    
+    // Remove existing custom services that are no longer available (only local services)
+    const removedServices = [];
+    const localServiceTypes = ['ollama', 'vllm', 'openai-compatible'];
+    
+    for (const existingService of existingServices) {
+      // Only remove local services that were likely auto-added
+      if (localServiceTypes.includes(existingService.type) && 
+          existingService.baseURL.includes('localhost') &&
+          !availableBaseURLs.has(existingService.baseURL)) {
+        try {
+          await llmConfigManager.removeCustomService(existingService.id);
+          removedServices.push(existingService);
+          logger.info(`Auto-removed unavailable local service: ${existingService.name}`);
+        } catch (error) {
+          logger.warn(`Failed to auto-remove service ${existingService.name}:`, error);
+        }
+      }
+    }
+    
+    // Get local models directly from the manager
+    let localModels: any[] = [];
+    try {
+      const localLlmManager = getLocalLLMManager();
+      localModels = await localLlmManager.getLocalModels();
+    } catch (error) {
+      logger.debug('Local LLM manager not available:', error);
+    }
+
+    // Refresh the unified model list with fresh scanned services
+    await llmConfigManager.refreshModels(services, localModels);
+    
+    // Broadcast model updates to connected clients
+    sseManager.broadcast('model-updates', {
+      type: 'models-updated',
+      timestamp: Date.now()
+    });
+    
+    res.json({ 
+      scannedServices: services,
+      addedServices: addedServices.length > 0 ? addedServices : undefined,
+      removedServices: removedServices.length > 0 ? removedServices : undefined
+    });
   } catch (error) {
     logger.error('Error rescanning LLM services:', error);
     res.status(500).json({ error: 'Failed to rescan LLM services' });
+  }
+});
+
+// Custom LLM Services Management
+app.get('/api/llm/custom-services', async (req, res) => {
+  try {
+    const customServices = await llmConfigManager.getCustomServices();
+    res.json(customServices);
+  } catch (error) {
+    logger.error('Error getting custom LLM services:', error);
+    res.status(500).json({ error: 'Failed to get custom LLM services' });
+  }
+});
+
+app.post('/api/llm/custom-services', async (req: any, res: any) => {
+  try {
+    const { name, baseURL, type, apiKey, enabled } = req.body;
+    
+    if (!name || !baseURL || !type) {
+      return res.status(400).json({ error: 'name, baseURL, and type are required' });
+    }
+
+    const newService = await llmConfigManager.addCustomService({
+      name,
+      baseURL,
+      type,
+      apiKey,
+      enabled: enabled !== false // Default to true
+    });
+
+    await refreshModelList(); // Refresh model list after adding service
+    res.json(newService);
+  } catch (error) {
+    logger.error('Error adding custom LLM service:', error);
+    res.status(500).json({ error: 'Failed to add custom LLM service' });
+  }
+});
+
+app.put('/api/llm/custom-services/:id', async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    const updatedService = await llmConfigManager.updateCustomService(id, updates);
+    await refreshModelList(); // Refresh model list after updating service
+    res.json(updatedService);
+  } catch (error) {
+    logger.error('Error updating custom LLM service:', error);
+    res.status(500).json({ error: 'Failed to update custom LLM service' });
+  }
+});
+
+app.delete('/api/llm/custom-services/:id', async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    await llmConfigManager.removeCustomService(id);
+    await refreshModelList(); // Refresh model list after removing service
+    res.json({ success: true });
+  } catch (error) {
+    logger.error('Error removing custom LLM service:', error);
+    res.status(500).json({ error: 'Failed to remove custom LLM service' });
   }
 });
 
@@ -315,6 +466,12 @@ app.post('/api/llm/test-service', async (req: any, res: any) => {
     logger.error('Error testing LLM service:', error);
     res.status(500).json({ error: 'Failed to test LLM service' });
   }
+});
+
+// Server-Sent Events endpoint for real-time model updates
+app.get('/api/llm/model-updates', (req, res) => {
+  const clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  sseManager.addClient(clientId, res, 'model-updates');
 });
 
 app.get('/api/conversation', (req, res) => {

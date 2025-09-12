@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useDownloadStore, startDownloadTracking } from '../store/useDownloadStore';
 import { 
   Download, 
   Trash2, 
@@ -8,12 +9,11 @@ import {
   Cpu, 
   Loader2, 
   CheckCircle, 
-  Info,
   Clock,
-  MemoryStick,
   X
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { modelEvents } from '../utils/modelEvents';
 
 interface LocalModelInfo {
   id: string;
@@ -51,27 +51,23 @@ export function LocalLLMManager() {
   const [localModels, setLocalModels] = useState<LocalModelInfo[]>([]);
   const [availableModels, setAvailableModels] = useState<ModelDownloadInfo[]>([]);
   const [modelStatuses, setModelStatuses] = useState<Map<string, ModelStatus>>(new Map());
-  const [downloadProgress, setDownloadProgress] = useState<Map<string, { progress: number; speed?: string }>>(new Map());
   const [loading, setLoading] = useState(true);
-  const [memoryStats, setMemoryStats] = useState<{ loadedModels: number; totalMemoryUsage: string }>({
-    loadedModels: 0,
-    totalMemoryUsage: 'N/A'
-  });
-  const [eventSources, setEventSources] = useState<Map<string, EventSource>>(new Map());
+
+  // Use download store for progress tracking
+  const downloads = useDownloadStore((state) => state.downloads);
 
   useEffect(() => {
     loadData();
-    loadMemoryStats();
-    
-    // Poll for memory stats every 5 seconds
-    const interval = setInterval(() => {
-      loadMemoryStats();
-    }, 5000);
+
+    // Listen for model download completion to refresh the list
+    const handleModelDownloaded = () => {
+      loadData();
+    };
+
+    modelEvents.on('local-model-downloaded', handleModelDownloaded);
 
     return () => {
-      clearInterval(interval);
-      // Close all EventSource connections
-      eventSources.forEach(source => source.close());
+      modelEvents.off('local-model-downloaded', handleModelDownloaded);
     };
   }, []);
 
@@ -105,96 +101,21 @@ export function LocalLLMManager() {
       }
     } catch (error) {
       console.error('Error loading local LLM data:', error);
-      toast.error('Failed to load local LLM data');
+      if (error instanceof TypeError && error.message.includes('NetworkError')) {
+        toast.error('Server not running.', { duration: 5000 });
+      } else {
+        toast.error('Failed to load local LLM data');
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const loadMemoryStats = async () => {
-    try {
-      const response = await fetch('/api/local-llm/stats');
-      if (response.ok) {
-        const stats = await response.json();
-        setMemoryStats(stats);
-      }
-    } catch (error) {
-      console.error('Error loading memory stats:', error);
-    }
-  };
 
+
+  // Simple function to start download tracking
   const startDownloadProgressStream = (filename: string) => {
-    // Don't start multiple streams for the same file
-    if (eventSources.has(filename)) {
-      return;
-    }
-
-    const eventSource = new EventSource(`/api/local-llm/download-progress-stream/${filename}`);
-    
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        setDownloadProgress(prev => {
-          const newProgress = new Map(prev);
-          if (data.isDownloading || data.progress > 0) {
-            newProgress.set(filename, { progress: data.progress, speed: data.speed });
-          } else {
-            newProgress.delete(filename);
-          }
-          return newProgress;
-        });
-
-        // Handle completion or error
-        if (data.completed) {
-          toast.success('Download completed successfully');
-          eventSource.close();
-          setEventSources(prev => {
-            const newSources = new Map(prev);
-            newSources.delete(filename);
-            return newSources;
-          });
-          // Remove from progress display
-          setDownloadProgress(prev => {
-            const newProgress = new Map(prev);
-            newProgress.delete(filename);
-            return newProgress;
-          });
-          loadData(); // Reload to show the new model
-        } else if (data.error) {
-          if (data.cancelled) {
-            toast.success('Download cancelled');
-          } else {
-            toast.error(`Download failed: ${data.error}`);
-          }
-          eventSource.close();
-          setEventSources(prev => {
-            const newSources = new Map(prev);
-            newSources.delete(filename);
-            return newSources;
-          });
-          // Remove from progress display
-          setDownloadProgress(prev => {
-            const newProgress = new Map(prev);
-            newProgress.delete(filename);
-            return newProgress;
-          });
-        }
-      } catch (error) {
-        console.error('Error parsing SSE data:', error);
-      }
-    };
-
-    eventSource.onerror = (error) => {
-      console.error('SSE connection error:', error);
-      eventSource.close();
-      setEventSources(prev => {
-        const newSources = new Map(prev);
-        newSources.delete(filename);
-        return newSources;
-      });
-    };
-
-    setEventSources(prev => new Map(prev.set(filename, eventSource)));
+    startDownloadTracking(filename);
   };
 
   const handleDownload = async (model: ModelDownloadInfo) => {
@@ -219,10 +140,8 @@ export function LocalLLMManager() {
 
       if (response.ok) {
         toast.success(`Started downloading ${model.name}`);
-        // Start SSE connection for progress updates
+        // Start SSE tracking for this download
         startDownloadProgressStream(model.filename);
-        // Initialize progress display
-        setDownloadProgress(prev => new Map(prev.set(model.filename, { progress: 0, speed: '0 B/s' })));
       } else {
         const error = await response.json();
         toast.error(error.error || 'Failed to start download');
@@ -240,23 +159,8 @@ export function LocalLLMManager() {
       });
 
       if (response.ok) {
-        // Close the EventSource connection
-        const eventSource = eventSources.get(filename);
-        if (eventSource) {
-          eventSource.close();
-          setEventSources(prev => {
-            const newSources = new Map(prev);
-            newSources.delete(filename);
-            return newSources;
-          });
-        }
-        
-        // Remove from progress display
-        setDownloadProgress(prev => {
-          const newProgress = new Map(prev);
-          newProgress.delete(filename);
-          return newProgress;
-        });
+        // The global store will handle cleanup when it receives the cancellation event
+        toast.success('Download cancelled');
       } else {
         const error = await response.json();
         toast.error(error.error || 'Failed to cancel download');
@@ -280,6 +184,9 @@ export function LocalLLMManager() {
       if (response.ok) {
         toast.success('Model deleted successfully');
         loadData(); // Reload data
+        
+        // Emit event to trigger global model rescan
+        modelEvents.emit('models-changed');
       } else {
         const error = await response.json();
         toast.error(error.error || 'Failed to delete model');
@@ -304,7 +211,6 @@ export function LocalLLMManager() {
           const status = await statusResponse.json();
           setModelStatuses(prev => new Map(prev.set(modelId, status)));
         }
-        loadMemoryStats();
       } else {
         const error = await response.json();
         toast.error(error.error || 'Failed to load model');
@@ -329,7 +235,6 @@ export function LocalLLMManager() {
           const status = await statusResponse.json();
           setModelStatuses(prev => new Map(prev.set(modelId, status)));
         }
-        loadMemoryStats();
       } else {
         const error = await response.json();
         toast.error(error.error || 'Failed to unload model');
@@ -373,23 +278,6 @@ export function LocalLLMManager() {
 
   return (
     <div className="space-y-6">
-      {/* Memory Stats */}
-      <div className="p-4 bg-gray-800 rounded-lg border border-gray-700">
-        <div className="flex items-center gap-3 mb-3">
-          <MemoryStick size={20} className="text-green-400" />
-          <h3 className="text-lg font-medium text-white">Memory Usage</h3>
-        </div>
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <span className="text-gray-400">Loaded Models:</span>
-            <span className="text-white ml-2 font-mono">{memoryStats.loadedModels}</span>
-          </div>
-          <div>
-            <span className="text-gray-400">Memory Usage:</span>
-            <span className="text-white ml-2 font-mono">{memoryStats.totalMemoryUsage}</span>
-          </div>
-        </div>
-      </div>
 
       {/* Downloaded Models */}
       <div className="space-y-4">
@@ -498,7 +386,7 @@ export function LocalLLMManager() {
 
         <div className="space-y-3">
           {availableModels.map((model) => {
-            const progressInfo = downloadProgress.get(model.filename);
+            const progressInfo = downloads.get(model.filename);
             const isDownloading = Boolean(progressInfo);
             const progress = progressInfo?.progress || 0;
             const speed = progressInfo?.speed || '0 B/s';

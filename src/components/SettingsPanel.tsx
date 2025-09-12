@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Settings, Cpu, Plus, Trash2, RefreshCw, TestTube, Check, X, Eye, EyeOff, Edit2, Minus, Type, HardDrive, Info } from 'lucide-react';
-import { useLlmServices, CustomLLMService } from '../hooks/useLlmServices';
+import { useCustomServices, CustomLLMService } from '../hooks/useModels';
 import { useAppStore } from '../store/useAppStore';
 import { LocalLLMManager } from './LocalLLMManager';
 import toast from 'react-hot-toast';
@@ -22,7 +22,7 @@ interface ServiceCardProps {
   cancelEditing: () => void;
   saveEditing: () => void;
   handleTestService: (service: CustomLLMService) => void;
-  removeCustomService: (id: string) => void;
+  removeService: (id: string) => void;
   testingService: string | null;
   showApiKeys: Set<string>;
   toggleApiKeyVisibility: (id: string) => void;
@@ -38,7 +38,7 @@ const ServiceCard = React.memo<ServiceCardProps>(({
   cancelEditing, 
   saveEditing, 
   handleTestService, 
-  removeCustomService, 
+  removeService, 
   testingService, 
   showApiKeys, 
   toggleApiKeyVisibility 
@@ -111,7 +111,7 @@ const ServiceCard = React.memo<ServiceCardProps>(({
               <Edit2 size={14} />
             </button>
             <button
-              onClick={() => removeCustomService(service.id)}
+              onClick={() => removeService(service.id)}
               className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-red-400"
               title="Remove service"
             >
@@ -192,10 +192,10 @@ const ServiceCard = React.memo<ServiceCardProps>(({
 ));
 
 
-type SettingsTab = 'builtin-llm' | 'local-llm' | 'external-llm' | 'general-preferences';
+type SettingsTab = 'builtin-llm' | 'external-llm' | 'general-preferences';
 
 export function SettingsPanel() {
-  const { config, isLoading, error, addCustomService, removeCustomService, updateCustomService, testService, rescanServices } = useLlmServices();
+  const { services, isLoading, addService, removeService, updateService, testService, refetch } = useCustomServices();
   const { fontSize, increaseFontSize, decreaseFontSize } = useAppStore();
   const [activeTab, setActiveTab] = useState<SettingsTab>('builtin-llm');
   const [showAddForm, setShowAddForm] = useState(false);
@@ -219,7 +219,7 @@ export function SettingsPanel() {
     }
 
     try {
-      addCustomService({
+      addService({
         name: formData.name.trim(),
         baseURL: formData.baseURL.trim(),
         type: formData.type,
@@ -253,9 +253,44 @@ export function SettingsPanel() {
 
   const handleRescan = async () => {
     try {
-      await rescanServices();
-      toast.success('Rescanned for available services');
+      const response = await fetch('/api/llm/rescan', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to rescan services');
+      }
+      
+      const result = await response.json();
+      
+      // Refresh the services list
+      await refetch();
+      
+      const addedCount = result.addedServices?.length || 0;
+      const removedCount = result.removedServices?.length || 0;
+      const availableCount = result.scannedServices?.filter((s: any) => s.available)?.length || 0;
+      
+      if (addedCount > 0 || removedCount > 0) {
+        const messages = [];
+        if (addedCount > 0) {
+          const serviceNames = result.addedServices.map((s: any) => s.name).join(', ');
+          messages.push(`Added: ${serviceNames}`);
+        }
+        if (removedCount > 0) {
+          const serviceNames = result.removedServices.map((s: any) => s.name).join(', ');
+          messages.push(`Removed: ${serviceNames}`);
+        }
+        toast.success(`Rescan complete! ${messages.join(' • ')}`);
+      } else if (availableCount > 0) {
+        toast.success(`Rescan complete! Found ${availableCount} available service(s)`);
+      } else {
+        toast.success('Rescan complete! No services found');
+      }
     } catch (error) {
+      console.error('Rescan error:', error);
       toast.error('Failed to rescan services');
     }
   };
@@ -289,7 +324,7 @@ export function SettingsPanel() {
 
   const saveEditing = () => {
     if (editingService && editFormData.name && editFormData.baseURL) {
-      updateCustomService(editingService, {
+      updateService(editingService, {
         name: editFormData.name,
         baseURL: editFormData.baseURL,
         type: editFormData.type,
@@ -319,8 +354,7 @@ export function SettingsPanel() {
           <nav className="flex space-x-8">
             {[
               { id: 'builtin-llm', label: 'Built-in LLM', icon: HardDrive },
-              { id: 'local-llm', label: 'Local LLM', icon: Cpu },
-              { id: 'external-llm', label: 'External LLM', icon: Cpu },
+              { id: 'external-llm', label: 'LLM Services', icon: Cpu },
               { id: 'general-preferences', label: 'General Preferences', icon: Settings }
             ].map((tab) => {
               const Icon = tab.icon;
@@ -376,96 +410,7 @@ export function SettingsPanel() {
             </div>
           )}
 
-          {/* Local LLM Tab */}
-          {activeTab === 'local-llm' && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <HardDrive size={20} className="text-blue-400" />
-                  <h2 className="text-lg font-medium text-white">Local LLM Services</h2>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleRescan}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-lg text-sm text-gray-200 transition-colors"
-                    title="Rescan for available services"
-                  >
-                    <RefreshCw size={14} />
-                    Rescan
-                  </button>
-                </div>
-              </div>
 
-              {/* Info Notice */}
-              <div className="p-4 bg-blue-900/20 border border-blue-600/30 rounded-lg">
-                <div className="flex items-start gap-3">
-                  <Info size={16} className="text-blue-400 mt-0.5" />
-                  <div className="text-sm">
-                    <p className="text-blue-200 mb-2">
-                      <strong>Local LLM Services:</strong> Connect to locally running AI services.
-                    </p>
-                    <ul className="text-blue-300 space-y-1 text-xs">
-                      <li>• Automatically detects Ollama, vLLM, and other local services</li>
-                      <li>• Services must be running and accessible on your network</li>
-                      <li>• Use "Rescan" to detect newly started services</li>
-                      <li>• Local services typically run on localhost with specific ports</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              {error && (
-                <div className="p-3 bg-red-900 border border-red-700 rounded-lg text-red-200 text-sm">
-                  {error}
-                </div>
-              )}
-
-              {/* Detected Services */}
-              {config.detectedServices.length > 0 && (
-                <div className="space-y-4">
-                  <h3 className="text-md font-medium text-white">Detected Services</h3>
-                  <div className="space-y-3">
-                    {config.detectedServices.map((service) => (
-                      <ServiceCard 
-                        key={service.id} 
-                        service={service} 
-                        isCustom={false}
-                        editingService={editingService}
-                        editFormData={editFormData}
-                        setEditFormData={setEditFormData}
-                        startEditing={startEditing}
-                        cancelEditing={cancelEditing}
-                        saveEditing={saveEditing}
-                        handleTestService={handleTestService}
-                        removeCustomService={removeCustomService}
-                        testingService={testingService}
-                        showApiKeys={showApiKeys}
-                        toggleApiKeyVisibility={toggleApiKeyVisibility}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Empty State for Local Services */}
-              {!isLoading && config.detectedServices.length === 0 && (
-                <div className="text-center py-12">
-                  <Cpu size={48} className="text-gray-600 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-400 mb-2">No Local Services Found</h3>
-                  <p className="text-gray-500 mb-4">
-                    No local LLM services (Ollama, vLLM, etc.) were detected automatically.
-                  </p>
-                </div>
-              )}
-
-              {isLoading && (
-                <div className="text-center py-8">
-                  <RefreshCw size={24} className="text-blue-400 animate-spin mx-auto mb-2" />
-                  <p className="text-gray-400">Loading LLM services...</p>
-                </div>
-              )}
-            </div>
-          )}
 
           {/* External LLM Tab */}
           {activeTab === 'external-llm' && (
@@ -473,9 +418,17 @@ export function SettingsPanel() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <Cpu size={20} className="text-blue-400" />
-                  <h2 className="text-lg font-medium text-white">External LLM Services</h2>
+                  <h2 className="text-lg font-medium text-white">LLM Services</h2>
                 </div>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleRescan}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-lg text-sm text-gray-200 transition-colors"
+                    title="Rescan for local services (Ollama, vLLM, etc.)"
+                  >
+                    <RefreshCw size={14} />
+                    Rescan
+                  </button>
                   <button
                     onClick={() => setShowAddForm(!showAddForm)}
                     className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white transition-colors"
@@ -492,13 +445,13 @@ export function SettingsPanel() {
                   <Info size={16} className="text-blue-400 mt-0.5" />
                   <div className="text-sm">
                     <p className="text-blue-200 mb-2">
-                      <strong>External LLM Services:</strong> Connect to remote AI services and APIs.
+                      <strong>LLM Services:</strong> Connect to local and remote AI services.
                     </p>
                     <ul className="text-blue-300 space-y-1 text-xs">
-                      <li>• Add services like OpenAI, Anthropic, or custom API endpoints</li>
+                      <li>• Use "Rescan" to automatically detect local services (Ollama, vLLM, etc.)</li>
+                      <li>• Manually add LLM services like OpenAI, Anthropic, or custom endpoints</li>
                       <li>• API keys are stored securely and sent only to specified endpoints</li>
-                      <li>• External services typically require internet connectivity</li>
-                      <li>• Usage may incur costs based on the service provider's pricing</li>
+                      <li>• Local services run on your machine, LLM services require internet</li>
                     </ul>
                   </div>
                 </div>
@@ -588,11 +541,11 @@ export function SettingsPanel() {
             )}
 
             {/* Custom Services */}
-            {config.customServices.length > 0 && (
+            {services.length > 0 && (
               <div className="space-y-4">
-                <h3 className="text-md font-medium text-white">Custom Services</h3>
+                <h3 className="text-md font-medium text-white">Service Details</h3>
                 <div className="space-y-3">
-                  {config.customServices.map((service) => (
+                  {services.map((service: CustomLLMService) => (
                     <ServiceCard 
                       key={service.id} 
                       service={service} 
@@ -604,7 +557,7 @@ export function SettingsPanel() {
                       cancelEditing={cancelEditing}
                       saveEditing={saveEditing}
                       handleTestService={handleTestService}
-                      removeCustomService={removeCustomService}
+                      removeService={removeService}
                       testingService={testingService}
                       showApiKeys={showApiKeys}
                       toggleApiKeyVisibility={toggleApiKeyVisibility}
@@ -614,13 +567,13 @@ export function SettingsPanel() {
               </div>
             )}
 
-            {/* Empty State for External Services */}
-            {!isLoading && config.customServices.length === 0 && (
+            {/* Empty State for LLM Services */}
+            {!isLoading && services.length === 0 && (
               <div className="text-center py-12">
                 <Cpu size={48} className="text-gray-600 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-400 mb-2">No External Services</h3>
+                <h3 className="text-lg font-medium text-gray-400 mb-2">No LLM Services</h3>
                 <p className="text-gray-500 mb-4">
-                  Add external LLM services (OpenAI, Anthropic, etc.) to get started.
+                  Add LLM services (OpenAI, Anthropic, etc.) to get started.
                 </p>
                 <button
                   onClick={() => setShowAddForm(true)}

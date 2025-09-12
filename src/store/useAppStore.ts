@@ -1,23 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-interface LLMConfig {
-  baseURL: string;
-  model: string;
-  displayName?: string;
-  apiKey?: string;
-  type?: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'local';
-}
-
-export interface SelectedModel {
-  serviceId: string;
-  model: string;
-  serviceName: string;
-  displayName: string;
-  baseURL: string;
-  apiKey?: string;
-  contextLength?: number;
-  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'local';
+// Simplified - only store the last used model ID
+export interface LastUsedModel {
+  modelId: string;
+  timestamp: Date;
 }
 
 interface AppState {
@@ -32,9 +19,8 @@ interface AppState {
   files: string[];
   isLoading: boolean;
   
-  // LLM Configuration
-  llmConfig: LLMConfig;
-  selectedModel?: SelectedModel;
+  // LLM Configuration - simplified to only store last used model
+  lastUsedModel?: LastUsedModel;
   
   // Personality/Role Configuration
   defaultCustomRole?: string; // fallback custom role for new threads
@@ -50,8 +36,7 @@ interface AppState {
   setCurrentDirectory: (dir: string) => void;
   setFiles: (files: string[]) => void;
   setIsLoading: (loading: boolean) => void;
-  setLlmConfig: (config: Partial<LLMConfig>) => void;
-  setSelectedModel: (model?: SelectedModel) => void;
+  setLastUsedModel: (modelId: string) => void;
   increaseFontSize: () => void;
   decreaseFontSize: () => void;
   
@@ -61,13 +46,6 @@ interface AppState {
   // MindMap Actions  
   setMindMapKeyBindings: (keyBindings: Record<string, string>) => void;
 }
-
-const defaultLlmConfig: LLMConfig = {
-  baseURL: 'http://localhost:11434',
-  model: '',
-  apiKey: undefined,
-  type: undefined,
-};
 
 export const useAppStore = create<AppState>()(
   persist(
@@ -80,8 +58,7 @@ export const useAppStore = create<AppState>()(
       currentDirectory: '.',
       files: [],
       isLoading: false,
-      llmConfig: defaultLlmConfig,
-      selectedModel: undefined,
+      lastUsedModel: undefined,
       defaultCustomRole: undefined,
       mindMapKeyBindings: undefined,
       
@@ -93,11 +70,12 @@ export const useAppStore = create<AppState>()(
       setCurrentDirectory: (currentDirectory: string) => set({ currentDirectory }),
       setFiles: (files: string[]) => set({ files }),
       setIsLoading: (isLoading: boolean) => set({ isLoading }),
-      setLlmConfig: (config: Partial<LLMConfig>) => {
-        const currentConfig = get().llmConfig;
-        set({ llmConfig: { ...currentConfig, ...config } });
-      },
-      setSelectedModel: (selectedModel?: SelectedModel) => set({ selectedModel }),
+      setLastUsedModel: (modelId: string) => set({ 
+        lastUsedModel: { 
+          modelId, 
+          timestamp: new Date() 
+        } 
+      }),
       increaseFontSize: () => {
         const currentSize = get().fontSize;
         set({ fontSize: Math.min(currentSize + 2, 24) });
@@ -118,8 +96,7 @@ export const useAppStore = create<AppState>()(
       partialize: (state) => ({
         fontSize: state.fontSize,
         workspaceRoot: state.workspaceRoot,
-        llmConfig: state.llmConfig,
-        selectedModel: state.selectedModel,
+        lastUsedModel: state.lastUsedModel,
         defaultCustomRole: state.defaultCustomRole,
         mindMapKeyBindings: state.mindMapKeyBindings,
       }),

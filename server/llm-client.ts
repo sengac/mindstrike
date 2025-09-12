@@ -112,11 +112,28 @@ export class LLMClient {
           };
         } catch (error) {
           if (error instanceof Error && error.message === 'Model not loaded. Please load the model first.') {
-            // Throw a more specific error that the frontend can catch
-            const customError = new Error('LOCAL_MODEL_NOT_LOADED');
-            (customError as any).modelId = this.config.model;
-            (customError as any).originalMessage = error.message;
-            throw customError;
+            // Try to load the model automatically
+            try {
+              console.log(`Auto-loading local model: ${this.config.model}`);
+              await localManager.loadModel(this.config.model);
+              
+              // Retry the generation after loading
+              const response = await localManager.generateResponse(this.config.model, localMessages, {
+                temperature: 0.7,
+                maxTokens: 2048
+              });
+
+              return {
+                content: response,
+                toolCalls: undefined
+              };
+            } catch (loadError) {
+              // If auto-loading fails, fall back to the original error handling
+              const customError = new Error('LOCAL_MODEL_NOT_LOADED');
+              (customError as any).modelId = this.config.model;
+              (customError as any).originalMessage = error.message;
+              throw customError;
+            }
           }
           throw error;
         }
@@ -287,11 +304,35 @@ export class LLMClient {
       }));
 
       // Use the streaming generator from local manager
-      yield* localManager.generateStreamResponse(this.config.model, localMessages, {
-        temperature: 0.7,
-        maxTokens: 2048
-      });
-      return;
+      try {
+        yield* localManager.generateStreamResponse(this.config.model, localMessages, {
+          temperature: 0.7,
+          maxTokens: 2048
+        });
+        return;
+      } catch (error) {
+        if (error instanceof Error && error.message === 'Model not loaded. Please load the model first.') {
+          // Try to load the model automatically
+          try {
+            console.log(`Auto-loading local model for streaming: ${this.config.model}`);
+            await localManager.loadModel(this.config.model);
+            
+            // Retry the streaming generation after loading
+            yield* localManager.generateStreamResponse(this.config.model, localMessages, {
+              temperature: 0.7,
+              maxTokens: 2048
+            });
+            return;
+          } catch (loadError) {
+            // If auto-loading fails, fall back to the original error handling
+            const customError = new Error('LOCAL_MODEL_NOT_LOADED');
+            (customError as any).modelId = this.config.model;
+            (customError as any).originalMessage = error.message;
+            throw customError;
+          }
+        }
+        throw error;
+      }
     }
     
     let endpoint: string;

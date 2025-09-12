@@ -1,7 +1,7 @@
 import React from 'react';
 import { BarChart3 } from 'lucide-react';
 import { ConversationMessage } from '../types';
-import { LLMModel } from '../hooks/useAvailableModels';
+import { LLMModel } from '../hooks/useModels';
 import { 
   calculateConversationTokens, 
   calculateConversationSize, 

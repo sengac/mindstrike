@@ -436,6 +436,107 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
     setLocalModelError(null);
   }, []);
 
+  const retryLastMessage = useCallback(async () => {
+    if (messages.length === 0) return;
+    
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage.role !== 'user') return;
+    
+    setIsLoading(true);
+    
+    try {
+      const requestBody = { message: lastMessage.content, threadId, images: lastMessage.images || [] };
+      
+      // Use SSE for real-time updates
+      const response = await fetch('/api/message/stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let currentMessages = [...messages];
+      let assistantMessage: ConversationMessage | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              
+              if (data.type === 'message-update') {
+                const updatedMessage = {
+                  ...data.message,
+                  timestamp: new Date(data.message.timestamp)
+                };
+                
+                const validatedMessage = await validateAndProcessMessage(updatedMessage);
+                
+                if (assistantMessage) {
+                  currentMessages = currentMessages.map(msg => 
+                    msg.id === validatedMessage.id ? validatedMessage : msg
+                  );
+                } else {
+                  assistantMessage = validatedMessage;
+                  currentMessages = [...currentMessages, validatedMessage];
+                }
+                setMessages([...currentMessages]);
+                
+              } else if (data.type === 'completed') {
+                const finalMsg = {
+                  ...data.message,
+                  timestamp: new Date(data.message.timestamp)
+                };
+                
+                const validatedFinalMsg = await validateAndProcessMessage(finalMsg);
+                
+                if (assistantMessage) {
+                  currentMessages = currentMessages.map(msg => 
+                    msg.id === validatedFinalMsg.id ? validatedFinalMsg : msg
+                  );
+                } else {
+                  currentMessages = [...currentMessages, validatedFinalMsg];
+                }
+                
+                setMessages([...currentMessages]);
+                setIsLoading(false);
+                
+              } else if (data.type === 'error') {
+                throw new Error(data.error);
+              } else if (data.type === 'local-model-not-loaded') {
+                setLocalModelError({
+                  modelId: data.modelId,
+                  error: data.error
+                });
+                setIsLoading(false);
+                return;
+              }
+            } catch (parseError) {
+              console.error('Error parsing SSE data:', parseError);
+            }
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error('Error retrying message:', error);
+      setIsLoading(false);
+    }
+  }, [messages, threadId, validateAndProcessMessage]);
+
   return {
     messages,
     isLoading,
@@ -446,6 +547,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
     editMessage,
     validation,
     localModelError,
-    clearLocalModelError
+    clearLocalModelError,
+    retryLastMessage
   };
 }

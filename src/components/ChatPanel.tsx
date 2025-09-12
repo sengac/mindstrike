@@ -34,7 +34,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
   const [attachedImages, setAttachedImages] = useState<ImageAttachment[]>([]);
   const [chatLoadTime, setChatLoadTime] = useState<number>(0);
   const { fontSize, workspaceRoot, defaultCustomRole } = useAppStore();
-  const { messages, isLoading, sendMessage, clearConversation, regenerateMessage, cancelToolCalls, editMessage, validation, localModelError, clearLocalModelError } = useChat({
+  const { messages, isLoading, sendMessage, clearConversation, regenerateMessage, cancelToolCalls, editMessage, validation, localModelError, clearLocalModelError, retryLastMessage } = useChat({
     threadId,
     messages: initialMessages,
     onMessagesUpdate,
@@ -631,13 +631,8 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
           targetModelId={localModelError.modelId}
           onModelLoaded={() => {
             clearLocalModelError();
-            // Automatically retry the last message after model is loaded
-            if (messages.length > 0) {
-              const lastMessage = messages[messages.length - 1];
-              if (lastMessage.role === 'user') {
-                sendMessage(lastMessage.content, lastMessage.images || []);
-              }
-            }
+            // Retry the last message without adding it to the chat again
+            retryLastMessage();
           }}
         />
       )}

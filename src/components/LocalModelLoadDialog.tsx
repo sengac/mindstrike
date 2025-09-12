@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { X, Play, Square, Loader2, Cpu, MemoryStick, Settings, Download } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { X, Play, Square, Loader2, Cpu, Download } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import toast from 'react-hot-toast';
+import { modelEvents } from '../utils/modelEvents';
 
 interface LocalModelInfo {
   id: string;
@@ -44,10 +45,7 @@ export function LocalModelLoadDialog({
   const [modelStatuses, setModelStatuses] = useState<Map<string, ModelStatus>>(new Map());
   const [loading, setLoading] = useState(true);
   const [loadingModelId, setLoadingModelId] = useState<string | null>(null);
-  const [memoryStats, setMemoryStats] = useState<{ loadedModels: number; totalMemoryUsage: string }>({
-    loadedModels: 0,
-    totalMemoryUsage: 'N/A'
-  });
+
 
   // Helper functions
   const formatFileSize = (bytes: number): string => {
@@ -73,17 +71,6 @@ export function LocalModelLoadDialog({
   };
 
   // API functions
-  const fetchMemoryStats = useCallback(async () => {
-    try {
-      const response = await fetch('/api/local-llm/stats');
-      if (response.ok) {
-        const stats = await response.json();
-        setMemoryStats(stats);
-      }
-    } catch (error) {
-      console.error('Error loading memory stats:', error);
-    }
-  }, []);
 
   const fetchModelsAndStatuses = useCallback(async () => {
     try {
@@ -114,7 +101,11 @@ export function LocalModelLoadDialog({
       }
     } catch (error) {
       console.error('Error loading local LLM data:', error);
-      toast.error('Failed to load local LLM data');
+      if (error instanceof TypeError && error.message.includes('NetworkError')) {
+        toast.error('Server not running.', { duration: 5000 });
+      } else {
+        toast.error('Failed to load local LLM data');
+      }
     } finally {
       setLoading(false);
     }
@@ -133,11 +124,11 @@ export function LocalModelLoadDialog({
           toast.success('Model loaded successfully');
         }
         
-        // Refresh model status and memory stats
-        await Promise.all([
-          fetchModelsAndStatuses(),
-          fetchMemoryStats()
-        ]);
+        // Refresh model status
+        await fetchModelsAndStatuses();
+        
+        // Emit event to trigger global model rescan since local model state changed
+        modelEvents.emit('models-changed');
         
         // Handle target model completion
         if (targetModelId && modelId === targetModelId) {
@@ -167,11 +158,14 @@ export function LocalModelLoadDialog({
     } finally {
       setLoadingModelId(null);
     }
-  }, [targetModelId, onModelLoaded, onClose, fetchModelsAndStatuses, fetchMemoryStats]);
+  }, [targetModelId, onModelLoaded, onClose, fetchModelsAndStatuses]);
 
   const handleMemoryIssueRetry = useCallback(async (targetModelId: string) => {
     try {
-      toast.info('Insufficient memory detected. Unloading other models...');
+      toast('Insufficient memory detected. Unloading other models...', {
+        duration: 4000,
+        icon: 'ℹ️'
+      });
       
       // Get all loaded models except the target
       const loadedModelIds = Array.from(modelStatuses.entries())
@@ -197,12 +191,12 @@ export function LocalModelLoadDialog({
       );
       
       // Refresh states
-      await Promise.all([
-        fetchModelsAndStatuses(),
-        fetchMemoryStats()
-      ]);
+      await fetchModelsAndStatuses();
       
-      toast.info('Retrying model loading...');
+      toast('Retrying model loading...', {
+        duration: 3000,
+        icon: 'ℹ️'
+      });
       
       // Retry after a brief delay
       setTimeout(() => {
@@ -213,7 +207,7 @@ export function LocalModelLoadDialog({
       console.error('Error during memory issue retry:', error);
       toast.error('Failed to free up memory and retry');
     }
-  }, [modelStatuses, fetchModelsAndStatuses, fetchMemoryStats, loadModel]);
+  }, [modelStatuses, fetchModelsAndStatuses, loadModel]);
 
   const unloadModel = useCallback(async (modelId: string) => {
     try {
@@ -224,11 +218,11 @@ export function LocalModelLoadDialog({
       if (response.ok) {
         toast.success('Model unloaded successfully');
         
-        // Refresh model status and memory stats
-        await Promise.all([
-          fetchModelsAndStatuses(),
-          fetchMemoryStats()
-        ]);
+        // Refresh model status
+        await fetchModelsAndStatuses();
+        
+        // Emit event to trigger global model rescan since local model state changed
+        modelEvents.emit('models-changed');
       } else {
         const error = await response.json();
         toast.error(error.error || 'Failed to unload model');
@@ -237,15 +231,14 @@ export function LocalModelLoadDialog({
       console.error('Error unloading model:', error);
       toast.error('Failed to unload model');
     }
-  }, [fetchModelsAndStatuses, fetchMemoryStats]);
+  }, [fetchModelsAndStatuses]);
 
   // Initial data loading
   useEffect(() => {
     if (isOpen) {
       fetchModelsAndStatuses();
-      fetchMemoryStats();
     }
-  }, [isOpen, fetchModelsAndStatuses, fetchMemoryStats]);
+  }, [isOpen, fetchModelsAndStatuses]);
 
   // Auto-load target model when data is available
   useEffect(() => {
@@ -259,18 +252,15 @@ export function LocalModelLoadDialog({
     }
   }, [isOpen, targetModelId, localModels, modelStatuses, loadingModelId, loading, loadModel]);
 
-  // Memory stats polling - only when dialog is open and not loading
-  useEffect(() => {
-    if (!isOpen || loadingModelId) return;
 
-    const interval = setInterval(() => {
-      fetchMemoryStats();
-    }, 5000); // Reduced frequency to prevent flickering
-
-    return () => clearInterval(interval);
-  }, [isOpen, loadingModelId, fetchMemoryStats]);
 
   if (!isOpen) return null;
+  
+  // Don't show dialog UI when auto-loading a specific model
+  // Just handle the loading logic in the background
+  if (targetModelId) {
+    return null;
+  }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -312,32 +302,8 @@ export function LocalModelLoadDialog({
         </div>
 
         <div className="p-6 overflow-y-auto max-h-[calc(80vh-120px)]">
-          {/* Memory Stats */}
-          <div className="mb-6 p-4 bg-gray-800 rounded-lg border border-gray-700">
-            <div className="flex items-center gap-3 mb-3">
-              <MemoryStick size={20} className="text-green-400" />
-              <h3 className="text-lg font-medium text-white">Memory Usage</h3>
-            </div>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-gray-400">Loaded Models:</span>
-                <span className="text-white ml-2 font-mono">{memoryStats.loadedModels}</span>
-              </div>
-              <div>
-                <span className="text-gray-400">Memory Usage:</span>
-                <span className="text-white ml-2 font-mono">
-                  {memoryStats.totalMemoryUsage === 'N/A' ? 'Not Available' : memoryStats.totalMemoryUsage}
-                </span>
-              </div>
-            </div>
-          </div>
-
           {/* Model List */}
           <div>
-            <div className="flex items-center gap-3 mb-4">
-              <Cpu size={20} className="text-blue-400" />
-              <h3 className="text-lg font-medium text-white">Local Models</h3>
-            </div>
             
             {loading ? (
               <div className="text-center py-8">

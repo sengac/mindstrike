@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getLocalLLMManager } from '../local-llm-singleton.js';
+import { sseManager } from '../sse-manager.js';
 
 const router = Router();
 const llmManager = getLocalLLMManager();
@@ -87,6 +88,12 @@ router.post('/download', async (req, res) => {
         sseConnections.delete(filename);
       }
       console.log(`Download completed: ${filename}`);
+      
+      // Broadcast model updates to connected clients since new model is available
+      sseManager.broadcast('model-updates', {
+        type: 'models-updated',
+        timestamp: Date.now()
+      });
     }).catch((error) => {
       // Download failed or cancelled
       const connections = sseConnections.get(filename);
@@ -215,6 +222,13 @@ router.post('/models/:modelId/load', async (req, res) => {
   
   try {
     await llmManager.loadModel(modelId);
+    
+    // Broadcast model updates to connected clients
+    sseManager.broadcast('model-updates', {
+      type: 'models-updated',
+      timestamp: Date.now()
+    });
+    
     res.json({ message: 'Model loaded successfully' });
   } catch (error) {
     console.error('Error loading model:', error);
@@ -230,6 +244,13 @@ router.post('/models/:modelId/unload', async (req, res) => {
   
   try {
     await llmManager.unloadModel(modelId);
+    
+    // Broadcast model updates to connected clients
+    sseManager.broadcast('model-updates', {
+      type: 'models-updated',
+      timestamp: Date.now()
+    });
+    
     res.json({ message: 'Model unloaded successfully' });
   } catch (error) {
     console.error('Error unloading model:', error);
@@ -309,17 +330,6 @@ router.post('/models/:modelId/generate-stream', async (req, res) => {
   }
 });
 
-/**
- * Get memory usage stats
- */
-router.get('/stats', (req, res) => {
-  try {
-    const stats = llmManager.getMemoryStats();
-    res.json(stats);
-  } catch (error) {
-    console.error('Error getting stats:', error);
-    res.status(500).json({ error: 'Failed to get stats' });
-  }
-});
+
 
 export default router;

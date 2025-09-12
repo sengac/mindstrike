@@ -17,8 +17,7 @@ import { useWorkflows } from './hooks/useWorkflows';
 import { useMindMaps } from './hooks/useMindMaps';
 import { useWorkspaceStore } from './hooks/useWorkspaceStore';
 import { useAppStore } from './store/useAppStore';
-import { useLlmConfig } from './hooks/useLlmConfig';
-import { LLMModel } from './hooks/useAvailableModels';
+
 import { ConversationMessage } from './types';
 import { Source } from './components/shared/ChatContentViewer';
 import { Menu, X, MessageSquare, Workflow, Network, Settings, Cpu } from 'lucide-react';
@@ -41,15 +40,12 @@ function App() {
     activePanel, 
     setActivePanel, 
     workspaceRoot, 
-    setLlmConfig,
-    selectedModel,
-    setSelectedModel
+
   } = useAppStore();
   const { setWorkspaceRoot } = useWorkspaceStore();
   const chatPanelRef = useRef<ChatPanelRef>(null);
   
-  // Initialize LLM config synchronization
-  useLlmConfig();
+  // LLM config is now managed server-side through ModelSelector
   
   // Restore workspace before loading threads
   useEffect(() => {
@@ -222,20 +218,7 @@ function App() {
 
 
 
-  const handleModelSelect = useCallback(async (model: LLMModel) => {
-    setSelectedModel(model);
-    try {
-      setLlmConfig({
-        baseURL: model.baseURL,
-        model: model.model,
-        displayName: model.displayName,
-        apiKey: model.apiKey,
-        type: model.type
-      });
-    } catch (error) {
-      console.error('Failed to update LLM config:', error);
-    }
-  }, [setSelectedModel, setLlmConfig]);
+  // Model selection is now handled internally by ModelSelector
 
   return (
     <div className="flex h-screen bg-gray-900 text-gray-100">
@@ -271,13 +254,9 @@ function App() {
                 <div className="flex items-center space-x-4">
                   <HeaderStats 
                     messages={activeThread?.messages || []}
-                    selectedModel={selectedModel}
                   />
                   <div className="flex items-center gap-2">
-                    <ModelSelector 
-                      selectedModel={selectedModel}
-                      onModelSelect={handleModelSelect}
-                    />
+                    <ModelSelector />
                     <button
                       onClick={() => setShowLocalModelDialog(true)}
                       className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
@@ -325,10 +304,7 @@ function App() {
                 </div>
                 <div className="flex items-center space-x-4">
                   <div className="flex items-center gap-2">
-                    <ModelSelector 
-                      selectedModel={selectedModel}
-                      onModelSelect={handleModelSelect}
-                    />
+                    <ModelSelector />
                     <button
                       onClick={() => setShowLocalModelDialog(true)}
                       className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
@@ -366,10 +342,7 @@ function App() {
                 </div>
                 <div className="flex items-center space-x-4">
                   <div className="flex items-center gap-2">
-                    <ModelSelector 
-                      selectedModel={selectedModel}
-                      onModelSelect={handleModelSelect}
-                    />
+                    <ModelSelector />
                     <button
                       onClick={() => setShowLocalModelDialog(true)}
                       className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"

@@ -7,6 +7,7 @@ export interface AvailableLLMService {
   models: string[];
   type: 'ollama' | 'vllm' | 'openai-compatible' | 'anthropic';
   available: boolean;
+  modelsWithMetadata?: ModelMetadata[];
 }
 
 export interface ModelMetadata {
@@ -52,11 +53,23 @@ export class LLMScanner {
     for (const service of potentialServices) {
       try {
         const models = await this.checkService(service);
-        this.services.push({
+        const serviceInfo: AvailableLLMService = {
           ...service,
           models,
           available: models.length > 0
-        });
+        };
+
+        // Get metadata for models if service is available
+        if (models.length > 0) {
+          try {
+            const modelsWithMetadata = await this.getAllModelsWithMetadata(serviceInfo);
+            serviceInfo.modelsWithMetadata = modelsWithMetadata;
+          } catch (error) {
+            logger.debug(`Failed to get metadata for ${service.name}:`, error);
+          }
+        }
+
+        this.services.push(serviceInfo);
         
         if (models.length > 0) {
           logger.info(`✓ Found ${service.name} with ${models.length} models: ${models.slice(0, 3).join(', ')}${models.length > 3 ? '...' : ''}`);

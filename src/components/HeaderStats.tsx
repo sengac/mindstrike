@@ -1,7 +1,7 @@
 import React from 'react';
 import { BarChart3 } from 'lucide-react';
 import { ConversationMessage } from '../types';
-import { LLMModel } from '../hooks/useAvailableModels';
+import { useModels } from '../hooks/useModels';
 import { 
   calculateConversationTokens, 
   calculateConversationSize, 
@@ -12,13 +12,13 @@ import { formatTokenCount } from '../utils/tokenUtils';
 
 interface HeaderStatsProps {
   messages: ConversationMessage[];
-  selectedModel?: LLMModel;
 }
 
-export function HeaderStats({ messages, selectedModel }: HeaderStatsProps) {
+export function HeaderStats({ messages }: HeaderStatsProps) {
+  const { defaultModel } = useModels();
   const tokenCount = calculateConversationTokens(messages);
   const conversationSize = calculateConversationSize(messages);
-  const maxTokens = selectedModel?.contextLength || 0;
+  const maxTokens = defaultModel?.contextLength || 0;
   const usagePercentage = calculateContextUsage(tokenCount, maxTokens);
   
   // Don't show if no messages
@@ -49,7 +49,7 @@ export function HeaderStats({ messages, selectedModel }: HeaderStatsProps) {
         </span>
       </div>
       
-      {selectedModel && maxTokens > 0 && (
+      {defaultModel && maxTokens > 0 && (
         <div className="flex items-center gap-2">
           <span className="text-gray-500">Context:</span>
           <div 
