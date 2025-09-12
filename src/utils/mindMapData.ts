@@ -8,6 +8,10 @@ export interface MindMapNode {
   chatId?: string | null
   side?: 'left' | 'right'
   children?: MindMapNode[]
+  customColors?: {
+    backgroundClass: string
+    foregroundClass: string
+  } | null
 }
 
 export interface MindMapData {
@@ -58,7 +62,8 @@ export class MindMapDataManager {
           level,
           hasChildren: (treeNode.children && treeNode.children.length > 0) || false,
           chatId: treeNode.chatId || undefined,
-          notes: treeNode.notes || undefined
+          notes: treeNode.notes || undefined,
+          customColors: treeNode.customColors || undefined
         }
       }
 
@@ -118,6 +123,11 @@ export class MindMapDataManager {
       // Include chatId if it exists
       if (node.data.chatId) {
         nodeData.chatId = node.data.chatId;
+      }
+
+      // Include customColors if they exist
+      if (node.data.customColors) {
+        nodeData.customColors = node.data.customColors;
       }
 
       return nodeData

@@ -152,13 +152,31 @@ function App() {
     });
   }, []);
 
-  const updateNodeNotes = useCallback((nodeId: string, notes: string | null) => {
+  const updateNodeNotes = useCallback(async (nodeId: string, notes: string | null) => {
     setPendingNodeUpdate({
       nodeId,
       notes,
       timestamp: Date.now()
     });
-  }, []);
+    
+    // Wait for the save to complete
+    return new Promise<void>((resolve) => {
+      const timeout = setTimeout(resolve, 1000); // Max 1 second timeout
+      
+      const checkSave = () => {
+        // Check if the update was processed by checking if pendingNodeUpdate is cleared
+        if (!pendingNodeUpdate || 
+            pendingNodeUpdate.nodeId !== nodeId || 
+            pendingNodeUpdate.notes !== notes) {
+          clearTimeout(timeout);
+          resolve();
+        } else {
+          setTimeout(checkSave, 50);
+        }
+      };
+      checkSave();
+    });
+  }, [pendingNodeUpdate]);
 
   // Clear pending node update after a short delay to ensure it's been processed
   useEffect(() => {

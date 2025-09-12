@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Eye, Edit3, Save, Trash2, Loader2 } from 'lucide-react';
+import { Eye, Edit3, Save } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { CodeEditor } from '../CodeEditor';
 import { MarkdownViewer } from '../MarkdownViewer';
 import { clsx } from 'clsx';
@@ -10,8 +11,7 @@ interface MarkdownEditorProps {
   placeholder?: string;
   showTabs?: boolean;
   defaultMode?: 'preview' | 'edit';
-  autoSave?: boolean;
-  autoSaveDelay?: number;
+  activeMode?: 'preview' | 'edit';
   onSave?: (value: string) => Promise<void> | void;
   className?: string;
 }
@@ -24,74 +24,47 @@ export function MarkdownEditor({
   placeholder = "Enter markdown content...",
   showTabs = true,
   defaultMode = 'preview',
-  autoSave = false,
-  autoSaveDelay = 1000,
+  activeMode,
   onSave,
   className = ""
 }: MarkdownEditorProps) {
-  const [activeTab, setActiveTab] = useState<TabType>(defaultMode);
-  const [editedContent, setEditedContent] = useState(value);
-  const [hasChanges, setHasChanges] = useState(false);
-  const [lastSavedValue, setLastSavedValue] = useState(value);
-  const [isSaving, setIsSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabType>(activeMode || defaultMode);
+  const [content, setContent] = useState(value);
+  const [originalValue, setOriginalValue] = useState(value);
 
-  // Update edited content when value prop changes
+  // Update content when value prop changes
   useEffect(() => {
-    if (value !== editedContent) {
-      setEditedContent(value);
-      setLastSavedValue(value);
-      setHasChanges(false);
-    }
+    setContent(value);
+    setOriginalValue(value);
   }, [value]);
 
-  // Auto-save functionality
+  // Update active tab when activeMode prop changes
   useEffect(() => {
-    if (autoSave && hasChanges && onSave) {
-      const timer = setTimeout(() => {
-        handleSave();
-      }, autoSaveDelay);
-      
-      return () => clearTimeout(timer);
+    if (activeMode) {
+      setActiveTab(activeMode);
     }
-  }, [editedContent, hasChanges, autoSave, autoSaveDelay, onSave]);
+  }, [activeMode]);
+
+  const hasChanges = content !== originalValue;
 
   const handleContentChange = (newContent: string) => {
-    setEditedContent(newContent);
-    setHasChanges(newContent !== lastSavedValue);
-    onChange(newContent);
+    setContent(newContent);
   };
 
   const handleSave = async () => {
-    if (isSaving) return;
-    
-    setIsSaving(true);
-    try {
-      if (onSave) {
-        await onSave(editedContent);
-      }
-      setHasChanges(false);
-      setLastSavedValue(editedContent);
-    } catch (error) {
-      console.error('Save failed:', error);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleClear = () => {
-    setEditedContent('');
-    setHasChanges(true);
-    onChange('');
     if (onSave) {
-      onSave('');
+      try {
+        await onSave(content);
+        setOriginalValue(content);
+        toast.success('Notes saved successfully');
+      } catch (error) {
+        console.error('Save failed:', error);
+        toast.error('Failed to save notes');
+      }
     }
-    setLastSavedValue('');
-    setHasChanges(false);
   };
 
-  const handleTabChange = (tab: TabType) => {
-    setActiveTab(tab);
-  };
+
 
   // If no tabs are shown, render in a simpler layout
   if (!showTabs) {
@@ -99,7 +72,7 @@ export function MarkdownEditor({
       <div className={clsx("flex flex-col h-full", className)}>
         <div className="h-full">
           <CodeEditor
-            value={editedContent}
+            value={content}
             language="markdown"
             onChange={handleContentChange}
             readOnly={false}
@@ -118,7 +91,7 @@ export function MarkdownEditor({
         <div className="flex items-center justify-between px-4 py-2">
           <div className="flex space-x-1">
             <button
-              onClick={() => handleTabChange('preview')}
+              onClick={() => setActiveTab('preview')}
               className={clsx(
                 'flex items-center space-x-2 px-3 py-1.5 rounded text-sm font-medium transition-colors',
                 activeTab === 'preview'
@@ -130,7 +103,7 @@ export function MarkdownEditor({
               <span>Preview</span>
             </button>
             <button
-              onClick={() => handleTabChange('edit')}
+              onClick={() => setActiveTab('edit')}
               className={clsx(
                 'flex items-center space-x-2 px-3 py-1.5 rounded text-sm font-medium transition-colors',
                 activeTab === 'edit'
@@ -143,34 +116,15 @@ export function MarkdownEditor({
             </button>
           </div>
 
-          {/* Clear and Save buttons - only show when editing, has content or changes, and manual save */}
-          {activeTab === 'edit' && !autoSave && onSave && (editedContent.trim() || hasChanges) && (
-            <div className="flex items-center space-x-2">
-              {editedContent.trim() && (
-                <button
-                  onClick={handleClear}
-                  className="flex items-center space-x-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded text-sm font-medium transition-colors"
-                >
-                  <Trash2 size={14} />
-                  <span>Clear</span>
-                </button>
-              )}
-              {hasChanges && editedContent.trim() && (
-                <button
-                  onClick={handleSave}
-                  disabled={isSaving}
-                  className={clsx(
-                    "flex items-center space-x-1 px-3 py-1.5 rounded text-sm font-medium transition-colors",
-                    isSaving 
-                      ? "bg-green-500 cursor-not-allowed" 
-                      : "bg-green-600 hover:bg-green-700"
-                  )}
-                >
-                  {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                  <span>{isSaving ? 'Saving...' : 'Save'}</span>
-                </button>
-              )}
-            </div>
+          {/* Save button */}
+          {activeTab === 'edit' && onSave && (
+            <button
+              onClick={handleSave}
+              className="flex items-center space-x-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded text-sm font-medium transition-colors"
+            >
+              <Save size={14} />
+              <span>Save</span>
+            </button>
           )}
         </div>
       </div>
@@ -178,11 +132,11 @@ export function MarkdownEditor({
       {/* Tab Content */}
       <div className="flex-1 overflow-hidden">
         {activeTab === 'preview' ? (
-          <MarkdownViewer content={editedContent || placeholder} />
+          <MarkdownViewer content={content || placeholder} />
         ) : (
           <div className="h-full">
             <CodeEditor
-              value={editedContent}
+              value={content}
               language="markdown"
               onChange={handleContentChange}
               readOnly={false}
@@ -192,15 +146,6 @@ export function MarkdownEditor({
           </div>
         )}
       </div>
-      
-      {/* Status indicator for auto-save */}
-      {autoSave && hasChanges && (
-        <div className="px-4 py-1 bg-gray-800 border-t border-gray-700">
-          <div className="text-xs text-yellow-400">
-            Auto-saving...
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
-import { forwardRef, useState } from 'react';
+import { forwardRef, useState, useEffect } from 'react';
 import { MessageSquare, ExternalLink, Unlink, X, StickyNote } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { Thread, ConversationMessage } from '../../types';
 import { ChatPanel, ChatPanelRef } from '../ChatPanel';
 import { MarkdownEditor } from './MarkdownEditor';
@@ -16,7 +17,7 @@ interface ChatContentViewerProps {
   onMessagesUpdate?: (messages: ConversationMessage[]) => void;
   onFirstMessage?: () => void;
   onRoleUpdate?: (threadId: string, customRole?: string) => void;
-  onNotesUpdate?: (notes: string) => void;
+  onNotesUpdate?: (notes: string) => Promise<void>;
 }
 
 export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps>(({
@@ -36,10 +37,18 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
   const [activeTab, setActiveTab] = useState<'chat' | 'notes'>(focusNotes ? 'notes' : 'chat');
   const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false);
   const [pendingContent, setPendingContent] = useState('');
+  const [notesActiveMode, setNotesActiveMode] = useState<'preview' | 'edit'>();
+
+  // Update active tab when focusNotes prop changes
+  useEffect(() => {
+    if (focusNotes) {
+      setActiveTab('notes');
+    }
+  }, [focusNotes]);
 
   const handleSaveNotes = async (value: string) => {
     if (onNotesUpdate) {
-      onNotesUpdate(value);
+      await onNotesUpdate(value);
     }
   };
 
@@ -53,8 +62,10 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
       // Directly copy to notes if empty
       if (onNotesUpdate) {
         onNotesUpdate(content);
-        // Switch to notes tab to show the content
+        // Switch to notes tab and preview mode to show the content
         setActiveTab('notes');
+        setNotesActiveMode('preview');
+        toast.success('Content copied to notes');
       }
     }
   };
@@ -62,8 +73,10 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
   const handleConfirmOverwrite = () => {
     if (onNotesUpdate && pendingContent) {
       onNotesUpdate(pendingContent);
-      // Switch to notes tab to show the content
+      // Switch to notes tab and preview mode to show the content
       setActiveTab('notes');
+      setNotesActiveMode('preview');
+      toast.success('Notes replaced with copied content');
     }
     setShowOverwriteConfirm(false);
     setPendingContent('');
@@ -75,8 +88,10 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
       const separator = currentNotes.trim() ? '\n\n---\n\n' : '';
       const newContent = currentNotes + separator + pendingContent;
       onNotesUpdate(newContent);
-      // Switch to notes tab to show the content
+      // Switch to notes tab and preview mode to show the content
       setActiveTab('notes');
+      setNotesActiveMode('preview');
+      toast.success('Content appended to notes');
     }
     setShowOverwriteConfirm(false);
     setPendingContent('');
@@ -227,7 +242,7 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
               placeholder="Add notes and context for this node using markdown..."
               showTabs={true}
               defaultMode={nodeNotes && nodeNotes.trim() ? "preview" : "edit"}
-              autoSave={false}
+              activeMode={notesActiveMode}
               onSave={handleSaveNotes}
               className="flex-1"
             />

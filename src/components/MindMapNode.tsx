@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { Plus, Minus, Brain, Edit, Trash2, Share, FileText } from 'lucide-react';
+import { Plus, Minus, MessageSquare, Edit, Trash2, Share, FileText } from 'lucide-react';
 import { clsx } from 'clsx';
 
 export interface MindMapNodeData {
@@ -20,6 +20,10 @@ export interface MindMapNodeData {
   dropPosition?: 'above' | 'below' | 'over' | null;
   layout?: 'LR' | 'RL' | 'TB' | 'BT';
   width?: number; // Calculated width of the node
+  customColors?: {
+    backgroundClass: string;
+    foregroundClass: string;
+  } | null;
 }
 
 export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) {
@@ -262,7 +266,10 @@ export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) 
     'bg-pink-500 border-pink-400',     // Level 4+
   ];
   
-  const colorClass = nodeColors[Math.min(nodeLevel, nodeColors.length - 1)];
+  const defaultColorClass = nodeColors[Math.min(nodeLevel, nodeColors.length - 1)];
+  const colorClass = data.customColors ? data.customColors.backgroundClass : defaultColorClass;
+
+
 
   return (
     <div className="relative">
@@ -324,7 +331,7 @@ export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) 
           className="relative w-8 h-8 bg-blue-600 border border-blue-500 rounded-full flex items-center justify-center hover:bg-blue-700 transition-colors z-10 shadow-lg"
           title="AI Inferences"
         >
-          <Brain size={16} className="text-white" />
+          <MessageSquare size={16} className="text-white" />
         </button>
       </div>
 
@@ -332,6 +339,7 @@ export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) 
         className={clsx(
           'px-4 py-2 rounded-lg border-2 transition-colors duration-200 relative',
           colorClass,
+          data.customColors?.foregroundClass || (data.customColors ? '' : 'text-white'),
           selected ? 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-gray-900' : '',
           data.isRoot ? 'shadow-lg scale-110' : 'shadow-md',
           data.isDragging ? 'opacity-30 scale-95 ring-2 ring-blue-400 ring-offset-2 ring-offset-gray-900 shadow-lg' : '',
@@ -339,7 +347,11 @@ export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) 
           data.isDropTarget && (data.dropPosition === 'above' || data.dropPosition === 'below') ? 'ring-2 ring-blue-400 ring-offset-2 ring-offset-gray-900 shadow-lg' : '',
           !isEditing ? 'select-none' : ''
         )}
-        style={{ width: `${nodeWidth}px`, minWidth: '120px', maxWidth: '800px' }}
+        style={{ 
+          width: `${nodeWidth}px`, 
+          minWidth: '120px', 
+          maxWidth: '800px'
+        }}
         onContextMenu={handleContextMenu}
         onClick={(e) => {
           // Don't handle clicks if context menu is open
@@ -486,13 +498,19 @@ export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) 
             onChange={(e) => setLabel(e.target.value)}
             onBlur={handleSubmit}
             onKeyDown={handleKeyDown}
-            className="bg-transparent border-none outline-none text-white text-sm font-medium flex-1 min-w-0"
-            placeholder="Enter text..."
+            className={clsx(
+              "bg-transparent border-none outline-none text-sm font-medium flex-1 min-w-0",
+              data.customColors?.foregroundClass || 'text-white'
+            )}
             style={{ width: '100%' }}
+            placeholder="Enter text..."
           />
         ) : (
           <span 
-            className="text-white text-sm font-medium flex-1 min-w-0 break-words cursor-pointer select-none"
+            className={clsx(
+              "text-sm font-medium flex-1 min-w-0 break-words cursor-pointer select-none",
+              data.customColors?.foregroundClass || 'text-white'
+            )}
             onDoubleClick={() => setIsEditing(true)}
           >
             {data.label}
@@ -575,7 +593,7 @@ export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) 
             }}
             className="w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700 flex items-center gap-2"
           >
-            <Brain size={14} />
+            <MessageSquare size={14} />
             AI Inferences
           </button>
           {!data.isRoot && (

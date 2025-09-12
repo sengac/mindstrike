@@ -94,7 +94,10 @@ function ChatMessageComponent({ message, onDelete, onRegenerate, onCancelToolCal
   useEffect(() => {
     // Render mermaid diagrams when content changes or when switching to markdown view
     if (mermaidRef.current && showMarkdown) {
-      renderMermaidDiagramsDelayed(mermaidRef.current);
+      renderMermaidDiagramsDelayed(mermaidRef.current, false, () => {
+        // Dispatch event that bubbles up to ChatPanel
+        mermaidRef.current?.dispatchEvent(new CustomEvent('mermaidRenderComplete', { bubbles: true }));
+      });
     }
   }, [message.content, showMarkdown]);
 

@@ -28,11 +28,14 @@ export interface MindMapControls {
   canUndo: boolean
   canRedo: boolean
   currentLayout: 'LR' | 'RL' | 'TB' | 'BT'
+  selectedNodeId: string | null
+  setNodeColors: (nodeId: string, colors: { backgroundClass: string; foregroundClass: string }) => void
+  clearNodeColors: (nodeId: string) => void
 }
 
 interface MindMapProps {
   mindMapId: string
-  onSave: (data: MindMapData) => void
+  onSave: (data: MindMapData) => Promise<void>
   initialData?: MindMapData
   onControlsReady?: (controls: MindMapControls) => void
   keyBindings?: Record<string, string>
@@ -107,9 +110,16 @@ function MindMapInner ({
   // Global click handler to deselect nodes when clicking outside
   useEffect(() => {
     const handleGlobalClick = (e: MouseEvent) => {
+      const target = e.target as Element
+      
+      // Check if click is on color palette or mindmap controls
+      const isColorPaletteClick = target.closest('[data-color-palette]') !== null
+      const isMindMapControlsClick = target.closest('[data-mindmap-controls]') !== null
+      
       // Check if click is outside the mindmap container
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        if (selectedNodeId) {
+        // Don't deselect if clicking on color palette or mindmap controls
+        if (selectedNodeId && !isColorPaletteClick && !isMindMapControlsClick) {
           setSelectedNodeId(null)
           const updatedNodes = nodes.map(n => ({ ...n, selected: false }))
           setNodes(updatedNodes)
@@ -205,6 +215,9 @@ function MindMapInner ({
 
   // Handle external node updates via props instead of imperative functions
   useEffect(() => {
+    const handleExternalUpdates = async () => {
+      if (!externalNodeUpdates) return;
+      
     if (externalNodeUpdates) {
       const { nodeId, chatId, notes } = externalNodeUpdates
       const { nodes: currentNodes, rootNodeId: currentRootId, layout: currentLayout } = stateRef.current
@@ -249,22 +262,25 @@ function MindMapInner ({
         try {
           if (currentRootId && updatedNodes.find(n => n.id === currentRootId)) {
             const treeData = dataManager.convertNodesToTree(updatedNodes, currentRootId, currentLayout)
-            onSave(treeData)
+            await onSave(treeData)
           }
         } catch (error) {
           console.error('Error saving external node update:', error)
         }
       }
     }
+    };
+    
+    handleExternalUpdates();
   }, [externalNodeUpdates, actionsManager, dataManager, updateState, onSave])
 
   // Optimized auto-save with debouncing and memoized dependency
-  const saveData = useCallback(() => {
+  const saveData = useCallback(async () => {
     const { nodes: currentNodes, rootNodeId: currentRootId, layout: currentLayout } = stateRef.current
     if (currentNodes.length > 0 && currentRootId && !isCurrentlyInitializing.current) {
       try {
         const treeData = dataManager.convertNodesToTree(currentNodes, currentRootId, currentLayout)
-        onSave(treeData)
+        await onSave(treeData)
       } catch (error) {
         console.error('Failed to save MindMap data:', error)
       }
@@ -352,6 +368,31 @@ function MindMapInner ({
     const { nodes: currentNodes, edges: currentEdges, rootNodeId: currentRootId, layout: currentLayout } = stateRef.current
     
     try {
+      // Find all nodes that will be deleted (including descendants)
+      const nodesToDelete = new Set([nodeIdToDelete])
+      const findDescendants = (nodeId: string) => {
+        const children = currentNodes.filter(n => n.data.parentId === nodeId)
+        children.forEach(child => {
+          if (!nodesToDelete.has(child.id)) {
+            nodesToDelete.add(child.id)
+            findDescendants(child.id)
+          }
+        })
+      }
+      findDescendants(nodeIdToDelete)
+      
+      // Find the parent of the node being deleted
+      const nodeToDelete = currentNodes.find(n => n.id === nodeIdToDelete)
+      const parentId = nodeToDelete?.data.parentId
+      
+      // Dispatch event to check and close inference panel if any deleted node or parent is active
+      window.dispatchEvent(new CustomEvent('mindmap-inference-check-and-close', {
+        detail: { 
+          deletedNodeIds: Array.from(nodesToDelete),
+          parentId: parentId 
+        }
+      }))
+      
       const result = await actionsManager.deleteNode(
         currentNodes,
         currentEdges,
@@ -511,19 +552,17 @@ function MindMapInner ({
     updateState({ nodes: updatedNodes })
     
     // Force immediate save to ensure chatId is persisted
-    setTimeout(() => {
-      try {
-        // Check if root node exists before converting
-        if (!currentRootId || !updatedNodes.find(n => n.id === currentRootId)) {
-          console.warn('Root node not found, skipping save for chatId update')
-          return
-        }
-        const treeData = dataManager.convertNodesToTree(updatedNodes, currentRootId, currentLayout)
-        onSave(treeData)
-      } catch (error) {
-        console.error('Error saving chatId update:', error)
+    try {
+      // Check if root node exists before converting
+      if (!currentRootId || !updatedNodes.find(n => n.id === currentRootId)) {
+        console.warn('Root node not found, skipping save for chatId update')
+        return
       }
-    }, 100)
+      const treeData = dataManager.convertNodesToTree(updatedNodes, currentRootId, currentLayout)
+      onSave(treeData)
+    } catch (error) {
+      console.error('Error saving chatId update:', error)
+    }
   }, [actionsManager, updateState, dataManager, onSave])
 
   // Update node notes handler
@@ -536,20 +575,83 @@ function MindMapInner ({
     updateState({ nodes: updatedNodes })
     
     // Force immediate save to ensure notes are persisted
-    setTimeout(() => {
-      try {
-        // Check if root node exists before converting
-        if (!currentRootId || !updatedNodes.find(n => n.id === currentRootId)) {
-          console.warn('Root node not found, skipping save for notes update')
-          return
-        }
-        const treeData = dataManager.convertNodesToTree(updatedNodes, currentRootId, currentLayout)
-        onSave(treeData)
-      } catch (error) {
-        console.error('Error saving notes update:', error)
+    try {
+      // Check if root node exists before converting
+      if (!currentRootId || !updatedNodes.find(n => n.id === currentRootId)) {
+        console.warn('Root node not found, skipping save for notes update')
+        return
       }
-    }, 100)
+      const treeData = dataManager.convertNodesToTree(updatedNodes, currentRootId, currentLayout)
+      onSave(treeData)
+    } catch (error) {
+      console.error('Error saving notes update:', error)
+    }
   }, [actionsManager, updateState, dataManager, onSave])
+
+  // Color methods
+  const handleSetNodeColors = useCallback((nodeId: string, colors: { backgroundClass: string; foregroundClass: string }) => {
+    const { nodes: currentNodes, rootNodeId: currentRootId, layout: currentLayout } = stateRef.current
+    
+    const updatedNodes = currentNodes.map(node => 
+      node.id === nodeId 
+        ? { 
+            ...node, 
+            data: { ...node.data, customColors: colors },
+            // Force re-render by updating a timestamp
+            style: { ...node.style }
+          }
+        : node
+    )
+    
+    dataManager.saveToHistory(updatedNodes, currentRootId, currentLayout)
+    
+    // Force immediate re-render for color changes
+    setNodes(updatedNodes)
+    
+    // Force immediate save to ensure colors are persisted
+    try {
+      if (!currentRootId || !updatedNodes.find(n => n.id === currentRootId)) {
+        console.warn('Root node not found, skipping save for colors update')
+        return
+      }
+      const treeData = dataManager.convertNodesToTree(updatedNodes, currentRootId, currentLayout)
+      onSave(treeData)
+    } catch (error) {
+      console.error('Error saving colors update:', error)
+    }
+  }, [updateState, dataManager, onSave])
+
+  const handleClearNodeColors = useCallback((nodeId: string) => {
+    const { nodes: currentNodes, rootNodeId: currentRootId, layout: currentLayout } = stateRef.current
+    
+    const updatedNodes = currentNodes.map(node => 
+      node.id === nodeId 
+        ? { 
+            ...node, 
+            data: { ...node.data, customColors: null },
+            // Force re-render by updating a timestamp
+            style: { ...node.style }
+          }
+        : node
+    )
+    
+    dataManager.saveToHistory(updatedNodes, currentRootId, currentLayout)
+    
+    // Force immediate re-render for color changes
+    setNodes(updatedNodes)
+    
+    // Force immediate save to ensure color clearing is persisted
+    try {
+      if (!currentRootId || !updatedNodes.find(n => n.id === currentRootId)) {
+        console.warn('Root node not found, skipping save for color clearing')
+        return
+      }
+      const treeData = dataManager.convertNodesToTree(updatedNodes, currentRootId, currentLayout)
+      onSave(treeData)
+    } catch (error) {
+      console.error('Error saving color clearing:', error)
+    }
+  }, [updateState, dataManager, onSave])
 
   // Undo/Redo handlers - optimized
   const handleUndo = useCallback(async () => {
@@ -871,8 +973,11 @@ function MindMapInner ({
     changeLayout: handleChangeLayout,
     canUndo: undoRedoState.canUndo,
     canRedo: undoRedoState.canRedo,
-    currentLayout: layout
-  }), [handleUndo, handleRedo, handleResetLayout, handleChangeLayout, undoRedoState.canUndo, undoRedoState.canRedo, layout])
+    currentLayout: layout,
+    selectedNodeId,
+    setNodeColors: handleSetNodeColors,
+    clearNodeColors: handleClearNodeColors
+  }), [handleUndo, handleRedo, handleResetLayout, handleChangeLayout, undoRedoState.canUndo, undoRedoState.canRedo, layout, selectedNodeId, handleSetNodeColors, handleClearNodeColors])
 
   // Use ref to prevent excessive callback calls and potential render warnings
   const lastControlsRef = useRef<MindMapControls | null>(null)

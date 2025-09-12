@@ -24,7 +24,7 @@ interface MindMapsPanelProps {
   onMessagesUpdate?: (threadId: string, messages: ConversationMessage[]) => void;
   onFirstMessage?: () => void;
   onRoleUpdate?: (threadId: string, customRole?: string) => void;
-  onNodeNotesUpdate?: (nodeId: string, notes: string) => void;
+  onNodeNotesUpdate?: (nodeId: string, notes: string) => Promise<void>;
 }
 
 export function MindMapsPanel({
@@ -113,11 +113,28 @@ export function MindMapsPanel({
       }
     };
 
+    const handleInferenceCheckAndClose = (event: CustomEvent) => {
+      const { deletedNodeIds, parentId } = event.detail;
+      
+      if (inferenceChatNode) {
+        // Check if the active inference node is being deleted or is the parent of deleted nodes
+        const shouldClose = deletedNodeIds.includes(inferenceChatNode.id) || 
+                           (parentId && inferenceChatNode.id === parentId);
+        
+        if (shouldClose) {
+          setShowInferenceChat(false);
+          setInferenceChatNode(null);
+          window.dispatchEvent(new CustomEvent('mindmap-inference-close'));
+        }
+      }
+    };
+
     window.addEventListener('mindmap-inference-open', handleInferenceOpen as EventListener);
     window.addEventListener('mindmap-inference-close', handleInferenceClose as EventListener);
     window.addEventListener('mindmap-inference-get-active', handleGetActiveState as EventListener);
     window.addEventListener('mindmap-node-notes-updated', handleNodeNotesUpdated as EventListener);
     window.addEventListener('mindmap-node-update-finished', handleNodeLabelUpdated as EventListener);
+    window.addEventListener('mindmap-inference-check-and-close', handleInferenceCheckAndClose as EventListener);
 
     return () => {
       window.removeEventListener('mindmap-inference-open', handleInferenceOpen as EventListener);
@@ -125,6 +142,7 @@ export function MindMapsPanel({
       window.removeEventListener('mindmap-inference-get-active', handleGetActiveState as EventListener);
       window.removeEventListener('mindmap-node-notes-updated', handleNodeNotesUpdated as EventListener);
       window.removeEventListener('mindmap-node-update-finished', handleNodeLabelUpdated as EventListener);
+      window.removeEventListener('mindmap-inference-check-and-close', handleInferenceCheckAndClose as EventListener);
     };
   }, [inferenceChatNode]);
 
@@ -217,9 +235,9 @@ export function MindMapsPanel({
             onThreadCreate={onThreadCreate}
             onThreadRename={onThreadRename}
             onThreadDelete={onThreadDelete}
-            onNotesUpdate={(nodeId, notes) => {
+            onNotesUpdate={async (nodeId, notes) => {
               if (onNodeNotesUpdate) {
-                onNodeNotesUpdate(nodeId, notes);
+                await onNodeNotesUpdate(nodeId, notes);
               }
             }}
           />

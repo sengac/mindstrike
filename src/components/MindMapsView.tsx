@@ -1,8 +1,9 @@
-import { useCallback, useState, useEffect, useRef } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { Network, Undo2, Redo2, RotateCcw, ArrowRight, ArrowLeft, ArrowDown, ArrowUp, Settings } from 'lucide-react';
 import { MindMap as MindMapType } from '../hooks/useMindMaps';
 import MindMap, { MindMapData, MindMapControls } from './MindMap';
 import { ControlsModal } from './ControlsModal';
+import { ColorPalette } from './ColorPalette';
 import { useAppStore } from '../store/useAppStore';
 
 interface MindMapsViewProps {
@@ -59,51 +60,35 @@ export function MindMapsView({ activeMindMap, pendingNodeUpdate }: MindMapsViewP
     }
   };
 
-  // Debounced save function to prevent rapid consecutive saves
-  const debouncedSave = useRef<NodeJS.Timeout | null>(null);
+  // Save function - immediate save without debouncing
   const saveMindMapData = useCallback(async (data: MindMapData) => {
     if (!activeMindMap?.id) {
       console.warn('No active MindMap ID for saving mindmap');
       return;
     }
 
-    // Clear any existing debounce timer
-    if (debouncedSave.current) {
-      clearTimeout(debouncedSave.current);
-    }
-
-    // Set a new debounce timer
-    debouncedSave.current = setTimeout(async () => {
-      try {
-        const response = await fetch(`/api/mindmaps/${activeMindMap.id}/mindmap`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(data),
-        });
-        
-        if (response.ok) {
-          console.log('Mindmap saved successfully');
-        } else {
-          console.error('Failed to save mindmap:', response.status, response.statusText);
-          const errorText = await response.text();
-          console.error('Error response body:', errorText);
-        }
-      } catch (error) {
-        console.error('Failed to save mindmap data:', error);
+    try {
+      const response = await fetch(`/api/mindmaps/${activeMindMap.id}/mindmap`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+      
+      if (response.ok) {
+        console.log('Mindmap saved successfully');
+      } else {
+        console.error('Failed to save mindmap:', response.status, response.statusText);
+        const errorText = await response.text();
+        console.error('Error response body:', errorText);
       }
-    }, 500); // 500ms debounce delay
+    } catch (error) {
+      console.error('Failed to save mindmap data:', error);
+    }
   }, [activeMindMap?.id]);
 
-  // Cleanup debounce timer on unmount
-  useEffect(() => {
-    return () => {
-      if (debouncedSave.current) {
-        clearTimeout(debouncedSave.current);
-      }
-    };
-  }, []);
+
 
   return (
     <div className="flex-1 flex flex-col bg-gray-900">
@@ -130,7 +115,7 @@ export function MindMapsView({ activeMindMap, pendingNodeUpdate }: MindMapsViewP
               
               {/* MindMap Controls */}
               {mindMapControls && (
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4" data-mindmap-controls>
                   {/* Undo/Redo Controls */}
                   <div className="flex items-center gap-1">
                     <button
@@ -163,6 +148,23 @@ export function MindMapsView({ activeMindMap, pendingNodeUpdate }: MindMapsViewP
                     >
                       <Settings size={14} />
                     </button>
+                    
+                    {/* Color Palette */}
+                    {mindMapControls.selectedNodeId && (
+                      <ColorPalette
+                        selectedNodeId={mindMapControls.selectedNodeId}
+                        onColorChange={(colors) => {
+                          if (mindMapControls.selectedNodeId) {
+                            mindMapControls.setNodeColors(mindMapControls.selectedNodeId, colors);
+                          }
+                        }}
+                        onColorClear={() => {
+                          if (mindMapControls.selectedNodeId) {
+                            mindMapControls.clearNodeColors(mindMapControls.selectedNodeId);
+                          }
+                        }}
+                      />
+                    )}
                   </div>
                   
                   {/* Layout Direction Controls */}

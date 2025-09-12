@@ -65,7 +65,10 @@ function setupMermaidObserver(container: HTMLElement) {
       setTimeout(() => {
         // Double-check container is still connected before rendering
         if (container.isConnected) {
-          renderMermaidDiagramsDelayed(container);
+          renderMermaidDiagramsDelayed(container, false, () => {
+            // Dispatch a custom event when mermaid rendering completes
+            container.dispatchEvent(new CustomEvent('mermaidRenderComplete'));
+          });
         }
       }, 100);
     }
@@ -88,7 +91,7 @@ function setupMermaidObserver(container: HTMLElement) {
 }
 
 // Single function to render all mermaid diagrams in a container
-export async function renderMermaidDiagrams(container: HTMLElement): Promise<void> {
+export async function renderMermaidDiagrams(container: HTMLElement, onComplete?: () => void): Promise<void> {
   // Queue the render to prevent race conditions
   renderQueue = renderQueue.then(async () => {
     // Ensure mermaid is initialized
@@ -98,6 +101,9 @@ export async function renderMermaidDiagrams(container: HTMLElement): Promise<voi
     const mermaidElements = container.querySelectorAll('.mermaid:not([data-rendered])');
     
     if (mermaidElements.length === 0) {
+      if (onComplete) {
+        onComplete();
+      }
       return;
     }
 
@@ -157,13 +163,18 @@ export async function renderMermaidDiagrams(container: HTMLElement): Promise<voi
         // Silently ignore errors for disconnected elements
       }
     }
+    
+    // Call completion callback if provided
+    if (onComplete) {
+      onComplete();
+    }
   });
   
   return renderQueue;
 }
 
 // Enhanced renderer that uses RequestAnimationFrame for better timing
-export function renderMermaidDiagramsDelayed(container: HTMLElement, force = false): Promise<void> {
+export function renderMermaidDiagramsDelayed(container: HTMLElement, force = false, onComplete?: () => void): Promise<void> {
   // Set up observer for this container if not already done
   setupMermaidObserver(container);
   
@@ -179,7 +190,7 @@ export function renderMermaidDiagramsDelayed(container: HTMLElement, force = fal
           });
         }
         
-        await renderMermaidDiagrams(container);
+        await renderMermaidDiagrams(container, onComplete);
         resolve();
       });
     });

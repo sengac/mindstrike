@@ -31,6 +31,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
   const [showPersonalityModal, setShowPersonalityModal] = useState(false);
   const [defaultRole, setDefaultRole] = useState('');
   const [attachedImages, setAttachedImages] = useState<ImageAttachment[]>([]);
+  const [chatLoadTime, setChatLoadTime] = useState<number>(0);
   const { fontSize, workspaceRoot, defaultCustomRole } = useAppStore();
   const { messages, isLoading, sendMessage, clearConversation, regenerateMessage, cancelToolCalls, editMessage, validation } = useChat({
     threadId,
@@ -43,6 +44,8 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useImperativeHandle(ref, () => ({
     clearConversation
@@ -50,6 +53,13 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const scrollToBottomIfNotRecentLoad = () => {
+    const timeSinceLoad = Date.now() - chatLoadTime;
+    if (timeSinceLoad < 2000) { // Only scroll if less than 2 seconds since chat loaded
+      scrollToBottom();
+    }
   };
 
   // Create truly stable callbacks that don't change on re-renders
@@ -79,6 +89,11 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
     stableCallbacks.current.onRegenerate(messageId);
   }, []);
 
+  // Set chat load time on mount
+  useEffect(() => {
+    setChatLoadTime(Date.now());
+  }, []);
+
   const handleEditMessage = useCallback((messageId: string, newContent: string) => {
     stableCallbacks.current.onEdit(messageId, newContent);
   }, []);
@@ -91,10 +106,45 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
     scrollToBottom();
   }, [messages]);
 
-  // Scroll to bottom when thread changes
+  // Listen for mermaid render completion to scroll to bottom
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    // Only set up listener if there are mermaid code blocks in the messages
+    const hasMermaidContent = messages.some(message => 
+      message.content && message.content.includes('```mermaid')
+    );
+    if (!hasMermaidContent) return;
+
+    const handleMermaidComplete = (event: Event) => {
+      // Clear any existing timeout to debounce multiple diagram completions
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+      
+      // Set new timeout to scroll after all diagrams have finished (50ms debounce)
+      scrollTimeoutRef.current = setTimeout(() => {
+        scrollToBottomIfNotRecentLoad();
+      }, 50);
+    };
+
+    container.addEventListener('mermaidRenderComplete', handleMermaidComplete);
+    
+    return () => {
+      container.removeEventListener('mermaidRenderComplete', handleMermaidComplete);
+      // Clear any pending scroll timeout on cleanup
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, [messages, chatLoadTime]);
+
+  // Scroll to bottom when thread changes and reset load timer
   useEffect(() => {
     if (threadId) {
       scrollToBottom();
+      setChatLoadTime(Date.now()); // Reset timer when switching threads
     }
   }, [threadId]);
 
@@ -336,7 +386,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 relative" style={{ '--dynamic-font-size': `${fontSize}px` } as React.CSSProperties}>
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 relative" style={{ '--dynamic-font-size': `${fontSize}px` } as React.CSSProperties}>
 
         {messages.length === 0 && (
           <div className="text-center text-gray-500 mt-8">

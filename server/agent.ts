@@ -126,6 +126,7 @@ export class Agent {
       "- Don't explain how you got the information unless it's relevant to the user.",
       "- All code should be wrapped with ```(language) at the beginning and ``` at the end.",
       "- All diagrams are to be rendered with Mermaid and should be wrapped with ```mermaid and ``` at the beginning and end and the syntax should be heavily checked for its validity first.",
+      "- All json should be wrapped with ```json at the beginning and ``` at the end.",
       "- All mathematical formulas are to be written in LaTeX",
       "- When writing code examples, preference them to be written in TypeScript unless otherwise specified or it makes sense to use a different language."
     ].join('\n');

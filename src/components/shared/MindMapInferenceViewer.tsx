@@ -1,7 +1,8 @@
-import { forwardRef, useState } from 'react';
-import { MessageSquare, X, StickyNote, Network, Plus, Edit2, Trash2 } from 'lucide-react';
+import { forwardRef, useState, useEffect } from 'react';
+import { MessageSquare, X, StickyNote } from 'lucide-react';
 import { Thread } from '../../types';
 import { MarkdownEditor } from './MarkdownEditor';
+import { ThreadList } from './ThreadList';
 
 interface MindMapInferenceViewerProps {
   nodeId: string;
@@ -14,7 +15,7 @@ interface MindMapInferenceViewerProps {
   onThreadRename?: (threadId: string, newName: string) => void;
   onThreadDelete?: (threadId: string) => void;
   onClose?: () => void;
-  onNotesUpdate?: (notes: string) => void;
+  onNotesUpdate?: (notes: string) => Promise<void>;
 }
 
 export const MindMapInferenceViewer = forwardRef<HTMLDivElement, MindMapInferenceViewerProps>(({
@@ -31,37 +32,17 @@ export const MindMapInferenceViewer = forwardRef<HTMLDivElement, MindMapInferenc
   onNotesUpdate
 }, ref) => {
   const [activeTab, setActiveTab] = useState<'chat' | 'notes'>(focusNotes ? 'notes' : 'chat');
-  const [hoveredThreadId, setHoveredThreadId] = useState<string | null>(null);
-  const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState('');
+
+  // Update active tab when focusNotes prop changes
+  useEffect(() => {
+    if (focusNotes) {
+      setActiveTab('notes');
+    }
+  }, [focusNotes]);
 
   const handleSaveNotes = async (value: string) => {
     if (onNotesUpdate) {
-      onNotesUpdate(value);
-    }
-  };
-
-  const handleStartEdit = (thread: Thread) => {
-    setEditingThreadId(thread.id);
-    setEditingName(thread.name);
-  };
-
-  const handleFinishEdit = (threadId: string) => {
-    if (editingName.trim() && onThreadRename) {
-      onThreadRename(threadId, editingName.trim());
-    }
-    setEditingThreadId(null);
-    setEditingName('');
-  };
-
-  const handleCancelEdit = () => {
-    setEditingThreadId(null);
-    setEditingName('');
-  };
-
-  const handleDeleteThread = (threadId: string) => {
-    if (onThreadDelete) {
-      onThreadDelete(threadId);
+      await onNotesUpdate(value);
     }
   };
 
@@ -122,119 +103,16 @@ export const MindMapInferenceViewer = forwardRef<HTMLDivElement, MindMapInferenc
       {/* Tab Content */}
       <div className="flex-1 min-h-0 relative">
         {activeTab === 'chat' ? (
-          <div className="flex flex-col h-full relative">
-            {/* Thread List */}
-            <div className="flex-1 overflow-y-auto">
-              {threads.length === 0 ? (
-                <div className="p-4 text-center text-gray-500">
-                  <Network size={24} className="mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">No chat threads yet</p>
-                  <p className="text-xs mt-1">Create a new conversation to get started</p>
-                </div>
-              ) : (
-                <div className="p-2 space-y-1">
-                  {threads.map((thread) => (
-                    <div
-                      key={thread.id}
-                      className="group relative p-3 rounded-lg cursor-pointer transition-colors hover:bg-gray-700 border border-transparent hover:border-gray-600"
-                      onMouseEnter={() => setHoveredThreadId(thread.id)}
-                      onMouseLeave={() => setHoveredThreadId(null)}
-                      onClick={() => {
-                        if (editingThreadId !== thread.id) {
-                          onThreadSelect(thread.id);
-                        }
-                      }}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            {editingThreadId === thread.id ? (
-                              <input
-                                type="text"
-                                value={editingName}
-                                onChange={(e) => setEditingName(e.target.value)}
-                                onBlur={() => handleFinishEdit(thread.id)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    handleFinishEdit(thread.id);
-                                  } else if (e.key === 'Escape') {
-                                    handleCancelEdit();
-                                  }
-                                }}
-                                className="bg-gray-600 border border-gray-500 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-400 flex-1"
-                                autoFocus
-                              />
-                            ) : (
-                              <h4 className="text-sm font-medium text-gray-200 truncate">
-                                {thread.name}
-                              </h4>
-                            )}
-                          </div>
-                          {editingThreadId !== thread.id && (
-                            <>
-                              {thread.summary && (
-                                <p className="text-xs text-gray-400 mt-1 line-clamp-2">
-                                  {thread.summary}
-                                </p>
-                              )}
-                              <div className="flex items-center justify-between mt-1">
-                                <p className="text-xs text-gray-500">
-                                  {thread.messages.length} message{thread.messages.length !== 1 ? 's' : ''}
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  {thread.updatedAt.toLocaleDateString()}
-                                </p>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                        
-                        {hoveredThreadId === thread.id && editingThreadId !== thread.id && (onThreadRename || onThreadDelete) && (
-                          <div className="flex items-center space-x-1 ml-2">
-                            {onThreadRename && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleStartEdit(thread);
-                                }}
-                                className="p-1 hover:bg-gray-600 rounded text-gray-400 hover:text-gray-200 transition-colors"
-                                title="Rename thread"
-                              >
-                                <Edit2 size={12} />
-                              </button>
-                            )}
-                            {onThreadDelete && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteThread(thread.id);
-                                }}
-                                className="p-1 hover:bg-gray-600 rounded text-gray-400 hover:text-red-400 transition-colors"
-                                title="Delete thread"
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Floating New Chat Button */}
-            {onThreadCreate && (
-              <button
-                onClick={onThreadCreate}
-                className="absolute bottom-4 right-4 p-3 bg-blue-600 hover:bg-blue-700 rounded-full shadow-lg transition-colors text-white z-10"
-                title="New Chat"
-              >
-                <Plus size={20} />
-              </button>
-            )}
-          </div>
+          <ThreadList
+            threads={threads}
+            onThreadSelect={onThreadSelect}
+            onThreadCreate={onThreadCreate}
+            onThreadRename={onThreadRename}
+            onThreadDelete={onThreadDelete}
+            emptyStateTitle="No chat threads yet"
+            emptyStateSubtitle="Create a new conversation to get started"
+            createButtonTitle="New Chat"
+          />
         ) : (
           <div className="flex flex-col h-full">
             <MarkdownEditor

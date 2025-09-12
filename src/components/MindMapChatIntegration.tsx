@@ -23,7 +23,7 @@ interface MindMapChatIntegrationProps {
   onMessagesUpdate?: (messages: ConversationMessage[]) => void;
   onFirstMessage?: () => void;
   onRoleUpdate?: (threadId: string, customRole?: string) => void;
-  onNotesUpdate?: (nodeId: string, notes: string) => void;
+  onNotesUpdate?: (nodeId: string, notes: string) => Promise<void>;
 }
 
 export function MindMapChatIntegration({
@@ -92,7 +92,11 @@ export function MindMapChatIntegration({
         onThreadRename={onThreadRename}
         onThreadDelete={onThreadDelete}
         onClose={onClose}
-        onNotesUpdate={onNotesUpdate}
+        onNotesUpdate={async (notes) => {
+          if (onNotesUpdate) {
+            await onNotesUpdate(nodeId, notes);
+          }
+        }}
       />
     );
   }
@@ -112,9 +116,9 @@ export function MindMapChatIntegration({
       onMessagesUpdate={handleMessagesUpdateForThread}
       onFirstMessage={onFirstMessage}
       onRoleUpdate={handleRoleUpdateForThread}
-      onNotesUpdate={(notes) => {
+      onNotesUpdate={async (notes) => {
         if (onNotesUpdate) {
-          onNotesUpdate(nodeId, notes);
+          await onNotesUpdate(nodeId, notes);
         }
       }}
     />

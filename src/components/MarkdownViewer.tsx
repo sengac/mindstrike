@@ -75,7 +75,10 @@ export function MarkdownViewer({ content }: MarkdownViewerProps) {
   useEffect(() => {
     // Render mermaid diagrams when content changes
     if (mermaidRef.current) {
-      renderMermaidDiagramsDelayed(mermaidRef.current);
+      renderMermaidDiagramsDelayed(mermaidRef.current, false, () => {
+        // Dispatch custom event when mermaid rendering completes
+        mermaidRef.current?.dispatchEvent(new CustomEvent('mermaidRenderComplete', { bubbles: true }));
+      });
     }
   }, [content]);
 
