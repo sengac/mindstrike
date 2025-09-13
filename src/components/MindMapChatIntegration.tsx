@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Thread, ConversationMessage } from '../types';
+import { Thread, ConversationMessage, NotesAttachment } from '../types';
 import { ChatThreadSelector } from './shared/ChatThreadSelector';
 import { ChatContentViewer, Source } from './shared/ChatContentViewer';
 import { ChatPanelRef } from './ChatPanel';
@@ -19,7 +19,7 @@ interface MindMapChatIntegrationProps {
   onThreadRename?: (threadId: string, newName: string) => void;
   onThreadDelete?: (threadId: string) => void;
   onClose?: () => void;
-  onNavigateToChat?: () => void;
+  onNavigateToChat?: (threadId?: string) => void;
   onDeleteMessage?: (messageId: string) => void;
   onMessagesUpdate?: (messages: ConversationMessage[]) => void;
   onFirstMessage?: () => void;
@@ -89,6 +89,13 @@ export function MindMapChatIntegration({
     }
   };
 
+  const handleCopyNotesToChat = (notes: NotesAttachment) => {
+    // Add notes attachment to the current chat panel
+    if (chatPanelRef.current) {
+      chatPanelRef.current.addNotesAttachment(notes);
+    }
+  };
+
   // Always show ChatContentViewer, with or without a thread
   return (
     <ChatContentViewer
@@ -121,6 +128,7 @@ export function MindMapChatIntegration({
       onThreadCreate={onThreadCreate}
       onThreadRename={onThreadRename}
       onThreadDelete={onThreadDelete}
+      onCopyNotesToChat={handleCopyNotesToChat}
     />
   );
 }

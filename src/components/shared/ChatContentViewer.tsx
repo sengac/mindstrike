@@ -1,7 +1,7 @@
-import { forwardRef, useState, useEffect } from 'react';
-import { MessageSquare, ExternalLink, Unlink, X, StickyNote, BookOpen, Sparkles } from 'lucide-react';
+import { forwardRef, useState, useEffect, useRef, useImperativeHandle } from 'react';
+import { MessageSquare, ExternalLink, Unlink, X, StickyNote, BookOpen, Sparkles, Copy } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Thread, ConversationMessage } from '../../types';
+import { Thread, ConversationMessage, NotesAttachment } from '../../types';
 import { ChatPanel, ChatPanelRef } from '../ChatPanel';
 import { MarkdownEditor } from './MarkdownEditor';
 import { ThreadList } from './ThreadList';
@@ -22,7 +22,7 @@ interface ChatContentViewerProps {
   nodeSources?: Source[];
   focusNotes?: boolean;
   focusSources?: boolean;
-  onNavigateToChat?: () => void;
+  onNavigateToChat?: (threadId?: string) => void;
   onUnassignThread?: () => void;
   onClose?: () => void;
   onDeleteMessage?: (messageId: string) => void;
@@ -35,6 +35,7 @@ interface ChatContentViewerProps {
   onThreadCreate?: () => void;
   onThreadRename?: (threadId: string, newName: string) => void;
   onThreadDelete?: (threadId: string) => void;
+  onCopyNotesToChat?: (notes: NotesAttachment) => void;
 }
 
 export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps>(({
@@ -57,7 +58,8 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
   onThreadSelect,
   onThreadCreate,
   onThreadRename,
-  onThreadDelete
+  onThreadDelete,
+  onCopyNotesToChat
 }, ref) => {
   const [activeTab, setActiveTab] = useState<'chat' | 'notes' | 'sources' | 'refactor'>(
     focusNotes ? 'notes' : focusSources ? 'sources' : 'chat'
@@ -65,6 +67,25 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
   const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false);
   const [pendingContent, setPendingContent] = useState('');
   const [notesActiveMode, setNotesActiveMode] = useState<'preview' | 'edit'>();
+  const [pendingNotesAttachment, setPendingNotesAttachment] = useState<NotesAttachment | null>(null);
+  const chatPanelRef = useRef<ChatPanelRef>(null);
+
+  // Forward ref methods to parent
+  useImperativeHandle(ref, () => ({
+    clearConversation: () => {
+      if (chatPanelRef.current) {
+        chatPanelRef.current.clearConversation();
+      }
+    },
+    addNotesAttachment: (notes: NotesAttachment) => {
+      if (chatPanelRef.current) {
+        chatPanelRef.current.addNotesAttachment(notes);
+      } else {
+        // Store for later if ChatPanel not available yet
+        setPendingNotesAttachment(notes);
+      }
+    }
+  }));
 
   // Update active tab when focusNotes or focusSources prop changes
   useEffect(() => {
@@ -74,6 +95,14 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
       setActiveTab('sources');
     }
   }, [focusNotes, focusSources]);
+
+  // Add pending notes attachment when ChatPanel becomes available
+  useEffect(() => {
+    if (pendingNotesAttachment && chatPanelRef.current) {
+      chatPanelRef.current.addNotesAttachment(pendingNotesAttachment);
+      setPendingNotesAttachment(null);
+    }
+  }, [pendingNotesAttachment, activeTab, thread]);
 
   const handleSaveNotes = async (value: string) => {
     if (onNotesUpdate) {
@@ -131,6 +160,26 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
     setPendingContent('');
   };
 
+  const handleCopyNotesToChat = () => {
+    if (!nodeNotes || !nodeNotes.trim()) {
+      toast.error('No notes content to copy');
+      return;
+    }
+
+    const notesAttachment: NotesAttachment = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      title: `Notes from ${nodeLabel}`,
+      content: nodeNotes,
+      nodeLabel,
+      attachedAt: new Date()
+    };
+
+    // Store the notes attachment to be added when ChatPanel is available
+    setPendingNotesAttachment(notesAttachment);
+    setActiveTab('chat');
+    toast.success('Notes copied to chat as attachment');
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Confirmation Dialog Overlay */}
@@ -166,75 +215,77 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
       )}
 
       {/* Header with Tabs */}
-      <div className="flex-shrink-0 border-b border-gray-600">
-        <div className="flex items-center justify-between p-3" data-testid="chat-content-viewer-header">
+      <div className="flex-shrink-0 border-b border-gray-700">
+        <div className="flex items-center justify-between" data-testid="chat-content-viewer-header">
           {/* Tab Navigation */}
-          <div className="flex items-center">
-            <button
-              onClick={() => setActiveTab('chat')}
-              className={`flex items-center gap-2 px-3 py-1 rounded-t text-sm font-medium transition-colors ${
-                activeTab === 'chat'
-                  ? 'text-white bg-gray-700'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              <MessageSquare size={16} className="text-blue-400" />
-              <span>Chat</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('notes')}
-              className={`flex items-center gap-2 px-3 py-1 rounded-t text-sm font-medium transition-colors ml-1 ${
-                activeTab === 'notes'
-                  ? 'text-white bg-gray-700'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              <StickyNote size={16} className="text-green-400" />
-              <span>Notes</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('sources')}
-              className={`flex items-center gap-2 px-3 py-1 rounded-t text-sm font-medium transition-colors ml-1 ${
-                activeTab === 'sources'
-                  ? 'text-white bg-gray-700'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              <BookOpen size={16} className="text-orange-400" />
-              <span>Sources</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('refactor')}
-              data-testid="generative-refactor-tab-button"
-              className={`flex items-center gap-2 px-3 py-1 rounded-t text-sm font-medium transition-all duration-300 ml-1 relative overflow-hidden ${
-                activeTab === 'refactor'
-                  ? 'text-white bg-gray-700 animate-shimmer-inset bg-gradient-to-r from-purple-500/20 via-blue-500/20 to-cyan-500/20 animate-shine'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-              style={{
-                backgroundImage: activeTab === 'refactor' 
-                  ? 'linear-gradient(45deg, rgba(168, 85, 247, 0.1), rgba(59, 130, 246, 0.1), rgba(6, 182, 212, 0.1)), linear-gradient(135deg, transparent 25%, rgba(255, 255, 255, 0.1) 50%, transparent 75%)'
-                  : undefined,
-                backgroundSize: activeTab === 'refactor' ? '200% 200%, 200% 200%' : undefined,
-                animation: activeTab === 'refactor' 
-                  ? 'shimmer-inset 2s linear infinite, shine 2s ease-in-out infinite'
-                  : undefined
-              }}
-            >
-              <Sparkles size={16} className="text-purple-400" />
-              <span>Generative Refactor</span>
-            </button>
+          <div className="px-6">
+            <nav className="flex space-x-8">
+              <button
+                onClick={() => setActiveTab('chat')}
+                className={`flex items-center gap-2 py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'chat'
+                    ? 'border-blue-500 text-blue-400'
+                    : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                }`}
+              >
+                <MessageSquare size={16} className={activeTab === 'chat' ? 'text-blue-400' : ''} />
+                <span>Chat</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('notes')}
+                className={`flex items-center gap-2 py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'notes'
+                    ? 'border-blue-500 text-blue-400'
+                    : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                }`}
+              >
+                <StickyNote size={16} className={activeTab === 'notes' ? 'text-blue-400' : ''} />
+                <span>Notes</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('sources')}
+                className={`flex items-center gap-2 py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'sources'
+                    ? 'border-blue-500 text-blue-400'
+                    : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                }`}
+              >
+                <BookOpen size={16} className={activeTab === 'sources' ? 'text-blue-400' : ''} />
+                <span>Sources</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('refactor')}
+                data-testid="generative-refactor-tab-button"
+                className={`flex items-center gap-2 py-4 px-2 border-b-2 font-medium text-sm transition-all duration-300 relative overflow-hidden ${
+                  activeTab === 'refactor'
+                    ? 'border-transparent text-blue-400 animate-shimmer-inset bg-gradient-to-r from-purple-500/20 via-blue-500/20 to-cyan-500/20 animate-shine'
+                    : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                }`}
+                style={{
+                  backgroundImage: activeTab === 'refactor' 
+                    ? 'linear-gradient(45deg, rgba(168, 85, 247, 0.1), rgba(59, 130, 246, 0.1), rgba(6, 182, 212, 0.1)), linear-gradient(135deg, transparent 25%, rgba(255, 255, 255, 0.1) 50%, transparent 75%)'
+                    : undefined,
+                  backgroundSize: activeTab === 'refactor' ? '200% 200%, 200% 200%' : undefined,
+                  animation: activeTab === 'refactor' 
+                    ? 'shimmer-inset 2s linear infinite, shine 2s ease-in-out infinite'
+                    : undefined
+                }}
+              >
+                <Sparkles size={16} className={activeTab === 'refactor' ? 'text-purple-400' : ''} />
+                <span>Generative Refactor</span>
+              </button>
+            </nav>
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 pl-6 pr-3">
             {onClose && (
               <button
                 onClick={onClose}
-                className="text-gray-400 hover:text-white transition-colors p-1 rounded"
+                className="p-2 hover:bg-white/10 rounded transition-colors text-gray-400 hover:text-white"
                 title="Close"
               >
-                <X size={14} />
+                <X size={20} />
               </button>
             )}
           </div>
@@ -245,11 +296,11 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
       <div className="flex-1 min-h-0 relative">
         {/* Floating Action Buttons - Only show when chat tab is active and thread exists */}
         {activeTab === 'chat' && thread && (
-          <div className="absolute top-4 right-4 z-10 flex gap-2">
+          <div className="absolute top-4 right-4 z-10 flex gap-2 bg-black/20 p-3 rounded-lg backdrop-blur-sm">
             {onUnassignThread && (
               <button
                 onClick={onUnassignThread}
-                className="bg-gray-800 hover:bg-red-700 text-white p-3 rounded-full shadow-lg transition-colors border border-gray-600"
+                className="bg-transparent hover:bg-red-700 text-white p-3 rounded-full shadow-lg transition-colors border border-white"
                 title="Unassign thread from this node"
               >
                 <Unlink size={20} />
@@ -257,8 +308,8 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
             )}
             {onNavigateToChat && (
               <button
-                onClick={onNavigateToChat}
-                className="bg-gray-800 hover:bg-blue-700 text-white p-3 rounded-full shadow-lg transition-colors border border-gray-600"
+                onClick={() => onNavigateToChat(thread?.id)}
+                className="bg-transparent hover:bg-blue-700 text-white p-3 rounded-full shadow-lg transition-colors border border-white"
                 title="Open in chat view"
               >
                 <ExternalLink size={20} />
@@ -270,7 +321,7 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
         {activeTab === 'chat' ? (
           thread ? (
             <ChatPanel
-              ref={ref}
+              ref={chatPanelRef}
               threadId={thread.id}
               messages={thread.messages}
               onMessagesUpdate={(messages) => {
@@ -311,6 +362,17 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
               activeMode={notesActiveMode}
               onSave={handleSaveNotes}
               className="flex-1"
+              additionalButtons={
+                <button
+                  onClick={handleCopyNotesToChat}
+                  disabled={!nodeNotes || !nodeNotes.trim()}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded text-sm font-medium transition-colors"
+                  title="Copy notes to chat as attachment"
+                >
+                  <Copy size={14} />
+                  <span>Copy To Chat</span>
+                </button>
+              }
             />
           </div>
         ) : activeTab === 'sources' ? (

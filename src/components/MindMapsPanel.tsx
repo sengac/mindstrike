@@ -20,7 +20,7 @@ interface MindMapsPanelProps {
   onThreadCreate?: () => void;
   onThreadRename?: (threadId: string, newName: string) => void;
   onThreadDelete?: (threadId: string) => void;
-  onNavigateToChat?: () => void;
+  onNavigateToChat?: (threadId?: string) => void;
   onDeleteMessage?: (threadId: string, messageId: string) => void;
   onMessagesUpdate?: (threadId: string, messages: ConversationMessage[]) => void;
   onFirstMessage?: () => void;

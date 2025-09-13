@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Thread, ConversationMessage } from '../types';
 import { cleanContentForLLM } from '../utils/content-filter';
+import { useAppStore } from '../store/useAppStore';
 
-export function useThreads(workspaceRestored: boolean = true) {
+export function useThreads() {
+  const workspaceVersion = useAppStore((state) => state.workspaceVersion);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -39,12 +41,10 @@ export function useThreads(workspaceRestored: boolean = true) {
     }
   }, []);
 
-  // Load threads from mindstrike-chats.json file on mount (after workspace is restored)
+  // Load threads from mindstrike-chats.json file on mount and when workspace changes
   useEffect(() => {
-    if (workspaceRestored) {
-      loadThreads();
-    }
-  }, [loadThreads, workspaceRestored]);
+    loadThreads();
+  }, [loadThreads, workspaceVersion]);
 
   // Cleanup timeout on unmount
   useEffect(() => {

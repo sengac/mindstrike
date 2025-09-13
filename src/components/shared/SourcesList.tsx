@@ -281,7 +281,7 @@ export function SourcesList({ sources, onSourcesUpdate }: SourcesListProps) {
       {!isCreating && onSourcesUpdate && (
         <button
           onClick={handleStartCreate}
-          className="absolute bottom-4 right-4 p-3 bg-orange-600 hover:bg-orange-700 rounded-full shadow-lg transition-colors text-white z-10"
+          className="absolute bottom-4 right-4 p-3 bg-blue-600 hover:bg-blue-700 rounded-full shadow-lg transition-colors text-white z-10"
           title="Add New Source"
         >
           <Plus size={20} />

@@ -1,7 +1,7 @@
 import React from 'react';
 import { BarChart3 } from 'lucide-react';
 import { ConversationMessage } from '../types';
-import { useModels } from '../hooks/useModels';
+import { useModelsStore } from '../store/useModelsStore';
 import { 
   calculateConversationTokens, 
   calculateConversationSize, 
@@ -15,7 +15,7 @@ interface HeaderStatsProps {
 }
 
 export function HeaderStats({ messages }: HeaderStatsProps) {
-  const { defaultModel } = useModels();
+  const defaultModel = useModelsStore(state => state.getDefaultModel());
   const tokenCount = calculateConversationTokens(messages);
   const conversationSize = calculateConversationSize(messages);
   const maxTokens = defaultModel?.contextLength || 0;

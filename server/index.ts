@@ -148,6 +148,16 @@ async function initializeLLMConfig() {
 async function initializeLLMServices() {
   try {
     await initializeLLMConfig();
+    
+    // Initialize model fetcher
+    try {
+      const { modelFetcher } = await import('./model-fetcher.js');
+      await modelFetcher.initialize();
+      logger.info('Model fetcher initialized');
+    } catch (error) {
+      logger.warn('Failed to initialize model fetcher:', error);
+    }
+    
     await llmScanner.scanAvailableServices();
     await refreshModelList();
     logger.info('LLM services initialized');
@@ -482,7 +492,7 @@ app.get('/api/conversation', (req, res) => {
 
 app.post('/api/message', async (req: any, res: any) => {
   try {
-    const { message, threadId, images } = req.body;
+    const { message, threadId, images, notes } = req.body;
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
     }
@@ -497,7 +507,7 @@ app.post('/api/message', async (req: any, res: any) => {
       agentPool.setCurrentThread(threadId);
     }
 
-    const response = await agentPool.getCurrentAgent().processMessage(message, images);
+    const response = await agentPool.getCurrentAgent().processMessage(message, images, notes);
     res.json(response);
   } catch (error: any) {
     console.error('Error processing message:', error);
@@ -508,18 +518,12 @@ app.post('/api/message', async (req: any, res: any) => {
 // SSE endpoint for real-time message processing
 app.post('/api/message/stream', async (req: any, res: any) => {
   try {
-    const { message, threadId, images } = req.body;
+    const { message, threadId, images, notes } = req.body;
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
     }
 
     // Check if LLM model is configured
-    logger.info('Stream message request received, current LLM config:', { 
-      baseURL: currentLlmConfig.baseURL, 
-      model: currentLlmConfig.model, 
-      apiKey: currentLlmConfig.apiKey ? '[REDACTED]' : undefined 
-    });
-    
     if (!currentLlmConfig.model || currentLlmConfig.model.trim() === '') {
       return res.status(400).json({ error: 'No LLM model configured. Please select a model from the available options.' });
     }
@@ -543,9 +547,8 @@ app.post('/api/message/stream', async (req: any, res: any) => {
     if (res.flush) res.flush();
 
     // Process message with real-time updates using thread-specific agent
-    const response = await agentPool.getCurrentAgent().processMessage(message, images, (updatedMessage: any) => {
+    const response = await agentPool.getCurrentAgent().processMessage(message, images, notes, (updatedMessage: any) => {
       // Send message update via SSE
-      console.log('📡 Sending SSE message-update - Status:', updatedMessage.status, 'Tool calls:', updatedMessage.toolCalls?.length || 0);
       res.write(`data: ${JSON.stringify({
         type: 'message-update',
         message: updatedMessage

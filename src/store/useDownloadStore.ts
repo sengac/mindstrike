@@ -6,6 +6,9 @@ interface DownloadProgress {
   progress: number;
   speed?: string;
   isDownloading: boolean;
+  errorType?: string;
+  errorMessage?: string;
+  huggingFaceUrl?: string;
 }
 
 interface DownloadStore {
@@ -59,12 +62,19 @@ export function startDownloadTracking(filename: string) {
     } else if (data.error) {
       if (data.cancelled) {
         toast.success('Download cancelled');
+      } else if (data.errorType === '401') {
+        // Don't show toast for 401 - will be shown in UI
+      } else if (data.errorType === '403') {
+        // Don't show toast for 403 - will be shown in UI
       } else {
         toast.error(`Download failed: ${data.error}`);
       }
       eventSource.close();
       connections.delete(filename);
-      setTimeout(() => useDownloadStore.getState().removeDownload(filename), 1000);
+      // Don't auto-remove downloads with 401/403 errors so the error persists in UI
+      if (data.errorType !== '401' && data.errorType !== '403') {
+        setTimeout(() => useDownloadStore.getState().removeDownload(filename), 1000);
+      }
     }
   };
   

@@ -35,8 +35,30 @@ class SSEManager {
 
     logger.info(`SSE client ${id} connected to topic ${topic}`);
 
+    // Send periodic keepalive messages to prevent connection timeout
+    const keepaliveInterval = setInterval(() => {
+      if (this.clients.has(id)) {
+        try {
+          response.write(`: keepalive ${Date.now()}\n\n`);
+        } catch (error) {
+          logger.debug(`Failed to send keepalive to client ${id}:`, error);
+          clearInterval(keepaliveInterval);
+          this.removeClient(id);
+        }
+      } else {
+        clearInterval(keepaliveInterval);
+      }
+    }, 30000); // Send keepalive every 30 seconds
+
     // Handle client disconnect
     response.on('close', () => {
+      clearInterval(keepaliveInterval);
+      this.removeClient(id);
+    });
+
+    response.on('error', (error) => {
+      logger.error(`SSE client ${id} error:`, error);
+      clearInterval(keepaliveInterval);
       this.removeClient(id);
     });
   }

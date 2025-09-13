@@ -4,6 +4,8 @@ import * as path from 'path';
 import * as os from 'os';
 import { createHash } from 'crypto';
 import { getLocalModelsDirectory } from './utils/settings-directory.js';
+import { modelFetcher, DynamicModelInfo } from './model-fetcher.js';
+import { logger } from './logger.js';
 
 export interface LocalModelInfo {
   id: string;
@@ -32,64 +34,7 @@ export interface ModelDownloadInfo {
   quantization?: string;
 }
 
-// Popular GGUF models for download
-export const AVAILABLE_MODELS: ModelDownloadInfo[] = [
-  {
-    name: "Llama 2 7B Chat Q4_K_M",
-    url: "https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q4_K_M.gguf",
-    filename: "llama-2-7b-chat.Q4_K_M.gguf",
-    size: 4370000000, // ~4.37GB
-    description: "Llama 2 7B Chat model, Q4_K_M quantization - good balance of quality and speed",
-    modelType: "chat",
-    contextLength: 4096,
-    parameterCount: "7B",
-    quantization: "Q4_K_M"
-  },
-  {
-    name: "Llama 2 13B Chat Q4_K_M",
-    url: "https://huggingface.co/TheBloke/Llama-2-13B-Chat-GGUF/resolve/main/llama-2-13b-chat.Q4_K_M.gguf",
-    filename: "llama-2-13b-chat.Q4_K_M.gguf",
-    size: 7870000000, // ~7.87GB
-    description: "Llama 2 13B Chat model, Q4_K_M quantization - higher quality, requires more RAM",
-    modelType: "chat",
-    contextLength: 4096,
-    parameterCount: "13B",
-    quantization: "Q4_K_M"
-  },
-  {
-    name: "CodeLlama 7B Instruct Q4_K_M",
-    url: "https://huggingface.co/TheBloke/CodeLlama-7B-Instruct-GGUF/resolve/main/codellama-7b-instruct.Q4_K_M.gguf",
-    filename: "codellama-7b-instruct.Q4_K_M.gguf",
-    size: 4370000000, // ~4.37GB
-    description: "CodeLlama 7B Instruct model optimized for code generation",
-    modelType: "code",
-    contextLength: 16384,
-    parameterCount: "7B",
-    quantization: "Q4_K_M"
-  },
-  {
-    name: "Mistral 7B Instruct v0.2 Q4_K_M",
-    url: "https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_M.gguf",
-    filename: "mistral-7b-instruct-v0.2.Q4_K_M.gguf",
-    size: 4370000000, // ~4.37GB
-    description: "Mistral 7B Instruct v0.2 - fast and efficient instruction-following model",
-    modelType: "chat",
-    contextLength: 32768,
-    parameterCount: "7B",
-    quantization: "Q4_K_M"
-  },
-  {
-    name: "Phi-3 Mini 4K Instruct Q4_K_M",
-    url: "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf",
-    filename: "phi-3-mini-4k-instruct-q4.gguf",
-    size: 2600000000, // ~2.6GB
-    description: "Microsoft Phi-3 Mini - small but capable model, good for resource-constrained environments",
-    modelType: "chat",
-    contextLength: 4096,
-    parameterCount: "3.8B",
-    quantization: "Q4_K_M"
-  }
-];
+
 
 export class LocalLLMManager {
   private modelsDir: string;
@@ -133,18 +78,22 @@ export class LocalLLMManager {
       // Try to extract model info from filename
       const modelInfo = this.parseModelFilename(filename);
       
+      // Try to get remote model info from cache if available
+      const remoteModels = await modelFetcher.getAvailableModels();
+      const matchingRemoteModel = remoteModels.find(rm => rm.filename === filename);
+      
       models.push({
         id,
-        name: modelInfo.name || filename.replace('.gguf', ''),
+        name: matchingRemoteModel?.name || modelInfo.name || filename.replace('.gguf', ''),
         filename,
         path: fullPath,
         size: stats.size,
         downloaded: true,
         downloading: false,
-        modelType: modelInfo.modelType || 'unknown',
-        contextLength: modelInfo.contextLength,
-        parameterCount: modelInfo.parameterCount,
-        quantization: modelInfo.quantization
+        modelType: matchingRemoteModel?.modelType || modelInfo.modelType || 'unknown',
+        contextLength: matchingRemoteModel?.contextLength || modelInfo.contextLength,
+        parameterCount: matchingRemoteModel?.parameterCount || modelInfo.parameterCount,
+        quantization: matchingRemoteModel?.quantization || modelInfo.quantization
       });
     }
 
@@ -152,17 +101,39 @@ export class LocalLLMManager {
   }
 
   /**
-   * Get available models for download
+   * Get available models for download (dynamic from Hugging Face)
    */
-  getAvailableModels(): ModelDownloadInfo[] {
-    return AVAILABLE_MODELS;
+  async getAvailableModels(): Promise<(ModelDownloadInfo | DynamicModelInfo)[]> {
+    try {
+      // Get dynamic models from Hugging Face
+      const dynamicModels = await modelFetcher.getAvailableModels();
+      return dynamicModels;
+    } catch (error) {
+      logger.error('Failed to fetch dynamic models:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Search for models by query
+   */
+  async searchModels(query: string): Promise<(ModelDownloadInfo | DynamicModelInfo)[]> {
+    try {
+      const dynamicModels = await modelFetcher.searchModels(query);
+      
+      // For search results, don't include static models - just return the search results
+      return dynamicModels;
+    } catch (error) {
+      logger.error('Failed to search models:', error);
+      throw error;
+    }
   }
 
   /**
    * Download a model
    */
   async downloadModel(
-    modelInfo: ModelDownloadInfo,
+    modelInfo: ModelDownloadInfo | DynamicModelInfo,
     onProgress?: (progress: number, speed?: string) => void
   ): Promise<string> {
     const filename = modelInfo.filename;
@@ -187,12 +158,40 @@ export class LocalLLMManager {
     try {
       console.log(`Starting download of ${modelInfo.name}...`);
       
+      // Get Hugging Face token if available
+      const headers: Record<string, string> = {
+        'User-Agent': 'mindstrike-local-llm/1.0'
+      };
+      
+      try {
+        const { modelFetcher } = await import('./model-fetcher.js');
+        if (modelFetcher.hasHuggingFaceToken()) {
+          // Note: We don't expose the actual token, just check if it exists
+          const fs = await import('fs/promises');
+          const path = await import('path');
+          const { getMindstrikeDirectory } = await import('./utils/settings-directory.js');
+          
+          const tokenFile = path.join(getMindstrikeDirectory(), 'hf-token');
+          const token = await fs.readFile(tokenFile, 'utf-8');
+          headers['Authorization'] = `Bearer ${token.trim()}`;
+        }
+      } catch (error) {
+        logger.debug('No Hugging Face token available for download');
+      }
+      
       const response = await fetch(modelInfo.url, {
-        signal: abortController.signal
+        signal: abortController.signal,
+        headers
       });
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        if (response.status === 401) {
+          throw new Error('UNAUTHORIZED_HF_TOKEN_REQUIRED');
+        } else if (response.status === 403) {
+          throw new Error('FORBIDDEN_MODEL_ACCESS_REQUIRED');
+        } else {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
       }
 
       const contentLength = response.headers.get('Content-Length');
@@ -523,11 +522,21 @@ export class LocalLLMManager {
     let parameterCount: string | undefined;
     let quantization: string | undefined;
 
-    // Detect model type
-    if (lower.includes('chat') || lower.includes('instruct')) {
-      modelType = 'chat';
-    } else if (lower.includes('code')) {
+    // Enhanced model type detection
+    if (lower.includes('code') || lower.includes('coder') || lower.includes('starcoder') || 
+        lower.includes('codellama') || lower.includes('deepseek-coder') || lower.includes('phind')) {
       modelType = 'code';
+    } else if (lower.includes('embed') || lower.includes('bge-') || lower.includes('e5-') || 
+               lower.includes('sentence') || lower.includes('minilm')) {
+      modelType = 'embedding';
+    } else if (lower.includes('vision') || lower.includes('llava') || lower.includes('moondream') || 
+               lower.includes('cogvlm') || lower.includes('qwen-vl') || lower.includes('minicpm-v')) {
+      modelType = 'vision';
+    } else if (lower.includes('chat') || lower.includes('instruct') || lower.includes('alpaca') || 
+               lower.includes('vicuna') || lower.includes('mistral') || lower.includes('llama') || 
+               lower.includes('gemma') || lower.includes('qwen') || lower.includes('phi-') || 
+               lower.includes('yi-') || lower.includes('baichuan') || lower.includes('chatglm')) {
+      modelType = 'chat';
     }
 
     // Extract parameter count
@@ -536,10 +545,26 @@ export class LocalLLMManager {
       parameterCount = paramMatch[1] + 'B';
     }
 
-    // Extract quantization
-    const quantMatch = filename.match(/(Q\d+_[A-Z]+_?[A-Z]*)/i);
-    if (quantMatch) {
-      quantization = quantMatch[1];
+    // Enhanced quantization extraction
+    const quantPatterns = [
+      /(Q\d+_[A-Z]+_?[A-Z]*)/i,
+      /(IQ\d+_[A-Z]+_?[A-Z]*)/i,
+      /(Q\d+)/i,
+      /(IQ\d+)/i,
+      /(f16|f32|fp16|fp32)/i
+    ];
+    
+    for (const pattern of quantPatterns) {
+      const match = filename.match(pattern);
+      if (match) {
+        quantization = match[1].toUpperCase();
+        break;
+      }
+    }
+    
+    // Default quantization for GGUF files if none detected
+    if (!quantization && lower.includes('.gguf')) {
+      quantization = 'F16';
     }
 
     // Extract context length (if specified)

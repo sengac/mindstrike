@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useImperativeHandle, forwardRef, useCallback } from 'react';
-import { Send, Loader2, Github, Youtube, Trash2, User, Paperclip, X } from 'lucide-react';
+import { Send, Loader2, Github, Youtube, Trash2, User, Paperclip, X, MessageCircle } from 'lucide-react';
 import { MindStrikeIcon } from './MindStrikeIcon';
 import { ChatMessage } from './ChatMessage';
 import { PersonalityModal } from './PersonalityModal';
@@ -8,7 +8,7 @@ import { LocalModelLoadDialog } from './LocalModelLoadDialog';
 
 import { useChat } from '../hooks/useChat';
 import { useAppStore } from '../store/useAppStore';
-import { ConversationMessage, Thread, ImageAttachment } from '../types';
+import { ConversationMessage, Thread, ImageAttachment, NotesAttachment } from '../types';
 
 interface ChatPanelProps {
   threadId?: string;
@@ -24,6 +24,7 @@ interface ChatPanelProps {
 
 export interface ChatPanelRef {
   clearConversation: () => void;
+  addNotesAttachment: (notes: NotesAttachment) => void;
 }
 
 export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, messages: initialMessages = [], onMessagesUpdate, onFirstMessage, onDeleteMessage, activeThread, onRoleUpdate, onNavigateToWorkspaces, onCopyToNotes }, ref) => {
@@ -32,6 +33,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
   const [showPersonalityModal, setShowPersonalityModal] = useState(false);
   const [defaultRole, setDefaultRole] = useState('');
   const [attachedImages, setAttachedImages] = useState<ImageAttachment[]>([]);
+  const [attachedNotes, setAttachedNotes] = useState<NotesAttachment[]>([]);
   const [chatLoadTime, setChatLoadTime] = useState<number>(0);
   const { fontSize, workspaceRoot, defaultCustomRole } = useAppStore();
   const { messages, isLoading, sendMessage, clearConversation, regenerateMessage, cancelToolCalls, editMessage, validation, localModelError, clearLocalModelError, retryLastMessage } = useChat({
@@ -49,7 +51,10 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useImperativeHandle(ref, () => ({
-    clearConversation
+    clearConversation,
+    addNotesAttachment: (notes: NotesAttachment) => {
+      setAttachedNotes(prev => [...prev, notes]);
+    }
   }));
 
   const scrollToBottom = () => {
@@ -158,13 +163,15 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!input.trim() && attachedImages.length === 0) || isLoading) return;
+    if ((!input.trim() && attachedImages.length === 0 && attachedNotes.length === 0) || isLoading) return;
 
     const message = input.trim();
     const images = [...attachedImages];
+    const notes = [...attachedNotes];
     setInput('');
     setAttachedImages([]);
-    await sendMessage(message, images);
+    setAttachedNotes([]);
+    await sendMessage(message, images, notes);
   };
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -304,6 +311,10 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
     setAttachedImages(prev => prev.filter(img => img.id !== imageId));
   };
 
+  const removeNotes = (notesId: string) => {
+    setAttachedNotes(prev => prev.filter(notes => notes.id !== notesId));
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -314,8 +325,20 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
   const adjustTextareaHeight = () => {
     const textarea = textareaRef.current;
     if (textarea) {
-      textarea.style.height = 'auto';
-      textarea.style.height = Math.min(textarea.scrollHeight, 150) + 'px';
+      if (!textarea.value) {
+        // Calculate proper baseline height for empty textarea
+        const originalValue = textarea.value;
+        textarea.value = 'X'; // Single character to measure baseline
+        textarea.style.height = 'auto';
+        textarea.style.overflowY = 'hidden';
+        const baselineHeight = textarea.scrollHeight;
+        textarea.value = originalValue; // Restore empty value
+        textarea.style.height = baselineHeight + 'px';
+      } else {
+        textarea.style.height = 'auto';
+        textarea.style.overflowY = 'hidden';
+        textarea.style.height = Math.min(textarea.scrollHeight, 150) + 'px';
+      }
     }
   };
 
@@ -424,6 +447,15 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
                 >
                   <Youtube size={24} />
                 </a>
+                <a 
+                  href="https://discord.gg/KPg2gwjX" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-gray-400 hover:text-indigo-500 transition-colors"
+                  title="MindStrike Discord Server"
+                >
+                  <MessageCircle size={24} />
+                </a>
               </div>
               <p className="text-sm">Start a conversation with your current workspace:</p>
               <div className="flex items-center justify-center gap-3 mt-1">
@@ -508,6 +540,40 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
             </div>
           </div>
         )}
+
+        {/* Notes preview area */}
+        {attachedNotes.length > 0 && (
+          <div className="mb-4 p-3 bg-gray-800 rounded-lg border border-gray-600">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-gray-300">Attached Notes ({attachedNotes.length})</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {attachedNotes.map((note) => (
+                <div key={note.id} className="relative group bg-gray-700 rounded p-3 border border-gray-500 max-w-xs">
+                  <button
+                    type="button"
+                    onClick={() => removeNotes(note.id)}
+                    className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X size={10} className="text-white" />
+                  </button>
+                  <div className="text-xs font-medium text-blue-400 truncate mb-1">
+                    {note.title}
+                  </div>
+                  {note.nodeLabel && (
+                    <div className="text-xs text-gray-400 mb-2">
+                      From: {note.nodeLabel}
+                    </div>
+                  )}
+                  <div className="text-xs text-gray-300 line-clamp-3">
+                    {note.content.slice(0, 100)}
+                    {note.content.length > 100 && '...'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         
         <form onSubmit={handleSubmit} className="flex items-center space-x-4">
           <div className="flex-1 flex items-center bg-gray-800 border border-gray-600 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
@@ -524,7 +590,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
             />
             <button
               type="submit"
-              disabled={(!input.trim() && attachedImages.length === 0) || isLoading}
+              disabled={(!input.trim() && attachedImages.length === 0 && attachedNotes.length === 0) || isLoading}
               className="flex-shrink-0 mr-2 p-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg transition-colors"
             >
               <Send size={16} className="text-white" />

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Plus, Edit2, Trash2, Save, X } from 'lucide-react';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface MindMapRefactorProps {
   nodeId: string;
@@ -21,6 +22,7 @@ export function MindMapRefactor({
   const [newChildText, setNewChildText] = useState('');
   const [isAddingChild, setIsAddingChild] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleUpdateNode = async () => {
     if (!onNodeUpdate || editedLabel.trim() === nodeLabel) {
@@ -58,14 +60,13 @@ export function MindMapRefactor({
     }
   };
 
-  const handleDeleteNode = async () => {
+  const handleDeleteNode = () => {
     if (!onNodeDelete) return;
+    setShowDeleteConfirm(true);
+  };
 
-    const confirmed = window.confirm(
-      `Are you sure you want to delete the node "${nodeLabel}"? This action cannot be undone.`
-    );
-
-    if (!confirmed) return;
+  const confirmDeleteNode = async () => {
+    if (!onNodeDelete) return;
 
     setIsLoading(true);
     try {
@@ -234,6 +235,17 @@ export function MindMapRefactor({
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={confirmDeleteNode}
+        title="Delete Node"
+        message={`Are you sure you want to delete the node "${nodeLabel}"? This action cannot be undone and will remove all child nodes as well.`}
+        confirmText="Delete Node"
+        type="danger"
+        icon={<Trash2 size={20} />}
+      />
     </div>
   );
 }

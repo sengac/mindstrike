@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, Play, Square, Loader2, Cpu, Download } from 'lucide-react';
+import { X, Play, Square, Loader2, Cpu, Download, Trash2, FolderOpen } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import toast from 'react-hot-toast';
 import { modelEvents } from '../utils/modelEvents';
+import { ConfirmDialog } from './shared/ConfirmDialog';
 
 interface LocalModelInfo {
   id: string;
@@ -45,6 +46,8 @@ export function LocalModelLoadDialog({
   const [modelStatuses, setModelStatuses] = useState<Map<string, ModelStatus>>(new Map());
   const [loading, setLoading] = useState(true);
   const [loadingModelId, setLoadingModelId] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [pendingDeleteModelId, setPendingDeleteModelId] = useState<string>('');
 
 
   // Helper functions
@@ -233,6 +236,54 @@ export function LocalModelLoadDialog({
     }
   }, [fetchModelsAndStatuses]);
 
+  const handleDelete = useCallback((modelId: string) => {
+    setPendingDeleteModelId(modelId);
+    setShowDeleteConfirm(true);
+  }, []);
+
+  const confirmDelete = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/local-llm/models/${pendingDeleteModelId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        toast.success('Model deleted successfully');
+        await fetchModelsAndStatuses(); // Reload data
+        
+        // Emit event to trigger global model rescan
+        modelEvents.emit('models-changed');
+      } else {
+        const error = await response.json();
+        toast.error(error.error || 'Failed to delete model');
+      }
+    } catch (error) {
+      console.error('Error deleting model:', error);
+      toast.error('Failed to delete model');
+    } finally {
+      setPendingDeleteModelId('');
+      setShowDeleteConfirm(false);
+    }
+  }, [pendingDeleteModelId, fetchModelsAndStatuses]);
+
+  const handleOpenModelsDirectory = useCallback(async () => {
+    try {
+      const response = await fetch('/api/local-llm/open-models-directory', {
+        method: 'POST',
+      });
+
+      if (response.ok) {
+        toast.success('Opened models directory');
+      } else {
+        const error = await response.json();
+        toast.error(error.error || 'Failed to open models directory');
+      }
+    } catch (error) {
+      console.error('Error opening models directory:', error);
+      toast.error('Failed to open models directory');
+    }
+  }, []);
+
   // Initial data loading
   useEffect(() => {
     if (isOpen) {
@@ -272,6 +323,14 @@ export function LocalModelLoadDialog({
             <h2 className="text-xl font-semibold text-white">Local Model Management</h2>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleOpenModelsDirectory}
+              className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors"
+              title="Open models directory"
+            >
+              <FolderOpen size={16} />
+              Open Folder
+            </button>
             {!loading && localModels.length > 0 && (
               <button
                 onClick={() => {
@@ -420,6 +479,13 @@ export function LocalModelLoadDialog({
                               )}
                             </button>
                           )}
+                          <button
+                            onClick={() => handleDelete(model.id)}
+                            className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-red-400"
+                            title="Delete model"
+                          >
+                            <Trash2 size={14} />
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -429,6 +495,17 @@ export function LocalModelLoadDialog({
             )}
           </div>
         </div>
+        
+        <ConfirmDialog
+          isOpen={showDeleteConfirm}
+          onClose={() => setShowDeleteConfirm(false)}
+          onConfirm={confirmDelete}
+          title="Delete Model"
+          message="Are you sure you want to delete this model? This action cannot be undone and will permanently remove the model from your system."
+          confirmText="Delete Model"
+          type="danger"
+          icon={<Trash2 size={20} />}
+        />
       </div>
     </div>
   );

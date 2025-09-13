@@ -14,6 +14,7 @@ interface MarkdownEditorProps {
   activeMode?: 'preview' | 'edit';
   onSave?: (value: string) => Promise<void> | void;
   className?: string;
+  additionalButtons?: React.ReactNode;
 }
 
 type TabType = 'preview' | 'edit';
@@ -26,7 +27,8 @@ export function MarkdownEditor({
   defaultMode = 'preview',
   activeMode,
   onSave,
-  className = ""
+  className = "",
+  additionalButtons
 }: MarkdownEditorProps) {
   const [activeTab, setActiveTab] = useState<TabType>(activeMode || defaultMode);
   const [content, setContent] = useState(value);
@@ -116,16 +118,21 @@ export function MarkdownEditor({
             </button>
           </div>
 
-          {/* Save button */}
-          {activeTab === 'edit' && onSave && (
-            <button
-              onClick={handleSave}
-              className="flex items-center space-x-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded text-sm font-medium transition-colors"
-            >
-              <Save size={14} />
-              <span>Save</span>
-            </button>
-          )}
+          <div className="flex items-center space-x-2">
+            {/* Additional buttons */}
+            {additionalButtons}
+            
+            {/* Save button */}
+            {activeTab === 'edit' && onSave && (
+              <button
+                onClick={handleSave}
+                className="flex items-center space-x-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded text-sm font-medium transition-colors"
+              >
+                <Save size={14} />
+                <span>Save</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

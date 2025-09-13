@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useAppStore } from '../store/useAppStore';
 
 export interface Workflow {
   id: string;
@@ -8,7 +9,8 @@ export interface Workflow {
   updatedAt: Date;
 }
 
-export function useWorkflows(workspaceRestored: boolean = true) {
+export function useWorkflows() {
+  const workspaceVersion = useAppStore((state) => state.workspaceVersion);
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [activeWorkflowId, setActiveWorkflowId] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -41,12 +43,10 @@ export function useWorkflows(workspaceRestored: boolean = true) {
     }
   }, []);
 
-  // Load workflows from mindstrike-workflows.json file on mount
+  // Load workflows from mindstrike-workflows.json file on mount and when workspace changes
   useEffect(() => {
-    if (workspaceRestored) {
-      loadWorkflows();
-    }
-  }, [loadWorkflows, workspaceRestored]);
+    loadWorkflows();
+  }, [loadWorkflows, workspaceVersion]);
 
   // Cleanup timeout on unmount
   useEffect(() => {

@@ -18,6 +18,7 @@ import { useMindMaps } from './hooks/useMindMaps';
 import { useWorkspaceStore } from './hooks/useWorkspaceStore';
 import { useAppStore } from './store/useAppStore';
 
+
 import { ConversationMessage } from './types';
 import { Source } from './components/shared/ChatContentViewer';
 import { Menu, X, MessageSquare, Workflow, Network, Settings, Cpu } from 'lucide-react';
@@ -42,32 +43,23 @@ function App() {
     workspaceRoot, 
 
   } = useAppStore();
-  const { setWorkspaceRoot } = useWorkspaceStore();
   const chatPanelRef = useRef<ChatPanelRef>(null);
   
   // LLM config is now managed server-side through ModelSelector
   
-  // Restore workspace before loading threads
+  // Initialize workspace once globally
   useEffect(() => {
-    const restoreWorkspace = async () => {
-      if (workspaceRoot) {
-        try {
-          await setWorkspaceRoot(workspaceRoot);
-        } catch (error) {
-          console.error('Failed to restore workspace:', error);
-        }
-      } else {
-        // Set workspace to current working directory if none is selected
-        try {
-          await setWorkspaceRoot();
-        } catch (error) {
-          console.error('Failed to set initial workspace:', error);
-        }
+    const initializeApp = async () => {
+      try {
+        const { initializeWorkspace } = await import('./utils/workspace-initializer');
+        await initializeWorkspace();
+      } catch (error) {
+        console.error('Failed to initialize workspace:', error);
       }
       setWorkspaceRestored(true);
     };
-    restoreWorkspace();
-  }, [workspaceRoot, setWorkspaceRoot]);
+    initializeApp();
+  }, []); // No dependencies - runs once on mount
   
   const {
     threads,
@@ -82,7 +74,7 @@ function App() {
     selectThread,
     updateThreadMessages,
     deleteMessage
-  } = useThreads(workspaceRestored); // Pass flag to delay loading
+  } = useThreads();
 
   const {
     workflows,
@@ -93,7 +85,7 @@ function App() {
     deleteWorkflow,
     renameWorkflow,
     selectWorkflow
-  } = useWorkflows(workspaceRestored);
+  } = useWorkflows();
 
   const {
     mindMaps,
@@ -104,7 +96,7 @@ function App() {
     deleteMindMap,
     renameMindMap,
     selectMindMap
-  } = useMindMaps(workspaceRestored);
+  } = useMindMaps();
 
   // Create a default thread if none exist (only after data is loaded)
   useEffect(() => {
@@ -374,7 +366,12 @@ function App() {
                 onThreadCreate={handleNewThread}
                 onThreadRename={renameThread}
                 onThreadDelete={deleteThread}
-                onNavigateToChat={() => setActivePanel('chat')}
+                onNavigateToChat={(threadId?: string) => {
+                  if (threadId) {
+                    selectThread(threadId);
+                  }
+                  setActivePanel('chat');
+                }}
                 onDeleteMessage={(threadId: string, messageId: string) => {
                   console.log('Deleting message:', { threadId, messageId });
                   deleteMessage(threadId, messageId);

@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, RefreshCw, Cpu, Settings } from 'lucide-react';
-import { useModels, LLMModel } from '../hooks/useModels';
+import { LLMModel } from '../hooks/useModels';
 import { getContextDescription } from '../utils/tokenUtils';
 import { useAppStore } from '../store/useAppStore';
+import { useModelsStore } from '../store/useModelsStore';
 import toast from 'react-hot-toast';
 
 interface ModelSelectorProps {
@@ -12,8 +13,9 @@ interface ModelSelectorProps {
 export function ModelSelector({ className = '' }: ModelSelectorProps) {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
-    const { models, isLoading, error, defaultModel, setDefaultModel, rescanModels } = useModels();
+    const { models, isLoading, error, setDefaultModel, rescanModels, getDefaultModel } = useModelsStore();
     const { setActivePanel } = useAppStore();
+    const defaultModel = getDefaultModel();
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -32,7 +34,7 @@ export function ModelSelector({ className = '' }: ModelSelectorProps) {
         
         // If no default model is set, auto-select the first available model
         if (!defaultModel) {
-            setDefaultModel(models[0].id).catch(error => {
+            setDefaultModel(models[0].id).catch((error: any) => {
                 console.error('Failed to set default model:', error);
                 toast.error('Failed to set default model');
             });
@@ -137,7 +139,7 @@ export function ModelSelector({ className = '' }: ModelSelectorProps) {
                         </div>
                     )}
 
-                    {models.map((model) => {
+                    {models.map((model: LLMModel) => {
                         const contextInfo = model.contextLength ? getContextDescription(model.contextLength) : '';
                         return (
                             <button

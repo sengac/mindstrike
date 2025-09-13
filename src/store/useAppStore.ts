@@ -18,6 +18,7 @@ interface AppState {
   currentDirectory: string;
   files: string[];
   isLoading: boolean;
+  workspaceVersion: number; // Increment to trigger data reloads
   
   // LLM Configuration - simplified to only store last used model
   lastUsedModel?: LastUsedModel;
@@ -36,6 +37,7 @@ interface AppState {
   setCurrentDirectory: (dir: string) => void;
   setFiles: (files: string[]) => void;
   setIsLoading: (loading: boolean) => void;
+  triggerWorkspaceReload: () => void;
   setLastUsedModel: (modelId: string) => void;
   increaseFontSize: () => void;
   decreaseFontSize: () => void;
@@ -58,6 +60,7 @@ export const useAppStore = create<AppState>()(
       currentDirectory: '.',
       files: [],
       isLoading: false,
+      workspaceVersion: 0,
       lastUsedModel: undefined,
       defaultCustomRole: undefined,
       mindMapKeyBindings: undefined,
@@ -66,10 +69,14 @@ export const useAppStore = create<AppState>()(
       setFontSize: (fontSize: number) => set({ fontSize }),
       setSidebarOpen: (sidebarOpen: boolean) => set({ sidebarOpen }),
       setActivePanel: (activePanel: 'chat' | 'files' | 'agents' | 'workflows' | 'mind-maps' | 'settings') => set({ activePanel }),
-      setWorkspaceRoot: (workspaceRoot?: string) => set({ workspaceRoot }),
+      setWorkspaceRoot: (workspaceRoot?: string) => set((state) => ({ 
+        workspaceRoot, 
+        workspaceVersion: state.workspaceVersion + 1 
+      })),
       setCurrentDirectory: (currentDirectory: string) => set({ currentDirectory }),
       setFiles: (files: string[]) => set({ files }),
       setIsLoading: (isLoading: boolean) => set({ isLoading }),
+      triggerWorkspaceReload: () => set((state) => ({ workspaceVersion: state.workspaceVersion + 1 })),
       setLastUsedModel: (modelId: string) => set({ 
         lastUsedModel: { 
           modelId, 

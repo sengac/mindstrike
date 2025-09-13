@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { ConversationMessage, ImageAttachment } from '../types';
+import { ConversationMessage, ImageAttachment, NotesAttachment } from '../types';
 import { useResponseValidation } from './useResponseValidation';
 
 interface UseChatProps {
@@ -76,7 +76,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
     loadConversation();
   }, [loadConversation]);
 
-  const sendMessage = useCallback(async (content: string, images?: ImageAttachment[]) => {
+  const sendMessage = useCallback(async (content: string, images?: ImageAttachment[], notes?: NotesAttachment[]) => {
     // Handle /clear command
     if (content.trim() === '/clear') {
       await clearConversation();
@@ -94,13 +94,14 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
       role: 'user',
       content,
       timestamp: new Date(),
-      images: images || []
+      images: images || [],
+      notes: notes || []
     };
     let currentMessages = [...messages, userMessage];
     setMessages(currentMessages);
 
     try {
-      const requestBody = { message: content, threadId, images: images || [] };
+      const requestBody = { message: content, threadId, images: images || [], notes: notes || [] };
       
       // Use SSE for real-time updates
       const response = await fetch('/api/message/stream', {

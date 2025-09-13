@@ -8,6 +8,7 @@ export interface ConversationMessage {
   status?: 'processing' | 'completed' | 'cancelled';
   model?: string; // LLM model used for assistant messages
   images?: ImageAttachment[]; // Image attachments for user messages
+  notes?: NotesAttachment[]; // Notes attachments for user messages
 }
 
 export interface ImageAttachment {
@@ -19,6 +20,14 @@ export interface ImageAttachment {
   thumbnail: string; // base64 encoded thumbnail for UI display
   fullImage: string; // base64 encoded full-size image for LLM
   uploadedAt: Date;
+}
+
+export interface NotesAttachment {
+  id: string;
+  title: string;
+  content: string;
+  nodeLabel?: string; // Optional label of the source node
+  attachedAt: Date;
 }
 
 export interface ToolCall {

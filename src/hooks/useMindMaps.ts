@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useAppStore } from '../store/useAppStore';
 
 export interface MindMap {
   id: string;
@@ -8,7 +9,8 @@ export interface MindMap {
   updatedAt: Date;
 }
 
-export function useMindMaps(workspaceRestored: boolean = true) {
+export function useMindMaps() {
+  const workspaceVersion = useAppStore((state) => state.workspaceVersion);
   const [mindMaps, setMindMaps] = useState<MindMap[]>([]);
   const [activeMindMapId, setActiveMindMapId] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -41,12 +43,10 @@ export function useMindMaps(workspaceRestored: boolean = true) {
     }
   }, []);
 
-  // Load mindmaps from mindstrike-mindmaps.json file on mount
+  // Load mindmaps from mindstrike-mindmaps.json file on mount and when workspace changes
   useEffect(() => {
-    if (workspaceRestored) {
-      loadMindMaps();
-    }
-  }, [loadMindMaps, workspaceRestored]);
+    loadMindMaps();
+  }, [loadMindMaps, workspaceVersion]);
 
   // Cleanup timeout on unmount
   useEffect(() => {

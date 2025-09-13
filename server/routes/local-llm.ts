@@ -1,6 +1,10 @@
 import { Router } from 'express';
+import { exec } from 'child_process';
+import fs from 'fs';
+import os from 'os';
 import { getLocalLLMManager } from '../local-llm-singleton.js';
 import { sseManager } from '../sse-manager.js';
+import { getLocalModelsDirectory } from '../utils/settings-directory.js';
 
 const router = Router();
 const llmManager = getLocalLLMManager();
@@ -24,13 +28,283 @@ router.get('/models', async (req, res) => {
 /**
  * Get available models for download
  */
-router.get('/available-models', (req, res) => {
+router.get('/available-models', async (req, res) => {
   try {
-    const models = llmManager.getAvailableModels();
+    const models = await llmManager.getAvailableModels();
     res.json(models);
   } catch (error) {
     console.error('Error getting available models:', error);
     res.status(500).json({ error: 'Failed to get available models' });
+  }
+});
+
+/**
+ * Refresh available models cache
+ */
+router.post('/refresh-models', async (req, res) => {
+  try {
+    const { modelFetcher } = await import('../model-fetcher.js');
+    const models = await modelFetcher.refreshAvailableModels(); // Force refresh
+    res.json({ success: true, models });
+  } catch (error) {
+    console.error('Error refreshing models:', error);
+    res.status(500).json({ error: 'Failed to refresh models' });
+  }
+});
+
+/**
+ * Open models directory in file explorer
+ */
+router.post('/open-models-directory', async (req, res) => {
+  try {
+    const modelsDir = getLocalModelsDirectory();
+    const platform = os.platform();
+    
+    // Ensure the directory exists before trying to open it
+    if (!fs.existsSync(modelsDir)) {
+      fs.mkdirSync(modelsDir, { recursive: true });
+    }
+    
+    let command: string;
+    if (platform === 'win32') {
+      command = `explorer "${modelsDir}"`;
+    } else if (platform === 'darwin') {
+      command = `open "${modelsDir}"`;
+    } else {
+      // Linux and other Unix-like systems
+      command = `xdg-open "${modelsDir}"`;
+    }
+    
+    exec(command, (error) => {
+      if (error) {
+        console.error('Error opening models directory:', error);
+        return res.status(500).json({ error: 'Failed to open models directory' });
+      }
+      res.json({ success: true, directory: modelsDir });
+    });
+  } catch (error) {
+    console.error('Error opening models directory:', error);
+    res.status(500).json({ error: 'Failed to open models directory' });
+  }
+});
+
+/**
+ * Clear accessibility cache and recheck all models
+ */
+router.post('/refresh-accessibility', async (req, res) => {
+  try {
+    const { modelFetcher } = await import('../model-fetcher.js');
+    modelFetcher.clearAccessibilityCache();
+    const models = await modelFetcher.refreshAvailableModels(); // Force refresh
+    res.json({ success: true, models });
+  } catch (error) {
+    console.error('Error refreshing accessibility:', error);
+    res.status(500).json({ error: 'Failed to refresh accessibility' });
+  }
+});
+
+/**
+ * Set Hugging Face token
+ */
+router.post('/hf-token', async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ error: 'Token is required' });
+    }
+
+    const { modelFetcher } = await import('../model-fetcher.js');
+    await modelFetcher.setHuggingFaceToken(token);
+    
+    res.json({ success: true, message: 'Hugging Face token saved. Rechecking gated models...' });
+  } catch (error) {
+    console.error('Error setting Hugging Face token:', error);
+    res.status(500).json({ error: 'Failed to save Hugging Face token' });
+  }
+});
+
+/**
+ * Remove Hugging Face token
+ */
+router.delete('/hf-token', async (req, res) => {
+  try {
+    const { modelFetcher } = await import('../model-fetcher.js');
+    await modelFetcher.removeHuggingFaceToken();
+    
+    res.json({ success: true, message: 'Hugging Face token removed' });
+  } catch (error) {
+    console.error('Error removing Hugging Face token:', error);
+    res.status(500).json({ error: 'Failed to remove Hugging Face token' });
+  }
+});
+
+/**
+ * Get Hugging Face token
+ */
+router.get('/hf-token', async (req, res) => {
+  try {
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    const { getMindstrikeDirectory } = await import('../utils/settings-directory.js');
+    
+    const tokenFile = path.join(getMindstrikeDirectory(), 'hf-token');
+    const token = await fs.readFile(tokenFile, 'utf-8');
+    
+    res.json({ token: token.trim() });
+  } catch (error) {
+    console.error('Error reading Hugging Face token:', error);
+    res.status(404).json({ error: 'Token not found' });
+  }
+});
+
+/**
+ * Check if Hugging Face token is set
+ */
+router.get('/hf-token/status', async (req, res) => {
+  try {
+    const { modelFetcher } = await import('../model-fetcher.js');
+    const hasToken = modelFetcher.hasHuggingFaceToken();
+    
+    res.json({ hasToken });
+  } catch (error) {
+    console.error('Error checking Hugging Face token status:', error);
+    res.status(500).json({ error: 'Failed to check token status' });
+  }
+});
+
+/**
+ * Update model list with real-time progress via SSE
+ */
+router.get('/update-models-stream', async (req: any, res: any) => {
+  try {
+    const { sseManager } = await import('../sse-manager.js');
+    const { modelFetcher } = await import('../model-fetcher.js');
+    
+    const clientId = `model-update-${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Set up SSE
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+    });
+
+    // Send initial connection event
+    res.write('data: {"type": "connected", "message": "Connected to model update stream"}\n\n');
+    if (res.flush) res.flush();
+
+    // Progress callback that sends updates via SSE
+    const progressCallback = (progress: any) => {
+      res.write(`data: ${JSON.stringify({
+        type: 'progress',
+        ...progress
+      })}\n\n`);
+      if (res.flush) res.flush();
+    };
+
+    // Handle client disconnect
+    req.on('close', () => {
+      console.log(`Model update stream client ${clientId} disconnected`);
+    });
+
+    // Start the model update process
+    try {
+      // Force refresh with progress
+      const models = await modelFetcher.getAvailableModelsWithProgress(progressCallback);
+      
+      // Update the local LLM manager's cache
+      const updatedModels = await llmManager.getAvailableModels();
+      
+      // Send final success event
+      res.write(`data: ${JSON.stringify({
+        type: 'completed',
+        message: `✅ Model update completed! Found ${models.length} models.`,
+        models: updatedModels
+      })}\n\n`);
+      
+    } catch (error) {
+      // Send error event
+      res.write(`data: ${JSON.stringify({
+        type: 'error',
+        message: `❌ Failed to update models: ${error instanceof Error ? error.message : 'Unknown error'}`
+      })}\n\n`);
+    }
+
+    // Close the connection
+    res.end();
+    
+  } catch (error) {
+    console.error('Error setting up model update stream:', error);
+    res.status(500).json({ error: 'Failed to start model update stream' });
+  }
+});
+
+/**
+ * Update model list (non-streaming version)
+ */
+router.post('/update-models', async (req, res) => {
+  try {
+    const { modelFetcher } = await import('../model-fetcher.js');
+    
+    // Force refresh
+    const models = await modelFetcher.refreshAvailableModels();
+    res.json({ success: true, models, count: models.length });
+  } catch (error) {
+    console.error('Error updating models:', error);
+    res.status(500).json({ error: 'Failed to update models' });
+  }
+});
+
+/**
+ * Search for models by query
+ */
+router.post('/search-models', async (req, res) => {
+  try {
+    const { query, searchType = 'all' } = req.body;
+    
+    if (!query || typeof query !== 'string') {
+      return res.status(400).json({ error: 'Query parameter is required and must be a string' });
+    }
+
+    const { modelFetcher } = await import('../model-fetcher.js');
+    const models = await modelFetcher.searchModels(query, searchType);
+    res.json({ success: true, models, count: models.length, query, searchType });
+  } catch (error) {
+    console.error('Error searching models:', error);
+    
+    // Handle specific timeout errors
+    if (error instanceof Error && error.message.includes('504')) {
+      res.status(504).json({ 
+        error: 'Search request timed out. HuggingFace API is currently slow. Please try again with a more specific search term.' 
+      });
+    } else if (error instanceof Error && error.message.includes('502')) {
+      res.status(502).json({ 
+        error: 'HuggingFace API is temporarily unavailable. Please try again later.' 
+      });
+    } else {
+      res.status(500).json({ error: 'Failed to search models' });
+    }
+  }
+});
+
+/**
+ * Clear search cache for a query (debug endpoint)
+ */
+router.post('/clear-search-cache', async (req, res) => {
+  try {
+    const { query } = req.body;
+    
+    if (!query || typeof query !== 'string') {
+      return res.status(400).json({ error: 'Query parameter is required and must be a string' });
+    }
+
+    const { modelFetcher } = await import('../model-fetcher.js');
+    modelFetcher.clearSearchCacheForQuery(query);
+    res.json({ success: true, message: `Cleared search cache for: ${query}` });
+  } catch (error) {
+    console.error('Error clearing search cache:', error);
+    res.status(500).json({ error: 'Failed to clear search cache' });
   }
 });
 
@@ -51,7 +325,7 @@ router.post('/download', async (req, res) => {
       filename,
       size,
       description,
-      modelType: modelType || 'unknown',
+      modelType: modelType || 'chat',
       contextLength,
       parameterCount,
       quantization
@@ -89,23 +363,39 @@ router.post('/download', async (req, res) => {
       }
       console.log(`Download completed: ${filename}`);
       
-      // Broadcast model updates to connected clients since new model is available
-      sseManager.broadcast('model-updates', {
-        type: 'models-updated',
-        timestamp: Date.now()
-      });
+      // Give server time to process the new model file before broadcasting update
+      setTimeout(() => {
+        sseManager.broadcast('model-updates', {
+          type: 'models-updated',
+          timestamp: Date.now()
+        });
+      }, 2000);
     }).catch((error) => {
       // Download failed or cancelled
       const connections = sseConnections.get(filename);
       if (connections) {
         const isCancelled = error.message === 'Download cancelled';
-        const data = JSON.stringify({ 
+        let errorDetails: any = {
           progress: 0, 
           speed: '0 B/s', 
           isDownloading: false, 
           error: error.message,
           cancelled: isCancelled
-        });
+        };
+
+        // Add specific handling for HF errors
+        if (error.message === 'UNAUTHORIZED_HF_TOKEN_REQUIRED') {
+          errorDetails.errorType = '401';
+          errorDetails.errorMessage = 'Hugging Face token required. Please add your token in settings.';
+        } else if (error.message === 'FORBIDDEN_MODEL_ACCESS_REQUIRED') {
+          errorDetails.errorType = '403';
+          errorDetails.errorMessage = 'Model access required. Request access on Hugging Face.';
+          // Extract model ID from URL for HF link
+          const modelId = modelUrl.replace('https://huggingface.co/', '').split('/resolve/')[0];
+          errorDetails.huggingFaceUrl = `https://huggingface.co/${modelId}`;
+        }
+
+        const data = JSON.stringify(errorDetails);
         connections.forEach(res => {
           try {
             res.write(`data: ${data}\n\n`);
@@ -207,6 +497,15 @@ router.delete('/models/:modelId', async (req, res) => {
   
   try {
     await llmManager.deleteModel(modelId);
+    
+    // Give server time to process the model deletion before broadcasting update
+    setTimeout(() => {
+      sseManager.broadcast('model-updates', {
+        type: 'models-updated',
+        timestamp: Date.now()
+      });
+    }, 2000);
+    
     res.json({ message: 'Model deleted successfully' });
   } catch (error) {
     console.error('Error deleting model:', error);

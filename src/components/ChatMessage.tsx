@@ -676,6 +676,34 @@ function ChatMessageComponent({ message, onDelete, onRegenerate, onCancelToolCal
                       </div>
                     </div>
                   )}
+
+                  {/* Display attached notes for user messages */}
+                  {isUser && message.notes && message.notes.length > 0 && (
+                    <div className="mb-3">
+                      <div className="space-y-2">
+                        {message.notes.map((note) => (
+                          <div key={note.id} className="bg-gray-700 rounded-lg p-3 border border-gray-600">
+                            <div className="flex items-start gap-2">
+                              <StickyNote size={16} className="text-blue-400 mt-0.5 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium text-blue-400 mb-1">
+                                  {note.title}
+                                </div>
+                                {note.nodeLabel && (
+                                  <div className="text-xs text-gray-400 mb-2">
+                                    From: {note.nodeLabel}
+                                  </div>
+                                )}
+                                <div className="text-sm text-gray-300 whitespace-pre-wrap">
+                                  {note.content}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {renderContent(message.content)}
                 </>
               )}

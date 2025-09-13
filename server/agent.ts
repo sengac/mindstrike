@@ -28,6 +28,14 @@ export interface ImageAttachment {
   uploadedAt: Date;
 }
 
+export interface NotesAttachment {
+  id: string;
+  title: string;
+  content: string;
+  nodeLabel?: string; // Optional label of the source node
+  attachedAt: Date;
+}
+
 export interface ConversationMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -38,6 +46,7 @@ export interface ConversationMessage {
   status?: 'processing' | 'completed' | 'cancelled';
   model?: string; // LLM model used for assistant messages
   images?: ImageAttachment[]; // Image attachments for user messages
+  notes?: NotesAttachment[]; // Notes attachments for user messages
 }
 
 export class Agent {
@@ -149,8 +158,7 @@ export class Agent {
     ].join('\n');
   }
 
-  async processMessage(userMessage: string, images?: ImageAttachment[], onUpdate?: (message: ConversationMessage) => void): Promise<ConversationMessage> {
-    console.log('🚀 processMessage called with onUpdate callback:', !!onUpdate);
+  async processMessage(userMessage: string, images?: ImageAttachment[], notes?: NotesAttachment[], onUpdate?: (message: ConversationMessage) => void): Promise<ConversationMessage> {
     
     // Add user message to conversation
     const userMsg: ConversationMessage = {
@@ -158,7 +166,8 @@ export class Agent {
       role: 'user',
       content: userMessage,
       timestamp: new Date(),
-      images: images || []
+      images: images || [],
+      notes: notes || []
     };
     this.conversation.push(userMsg);
 
@@ -276,6 +285,23 @@ export class Agent {
                   }
                 });
               }
+
+              // Add notes content
+              if (msg.notes && msg.notes.length > 0) {
+                let allNotesText = '';
+                for (const note of msg.notes) {
+                  allNotesText += `\n\n--- ATTACHED NOTES: ${note.title} ---${note.nodeLabel ? ` (from node: ${note.nodeLabel})` : ''}\n${note.content}\n--- END NOTES ---`;
+                }
+                
+                if (contentArray.length > 0 && contentArray[0].type === 'text') {
+                  contentArray[0].text += allNotesText;
+                } else {
+                  contentArray.unshift({
+                    type: 'text',
+                    text: msg.content + allNotesText
+                  });
+                }
+              }
               
               return {
                 role: msg.role,
@@ -298,9 +324,20 @@ export class Agent {
         }
       } else {
         // Regular text message
+        let messageContent = msg.content;
+        
+        // Add notes content for user messages
+        if (msg.role === 'user' && msg.notes && msg.notes.length > 0) {
+          let allNotesText = '';
+          for (const note of msg.notes) {
+            allNotesText += `\n\n--- ATTACHED NOTES: ${note.title} ---${note.nodeLabel ? ` (from node: ${note.nodeLabel})` : ''}\n${note.content}\n--- END NOTES ---`;
+          }
+          messageContent += allNotesText;
+        }
+        
         return {
           role: msg.role,
-          content: cleanContentForLLM(msg.content)
+          content: cleanContentForLLM(messageContent)
         };
       }
     });
@@ -329,10 +366,7 @@ export class Agent {
 
       // Send initial message update
       if (onUpdate) {
-        console.log('📤 Sending initial message update via onUpdate callback');
         onUpdate(assistantMsg);
-      } else {
-        console.log('⚠️ No onUpdate callback provided');
       }
 
       // Execute tool calls if present
