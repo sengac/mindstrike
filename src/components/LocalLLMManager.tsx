@@ -34,6 +34,8 @@ import {
 import toast from 'react-hot-toast';
 import { modelEvents } from '../utils/modelEvents';
 import { ConfirmDialog } from './shared/ConfirmDialog';
+import { ModelSearchProgress } from './ModelSearchProgress';
+import { useModelScanStore } from '../store/useModelScanStore';
 
 interface LocalModelInfo {
   id: string;
@@ -54,6 +56,7 @@ interface ModelDownloadInfo {
   name: string;
   url: string;
   filename: string;
+  modelId?: string;
   size?: number;
   description?: string;
   modelType: string;
@@ -75,7 +78,8 @@ interface ModelStatus {
 export function LocalLLMManager() {
   const [localModels, setLocalModels] = useState<LocalModelInfo[]>([]);
   const [modelStatuses, setModelStatuses] = useState<Map<string, ModelStatus>>(new Map());
-  const [loading, setLoading] = useState(true);
+  const [loadingLocalModels, setLoadingLocalModels] = useState(true);
+
   const [hfToken, setHfToken] = useState<string>('');
   const [showHfToken, setShowHfToken] = useState(false);
 
@@ -92,6 +96,9 @@ export function LocalLLMManager() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [showHfConfigDialog, setShowHfConfigDialog] = useState(false);
   const [searchType, setSearchType] = useState<'all' | 'name' | 'username' | 'description' | 'modelType'>('all');
+  
+  // Model scan store
+  const { isScanning: isScanningModels, startScan, startSearch } = useModelScanStore();
   // Pagination constants
   const DEFAULT_ITEMS_PER_PAGE = 10;
   
@@ -103,13 +110,12 @@ export function LocalLLMManager() {
     searchQuery,
     setSearchQuery,
     isSearching,
-    performSearch,
     clearSearch,
     availableModels,
     searchResults,
     hasSearched,
     loadingAvailable,
-    loadAvailableModels,
+    loadCachedModels,
     getDisplayModels
   } = useAvailableModelsStore();
 
@@ -208,9 +214,9 @@ export function LocalLLMManager() {
     loadData();
     loadHfTokenStatus();
 
-    // Listen for model download completion to refresh the list
+    // Listen for model download completion to refresh the downloaded models list
     const handleModelDownloaded = () => {
-      loadData();
+      loadLocalModels();
     };
 
     modelEvents.on('local-model-downloaded', handleModelDownloaded);
@@ -219,6 +225,30 @@ export function LocalLLMManager() {
       modelEvents.off('local-model-downloaded', handleModelDownloaded);
     };
   }, []);
+
+  // Auto-trigger Find Models when available models list is empty
+  useEffect(() => {
+    const triggerAutoScan = async () => {
+      // Only auto-trigger if we're not already scanning/searching and we have loaded available models
+      if (!isScanningModels && !isSearching && !loadingAvailable && availableModels.length === 0 && !hasSearched) {
+        console.log('No available models found, checking for cached models first...');
+        try {
+          // First try to load cached models
+          const hasCachedModels = await loadCachedModels();
+          if (!hasCachedModels) {
+            console.log('No cached models found, auto-triggering model scan...');
+            await startScan();
+          } else {
+            console.log('Loaded cached models successfully');
+          }
+        } catch (error) {
+          console.error('Failed to auto-start model scan:', error);
+        }
+      }
+    };
+
+    triggerAutoScan();
+  }, [availableModels, loadingAvailable, isScanningModels, isSearching, hasSearched, startScan, loadCachedModels]);
 
   // This is now handled by the store
 
@@ -232,13 +262,39 @@ export function LocalLLMManager() {
     setLocalCurrentPage(1);
   }, [searchResults, availableModels, hasSearched]);
 
-  const handleSearchButton = () => {
-    performSearch(searchType);
+  const handleSearchButton = async () => {
+    // If there's no search query and no advanced filters, trigger a model scan
+    const hasFilters = selectedModelType !== 'all' || selectedParameterSize !== 'all' || 
+                      sortBy !== 'downloads' || sortOrder !== 'desc';
+    
+    if (!searchQuery.trim() && !hasFilters) {
+      // No search query and no filters - start a full model scan
+      try {
+        await startScan();
+      } catch (error) {
+        console.error('Failed to start model scan:', error);
+        toast.error('Failed to start model scan');
+      }
+    } else {
+      // Has search query or filters - use unified search system
+      try {
+        const filters = {
+          selectedModelType,
+          selectedParameterSize,
+          sortBy,
+          sortOrder
+        };
+        await startSearch(searchQuery, searchType, filters);
+      } catch (error) {
+        console.error('Failed to start search:', error);
+        toast.error('Failed to start search');
+      }
+    }
   };
 
-  const loadData = async () => {
+  const loadLocalModels = async () => {
     try {
-      setLoading(true);
+      setLoadingLocalModels(true);
       
       // Load local models
       const modelsResponse = await fetch('/api/local-llm/models');
@@ -257,17 +313,32 @@ export function LocalLLMManager() {
         }
         setModelStatuses(statuses);
       }
-      setLoading(false);
-      
-      // Load available models using the store
-      await loadAvailableModels();
     } catch (error) {
-      console.error('Error loading local LLM data:', error);
+      console.error('Error loading local models:', error);
       if (error instanceof TypeError && error.message.includes('NetworkError')) {
         toast.error('Server not running.', { duration: 5000 });
       } else {
-        toast.error('Failed to load local LLM data');
+        toast.error('Failed to load downloaded models');
       }
+    } finally {
+      setLoadingLocalModels(false);
+    }
+  };
+
+  const loadData = async () => {
+    // Load local models first (instant)
+    await loadLocalModels();
+    
+    // Try to load cached models first (fast)
+    try {
+      const hasCachedModels = await loadCachedModels();
+      if (!hasCachedModels) {
+        console.log('No cached models found during initial load');
+        // The auto-scan useEffect will handle this case
+      }
+    } catch (error) {
+      console.error('Error loading cached models:', error);
+      // The auto-scan useEffect will handle this case
     }
   };
 
@@ -435,7 +506,7 @@ export function LocalLLMManager() {
 
       if (response.ok) {
         toast.success('Model deleted successfully');
-        loadData(); // Reload data
+        loadLocalModels(); // Reload downloaded models only
         
         // Emit event to trigger global model rescan
         modelEvents.emit('models-changed');
@@ -538,14 +609,7 @@ export function LocalLLMManager() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="text-center py-8">
-        <Loader2 size={24} className="text-blue-400 animate-spin mx-auto mb-2" />
-        <p className="text-gray-400">Loading local LLM models...</p>
-      </div>
-    );
-  }
+
 
   return (
     <div className="space-y-6">
@@ -557,17 +621,38 @@ export function LocalLLMManager() {
             <HardDrive size={20} className="text-blue-400" />
             <h3 className="text-lg font-medium text-white">Downloaded Models</h3>
           </div>
-          <button
-            onClick={handleOpenModelsDirectory}
-            className="flex items-center gap-2 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-white transition-colors"
-            title="Open models directory"
-          >
-            <FolderOpen size={14} />
-            Open Folder
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={loadLocalModels}
+              disabled={loadingLocalModels}
+              className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed rounded-lg text-sm text-white transition-colors"
+              title="Scan models folder for new or removed models"
+            >
+              {loadingLocalModels ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Search size={14} />
+              )}
+              Scan Models Folder
+            </button>
+            <button
+              onClick={handleOpenModelsDirectory}
+              className="flex items-center gap-2 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-white transition-colors"
+              title="Open models directory"
+            >
+              <FolderOpen size={14} />
+              Open Folder
+            </button>
+          </div>
         </div>
 
-        {localModels.length === 0 ? (
+        {loadingLocalModels ? (
+          <div className="text-center py-8">
+            <Loader2 size={48} className="text-blue-400 animate-spin mx-auto mb-4" />
+            <h4 className="text-lg font-medium text-gray-400 mb-2">Scanning for Downloaded Models</h4>
+            <p className="text-gray-500">Checking for models in your local storage...</p>
+          </div>
+        ) : localModels.length === 0 ? (
           <div className="text-center py-8">
             <HardDrive size={48} className="text-gray-600 mx-auto mb-4" />
             <h4 className="text-lg font-medium text-gray-400 mb-2">No Local Models</h4>
@@ -717,16 +802,16 @@ export function LocalLLMManager() {
             </select>
             <button
               onClick={handleSearchButton}
-              disabled={isSearching}
+              disabled={isSearching || isScanningModels}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed rounded-lg text-sm text-white transition-colors"
-              title="Search models"
+              title="Search for models"
             >
-              {isSearching ? (
+              {isSearching || isScanningModels ? (
                 <Loader2 size={14} className="animate-spin" />
               ) : (
                 <Search size={14} />
               )}
-              Search
+              {searchQuery.trim() ? 'Search' : 'Find Models'}
             </button>
           </div>
 
@@ -917,7 +1002,14 @@ export function LocalLLMManager() {
           </div>
         )}
 
-        {loadingAvailable ? (
+        {(isScanningModels || isSearching) ? (
+          <ModelSearchProgress
+            isVisible={true}
+            isSearching={isSearching}
+            isScanningModels={isScanningModels}
+            onClose={() => {}}
+          />
+        ) : loadingAvailable ? (
           <div className="text-center py-8">
             <Loader2 size={24} className="text-blue-400 animate-spin mx-auto mb-2" />
             <p className="text-gray-400">Loading available models...</p>
@@ -939,7 +1031,7 @@ export function LocalLLMManager() {
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                       <Download size={16} className="text-green-400" />
-                      <h4 className="text-white font-medium">{model.name}</h4>
+                      <h4 className="text-white font-medium">{model.modelId || model.name}</h4>
                       {model.huggingFaceUrl && (
                         <a
                           href={model.huggingFaceUrl}
@@ -1253,6 +1345,8 @@ export function LocalLLMManager() {
         type="warning"
         icon={<X size={20} />}
       />
+
+
     </div>
   );
 }

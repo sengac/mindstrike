@@ -5,6 +5,7 @@ export interface AvailableModel {
   name: string;
   url: string;
   filename: string;
+  modelId?: string;
   size?: number;
   description?: string;
   modelType: string;
@@ -41,6 +42,7 @@ interface AvailableModelsState {
   performSearch: (searchType?: string) => Promise<void>;
   clearSearch: () => void;
   loadAvailableModels: () => Promise<void>;
+  loadCachedModels: () => Promise<boolean>;
   setCurrentPage: (page: number) => void;
   
   // Getters
@@ -143,6 +145,24 @@ export const useAvailableModelsStore = create<AvailableModelsState>((set, get) =
       hasSearched: false,
       currentPage: 1
     });
+  },
+
+  loadCachedModels: async () => {
+    try {
+      const response = await fetch('/api/local-llm/available-models-cached');
+      if (response.ok) {
+        const data = await response.json();
+        const models = data || [];
+        set({ availableModels: models });
+        return models.length > 0;
+      } else {
+        console.error('Failed to load cached models:', response.statusText);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error loading cached models:', error);
+      return false;
+    }
   },
 
   loadAvailableModels: async () => {

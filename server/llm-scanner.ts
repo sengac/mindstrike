@@ -172,8 +172,17 @@ export class LLMScanner {
   }
 
   async getModelMetadata(service: AvailableLLMService, modelName: string): Promise<ModelMetadata | null> {
+    if (service.type === 'anthropic') {
+      // Get context length from documented values
+      const contextLength = this.getAnthropicContextLength(modelName);
+      return {
+        name: modelName,
+        context_length: contextLength
+      };
+    }
+    
     if (service.type !== 'ollama') {
-      logger.debug(`Model metadata only supported for Ollama services, service type: ${service.type}`);
+      logger.debug(`Model metadata only supported for Ollama and Anthropic services, service type: ${service.type}`);
       return null;
     }
 
@@ -238,7 +247,7 @@ export class LLMScanner {
   }
 
   async getAllModelsWithMetadata(service: AvailableLLMService): Promise<ModelMetadata[]> {
-    if (service.type !== 'ollama') {
+    if (service.type !== 'ollama' && service.type !== 'anthropic') {
       return service.models.map(name => ({ name }));
     }
 
@@ -254,5 +263,52 @@ export class LLMScanner {
     }
 
     return modelsWithMetadata;
+  }
+
+  private getAnthropicContextLength(modelName: string): number {
+    // Anthropic's API doesn't provide context length, so we use documented values from their manuals
+    const model = modelName.toLowerCase();
+    
+    // Claude 3.5 Sonnet models
+    if (model.includes('claude-3-5-sonnet') || model.includes('claude-3.5-sonnet')) {
+      return 200000;
+    }
+    
+    // Claude 3 models
+    if (model.includes('claude-3-opus')) {
+      return 200000;
+    }
+    if (model.includes('claude-3-sonnet')) {
+      return 200000;
+    }
+    if (model.includes('claude-3-haiku')) {
+      return 200000;
+    }
+    
+    // Claude 2 models
+    if (model.includes('claude-2.1')) {
+      return 200000;
+    }
+    if (model.includes('claude-2.0') || (model.includes('claude-2') && !model.includes('claude-2.1'))) {
+      return 100000;
+    }
+    
+    // Claude Instant models
+    if (model.includes('claude-instant')) {
+      return 100000;
+    }
+    
+    // Newer Claude models (Claude 4, etc.) - default to latest specification
+    if (model.includes('claude-4') || model.includes('claude-opus-4')) {
+      return 200000;
+    }
+    
+    // Default for any other Claude models
+    if (model.includes('claude')) {
+      return 200000;
+    }
+    
+    logger.debug(`Unknown Anthropic model: ${modelName}, using default context length`);
+    return 200000; // Default for unknown Anthropic models
   }
 }

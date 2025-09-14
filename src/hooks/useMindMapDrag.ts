@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react'
 import { NodeDragHandler, XYPosition, Node } from 'reactflow'
-import { MindMapNodeData } from '../components/MindMapNode'
+import { MindMapNodeData } from '../types/mindMap'
 
 interface UseMindMapDragProps {
   nodes: Node<MindMapNodeData>[]

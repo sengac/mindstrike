@@ -137,13 +137,22 @@ export class ModelFetcher {
   }
 
   /**
+   * Get cached models only, without triggering any fetch
+   */
+  getCachedModels(): DynamicModelInfo[] {
+    return Array.from(this.cache.values())
+      .sort((a, b) => b.downloads - a.downloads)
+      .slice(0, 100); // Limit to 100 as requested
+  }
+
+  /**
    * Get available models from cache
    */
   async getAvailableModels(): Promise<DynamicModelInfo[]> {
     // Return cached models sorted by downloads
     if (this.cache.size > 0) {
       logger.debug(`Returning ${this.cache.size} cached models`);
-      return Array.from(this.cache.values()).sort((a, b) => b.downloads - a.downloads);
+      return this.getCachedModels();
     }
 
     // Only fetch popular models if no cache exists (first time)
@@ -151,7 +160,7 @@ export class ModelFetcher {
     if (this.isFetching) {
       logger.debug('Models are already being fetched, waiting for completion...');
       await this.waitForFetch();
-      return Array.from(this.cache.values()).sort((a, b) => b.downloads - a.downloads);
+      return this.getCachedModels();
     }
 
     try {
@@ -243,6 +252,112 @@ export class ModelFetcher {
   }
 
   /**
+   * Search for models by keyword with progress updates
+   */
+  async searchModelsWithProgress(
+    query: string, 
+    searchType: string = 'all',
+    progressCallback: (progress: {
+      type: 'started' | 'fetching-models' | 'checking-model' | 'model-checked' | 'completed' | 'error';
+      message: string;
+      modelName?: string;
+      modelId?: string;
+      accessibility?: string;
+      current?: number;
+      total?: number;
+    }) => void
+  ): Promise<DynamicModelInfo[]> {
+    this.progressCallback = progressCallback;
+    const normalizedQuery = query.toLowerCase().trim();
+    
+    logger.info(`searchModelsWithProgress called with query: "${query}" (normalized: "${normalizedQuery}")`);
+    
+    try {
+      this.progressCallback({
+        type: 'started',
+        message: 'Starting search...'
+      });
+
+      if (!normalizedQuery) {
+        logger.info('Empty query, returning all cached models');
+        const models = Array.from(this.cache.values()).sort((a, b) => b.downloads - a.downloads);
+        this.progressCallback({
+          type: 'completed',
+          message: `Search completed! Found ${models.length} models.`,
+          total: models.length
+        });
+        return models;
+      }
+
+      // Check if we've already searched for this query
+      if (this.searchCache.has(normalizedQuery)) {
+        logger.info(`Found cached search for: ${normalizedQuery}`);
+        const cachedModelIds = this.searchCache.get(normalizedQuery)!;
+        const results = Array.from(cachedModelIds)
+          .map(id => this.cache.get(id))
+          .filter(model => model !== undefined) as DynamicModelInfo[];
+        
+        // If cached results are empty, remove from cache and search again
+        if (results.length === 0) {
+          logger.info(`Cached search for "${normalizedQuery}" has no results, clearing cache and searching again`);
+          this.searchCache.delete(normalizedQuery);
+        } else {
+          logger.info(`Returning ${results.length} cached models for query: ${normalizedQuery}`);
+          this.progressCallback({
+            type: 'completed',
+            message: `Search completed! Found ${results.length} cached models.`,
+            total: results.length
+          });
+          return results;
+        }
+      }
+
+      this.progressCallback({
+        type: 'fetching-models',
+        message: `Searching HuggingFace for "${query}"...`
+      });
+
+      logger.info(`Searching Hugging Face for: ${normalizedQuery} (searchType: ${searchType})`);
+      const newModels = await this.fetchModelsBySearch(normalizedQuery);
+      
+      // Filter models based on search type if not 'all'
+      let filteredModels = newModels;
+      if (searchType !== 'all') {
+        filteredModels = this.filterModelsBySearchType(newModels, normalizedQuery, searchType);
+      }
+      
+      // Add new models to cache
+      const foundModelIds = new Set<string>();
+      filteredModels.forEach(model => {
+        this.cache.set(model.modelId, model);
+        foundModelIds.add(model.modelId);
+      });
+
+      // Cache the search results
+      this.searchCache.set(normalizedQuery, foundModelIds);
+      this.saveCacheToFile();
+
+      logger.info(`Found ${newModels.length} models, filtered to ${filteredModels.length} for query: ${normalizedQuery} (searchType: ${searchType}), cached ${foundModelIds.size} model IDs`);
+      
+      const sortedResults = filteredModels.sort((a, b) => b.downloads - a.downloads);
+      this.progressCallback({
+        type: 'completed',
+        message: `Search completed! Found ${sortedResults.length} models.`,
+        total: sortedResults.length
+      });
+      
+      return sortedResults;
+    } catch (error) {
+      logger.error(`Failed to search models for: ${normalizedQuery}`, error);
+      this.progressCallback({
+        type: 'error',
+        message: `Search failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Get available models with progress updates
    */
   async getAvailableModelsWithProgress(
@@ -289,7 +404,10 @@ export class ModelFetcher {
   /**
    * Fetch popular GGUF models from Hugging Face and add to cache
    */
-  private async fetchPopularModels(): Promise<void> {
+  async fetchPopularModels(
+    progressCallback?: (current: number, total: number, modelId?: string) => void,
+    signal?: AbortSignal
+  ): Promise<void> {
     // Search for popular GGUF models sorted by downloads - get more models now
     const url = 'https://huggingface.co/api/models?filter=gguf&sort=downloads&direction=-1&limit=200';
     
@@ -339,7 +457,14 @@ export class ModelFetcher {
     const topModels = textGenModels.slice(0, 60);
     
     for (let i = 0; i < topModels.length; i++) {
+      if (signal?.aborted) {
+        throw new Error('Scan cancelled');
+      }
+      
       const model = topModels[i];
+      
+      // Call external progress callback
+      progressCallback?.(i + 1, topModels.length, model.id);
       
       this.progressCallback?.({
         type: 'checking-model',

@@ -8,14 +8,19 @@ import ReactFlow, {
   Edge
 } from 'reactflow'
 import 'reactflow/dist/style.css'
+import { Plus, Trash2, Sparkles } from 'lucide-react'
 
-import { MindMapNode, MindMapNodeData } from './MindMapNode'
+import { MindMapNode } from './MindMapNode'
+import { MindMapNodeData } from '../types/mindMap'
+
 
 import { MindMapData, MindMapDataManager } from '../utils/mindMapData'
 import { MindMapLayoutManager } from '../utils/mindMapLayout'
 import { MindMapActionsManager } from '../utils/mindMapActions'
 import { useMindMapDrag } from '../hooks/useMindMapDrag'
-import { Source } from './shared/ChatContentViewer'
+import { Source } from '../types/mindMap'
+import { GeneratingBlocker } from './shared/GeneratingBlocker'
+import { useGenerationStreaming } from '../hooks/useGenerationStreaming'
 
 const nodeTypes = {
   mindMapNode: MindMapNode
@@ -68,6 +73,23 @@ function MindMapInner ({
   const [rootNodeId, setRootNodeId] = useState<string>('')
   const [layout, setLayout] = useState<'LR' | 'RL' | 'TB' | 'BT'>('LR')
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
+  const [showGenerativePanel, setShowGenerativePanel] = useState(false)
+  const [generativeInput, setGenerativeInput] = useState('')
+  const [isAnimatingToPanel, setIsAnimatingToPanel] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [generationError, setGenerationError] = useState<string | null>(null)
+  const [generationSummary, setGenerationSummary] = useState<string | null>(null)
+  const generativeInputRef = useRef<HTMLInputElement>(null)
+
+  // Generation streaming hook
+  const { isStreaming, stats, startStreaming, cancelGeneration } = useGenerationStreaming()
+  
+  // Handle cancel generation  
+  const handleCancelGeneration = useCallback(() => {
+    cancelGeneration()
+    setIsGenerating(false)
+    setGenerationError('Generation cancelled by user')
+  }, [cancelGeneration])
 
   // Managers (initialized once) - use refs to ensure they never change
   const dataManagerRef = useRef<MindMapDataManager>()
@@ -387,6 +409,8 @@ function MindMapInner ({
     }
   }, [actionsManager, updateState, triggerSave])
 
+
+
   const handleDeleteNode = useCallback(async (nodeIdToDelete: string) => {
     const { nodes: currentNodes, edges: currentEdges, rootNodeId: currentRootId, layout: currentLayout } = stateRef.current
     
@@ -434,6 +458,10 @@ function MindMapInner ({
       console.error('Failed to delete node:', error)
     }
   }, [actionsManager, updateState, triggerSave])
+
+
+
+
 
   const handleUpdateNodeLabel = useCallback((nodeId: string, newLabel: string) => {
     const { nodes: currentNodes } = stateRef.current
@@ -597,6 +625,11 @@ function MindMapInner ({
     dataManager.saveToHistory(updatedNodes, currentRootId, currentLayout)
     updateState({ nodes: updatedNodes })
     
+    // Dispatch event to update node panel content if it's open
+    window.dispatchEvent(new CustomEvent('mindmap-node-notes-updated', {
+      detail: { nodeId, notes }
+    }));
+    
     // Force immediate save to ensure notes are persisted
     try {
       // Check if root node exists before converting
@@ -619,6 +652,11 @@ function MindMapInner ({
     
     dataManager.saveToHistory(updatedNodes, currentRootId, currentLayout)
     updateState({ nodes: updatedNodes })
+    
+    // Dispatch event to update node panel content if it's open
+    window.dispatchEvent(new CustomEvent('mindmap-node-sources-updated', {
+      detail: { nodeId, sources }
+    }));
     
     // Force immediate save to ensure sources are persisted
     try {
@@ -748,6 +786,229 @@ function MindMapInner ({
     moveNode: handleMoveNode
   })
 
+  // Parse mindmap changes from agent response
+  const parseMindmapChanges = useCallback((response: string) => {
+    try {
+      // First try to extract MINDMAP_CHANGES section (for compatibility)
+      let changesMatch = response.match(/MINDMAP_CHANGES:\s*({[\s\S]*?})\s*(?:```|$)/);
+      let changesJson: string;
+      
+      if (changesMatch) {
+        changesJson = changesMatch[1];
+      } else {
+        // New format: entire response should be JSON
+        changesJson = response.trim();
+        // Remove any markdown code blocks
+        changesJson = changesJson.replace(/^```json\s*/i, '').replace(/\s*```$/, '');
+      }
+      
+      const parsed = JSON.parse(changesJson);
+      return parsed.changes || [];
+    } catch (error) {
+      console.error('Error parsing mindmap changes:', error);
+      return null;
+    }
+  }, [])
+
+  // Apply mindmap changes to the current state
+  const applyMindmapChanges = useCallback(async (changes: any[]) => {
+    if (!dataManagerRef.current || !layoutManagerRef.current || !actionsManagerRef.current) return;
+
+    let updatedNodes = [...nodes];
+    
+    for (const change of changes) {
+      try {
+        if (change.action === 'create') {
+          // Create new node
+          const newNodeData = {
+            id: change.nodeId,
+            label: change.text,
+            isRoot: false,
+            parentId: change.parentId,
+            notes: change.notes || null,
+            sources: (change.sources || []).map((source: any) => ({
+              id: source.id || `src-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              name: source.name || source.title || 'Untitled Source',
+              directory: source.directory || source.description || '',
+              type: source.type || 'reference'
+            })),
+            level: 0, // Will be calculated by layout
+            hasChildren: false
+          };
+
+          const newNode = {
+            id: change.nodeId,
+            type: 'mindMapNode',
+            position: { x: 0, y: 0 }, // Will be positioned by layout
+            data: newNodeData
+          };
+
+          updatedNodes.push(newNode);
+          
+        } else if (change.action === 'update') {
+          // Update existing node
+          const nodeIndex = updatedNodes.findIndex(n => n.id === change.nodeId);
+          if (nodeIndex >= 0) {
+            const node = updatedNodes[nodeIndex];
+            const newData = { ...node.data };
+            
+            if (change.text !== undefined) newData.label = change.text;
+            if (change.notes !== undefined) newData.notes = change.notes;
+            if (change.sources !== undefined) {
+              // Ensure sources have required fields
+              newData.sources = change.sources.map((source: any) => ({
+                id: source.id || `src-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                name: source.name || source.title || 'Untitled Source',
+                directory: source.directory || source.description || '',
+                type: source.type || 'reference'
+              }));
+            }
+            
+            updatedNodes[nodeIndex] = { ...node, data: newData };
+          }
+          
+        } else if (change.action === 'delete') {
+          // Delete node and its children
+          const deleteNodeAndChildren = (nodeId: string) => {
+            const children = updatedNodes.filter(n => n.data.parentId === nodeId);
+            children.forEach(child => deleteNodeAndChildren(child.id));
+            updatedNodes = updatedNodes.filter(n => n.id !== nodeId);
+          };
+          deleteNodeAndChildren(change.nodeId);
+        }
+      } catch (error) {
+        console.error('Error applying change:', change, error);
+      }
+    }
+
+    // Update hierarchy levels
+    const updateLevels = (nodeId: string, level: number) => {
+      const node = updatedNodes.find(n => n.id === nodeId);
+      if (node) {
+        node.data.level = level;
+        const children = updatedNodes.filter(n => n.data.parentId === nodeId);
+        children.forEach(child => updateLevels(child.id, level + 1));
+      }
+    };
+    updateLevels(rootNodeId, 0);
+
+    // Update hasChildren flags
+    updatedNodes.forEach(node => {
+      node.data.hasChildren = updatedNodes.some(n => n.data.parentId === node.id);
+    });
+
+    // Apply layout using actionsManager which handles this properly
+    const result = await actionsManagerRef.current.resetLayout(
+      updatedNodes,
+      dataManagerRef.current.generateEdges(updatedNodes, layout),
+      rootNodeId,
+      layout
+    );
+
+    // Update state
+    setNodes(result.nodes);
+    setEdges(result.edges);
+
+    // Save to history and backend
+    dataManagerRef.current.saveToHistory(result.nodes, rootNodeId, layout);
+    const treeData = dataManagerRef.current.convertNodesToTree(result.nodes, rootNodeId, layout);
+    await onSave(treeData);
+
+    // Dispatch events to update node panel content if it's open
+    changes.forEach(change => {
+      if (change.action === 'update' || change.action === 'create') {
+        const updatedNode = result.nodes.find(n => n.id === change.nodeId);
+        if (updatedNode) {
+          // Dispatch notes update event
+          if (change.notes !== undefined) {
+            window.dispatchEvent(new CustomEvent('mindmap-node-notes-updated', {
+              detail: { nodeId: change.nodeId, notes: change.notes }
+            }));
+          }
+          
+          // Dispatch sources update event
+          if (change.sources !== undefined) {
+            window.dispatchEvent(new CustomEvent('mindmap-node-sources-updated', {
+              detail: { nodeId: change.nodeId, sources: change.sources }
+            }));
+          }
+        }
+      }
+    });
+
+    console.log(`Applied ${changes.length} mindmap changes`);
+  }, [nodes, rootNodeId, layout, onSave])
+
+  // Generation function
+  const handleGenerate = useCallback(async () => {
+    if (!generativeInput.trim() || !selectedNodeId || isGenerating || isStreaming) return
+
+    setIsGenerating(true)
+    setGenerationError(null)
+    setGenerationSummary(null)
+
+    try {
+      await startStreaming(
+        `/api/mindmaps/${mindMapId}/generate`,
+        {
+          prompt: generativeInput.trim(),
+          selectedNodeId: selectedNodeId
+        },
+        {
+          onProgress: (stats) => {
+            // Progress is handled by the GeneratingBlocker component
+          },
+          onComplete: async (result) => {
+            try {
+              // Parse and apply mindmap changes
+              const changes = parseMindmapChanges(result.response)
+              if (changes && changes.length > 0) {
+                await applyMindmapChanges(changes)
+                setGenerationSummary(`Applied ${changes.length} change(s) to the mindmap: ${result.response.split('MINDMAP_CHANGES:')[0].trim()}`)
+              } else {
+                setGenerationSummary(result.response || 'Content generated successfully!')
+              }
+              
+              // Auto-clear success message after 5 seconds
+              setTimeout(() => {
+                setGenerationSummary(null)
+              }, 5000)
+              
+              // Clear input and hide panel
+              setGenerativeInput('')
+              setShowGenerativePanel(false)
+              setIsAnimatingToPanel(false)
+              
+            } catch (error: any) {
+              console.error('Error applying changes:', error)
+              setGenerationError(error.message || 'Error applying changes')
+            } finally {
+              setIsGenerating(false)
+            }
+          },
+          onError: (error) => {
+            console.error('Generation error:', error)
+            setGenerationError(error || 'An error occurred during generation')
+            setIsGenerating(false)
+          }
+        }
+      )
+      
+    } catch (error: any) {
+      console.error('Generation error:', error)
+      setGenerationError(error.message || 'An error occurred during generation')
+      setIsGenerating(false)
+    }
+  }, [generativeInput, selectedNodeId, mindMapId, isGenerating, isStreaming, startStreaming, applyMindmapChanges])
+
+  // Clear generation status when panel is hidden
+  useEffect(() => {
+    if (!showGenerativePanel) {
+      setGenerationError(null)
+      setGenerationSummary(null)
+    }
+  }, [showGenerativePanel])
+
   // Inference chat state is now managed by MindMapsPanel
 
   // Optimized resize handling with debouncing
@@ -820,8 +1081,75 @@ function MindMapInner ({
         }))
       )
       window.dispatchEvent(new CustomEvent('mindmap-close-context-menu'))
+    },
+    handleNavigateSibling: (e: CustomEvent) => {
+      const { currentNodeId, direction } = e.detail
+      
+      const currentNode = nodes.find(n => n.id === currentNodeId)
+      if (!currentNode) return
+      
+      // Build a tree traversal order (depth-first)
+      const buildTraversalOrder = (): Node<MindMapNodeData>[] => {
+        const traversalOrder: Node<MindMapNodeData>[] = []
+        
+        // Find root node
+        const rootNode = nodes.find(n => n.data.isRoot || !n.data.parentId)
+        if (!rootNode) return []
+        
+        // Recursive depth-first traversal
+        const traverse = (node: Node<MindMapNodeData>) => {
+          traversalOrder.push(node)
+          
+          // Get children of this node, sorted by position
+          const children = nodes
+            .filter(n => n.data.parentId === node.id)
+            .sort((a, b) => {
+              // Sort by position (top to bottom, left to right)
+              if (Math.abs(a.position.y - b.position.y) > 10) {
+                return a.position.y - b.position.y
+              }
+              return a.position.x - b.position.x
+            })
+          
+          // Recursively traverse each child
+          children.forEach(child => traverse(child))
+        }
+        
+        traverse(rootNode)
+        return traversalOrder
+      }
+      
+      const traversalOrder = buildTraversalOrder()
+      const currentIndex = traversalOrder.findIndex(n => n.id === currentNodeId)
+      
+      if (currentIndex === -1) return
+      
+      let targetNode: Node<MindMapNodeData> | null = null
+      
+      if (direction === 'prev') {
+        // Go to previous node in traversal order (wrap to end if at beginning)
+        const prevIndex = currentIndex > 0 ? currentIndex - 1 : traversalOrder.length - 1
+        targetNode = traversalOrder[prevIndex]
+      } else if (direction === 'next') {
+        // Go to next node in traversal order (wrap to beginning if at end)
+        const nextIndex = currentIndex < traversalOrder.length - 1 ? currentIndex + 1 : 0
+        targetNode = traversalOrder[nextIndex]
+      }
+      
+      if (targetNode) {
+        // Dispatch inference open event for the target node
+        window.dispatchEvent(new CustomEvent('mindmap-inference-open', {
+          detail: {
+            nodeId: targetNode.id,
+            label: targetNode.data.label,
+            chatId: targetNode.data.chatId,
+            notes: targetNode.data.notes,
+            sources: targetNode.data.sources
+          }
+        }))
+      }
     }
-  }), [handleAddChildNode, handleAddSiblingNode, handleDeleteNode, handleUpdateNodeLabel, handleNodeLabelFinished, handleToggleNodeCollapse])
+  }), [handleAddChildNode, handleAddSiblingNode, handleDeleteNode, handleUpdateNodeLabel, handleNodeLabelFinished, handleToggleNodeCollapse, nodes])
 
   // Event listeners with memoized handlers
   useEffect(() => {
@@ -832,7 +1160,8 @@ function MindMapInner ({
       handleNodeUpdate,
       handleNodeUpdateFinished,
       handleToggleCollapse,
-      handleNodeSelect
+      handleNodeSelect,
+      handleNavigateSibling
     } = memoizedHandlers
 
     // Inference chat events are now handled by MindMapsPanel
@@ -847,6 +1176,7 @@ function MindMapInner ({
     window.addEventListener('mindmap-node-update-finished', handleNodeUpdateFinished as EventListener)
     window.addEventListener('mindmap-toggle-collapse', handleToggleCollapse as EventListener)
     window.addEventListener('mindmap-node-select', handleNodeSelect as EventListener)
+    window.addEventListener('mindmap-navigate-sibling', handleNavigateSibling as EventListener)
     
 
 
@@ -858,6 +1188,7 @@ function MindMapInner ({
       window.removeEventListener('mindmap-node-update-finished', handleNodeUpdateFinished as EventListener)
       window.removeEventListener('mindmap-toggle-collapse', handleToggleCollapse as EventListener)
       window.removeEventListener('mindmap-node-select', handleNodeSelect as EventListener)
+      window.removeEventListener('mindmap-navigate-sibling', handleNavigateSibling as EventListener)
     }
   }, [memoizedHandlers])
 
@@ -938,15 +1269,32 @@ function MindMapInner ({
         } else if (matchesKeyBinding(e, getKeyBinding('openInference', '.')) && selectedNodeId) {
           e.preventDefault()
           openInferenceForSelectedNode()
+        } else if (matchesKeyBinding(e, getKeyBinding('openGenerative', '/')) && selectedNodeId) {
+          e.preventDefault()
+          setIsAnimatingToPanel(true)
+          setTimeout(() => {
+            setShowGenerativePanel(true)
+          }, 200)
         }
       }
     }
-  }, [keyBindings, selectedNodeId, nodes, handleAddChildNode, handleAddSiblingNode, handleDeleteNode, handleUndo, handleRedo])
+  }, [keyBindings, selectedNodeId, nodes, handleAddChildNode, handleAddSiblingNode, handleDeleteNode, handleUndo, handleRedo, setIsAnimatingToPanel, setShowGenerativePanel])
 
   useEffect(() => {
     window.addEventListener('keydown', keyboardHandlers.handleKeyDown)
     return () => window.removeEventListener('keydown', keyboardHandlers.handleKeyDown)
   }, [keyboardHandlers.handleKeyDown])
+
+  // Focus input when generative panel becomes visible
+  useEffect(() => {
+    if (showGenerativePanel && generativeInputRef.current) {
+      // Small delay to ensure the panel animation has started
+      const timer = setTimeout(() => {
+        generativeInputRef.current?.focus()
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, [showGenerativePanel])
 
   // React Flow event handlers - memoized
   const reactFlowHandlers = useMemo(() => ({
@@ -1096,7 +1444,7 @@ function MindMapInner ({
   return (
     <div
       ref={containerRef}
-      className='h-full w-full relative'
+      className='h-full w-full relative overflow-hidden'
       style={{ minHeight: '400px' }}
     >
       {/* Drag Preview */}
@@ -1154,7 +1502,143 @@ function MindMapInner ({
       >
       </ReactFlow>
 
+      {/* Floating Action Buttons - appear when a node is selected */}
+      {selectedNodeId && (
+        <div className={`absolute bottom-4 right-4 flex gap-4 z-10 transition-opacity duration-300 ${
+          isAnimatingToPanel || showGenerativePanel ? 'opacity-0 pointer-events-none' : 'opacity-100'
+        }`}>
+          {/* Add Button */}
+          <button
+            onClick={() => handleAddChildNode(selectedNodeId)}
+            className="p-3 bg-blue-600 hover:bg-blue-700 rounded-full shadow-lg transition-colors text-white"
+            title="Add child node"
+          >
+            <Plus size={20} />
+          </button>
+          
+          {/* Generative Button */}
+          <button
+            onClick={() => {
+              setIsAnimatingToPanel(true)
+              // First hide the buttons, then show the panel after a delay
+              setTimeout(() => {
+                setShowGenerativePanel(true)
+              }, 200)
+            }}
+            className="generative-button p-3 rounded-full"
+            title="Generate"
+          >
+            <Sparkles size={20} className="generative-icon" />
+          </button>
+          
+          {/* Remove Button */}
+          <button
+            onClick={() => {
+              if (selectedNodeId) {
+                handleDeleteNode(selectedNodeId)
+              }
+            }}
+            className="p-3 bg-red-600 hover:bg-red-700 rounded-full shadow-lg transition-colors text-white"
+            title="Delete node"
+          >
+            <Trash2 size={20} />
+          </button>
+        </div>
+      )}
+
+      {/* Generative Input Panel */}
+      {selectedNodeId && (
+        <div className={`absolute bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 p-4 z-20 transform transition-transform duration-300 ease-out ${
+          showGenerativePanel ? 'translate-y-0' : 'translate-y-full'
+        }`}>
+          <div className="max-w-4xl mx-auto flex gap-3 items-center">
+            <input
+              ref={generativeInputRef}
+              type="text"
+              value={generativeInput}
+              onChange={(e) => setGenerativeInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && generativeInput.trim() && !isGenerating) {
+                  handleGenerate()
+                }
+                if (e.key === 'Escape') {
+                  setShowGenerativePanel(false)
+                  setGenerativeInput('')
+                  setIsAnimatingToPanel(false)
+                }
+              }}
+              placeholder="Enter your prompt to generate content..."
+              className="flex-1 px-4 py-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            {/* Error message */}
+            {generationError && (
+              <div className="absolute left-0 right-0 top-full mt-2 p-3 bg-red-900/50 border border-red-600 rounded-lg text-red-200 text-sm flex justify-between items-start">
+                <div>
+                  <div className="font-medium mb-1">Error:</div>
+                  <div>{generationError}</div>
+                </div>
+                <button 
+                  onClick={() => setGenerationError(null)}
+                  className="ml-2 text-red-300 hover:text-red-100 transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+            {/* Success message */}
+            {generationSummary && (
+              <div className="absolute left-0 right-0 top-full mt-2 p-3 bg-green-900/50 border border-green-600 rounded-lg text-green-200 text-sm flex justify-between items-start">
+                <div>
+                  <div className="font-medium mb-1">Generation Complete!</div>
+                  <div>{generationSummary}</div>
+                </div>
+                <button 
+                  onClick={() => setGenerationSummary(null)}
+                  className="ml-2 text-green-300 hover:text-green-100 transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+            <button
+              onClick={handleGenerate}
+              disabled={!generativeInput.trim() || isGenerating || isStreaming}
+              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-500 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium flex items-center gap-2"
+            >
+              {(isGenerating || isStreaming) ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  Generating...
+                </>
+              ) : (
+                'Generate'
+              )}
+            </button>
+            <button
+              onClick={() => {
+                setShowGenerativePanel(false)
+                setGenerativeInput('')
+                setIsAnimatingToPanel(false)
+              }}
+              className="px-4 py-3 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Inference Chat is now handled by MindMapsPanel */}
+      
+      {/* Generation Blocker */}
+      <GeneratingBlocker
+        isVisible={isStreaming}
+        onCancel={handleCancelGeneration}
+        status={stats.status}
+        tokensPerSecond={stats.tokensPerSecond}
+        totalTokens={stats.totalTokens}
+      />
+
     </div>
   )
 }

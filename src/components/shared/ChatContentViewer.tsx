@@ -1,18 +1,12 @@
 import { forwardRef, useState, useEffect, useRef, useImperativeHandle } from 'react';
-import { MessageSquare, ExternalLink, Unlink, X, StickyNote, BookOpen, Sparkles, Copy } from 'lucide-react';
+import { MessageSquare, ExternalLink, Unlink, X, StickyNote, BookOpen, Copy, ChevronLeft, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Thread, ConversationMessage, NotesAttachment } from '../../types';
+import { Source } from '../../types/mindMap';
 import { ChatPanel, ChatPanelRef } from '../ChatPanel';
 import { MarkdownEditor } from './MarkdownEditor';
 import { ThreadList } from './ThreadList';
 import { SourcesList } from './SourcesList';
-
-export interface Source {
-  id: string;
-  name: string;
-  directory: string;
-  type: 'file' | 'url' | 'document' | 'reference';
-}
 
 interface ChatContentViewerProps {
   thread?: Thread;
@@ -36,6 +30,8 @@ interface ChatContentViewerProps {
   onThreadRename?: (threadId: string, newName: string) => void;
   onThreadDelete?: (threadId: string) => void;
   onCopyNotesToChat?: (notes: NotesAttachment) => void;
+  onNavigateToPrevNode?: () => void;
+  onNavigateToNextNode?: () => void;
 }
 
 export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps>(({
@@ -59,9 +55,11 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
   onThreadCreate,
   onThreadRename,
   onThreadDelete,
-  onCopyNotesToChat
+  onCopyNotesToChat,
+  onNavigateToPrevNode,
+  onNavigateToNextNode
 }, ref) => {
-  const [activeTab, setActiveTab] = useState<'chat' | 'notes' | 'sources' | 'refactor'>(
+  const [activeTab, setActiveTab] = useState<'chat' | 'notes' | 'sources'>(
     focusNotes ? 'notes' : focusSources ? 'sources' : 'chat'
   );
   const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false);
@@ -253,32 +251,30 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
                 <BookOpen size={16} className={activeTab === 'sources' ? 'text-blue-400' : ''} />
                 <span>Sources</span>
               </button>
-              <button
-                onClick={() => setActiveTab('refactor')}
-                data-testid="generative-refactor-tab-button"
-                className={`flex items-center gap-2 py-4 px-2 border-b-2 font-medium text-sm transition-all duration-300 relative overflow-hidden ${
-                  activeTab === 'refactor'
-                    ? 'border-transparent text-blue-400 animate-shimmer-inset bg-gradient-to-r from-purple-500/20 via-blue-500/20 to-cyan-500/20 animate-shine'
-                    : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
-                }`}
-                style={{
-                  backgroundImage: activeTab === 'refactor' 
-                    ? 'linear-gradient(45deg, rgba(168, 85, 247, 0.1), rgba(59, 130, 246, 0.1), rgba(6, 182, 212, 0.1)), linear-gradient(135deg, transparent 25%, rgba(255, 255, 255, 0.1) 50%, transparent 75%)'
-                    : undefined,
-                  backgroundSize: activeTab === 'refactor' ? '200% 200%, 200% 200%' : undefined,
-                  animation: activeTab === 'refactor' 
-                    ? 'shimmer-inset 2s linear infinite, shine 2s ease-in-out infinite'
-                    : undefined
-                }}
-              >
-                <Sparkles size={16} className={activeTab === 'refactor' ? 'text-purple-400' : ''} />
-                <span>Generative Refactor</span>
-              </button>
+
             </nav>
           </div>
 
           {/* Action Buttons */}
           <div className="flex items-center gap-1 pl-6 pr-3">
+            {onNavigateToPrevNode && (
+              <button
+                onClick={onNavigateToPrevNode}
+                className="p-2 hover:bg-white/10 rounded transition-colors text-gray-400 hover:text-white"
+                title="Previous Node"
+              >
+                <ChevronLeft size={20} />
+              </button>
+            )}
+            {onNavigateToNextNode && (
+              <button
+                onClick={onNavigateToNextNode}
+                className="p-2 hover:bg-white/10 rounded transition-colors text-gray-400 hover:text-white"
+                title="Next Node"
+              >
+                <ChevronRight size={20} />
+              </button>
+            )}
             {onClose && (
               <button
                 onClick={onClose}
@@ -380,14 +376,7 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
             sources={nodeSources || []}
             onSourcesUpdate={onSourcesUpdate}
           />
-        ) : (
-          <div className="flex flex-col h-full p-4">
-            <h3 className="text-lg font-medium text-white mb-4">Refactor MindMap</h3>
-            <div className="text-gray-400 text-center">
-              MindMap refactoring functionality coming soon!
-            </div>
-          </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

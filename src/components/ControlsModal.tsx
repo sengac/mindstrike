@@ -65,6 +65,13 @@ const DEFAULT_KEY_BINDINGS: KeyBinding[] = [
     description: 'Open Node Panel for the selected node',
     defaultKey: '.',
     currentKey: '.'
+  },
+  {
+    id: 'openGenerative',
+    action: 'Open Generative Panel',
+    description: 'Open the generative AI panel for the selected node',
+    defaultKey: '/',
+    currentKey: '/'
   }
 ];
 

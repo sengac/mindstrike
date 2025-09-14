@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Node, Edge } from 'reactflow'
-import { MindMapNodeData } from '../components/MindMapNode'
+import { MindMapNodeData } from '../types/mindMap'
 
 export interface MindMapNode {
   id: string

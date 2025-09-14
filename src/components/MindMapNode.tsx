@@ -3,30 +3,7 @@ import { createPortal } from 'react-dom';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { Plus, Minus, PanelRightOpen, Edit, Trash2, Share, FileText, BookOpen } from 'lucide-react';
 import { clsx } from 'clsx';
-import { Source } from './shared/ChatContentViewer';
-
-export interface MindMapNodeData {
-  id: string;
-  label: string;
-  isRoot: boolean;
-  parentId?: string; // Parent node ID for hierarchy (not saved, computed dynamically)
-  notes?: string | null;
-  sources?: Source[];
-  chatId?: string | null;
-  isEditing?: boolean;
-  level?: number;
-  isCollapsed?: boolean;
-  hasChildren?: boolean;
-  isDragging?: boolean;
-  isDropTarget?: boolean;
-  dropPosition?: 'above' | 'below' | 'over' | null;
-  layout?: 'LR' | 'RL' | 'TB' | 'BT';
-  width?: number; // Calculated width of the node
-  customColors?: {
-    backgroundClass: string;
-    foregroundClass: string;
-  } | null;
-}
+import { Source, MindMapNodeData } from '../types/mindMap';
 
 export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) {
   const [isEditing, setIsEditing] = useState(data.isEditing || false);

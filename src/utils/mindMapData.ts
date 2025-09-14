@@ -1,6 +1,5 @@
 import { Node, Edge } from 'reactflow'
-import { MindMapNodeData } from '../components/MindMapNode'
-import { Source } from '../components/shared/ChatContentViewer'
+import { MindMapNodeData, Source } from '../types/mindMap'
 
 export interface MindMapNode {
   id: string

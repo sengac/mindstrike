@@ -5,7 +5,10 @@ import MindMap, { MindMapData, MindMapControls } from './MindMap';
 import { ControlsModal } from './ControlsModal';
 import { ColorPalette } from './ColorPalette';
 import { useAppStore } from '../store/useAppStore';
-import { Source } from './shared/ChatContentViewer';
+import { Source } from '../types/mindMap';
+
+import { Node } from 'reactflow';
+import { MindMapNodeData } from '../types/mindMap';
 
 interface MindMapsViewProps {
   activeMindMap: MindMapType | null;
@@ -17,9 +20,10 @@ interface MindMapsViewProps {
     sources?: Source[]
     timestamp: number
   }
+  onNodesChange?: (nodes: Node<MindMapNodeData>[]) => void;
 }
 
-export function MindMapsView({ activeMindMap, pendingNodeUpdate }: MindMapsViewProps) {
+export function MindMapsView({ activeMindMap, pendingNodeUpdate, onNodesChange }: MindMapsViewProps) {
   const [mindMapData, setMindMapData] = useState<MindMapData | undefined>();
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [mindMapControls, setMindMapControls] = useState<MindMapControls | null>(null);

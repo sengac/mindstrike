@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { Node } from 'reactflow'
-import { MindMapNodeData } from '../components/MindMapNode'
+import { MindMapNodeData } from '../types/mindMap'
 import { MindMapData } from './useMindMapData'
 
 interface UseMindMapActionsProps {

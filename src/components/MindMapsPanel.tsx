@@ -4,7 +4,7 @@ import { MindMap } from '../hooks/useMindMaps';
 import { Thread, ConversationMessage } from '../types';
 import { ListPanel } from './shared/ListPanel';
 import { MindMapChatIntegration } from './MindMapChatIntegration';
-import { Source } from './shared/ChatContentViewer';
+import { Source } from '../types/mindMap';
 
 interface MindMapsPanelProps {
   mindMaps: MindMap[];
@@ -222,6 +222,31 @@ export function MindMapsPanel({
       onMessagesUpdate(inferenceChatNode.chatId, messages);
     }
   };
+
+  // Navigation logic - using event system to get sibling nodes
+  const handleNavigateToPrevNode = () => {
+    if (!inferenceChatNode) return;
+    
+    // Dispatch event to request previous sibling
+    window.dispatchEvent(new CustomEvent('mindmap-navigate-sibling', {
+      detail: {
+        currentNodeId: inferenceChatNode.id,
+        direction: 'prev'
+      }
+    }));
+  };
+
+  const handleNavigateToNextNode = () => {
+    if (!inferenceChatNode) return;
+    
+    // Dispatch event to request next sibling
+    window.dispatchEvent(new CustomEvent('mindmap-navigate-sibling', {
+      detail: {
+        currentNodeId: inferenceChatNode.id,
+        direction: 'next'
+      }
+    }));
+  };
   return (
     <ListPanel
       items={mindMaps}
@@ -276,6 +301,8 @@ export function MindMapsPanel({
             onNodeAdd={onNodeAdd}
             onNodeUpdate={onNodeUpdate}
             onNodeDelete={onNodeDelete}
+            onNavigateToPrevNode={handleNavigateToPrevNode}
+            onNavigateToNextNode={handleNavigateToNextNode}
           />
         ) : null
       }

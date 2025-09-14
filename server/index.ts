@@ -13,6 +13,7 @@ import { getHomeDirectory } from './utils/settings-directory.js';
 import { sseManager } from './sse-manager.js';
 import { getLocalLLMManager } from './local-llm-singleton.js';
 import localLlmRoutes from './routes/local-llm.js';
+import modelScanRoutes from './routes/model-scan.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,6 +33,9 @@ app.use(express.json({ limit: '50mb' }));
 
 // Mount local LLM routes
 app.use('/api/local-llm', localLlmRoutes);
+
+// Mount model scan routes
+app.use('/api/model-scan', modelScanRoutes);
 
 // Serve static files from the built client
 app.use(express.static(path.join(__dirname, '../client')));
@@ -181,6 +185,46 @@ async function refreshModelList() {
     }
 
     await llmConfigManager.refreshModels(detectedServices, localModels);
+    
+    // Load default model into currentLlmConfig if available and not already set
+    if (!currentLlmConfig.model || currentLlmConfig.model.trim() === '') {
+      try {
+        const defaultModel = await llmConfigManager.getDefaultModel();
+        if (defaultModel) {
+          currentLlmConfig.baseURL = defaultModel.baseURL;
+          currentLlmConfig.model = defaultModel.model;
+          currentLlmConfig.displayName = defaultModel.displayName;
+          currentLlmConfig.apiKey = defaultModel.apiKey;
+          currentLlmConfig.type = defaultModel.type;
+          
+          // Update existing agents with new LLM config
+          agentPool.updateAllAgentsLLMConfig(currentLlmConfig);
+          
+          logger.info(`Auto-loaded default model: ${defaultModel.displayName} (${defaultModel.model})`);
+        } else {
+          // If no default model is set, try to auto-select the first available model
+          const models = await llmConfigManager.getModels();
+          const firstAvailableModel = models.find(m => m.available);
+          
+          if (firstAvailableModel) {
+            await llmConfigManager.setDefaultModel(firstAvailableModel.id);
+            
+            currentLlmConfig.baseURL = firstAvailableModel.baseURL;
+            currentLlmConfig.model = firstAvailableModel.model;
+            currentLlmConfig.displayName = firstAvailableModel.displayName;
+            currentLlmConfig.apiKey = firstAvailableModel.apiKey;
+            currentLlmConfig.type = firstAvailableModel.type;
+            
+            // Update existing agents with new LLM config
+            agentPool.updateAllAgentsLLMConfig(currentLlmConfig);
+            
+            logger.info(`Auto-selected first available model: ${firstAvailableModel.displayName} (${firstAvailableModel.model})`);
+          }
+        }
+      } catch (error) {
+        logger.debug('No default model available:', error);
+      }
+    }
     
     // Broadcast model updates to connected clients
     sseManager.broadcast('model-updates', {
@@ -482,6 +526,13 @@ app.post('/api/llm/test-service', async (req: any, res: any) => {
 app.get('/api/llm/model-updates', (req, res) => {
   const clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   sseManager.addClient(clientId, res, 'model-updates');
+});
+
+// SSE endpoint for generation streaming
+app.get('/api/generate/stream/:streamId', (req: Request, res: Response) => {
+  const { streamId } = req.params;
+  const clientId = `generate-${streamId}-${Date.now()}`;
+  sseManager.addClient(clientId, res, streamId);
 });
 
 app.get('/api/conversation', (req, res) => {
@@ -1047,6 +1098,136 @@ app.post('/api/mindmaps/:mindMapId/mindmap', async (req: Request, res: Response)
     res.json({ success: true });
   } catch (error: any) {
     logger.error('Error saving mindmap data:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Mindmap Generation API
+app.post('/api/mindmaps/:mindMapId/generate', async (req: Request, res: Response) => {
+  try {
+    const { mindMapId } = req.params;
+    const { prompt, selectedNodeId, stream } = req.body;
+
+    if (!prompt || !prompt.trim()) {
+      return res.status(400).json({ error: 'Prompt is required' });
+    }
+
+    // Check if LLM model is configured
+    if (!currentLlmConfig.model || currentLlmConfig.model.trim() === '') {
+      return res.status(400).json({ error: 'No LLM model configured. Please select a model from the available options.' });
+    }
+
+    // If streaming is requested, set up SSE
+    if (stream) {
+      const streamId = `mindmap-${mindMapId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Start the generation process in the background
+      setImmediate(async () => {
+        try {
+          // Import MindmapAgent
+          const { MindmapAgent } = await import('./agents/mindmap-agent.js');
+          
+          // Create mindmap agent with current config
+          const mindmapAgent = new MindmapAgent({
+            workspaceRoot,
+            llmConfig: currentLlmConfig
+          });
+
+          // Set mindmap context
+          await mindmapAgent.setMindmapContext(mindMapId, selectedNodeId);
+
+          // Process with streaming callback
+          sseManager.broadcast(streamId, { type: 'progress', status: 'Starting generation...' });
+          
+          logger.info('Processing mindmap generation request:', { mindMapId, selectedNodeId, prompt: prompt.substring(0, 100) });
+          
+          // Simple token counting simulation
+          let tokenCount = 0;
+          let lastValidTokensPerSecond = 0;
+          const startTime = Date.now();
+          
+          // Simulate token generation updates
+          const progressInterval = setInterval(() => {
+            tokenCount += Math.floor(Math.random() * 3) + 2; // 2-4 tokens per update
+            
+            const elapsed = (Date.now() - startTime) / 1000;
+            
+            // Only update tokensPerSecond if we have a meaningful value
+            if (elapsed > 0.5) { // Wait at least 500ms before calculating rate
+              const tokensPerSecond = tokenCount / elapsed;
+              lastValidTokensPerSecond = Math.round(tokensPerSecond * 10) / 10; // Round to 1 decimal place
+            }
+            
+            const updateData = {
+              type: 'token',
+              content: '',
+              totalTokens: tokenCount,
+              tokensPerSecond: lastValidTokensPerSecond
+            };
+            
+            sseManager.broadcast(streamId, updateData);
+          }, 150); // Slightly faster updates
+          
+          const response = await mindmapAgent.processMessage(prompt);
+          
+          // Clear the progress interval
+          clearInterval(progressInterval);
+          
+          // Send final token count
+          const finalElapsed = (Date.now() - startTime) / 1000;
+          const finalTokensPerSecond = finalElapsed > 0 ? tokenCount / finalElapsed : 0;
+          
+          // Broadcast completion
+          sseManager.broadcast(streamId, {
+            type: 'complete',
+            result: {
+              success: true,
+              response: response.content,
+              toolCalls: response.toolCalls,
+              toolResults: response.toolResults
+            }
+          });
+
+        } catch (error: any) {
+          logger.error('Error in streaming mindmap generation:', error);
+          sseManager.broadcast(streamId, {
+            type: 'error',
+            error: error.message
+          });
+        }
+      });
+
+      // Return stream ID immediately
+      return res.json({ streamId });
+    }
+
+    // Non-streaming fallback (original implementation)
+    // Import MindmapAgent
+    const { MindmapAgent } = await import('./agents/mindmap-agent.js');
+    
+    // Create mindmap agent with current config
+    const mindmapAgent = new MindmapAgent({
+      workspaceRoot,
+      llmConfig: currentLlmConfig
+    });
+
+    // Set mindmap context
+    await mindmapAgent.setMindmapContext(mindMapId, selectedNodeId);
+
+    // Process the generation request
+    logger.info('Processing mindmap generation request:', { mindMapId, selectedNodeId, prompt: prompt.substring(0, 100) });
+    
+    const response = await mindmapAgent.processMessage(prompt);
+    
+    res.json({
+      success: true,
+      response: response.content,
+      toolCalls: response.toolCalls,
+      toolResults: response.toolResults
+    });
+
+  } catch (error: any) {
+    logger.error('Error in mindmap generation:', error);
     res.status(500).json({ error: error.message });
   }
 });

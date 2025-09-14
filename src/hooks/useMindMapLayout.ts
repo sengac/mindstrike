@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react'
 import { Node, Edge } from 'reactflow'
-import { MindMapNodeData } from '../components/MindMapNode'
+import { MindMapNodeData } from '../types/mindMap'
 
 export function useMindMapLayout() {
   // Get visible nodes (excluding collapsed subtrees)

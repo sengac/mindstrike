@@ -3,6 +3,7 @@ import { Settings, Cpu, Plus, Trash2, RefreshCw, TestTube, Check, X, Eye, EyeOff
 import { useCustomServices, CustomLLMService } from '../hooks/useModels';
 import { useAppStore } from '../store/useAppStore';
 import { LocalLLMManager } from './LocalLLMManager';
+import { ModelScanProgress } from './ModelScanProgress';
 import toast from 'react-hot-toast';
 
 interface AddServiceFormData {
@@ -209,6 +210,7 @@ export function SettingsPanel() {
   const [showApiKeys, setShowApiKeys] = useState<Set<string>>(new Set());
   const [editingService, setEditingService] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState<Partial<CustomLLMService>>({});
+  const [showScanProgress, setShowScanProgress] = useState(false);
 
   const handleAddService = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,5 +1,5 @@
 import { Node, Edge } from 'reactflow'
-import { MindMapNodeData } from '../components/MindMapNode'
+import { MindMapNodeData } from '../types/mindMap'
 
 export class MindMapLayoutManager {
   // Get visible nodes (excluding collapsed subtrees)

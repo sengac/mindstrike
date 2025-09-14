@@ -1,8 +1,8 @@
 import { Node, Edge } from 'reactflow'
-import { MindMapNodeData } from '../components/MindMapNode'
+import { MindMapNodeData } from '../types/mindMap'
 import { MindMapData, MindMapDataManager } from './mindMapData'
 import { MindMapLayoutManager } from './mindMapLayout'
-import { Source } from '../components/shared/ChatContentViewer'
+import { Source } from '../types/mindMap'
 
 export class MindMapActionsManager {
   constructor(

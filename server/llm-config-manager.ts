@@ -272,15 +272,20 @@ export class LLMConfigManager {
         // Test the service and get its models
         const models = await this.testCustomServiceModels(customService);
         
-        // Get metadata for Ollama custom services
-        if (customService.type === 'ollama' && models.length > 0) {
+        // Get metadata for Ollama and Anthropic custom services
+        if ((customService.type === 'ollama' || customService.type === 'anthropic') && models.length > 0) {
           try {
-            const { LLMScanner } = require('./llm-scanner');
+            const { LLMScanner } = await import('./llm-scanner.js');
             const scanner = new LLMScanner();
-            const modelsWithMetadata = await scanner.getAllModelsWithMetadata({
-              ...customService,
-              models
-            });
+            const serviceForScanner = {
+              id: customService.id,
+              name: customService.name,
+              baseURL: customService.baseURL,
+              type: customService.type as 'ollama' | 'anthropic',
+              models,
+              available: true
+            };
+            const modelsWithMetadata = await scanner.getAllModelsWithMetadata(serviceForScanner);
             
             for (const modelMeta of modelsWithMetadata) {
               newModels.push({
@@ -297,7 +302,7 @@ export class LLMConfigManager {
               });
             }
           } catch (error) {
-            logger.debug(`Failed to get metadata for custom Ollama service ${customService.name}:`, error);
+            logger.debug(`Failed to get metadata for custom service ${customService.name}:`, error);
             // Fallback to models without metadata
             for (const modelName of models) {
               newModels.push({
@@ -314,7 +319,7 @@ export class LLMConfigManager {
             }
           }
         } else {
-          // Non-Ollama services or fallback
+          // Non-Ollama/Anthropic services or fallback
           for (const modelName of models) {
             newModels.push({
               id: `${customService.id}:${modelName}`,

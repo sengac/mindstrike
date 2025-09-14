@@ -20,7 +20,7 @@ import { useAppStore } from './store/useAppStore';
 
 
 import { ConversationMessage } from './types';
-import { Source } from './components/shared/ChatContentViewer';
+import { Source } from './types/mindMap';
 import { Menu, X, MessageSquare, Workflow, Network, Settings, Cpu } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 

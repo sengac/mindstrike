@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { Thread, ConversationMessage, NotesAttachment } from '../types';
 import { ChatThreadSelector } from './shared/ChatThreadSelector';
-import { ChatContentViewer, Source } from './shared/ChatContentViewer';
+import { ChatContentViewer } from './shared/ChatContentViewer';
+import { Source } from '../types/mindMap';
 import { ChatPanelRef } from './ChatPanel';
 
 interface MindMapChatIntegrationProps {
@@ -29,6 +30,8 @@ interface MindMapChatIntegrationProps {
   onNodeAdd?: (parentId: string, text: string) => Promise<void>;
   onNodeUpdate?: (nodeId: string, text: string) => Promise<void>;
   onNodeDelete?: (nodeId: string) => Promise<void>;
+  onNavigateToPrevNode?: () => void;
+  onNavigateToNextNode?: () => void;
 }
 
 export function MindMapChatIntegration({
@@ -55,7 +58,9 @@ export function MindMapChatIntegration({
   onSourcesUpdate,
   onNodeAdd,
   onNodeUpdate,
-  onNodeDelete
+  onNodeDelete,
+  onNavigateToPrevNode,
+  onNavigateToNextNode
 }: MindMapChatIntegrationProps) {
   const chatPanelRef = useRef<ChatPanelRef>(null);
 
@@ -129,6 +134,8 @@ export function MindMapChatIntegration({
       onThreadRename={onThreadRename}
       onThreadDelete={onThreadDelete}
       onCopyNotesToChat={handleCopyNotesToChat}
+      onNavigateToPrevNode={onNavigateToPrevNode}
+      onNavigateToNextNode={onNavigateToNextNode}
     />
   );
 }

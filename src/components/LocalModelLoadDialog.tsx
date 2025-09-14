@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, Play, Square, Loader2, Cpu, Download, Trash2, FolderOpen } from 'lucide-react';
+import { X, Play, Square, Loader2, Cpu, Download, Trash2 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import toast from 'react-hot-toast';
 import { modelEvents } from '../utils/modelEvents';
@@ -266,23 +266,7 @@ export function LocalModelLoadDialog({
     }
   }, [pendingDeleteModelId, fetchModelsAndStatuses]);
 
-  const handleOpenModelsDirectory = useCallback(async () => {
-    try {
-      const response = await fetch('/api/local-llm/open-models-directory', {
-        method: 'POST',
-      });
 
-      if (response.ok) {
-        toast.success('Opened models directory');
-      } else {
-        const error = await response.json();
-        toast.error(error.error || 'Failed to open models directory');
-      }
-    } catch (error) {
-      console.error('Error opening models directory:', error);
-      toast.error('Failed to open models directory');
-    }
-  }, []);
 
   // Initial data loading
   useEffect(() => {
@@ -323,14 +307,6 @@ export function LocalModelLoadDialog({
             <h2 className="text-xl font-semibold text-white">Local Model Management</h2>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleOpenModelsDirectory}
-              className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors"
-              title="Open models directory"
-            >
-              <FolderOpen size={16} />
-              Open Folder
-            </button>
             {!loading && localModels.length > 0 && (
               <button
                 onClick={() => {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Plus, Edit2, Trash2, BookOpen, FileText, ExternalLink, Link } from 'lucide-react';
-import { Source } from './ChatContentViewer';
+import { Plus, Edit, Trash2, BookOpen, FileText, ExternalLink, Link } from 'lucide-react';
+import { Source } from '../../types/mindMap';
 
 const typeIcons = {
   file: FileText,
@@ -211,8 +211,8 @@ export function SourcesList({ sources, onSourcesUpdate }: SourcesListProps) {
 
             {/* Sources List */}
             {(sources || []).map((source) => {
-              const IconComponent = typeIcons[source.type];
-              const iconColor = typeColors[source.type];
+              const IconComponent = typeIcons[source.type] || FileText;
+              const iconColor = typeColors[source.type] || 'text-gray-400';
               
               return (
                 <div
@@ -254,7 +254,7 @@ export function SourcesList({ sources, onSourcesUpdate }: SourcesListProps) {
                             className="p-1 hover:bg-gray-600 rounded text-gray-400 hover:text-gray-200 transition-colors"
                             title="Edit source"
                           >
-                            <Edit2 size={12} />
+                            <Edit size={12} />
                           </button>
                           <button
                             onClick={(e) => {

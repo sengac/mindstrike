@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useImperativeHandle, forwardRef, useCallback } from 'react';
-import { Send, Loader2, Github, Youtube, Trash2, User, Paperclip, X, MessageCircle } from 'lucide-react';
+import { Send, Loader2, Github, Youtube, Trash2, User, Paperclip, X } from 'lucide-react';
 import { MindStrikeIcon } from './MindStrikeIcon';
+import { DiscordIcon } from './DiscordIcon';
 import { ChatMessage } from './ChatMessage';
 import { PersonalityModal } from './PersonalityModal';
 import { ValidationStatusNotification } from './ValidationStatusNotification';
@@ -430,7 +431,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
               </h3>
               <div className="flex justify-center space-x-4 mb-4">
                 <a 
-                  href="https://github.com/mindstrikeai/mindstrike" 
+                  href="https://mindstrike.ai/link/github" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="text-gray-400 hover:text-white transition-colors"
@@ -439,7 +440,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
                   <Github size={24} />
                 </a>
                 <a 
-                  href="https://www.youtube.com/@agiledestructionai" 
+                  href="https://mindstrike.ai/link/youtube" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="text-gray-400 hover:text-red-500 transition-colors"
@@ -448,13 +449,13 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
                   <Youtube size={24} />
                 </a>
                 <a 
-                  href="https://discord.gg/KPg2gwjX" 
+                  href="https://mindstrike.ai/link/discord" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="text-gray-400 hover:text-indigo-500 transition-colors"
                   title="MindStrike Discord Server"
                 >
-                  <MessageCircle size={24} />
+                  <DiscordIcon size={24} />
                 </a>
               </div>
               <p className="text-sm">Start a conversation with your current workspace:</p>

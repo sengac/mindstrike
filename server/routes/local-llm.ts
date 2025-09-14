@@ -26,7 +26,21 @@ router.get('/models', async (req, res) => {
 });
 
 /**
- * Get available models for download
+ * Get cached available models only (no fetch if cache is empty)
+ */
+router.get('/available-models-cached', async (req, res) => {
+  try {
+    const { modelFetcher } = await import('../model-fetcher.js');
+    const models = modelFetcher.getCachedModels();
+    res.json(models);
+  } catch (error) {
+    console.error('Error getting cached models:', error);
+    res.status(500).json({ error: 'Failed to get cached models' });
+  }
+});
+
+/**
+ * Get available models for download (with fallback to fetch)
  */
 router.get('/available-models', async (req, res) => {
   try {
