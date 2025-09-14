@@ -110,7 +110,7 @@ export function useGenerationStreaming() {
       console.log('Connecting to SSE:', sseUrl);
       eventSourceRef.current = new EventSource(sseUrl);
       
-      updateStats(0, 'Generating...', 0);
+      updateStats(0, 'Generating...');
 
       // Note: We no longer need a continuous interval since server provides stable values
 
@@ -127,7 +127,7 @@ export function useGenerationStreaming() {
             case 'token':
               // Use server-provided counts if available
               if (data.totalTokens !== undefined && data.tokensPerSecond !== undefined) {
-                setStats(prevStats => ({
+                setStats(() => ({
                   tokensPerSecond: data.tokensPerSecond, // Always use the server value
                   totalTokens: data.totalTokens,
                   status: 'Generating...'

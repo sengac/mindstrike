@@ -252,9 +252,12 @@ export class MindmapAgent extends BaseAgent {
       this.systemPrompt = this.createSystemPrompt();
       
       // Update the system message in the current conversation
-      const systemMessage = this.conversation.find(msg => msg.role === 'system');
+      const messages = this.store.getState().messages;
+      const systemMessage = messages.find(msg => msg.role === 'system');
       if (systemMessage) {
-        systemMessage.content = this.systemPrompt;
+        this.store.getState().updateMessage(systemMessage.id, {
+          content: this.systemPrompt
+        });
         logger.info('Updated system message with context', { 
           systemMessageLength: systemMessage.content.length,
           includesContext: systemMessage.content.includes('MINDMAP CONTEXT')
@@ -429,9 +432,12 @@ export class MindmapAgent extends BaseAgent {
     this.systemPrompt = this.createSystemPrompt();
     
     // Update the system message in the current conversation
-    const systemMessage = this.conversation.find(msg => msg.role === 'system');
+    const messages = this.store.getState().messages;
+    const systemMessage = messages.find(msg => msg.role === 'system');
     if (systemMessage) {
-      systemMessage.content = this.systemPrompt;
+      this.store.getState().updateMessage(systemMessage.id, {
+        content: this.systemPrompt
+      });
     }
   }
 
@@ -444,20 +450,22 @@ export class MindmapAgent extends BaseAgent {
       const dynamicSystemPrompt = await this.createSystemPromptWithContext();
       
       // Update the system message in the conversation
-      const systemMessage = this.conversation.find(msg => msg.role === 'system');
+      const messages = this.store.getState().messages;
+      const systemMessage = messages.find(msg => msg.role === 'system');
       if (systemMessage) {
-        systemMessage.content = dynamicSystemPrompt;
+        this.store.getState().updateMessage(systemMessage.id, {
+          content: dynamicSystemPrompt
+        });
         logger.info('Updated existing system message with context', { 
-          systemMessageLength: systemMessage.content.length,
-          includesContext: systemMessage.content.includes('MINDMAP CONTEXT')
+          systemMessageLength: dynamicSystemPrompt.length,
+          includesContext: dynamicSystemPrompt.includes('MINDMAP CONTEXT')
         });
       } else {
         // Add system message if none exists
-        this.conversation.unshift({
-          id: this.generateId(),
+        this.store.getState().addMessage({
           role: 'system',
           content: dynamicSystemPrompt,
-          timestamp: new Date()
+          status: 'completed'
         });
         logger.info('Added new system message with context', { 
           systemMessageLength: dynamicSystemPrompt.length,

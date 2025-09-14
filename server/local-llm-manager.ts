@@ -496,14 +496,29 @@ export class LocalLLMManager {
     }
 
     // Generate streaming response
-    // For now, just use the regular prompt method and yield the complete response
-    // TODO: Implement proper streaming when node-llama-cpp supports it properly
+    // Since node-llama-cpp doesn't have proper streaming yet, we'll simulate it
+    // by yielding the response character by character with small delays
     const response = await session.prompt(lastUserMessage, {
       temperature: options?.temperature || 0.7,
       maxTokens: options?.maxTokens || 2048
     });
     
-    yield response;
+    // Simulate streaming by yielding characters/words with small delays
+    const words = response.split(' ');
+    let currentText = '';
+    
+    for (let i = 0; i < words.length; i++) {
+      const word = words[i];
+      currentText += (i === 0 ? '' : ' ') + word;
+      
+      // Yield word by word for more realistic streaming
+      yield (i === 0 ? '' : ' ') + word;
+      
+      // Add a small delay to simulate real streaming (only if not the last word)
+      if (i < words.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 50)); // 50ms delay between words
+      }
+    }
   }
 
   /**

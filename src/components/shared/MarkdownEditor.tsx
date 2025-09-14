@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Eye, Edit3, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { CodeEditor } from '../CodeEditor';
+import { CodeEditor } from '../../workspace/components/CodeEditor';
 import { MarkdownViewer } from '../MarkdownViewer';
 import { clsx } from 'clsx';
 

@@ -4,6 +4,8 @@ import toast from 'react-hot-toast';
 import { useDebugStore, LLMDebugEntry } from '../store/useDebugStore';
 import { useTaskStore } from '../store/useTaskStore';
 import { JSONViewer } from './JSONViewer';
+import { BaseDialog } from './shared/BaseDialog';
+import { useDialogAnimation } from '../hooks/useDialogAnimation';
 
 interface LLMDebugDialogProps {
   isOpen: boolean;
@@ -11,6 +13,7 @@ interface LLMDebugDialogProps {
 }
 
 export function LLMDebugDialog({ isOpen, onClose }: LLMDebugDialogProps) {
+  const { shouldRender, isVisible, handleClose } = useDialogAnimation(isOpen, onClose);
   const { entries, isConnected, clearEntries } = useDebugStore();
   const { currentWorkflow, workflows, getWorkflowProgress, getActiveTask } = useTaskStore();
   const [expandedEntries, setExpandedEntries] = useState<Set<string>>(new Set());
@@ -60,33 +63,39 @@ export function LLMDebugDialog({ isOpen, onClose }: LLMDebugDialogProps) {
     }
   };
 
-  if (!isOpen) return null;
+  if (!shouldRender) return null;
 
   return (
-    <div className="fixed inset-0 bg-gray-800 z-50 flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          <div className="flex items-center gap-3">
-            <Bug className="text-yellow-400" size={20} />
-            <h2 className="text-xl font-semibold text-white">LLM Debug & Tasks</h2>
-            <div className="flex items-center gap-2">
-              {isConnected ? (
-                <Wifi className="text-green-400" size={16} title="Connected to debug stream" />
-              ) : (
-                <WifiOff className="text-red-400" size={16} title="Disconnected from debug stream" />
-              )}
-              <span className="text-xs text-gray-400">
-                {isConnected ? 'Live' : 'Offline'}
-              </span>
-            </div>
+    <BaseDialog 
+      isOpen={shouldRender} 
+      onClose={handleClose}
+      isVisible={isVisible}
+      fullScreen={true}
+      className="bg-gray-800 flex flex-col"
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b border-gray-700">
+        <div className="flex items-center gap-3">
+          <Bug className="text-yellow-400" size={20} />
+          <h2 className="text-xl font-semibold text-white">LLM Debug & Tasks</h2>
+          <div className="flex items-center gap-2">
+            {isConnected ? (
+              <Wifi className="text-green-400" size={16} title="Connected to debug stream" />
+            ) : (
+              <WifiOff className="text-red-400" size={16} title="Disconnected from debug stream" />
+            )}
+            <span className="text-xs text-gray-400">
+              {isConnected ? 'Live' : 'Offline'}
+            </span>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-700 rounded transition-colors"
-          >
-            <X size={20} />
-          </button>
         </div>
+        <button
+          onClick={handleClose}
+          className="p-2 hover:bg-gray-700 rounded transition-colors"
+        >
+          <X size={20} />
+        </button>
+      </div>
 
         {/* Tabs */}
         <div className="flex border-b border-gray-700">
@@ -341,6 +350,6 @@ export function LLMDebugDialog({ isOpen, onClose }: LLMDebugDialogProps) {
             </div>
           )}
         </div>
-    </div>
+    </BaseDialog>
   );
 }

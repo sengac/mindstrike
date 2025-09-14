@@ -21,16 +21,7 @@ export interface MindMapData {
   }
 }
 
-interface HistoryState {
-  nodes: Node<MindMapNodeData>[]
-  rootNodeId: string
-  layout: 'LR' | 'RL' | 'TB' | 'BT'
-}
-
 export class MindMapDataManager {
-  private history: HistoryState[] = []
-  private historyIndex: number = -1
-  private isUndoRedo: boolean = false
 
   // Convert tree structure to React Flow nodes
   convertTreeToNodes(treeData: MindMapData) {
@@ -62,6 +53,7 @@ export class MindMapDataManager {
           parentId,
           level,
           hasChildren: (treeNode.children && treeNode.children.length > 0) || false,
+          isCollapsed: false,
           chatId: treeNode.chatId || undefined,
           notes: treeNode.notes || undefined,
           sources: treeNode.sources || undefined,
@@ -194,33 +186,7 @@ export class MindMapDataManager {
     return edges
   }
 
-  // Save state to history
-  saveToHistory(
-    nodes: Node<MindMapNodeData>[],
-    rootNodeId: string,
-    layout: 'LR' | 'RL' | 'TB' | 'BT'
-  ) {
-    if (this.isUndoRedo) {
-      this.isUndoRedo = false
-      return
-    }
 
-    const newState = {
-      nodes,
-      rootNodeId,
-      layout
-    }
-    const newHistory = this.history.slice(0, this.historyIndex + 1)
-    newHistory.push(newState)
-
-    if (newHistory.length > 50) {
-      newHistory.shift()
-    } else {
-      this.historyIndex += 1
-    }
-
-    this.history = newHistory
-  }
 
   // Initialize data from tree or create empty graph
   async initializeData(
@@ -236,8 +202,7 @@ export class MindMapDataManager {
       const { nodes, rootNodeId, layout } = this.convertTreeToNodes(initialData)
       const edges = this.generateEdges(nodes, layout)
 
-      this.history = [{ nodes, rootNodeId, layout }]
-      this.historyIndex = 0
+
 
       return { nodes, edges, rootNodeId, layout }
     } else {
@@ -258,55 +223,11 @@ export class MindMapDataManager {
       const edges: Edge[] = []
       const layout: 'LR' | 'RL' | 'TB' | 'BT' = 'LR'
 
-      this.history = [{ nodes, rootNodeId: rootId, layout }]
-      this.historyIndex = 0
+
 
       return { nodes, edges, rootNodeId: rootId, layout }
     }
   }
 
-  // Undo/Redo functionality
-  undo(): { nodes: Node<MindMapNodeData>[], edges: Edge[], rootNodeId: string, layout: 'LR' | 'RL' | 'TB' | 'BT' } | null {
-    if (this.historyIndex > 0) {
-      this.isUndoRedo = true
-      const prevState = this.history[this.historyIndex - 1]
-      const edges = this.generateEdges(prevState.nodes, prevState.layout)
-      
-      this.historyIndex -= 1
 
-      return {
-        nodes: prevState.nodes,
-        edges,
-        rootNodeId: prevState.rootNodeId,
-        layout: prevState.layout
-      }
-    }
-    return null
-  }
-
-  redo(): { nodes: Node<MindMapNodeData>[], edges: Edge[], rootNodeId: string, layout: 'LR' | 'RL' | 'TB' | 'BT' } | null {
-    if (this.historyIndex < this.history.length - 1) {
-      this.isUndoRedo = true
-      const nextState = this.history[this.historyIndex + 1]
-      const edges = this.generateEdges(nextState.nodes, nextState.layout)
-      
-      this.historyIndex += 1
-
-      return {
-        nodes: nextState.nodes,
-        edges,
-        rootNodeId: nextState.rootNodeId,
-        layout: nextState.layout
-      }
-    }
-    return null
-  }
-
-  get canUndo(): boolean {
-    return this.historyIndex > 0
-  }
-
-  get canRedo(): boolean {
-    return this.historyIndex < this.history.length - 1
-  }
 }

@@ -4,6 +4,8 @@ import { useAppStore } from '../store/useAppStore';
 import toast from 'react-hot-toast';
 import { modelEvents } from '../utils/modelEvents';
 import { ConfirmDialog } from './shared/ConfirmDialog';
+import { BaseDialog } from './shared/BaseDialog';
+import { useDialogAnimation } from '../hooks/useDialogAnimation';
 
 interface LocalModelInfo {
   id: string;
@@ -39,6 +41,7 @@ export function LocalModelLoadDialog({
   onModelLoaded 
 }: LocalModelLoadDialogProps) {
   // Hooks
+  const { shouldRender, isVisible, handleClose } = useDialogAnimation(isOpen, onClose);
   const { setActivePanel } = useAppStore();
   
   // State
@@ -289,7 +292,7 @@ export function LocalModelLoadDialog({
 
 
 
-  if (!isOpen) return null;
+  if (!shouldRender) return null;
   
   // Don't show dialog UI when auto-loading a specific model
   // Just handle the loading logic in the background
@@ -298,43 +301,48 @@ export function LocalModelLoadDialog({
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-gray-900 rounded-lg border border-gray-700 w-full max-w-4xl max-h-[80vh] overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-700">
-          <div className="flex items-center gap-3">
-            <Cpu size={24} className="text-blue-400" />
-            <h2 className="text-xl font-semibold text-white">Local Model Management</h2>
-          </div>
-          <div className="flex items-center gap-2">
-            {!loading && localModels.length > 0 && (
-              <button
-                onClick={() => {
-                  setActivePanel('settings');
-                  onClose();
-                  // Scroll to Available Models section after a brief delay
-                  setTimeout(() => {
-                    const element = document.getElementById('available-models');
-                    if (element) {
-                      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }
-                  }, 300);
-                }}
-                className="flex items-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors"
-                title="Go to Available Models section"
-              >
-                <Download size={16} />
-                Available Models
-              </button>
-            )}
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-gray-800 rounded transition-colors text-gray-400 hover:text-white"
-            >
-              <X size={20} />
-            </button>
-          </div>
+    <BaseDialog 
+      isOpen={shouldRender} 
+      onClose={handleClose}
+      isVisible={isVisible}
+      maxWidth="max-w-4xl"
+      className="max-h-[80vh] overflow-hidden"
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between p-6 border-b border-gray-700">
+        <div className="flex items-center gap-3">
+          <Cpu size={24} className="text-blue-400" />
+          <h2 className="text-xl font-semibold text-white">Local Model Management</h2>
         </div>
+        <div className="flex items-center gap-2">
+          {!loading && localModels.length > 0 && (
+            <button
+              onClick={() => {
+                setActivePanel('settings');
+                handleClose();
+                // Scroll to Available Models section after a brief delay
+                setTimeout(() => {
+                  const element = document.getElementById('available-models');
+                  if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }, 300);
+              }}
+              className="flex items-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors"
+              title="Go to Available Models section"
+            >
+              <Download size={16} />
+              Available Models
+            </button>
+          )}
+          <button
+            onClick={handleClose}
+            className="p-2 hover:bg-gray-800 rounded transition-colors text-gray-400 hover:text-white"
+          >
+            <X size={20} />
+          </button>
+        </div>
+      </div>
 
         <div className="p-6 overflow-y-auto max-h-[calc(80vh-120px)]">
           {/* Model List */}
@@ -353,7 +361,7 @@ export function LocalModelLoadDialog({
                 <button
                   onClick={() => {
                     setActivePanel('settings');
-                    onClose();
+                    handleClose();
                     // Scroll to Available Models section after a brief delay
                     setTimeout(() => {
                       const element = document.getElementById('available-models');
@@ -482,7 +490,6 @@ export function LocalModelLoadDialog({
           type="danger"
           icon={<Trash2 size={20} />}
         />
-      </div>
-    </div>
+    </BaseDialog>
   );
 }

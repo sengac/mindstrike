@@ -3,10 +3,11 @@ import { MessageSquare, ExternalLink, Unlink, X, StickyNote, BookOpen, Copy, Che
 import toast from 'react-hot-toast';
 import { Thread, ConversationMessage, NotesAttachment } from '../../types';
 import { Source } from '../../types/mindMap';
-import { ChatPanel, ChatPanelRef } from '../ChatPanel';
+import { ChatPanel, ChatPanelRef } from '../../chat/components/ChatPanel';
 import { MarkdownEditor } from './MarkdownEditor';
 import { ThreadList } from './ThreadList';
 import { SourcesList } from './SourcesList';
+import { MultiChoiceDialog } from './MultiChoiceDialog';
 
 interface ChatContentViewerProps {
   thread?: Thread;
@@ -134,7 +135,6 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
       setNotesActiveMode('preview');
       toast.success('Notes replaced with copied content');
     }
-    setShowOverwriteConfirm(false);
     setPendingContent('');
   };
 
@@ -149,12 +149,10 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
       setNotesActiveMode('preview');
       toast.success('Content appended to notes');
     }
-    setShowOverwriteConfirm(false);
     setPendingContent('');
   };
 
   const handleCancelOverwrite = () => {
-    setShowOverwriteConfirm(false);
     setPendingContent('');
   };
 
@@ -180,37 +178,19 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
 
   return (
     <div className="flex flex-col h-full">
-      {/* Confirmation Dialog Overlay */}
-      {showOverwriteConfirm && (
-        <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 border border-gray-600 rounded-lg p-6 max-w-md mx-4">
-            <h3 className="text-lg font-semibold text-white mb-3">Add to Notes</h3>
-            <p className="text-gray-300 mb-4">
-              The notes section already contains content. How would you like to add this message?
-            </p>
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={handleCancelOverwrite}
-                className="px-4 py-2 text-sm bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAppendToNotes}
-                className="px-4 py-2 text-sm bg-green-600 hover:bg-green-700 text-white rounded transition-colors"
-              >
-                Append to Notes
-              </button>
-              <button
-                onClick={handleConfirmOverwrite}
-                className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
-              >
-                Replace Notes
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Add to Notes Dialog */}
+      <MultiChoiceDialog
+        isOpen={showOverwriteConfirm}
+        onClose={() => setShowOverwriteConfirm(false)}
+        title="Add to Notes"
+        message="The notes section already contains content. How would you like to add this message?"
+        choices={[
+          { text: 'Cancel', onClick: handleCancelOverwrite, variant: 'secondary' },
+          { text: 'Append to Notes', onClick: handleAppendToNotes, variant: 'primary' },
+          { text: 'Replace Notes', onClick: handleConfirmOverwrite, variant: 'primary' }
+        ]}
+        icon={<StickyNote size={20} />}
+      />
 
       {/* Header with Tabs */}
       <div className="flex-shrink-0 border-b border-gray-700">

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import mermaid from 'mermaid';
 import { MERMAID_CONFIG } from '../utils/mermaidConfig';
+import { useDialogAnimation } from '../hooks/useDialogAnimation';
 
 interface MermaidModalProps {
   isOpen: boolean;
@@ -13,6 +14,7 @@ interface MermaidModalProps {
 export function MermaidModal({ isOpen, onClose, mermaidCode }: MermaidModalProps) {
   const [modalId, setModalId] = useState('');
   const [isRendering, setIsRendering] = useState(true);
+  const { shouldRender, isVisible, handleClose } = useDialogAnimation(isOpen, onClose);
 
   useEffect(() => {
     if (isOpen && mermaidCode) {
@@ -99,7 +101,7 @@ export function MermaidModal({ isOpen, onClose, mermaidCode }: MermaidModalProps
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose();
+        handleClose();
       }
     };
 
@@ -112,20 +114,24 @@ export function MermaidModal({ isOpen, onClose, mermaidCode }: MermaidModalProps
       document.removeEventListener('keydown', handleEscape);
       document.body.style.overflow = 'unset';
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, handleClose]);
 
-  if (!isOpen) return null;
+  if (!shouldRender) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] bg-black bg-opacity-75 backdrop-blur-sm flex items-center justify-center">
       {/* Backdrop */}
       <div 
         className="absolute inset-0"
-        onClick={onClose}
+        onClick={handleClose}
       />
       
       {/* Modal */}
-      <div className="relative bg-gray-900 w-[100vw] h-[100vh] flex flex-col">
+      <div className={`
+        relative bg-gray-900 w-[100vw] h-[100vh] flex flex-col
+        transition-all duration-200 ease-out
+        ${isVisible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}
+      `}>
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
           <div className="flex items-center space-x-2">
@@ -142,7 +148,7 @@ export function MermaidModal({ isOpen, onClose, mermaidCode }: MermaidModalProps
               <Download size={16} className="text-gray-400 hover:text-white" />
             </button>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="p-2 hover:bg-gray-700 rounded transition-colors"
               title="Close modal"
             >

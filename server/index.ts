@@ -597,55 +597,88 @@ app.post('/api/message/stream', async (req: any, res: any) => {
       agentPool.setCurrentThread(threadId);
     }
 
-    // Set SSE headers
-    res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Cache-Control'
-    });
+    // Generate unique client ID for this streaming session
+    const clientId = `chat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const topic = `chat-${threadId || 'default'}`;
 
-    // Send initial connection event
-    res.write('data: {"type": "connected"}\n\n');
-    if (res.flush) res.flush();
+    // Add client to SSE manager
+    sseManager.addClient(clientId, res, topic);
 
-    // Process message with real-time updates using thread-specific agent
-    const response = await agentPool.getCurrentAgent().processMessage(message, images, notes, (updatedMessage: any) => {
-      // Send message update via SSE
-      res.write(`data: ${JSON.stringify({
+    // Process message with real-time streaming using thread-specific agent
+    const agent = agentPool.getCurrentAgent();
+    
+    // Create a custom streaming callback that sends character-by-character updates
+    let assistantMessage: any = null;
+    let lastContentLength = 0;
+    
+    const streamingCallback = (updatedMessage: any) => {
+      // For the first update, create the assistant message
+      if (!assistantMessage) {
+        assistantMessage = updatedMessage;
+        sseManager.broadcast(topic, {
+          type: 'message-update',
+          message: updatedMessage
+        });
+        lastContentLength = updatedMessage.content.length;
+        return;
+      }
+      
+      // Check if content has grown (new characters added)
+      if (updatedMessage.content.length > lastContentLength) {
+        const newContent = updatedMessage.content.slice(lastContentLength);
+        if (newContent) {
+          // Send the new content as a chunk
+          sseManager.broadcast(topic, {
+            type: 'content-chunk',
+            chunk: newContent
+          });
+          lastContentLength = updatedMessage.content.length;
+        }
+      }
+      
+      // Always send the full message update for status changes
+      assistantMessage = updatedMessage;
+      sseManager.broadcast(topic, {
         type: 'message-update',
         message: updatedMessage
-      })}\n\n`);
-      if (res.flush) res.flush(); // Ensure data is sent immediately
-    });
+      });
+    };
+    
+    try {
+      // Use the legacy processMessage method with streaming callback
+      const response = await agent.processMessage(message, images, notes, streamingCallback);
 
-    // Send final completion event
-    res.write(`data: ${JSON.stringify({
-      type: 'completed',
-      message: response
-    })}\n\n`);
+      // Send final completion event
+      sseManager.broadcast(topic, {
+        type: 'completed',
+        message: response
+      });
+    } catch (processingError: any) {
+      console.error('Error processing message:', processingError);
+      
+      // Check if this is a local model not loaded error
+      if (processingError.message === 'LOCAL_MODEL_NOT_LOADED') {
+        sseManager.broadcast(topic, {
+          type: 'local-model-not-loaded',
+          error: processingError.originalMessage || 'Model not loaded. Please load the model first.',
+          modelId: processingError.modelId
+        });
+      } else {
+        sseManager.broadcast(topic, {
+          type: 'error',
+          error: processingError.message
+        });
+      }
+    }
 
-    // Close the connection
-    res.end();
+    // Remove client after processing (connection will be closed automatically)
+    setTimeout(() => {
+      sseManager.removeClient(clientId);
+    }, 1000);
 
   } catch (error: any) {
-    console.error('Error processing message stream:', error);
-    
-    // Check if this is a local model not loaded error
-    if (error.message === 'LOCAL_MODEL_NOT_LOADED') {
-      res.write(`data: ${JSON.stringify({
-        type: 'local-model-not-loaded',
-        error: error.originalMessage || 'Model not loaded. Please load the model first.',
-        modelId: error.modelId
-      })}\n\n`);
-    } else {
-      res.write(`data: ${JSON.stringify({
-        type: 'error',
-        error: error.message
-      })}\n\n`);
-    }
-    res.end();
+    console.error('Error setting up message stream:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -1101,8 +1134,9 @@ app.post('/api/mindmaps/:mindMapId/mindmap', async (req: Request, res: Response)
       const existingMindMapIndex = mindMaps.findIndex((m: any) => m.id === mindMapId);
       if (existingMindMapIndex >= 0) {
         mindMaps[existingMindMapIndex].mindmapData = mindmapData;
+        mindMaps[existingMindMapIndex].updatedAt = new Date().toISOString();
       } else {
-        mindMaps.push({ id: mindMapId, mindmapData });
+        mindMaps.push({ id: mindMapId, mindmapData, updatedAt: new Date().toISOString() });
       }
       
       await fs.writeFile(mindMapsPath, JSON.stringify(mindMaps, null, 2));

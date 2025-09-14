@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
-import { createPortal } from 'react-dom';
 import { AlertTriangle, Trash2, X } from 'lucide-react';
+import { BaseDialog } from './BaseDialog';
+import { useDialogAnimation } from '../../hooks/useDialogAnimation';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -25,7 +26,9 @@ export function ConfirmDialog({
   type = 'danger',
   icon
 }: ConfirmDialogProps) {
-  if (!isOpen) return null;
+  const { shouldRender, isVisible, handleClose } = useDialogAnimation(isOpen, onClose);
+
+  if (!shouldRender) return null;
 
   const getColors = () => {
     switch (type) {
@@ -55,9 +58,9 @@ export function ConfirmDialog({
                      type === 'warning' ? <AlertTriangle size={20} /> : 
                      <X size={20} />;
 
-  return createPortal(
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
-      <div className="bg-gray-800 border border-gray-600 rounded-lg p-6 max-w-md w-full mx-4">
+  return (
+    <BaseDialog isOpen={shouldRender} onClose={handleClose} isVisible={isVisible}>
+      <div className="p-6">
         <div className="flex items-center space-x-3 mb-4">
           <div className={`w-10 h-10 ${colors.iconBg} rounded-full flex items-center justify-center`}>
             <div className={colors.iconColor}>
@@ -76,7 +79,7 @@ export function ConfirmDialog({
         
         <div className="flex space-x-3 justify-end">
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
           >
             {cancelText}
@@ -84,7 +87,7 @@ export function ConfirmDialog({
           <button
             onClick={() => {
               onConfirm();
-              onClose();
+              handleClose();
             }}
             className={`px-4 py-2 ${colors.confirmBtn} text-white rounded transition-colors`}
           >
@@ -92,7 +95,6 @@ export function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>,
-    document.body
+    </BaseDialog>
   );
 }

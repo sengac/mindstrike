@@ -1,23 +1,23 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar';
-import { ChatPanel, ChatPanelRef } from './components/ChatPanel';
-import { ThreadsPanel } from './components/ThreadsPanel';
-import { WorkflowsPanel } from './components/WorkflowsPanel';
-import { WorkflowsView } from './components/WorkflowsView';
-import { MindMapsPanel } from './components/MindMapsPanel';
-import { MindMapsView } from './components/MindMapsView';
-import { FileExplorer } from './components/FileExplorer';
+import { ChatPanel, ChatPanelRef } from './chat/components/ChatPanel';
+import { ThreadsPanel } from './chat/components/ThreadsPanel';
+import { WorkflowsPanel } from './workflows/components/WorkflowsPanel';
+import { WorkflowsView } from './workflows/components/WorkflowsView';
+import { MindMapsPanel } from './mindmaps/components/MindMapsPanel';
+import { MindMapsView } from './mindmaps/components/MindMapsView';
+import { FileExplorer } from './workspace/components/FileExplorer';
 import { AgentsPanel } from './components/AgentsPanel';
-import { SettingsPanel } from './components/SettingsPanel';
-import { ModelSelector } from './components/ModelSelector';
+import { SettingsPanel } from './settings/components/SettingsPanel';
+import { ModelSelector } from './settings/components/ModelSelector';
 import { HeaderStats } from './components/HeaderStats';
 import { LocalModelLoadDialog } from './components/LocalModelLoadDialog';
 import { LLMDebugDialog } from './components/LLMDebugDialog';
 import { initializeDebugSSE } from './store/useDebugStore';
-import { useThreads } from './hooks/useThreads';
-import { useWorkflows } from './hooks/useWorkflows';
-import { useMindMaps } from './hooks/useMindMaps';
-import { useWorkspaceStore } from './hooks/useWorkspaceStore';
+import { useThreads } from './chat/hooks/useThreads';
+import { useWorkflows } from './workflows/hooks/useWorkflows';
+import { useMindMaps } from './mindmaps/hooks/useMindMaps';
+import { useWorkspaceStore } from './workspace/hooks/useWorkspaceStore';
 import { useAppStore } from './store/useAppStore';
 
 
@@ -98,6 +98,7 @@ function App() {
     activeMindMapId,
     activeMindMap,
     isLoaded: mindMapsLoaded,
+    loadMindMaps,
     createMindMap,
     deleteMindMap,
     renameMindMap,
@@ -414,6 +415,7 @@ function App() {
               />
               <MindMapsView 
                 activeMindMap={activeMindMap}
+                loadMindMaps={loadMindMaps}
                 pendingNodeUpdate={pendingNodeUpdate}
               />
             </div>

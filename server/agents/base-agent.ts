@@ -3,6 +3,7 @@ import { ToolSystem } from '../tools.js';
 import { logger } from '../logger.js';
 import { cleanContentForLLM } from '../utils/content-filter.js';
 import { LLMConfigManager } from '../llm-config-manager.js';
+import { getAgentStore, StreamingMessage } from '../../src/store/useAgentStore.js';
 
 export interface AgentConfig {
   workspaceRoot: string;
@@ -51,24 +52,34 @@ export interface ConversationMessage {
 export abstract class BaseAgent {
   protected llmClient: LLMClient;
   protected toolSystem: ToolSystem;
-  protected conversation: ConversationMessage[] = [];
-  protected cancelledMessages: Set<string> = new Set();
   protected systemPrompt: string;
   protected config: AgentConfig;
+  protected agentId: string;
+  protected store: ReturnType<typeof getAgentStore>;
 
-  constructor(config: AgentConfig) {
+  constructor(config: AgentConfig, agentId?: string) {
     this.config = config;
+    this.agentId = agentId || this.generateId();
     this.llmClient = new LLMClient(config.llmConfig);
     this.toolSystem = new ToolSystem(config.workspaceRoot);
     this.systemPrompt = this.createSystemPrompt();
     
-    // Initialize with system message
-    this.conversation.push({
-      id: 'system',
-      role: 'system',
-      content: this.systemPrompt,
-      timestamp: new Date()
-    });
+    // Initialize the agent store
+    this.store = getAgentStore(this.agentId, this.constructor.name, config.workspaceRoot);
+    
+    // Update store with current config
+    this.store.getState().updateLLMConfig(config.llmConfig);
+    this.store.getState().updateCustomRole(config.customRole);
+    
+    // Add system message if not already present
+    const messages = this.store.getState().messages;
+    if (messages.length === 0 || messages[0].role !== 'system') {
+      this.store.getState().addMessage({
+        role: 'system',
+        content: this.systemPrompt,
+        status: 'completed'
+      });
+    }
   }
 
   // Abstract methods that must be implemented by derived classes
@@ -77,12 +88,13 @@ export abstract class BaseAgent {
   // Common LLM message conversion logic
   protected convertToLLMMessages(): LLMMessage[] {
     const isOllama = this.config.llmConfig.baseURL.includes('11434') || this.config.llmConfig.baseURL.includes('ollama');
+    const messages = this.store.getState().messages;
     
     // Get the latest user message ID to determine which message can have images
-    const latestUserMessage = this.conversation[this.conversation.length - 1];
+    const latestUserMessage = messages[messages.length - 1];
     const isLatestUserMessage = latestUserMessage && latestUserMessage.role === 'user';
     
-    return this.conversation.map(msg => {
+    return messages.map(msg => {
       // For user messages with images
       if (msg.role === 'user' && msg.images && msg.images.length > 0) {
         // Only include images if this is the latest user message
@@ -241,68 +253,73 @@ export abstract class BaseAgent {
     });
   }
 
-  async processMessage(userMessage: string, images?: ImageAttachment[], notes?: NotesAttachment[], onUpdate?: (message: ConversationMessage) => void): Promise<ConversationMessage> {
-    
-    // Add user message to conversation
-    const userMsg: ConversationMessage = {
-      id: this.generateId(),
+  async processMessageStreaming(userMessage: string, images?: ImageAttachment[], notes?: NotesAttachment[]): Promise<string> {
+    // Add user message to store
+    const userMsgId = this.store.getState().addMessage({
       role: 'user',
       content: userMessage,
-      timestamp: new Date(),
+      status: 'completed',
       images: images || [],
       notes: notes || []
-    };
-    this.conversation.push(userMsg);
+    });
 
     // Convert conversation to LLM format
     const llmMessages = this.convertToLLMMessages();
 
     try {
-      // Get initial response from LLM
-      const response = await this.llmClient.generateResponse(llmMessages);
-
-      let responseContent = response.content;
-
-      // Parse response for tool calls
-      const { content, toolCalls } = this.parseToolCalls(responseContent);
-
-      // Create assistant message
-      const assistantMsg: ConversationMessage = {
-        id: this.generateId(),
+      // Create assistant message in streaming state
+      const assistantMsgId = this.store.getState().addMessage({
         role: 'assistant',
-        content: toolCalls && toolCalls.length > 0 ? '' : content,
-        timestamp: new Date(),
-        toolCalls,
-        status: toolCalls && toolCalls.length > 0 ? 'processing' : 'completed',
+        content: '',
+        status: 'streaming',
         model: this.config.llmConfig.displayName || this.config.llmConfig.model
-      };
+      });
 
-      this.conversation.push(assistantMsg);
+      // Set up abort controller for cancellation
+      const abortController = new AbortController();
+      this.store.getState().setAbortController(abortController);
 
-      // Send initial message update
-      if (onUpdate) {
-        onUpdate(assistantMsg);
+      let fullContent = '';
+      const streamGenerator = this.llmClient.generateStreamResponse(llmMessages);
+
+      for await (const chunk of streamGenerator) {
+        // Check if streaming was cancelled
+        if (abortController.signal.aborted) {
+          this.store.getState().setStreamingStatus(assistantMsgId, 'cancelled');
+          return assistantMsgId;
+        }
+
+        fullContent += chunk;
+        this.store.getState().appendToMessage(assistantMsgId, chunk);
       }
+
+      // Parse the full response for tool calls
+      const { content, toolCalls } = this.parseToolCalls(fullContent);
+
+      // Update message with final content and tool calls
+      this.store.getState().updateMessage(assistantMsgId, {
+        content: toolCalls && toolCalls.length > 0 ? '' : content,
+        toolCalls,
+        status: toolCalls && toolCalls.length > 0 ? 'streaming' : 'completed'
+      });
 
       // Execute tool calls if present
       if (toolCalls && toolCalls.length > 0) {
-        const toolResults = await this.executeToolCalls(toolCalls, assistantMsg.id);
+        const toolResults = await this.executeToolCalls(toolCalls, assistantMsgId);
         
-        // Check if the message was cancelled during execution
-        if (this.cancelledMessages.has(assistantMsg.id)) {
-          assistantMsg.status = 'cancelled';
-          assistantMsg.content = 'Tool execution was cancelled.';
-          this.cancelledMessages.delete(assistantMsg.id);
-          
-          if (onUpdate) {
-            onUpdate(assistantMsg);
-          }
-          return assistantMsg;
+        // Check if cancelled during tool execution
+        const currentMessage = this.store.getState().messages.find(m => m.id === assistantMsgId);
+        if (currentMessage?.status === 'cancelled') {
+          return assistantMsgId;
         }
-        
-        assistantMsg.toolResults = toolResults;
 
-        // Add tool results to conversation and get follow-up response
+        // Update message with tool results
+        this.store.getState().updateMessage(assistantMsgId, {
+          toolResults,
+          status: 'streaming' // Still streaming while getting follow-up response
+        });
+
+        // Get follow-up response after tool execution
         const toolResultContent = toolResults
           .map(result => {
             let resultText = '';
@@ -327,38 +344,309 @@ export abstract class BaseAgent {
           })
           .join('\n\n');
 
-        llmMessages.push({
-          role: 'assistant',
-          content: response.content
-        });
+        const followUpMessages = [
+          ...llmMessages,
+          {
+            role: 'assistant' as const,
+            content: fullContent
+          },
+          {
+            role: 'user' as const,
+            content: `Tool execution results:\n${toolResultContent}\n\nPlease respond to the user with the relevant information from the tool results. Include the actual content/data from the tools when it's helpful to the user.`
+          }
+        ];
+
+        // Stream the follow-up response
+        this.store.getState().updateMessage(assistantMsgId, { content: '' });
         
-        llmMessages.push({
-          role: 'user',
-          content: `Tool execution results:\n${toolResultContent}\n\nPlease respond to the user with the relevant information from the tool results. Include the actual content/data from the tools when it's helpful to the user.`
+        const followUpGenerator = this.llmClient.generateStreamResponse(followUpMessages);
+        let followUpContent = '';
+
+        for await (const chunk of followUpGenerator) {
+          // Check if streaming was cancelled
+          if (abortController.signal.aborted) {
+            this.store.getState().setStreamingStatus(assistantMsgId, 'cancelled');
+            return assistantMsgId;
+          }
+
+          followUpContent += chunk;
+          this.store.getState().appendToMessage(assistantMsgId, chunk);
+        }
+
+        this.store.getState().updateMessage(assistantMsgId, {
+          status: 'completed'
+        });
+      }
+
+      return assistantMsgId;
+
+    } catch (error: any) {
+      logger.error('Error in processMessageStreaming:', error);
+      
+      // Find the assistant message and mark it as error
+      const messages = this.store.getState().messages;
+      const assistantMsg = messages.find(m => m.role === 'assistant' && m.status === 'streaming');
+      if (assistantMsg) {
+        this.store.getState().updateMessage(assistantMsg.id, {
+          status: 'error',
+          content: assistantMsg.content + '\n\n[Error: ' + error.message + ']'
+        });
+        return assistantMsg.id;
+      }
+      
+      throw error;
+    }
+  }
+
+  // Legacy method with streaming support
+  async processMessage(userMessage: string, images?: ImageAttachment[], notes?: NotesAttachment[], onUpdate?: (message: ConversationMessage) => void): Promise<ConversationMessage> {
+    
+    // Add user message to store
+    const userMsgId = this.store.getState().addMessage({
+      role: 'user',
+      content: userMessage,
+      status: 'completed',
+      images: images || [],
+      notes: notes || []
+    });
+
+    // Convert conversation to LLM format
+    const llmMessages = this.convertToLLMMessages();
+
+    try {
+      // Create assistant message in streaming state
+      const assistantMsgId = this.store.getState().addMessage({
+        role: 'assistant',
+        content: '',
+        status: 'streaming',
+        model: this.config.llmConfig.displayName || this.config.llmConfig.model
+      });
+
+      // Set up abort controller for cancellation
+      const abortController = new AbortController();
+      this.store.getState().setAbortController(abortController);
+
+      let fullContent = '';
+      const streamGenerator = this.llmClient.generateStreamResponse(llmMessages);
+
+      for await (const chunk of streamGenerator) {
+        // Check if streaming was cancelled
+        if (abortController.signal.aborted) {
+          this.store.getState().setStreamingStatus(assistantMsgId, 'cancelled');
+          break;
+        }
+
+        fullContent += chunk;
+        this.store.getState().updateMessage(assistantMsgId, { content: fullContent });
+        
+        // Send real-time update via callback
+        if (onUpdate) {
+          const currentMessage = this.store.getState().messages.find(m => m.id === assistantMsgId);
+          if (currentMessage) {
+            const conversationMsg: ConversationMessage = {
+              id: currentMessage.id,
+              role: currentMessage.role,
+              content: currentMessage.content,
+              timestamp: currentMessage.timestamp,
+              toolCalls: currentMessage.toolCalls,
+              toolResults: currentMessage.toolResults,
+              status: 'processing',
+              model: currentMessage.model,
+              images: currentMessage.images,
+              notes: currentMessage.notes
+            };
+            onUpdate(conversationMsg);
+          }
+        }
+      }
+
+      // Parse the full response for tool calls
+      const { content, toolCalls } = this.parseToolCalls(fullContent);
+
+      // Update message with final content and tool calls
+      this.store.getState().updateMessage(assistantMsgId, {
+        content: toolCalls && toolCalls.length > 0 ? '' : content,
+        toolCalls,
+        status: toolCalls && toolCalls.length > 0 ? 'streaming' : 'completed'
+      });
+
+      // Execute tool calls if present
+      if (toolCalls && toolCalls.length > 0) {
+        // Send update for tool execution
+        if (onUpdate) {
+          const currentMessage = this.store.getState().messages.find(m => m.id === assistantMsgId);
+          if (currentMessage) {
+            const conversationMsg: ConversationMessage = {
+              id: currentMessage.id,
+              role: currentMessage.role,
+              content: currentMessage.content,
+              timestamp: currentMessage.timestamp,
+              toolCalls: currentMessage.toolCalls,
+              toolResults: currentMessage.toolResults,
+              status: 'processing',
+              model: currentMessage.model,
+              images: currentMessage.images,
+              notes: currentMessage.notes
+            };
+            onUpdate(conversationMsg);
+          }
+        }
+
+        const toolResults = await this.executeToolCalls(toolCalls, assistantMsgId);
+        
+        // Check if cancelled during tool execution
+        const currentMessage = this.store.getState().messages.find(m => m.id === assistantMsgId);
+        if (currentMessage?.status === 'cancelled') {
+          return this.convertToConversationMessage(currentMessage);
+        }
+
+        // Update message with tool results
+        this.store.getState().updateMessage(assistantMsgId, {
+          toolResults,
+          status: 'streaming' // Still streaming while getting follow-up response
         });
 
         // Get follow-up response after tool execution
-        const followUpResponse = await this.llmClient.generateResponse(llmMessages);
-        assistantMsg.content = followUpResponse.content;
-        assistantMsg.status = 'completed';
+        const toolResultContent = toolResults
+          .map(result => {
+            let resultText = '';
+            if (typeof result.result === 'string') {
+              resultText = result.result;
+            } else if (result.result && typeof result.result === 'object') {
+              if (result.result.success === false && result.result.error) {
+                resultText = `Error: ${result.result.error}`;
+              } else if (result.result.content) {
+                resultText = result.result.content;
+              } else if (result.result.text) {
+                resultText = result.result.text;
+              } else {
+                resultText = Object.entries(result.result)
+                  .map(([key, value]) => `${key}: ${value}`)
+                  .join(', ');
+              }
+            } else {
+              resultText = String(result.result);
+            }
+            return `Tool ${result.name} result:\n${resultText}`;
+          })
+          .join('\n\n');
+
+        const followUpMessages = [
+          ...llmMessages,
+          {
+            role: 'assistant' as const,
+            content: fullContent
+          },
+          {
+            role: 'user' as const,
+            content: `Tool execution results:\n${toolResultContent}\n\nPlease respond to the user with the relevant information from the tool results. Include the actual content/data from the tools when it's helpful to the user.`
+          }
+        ];
+
+        // Stream the follow-up response
+        this.store.getState().updateMessage(assistantMsgId, { content: '' });
         
-        if (onUpdate) {
-          onUpdate(assistantMsg);
+        const followUpGenerator = this.llmClient.generateStreamResponse(followUpMessages);
+        let followUpContent = '';
+
+        for await (const chunk of followUpGenerator) {
+          // Check if streaming was cancelled
+          if (abortController.signal.aborted) {
+            this.store.getState().setStreamingStatus(assistantMsgId, 'cancelled');
+            break;
+          }
+
+          followUpContent += chunk;
+          this.store.getState().updateMessage(assistantMsgId, { content: followUpContent });
+          
+          // Send real-time update via callback
+          if (onUpdate) {
+            const currentMessage = this.store.getState().messages.find(m => m.id === assistantMsgId);
+            if (currentMessage) {
+              const conversationMsg: ConversationMessage = {
+                id: currentMessage.id,
+                role: currentMessage.role,
+                content: currentMessage.content,
+                timestamp: currentMessage.timestamp,
+                toolCalls: currentMessage.toolCalls,
+                toolResults: currentMessage.toolResults,
+                status: 'processing',
+                model: currentMessage.model,
+                images: currentMessage.images,
+                notes: currentMessage.notes
+              };
+              onUpdate(conversationMsg);
+            }
+          }
         }
+
+        this.store.getState().updateMessage(assistantMsgId, {
+          status: 'completed'
+        });
       }
-      return assistantMsg;
+
+      // Get final message and convert to ConversationMessage format
+      const finalMessage = this.store.getState().messages.find(m => m.id === assistantMsgId);
+      if (!finalMessage) {
+        throw new Error('Message not found');
+      }
+
+      const conversationMsg = this.convertToConversationMessage(finalMessage);
+      
+      // Send final update via callback
+      if (onUpdate) {
+        onUpdate(conversationMsg);
+      }
+
+      return conversationMsg;
 
     } catch (error: any) {
       logger.error('Error in processMessage:', error);
+      
+      // Find the assistant message and mark it as error
+      const messages = this.store.getState().messages;
+      const assistantMsg = messages.find(m => m.role === 'assistant' && m.status === 'streaming');
+      if (assistantMsg) {
+        this.store.getState().updateMessage(assistantMsg.id, {
+          status: 'error',
+          content: assistantMsg.content + '\n\n[Error: ' + error.message + ']'
+        });
+        
+        const conversationMsg = this.convertToConversationMessage(assistantMsg);
+        if (onUpdate) {
+          onUpdate(conversationMsg);
+        }
+        return conversationMsg;
+      }
+      
       throw error;
     }
+  }
+
+  private convertToConversationMessage(streamingMsg: StreamingMessage): ConversationMessage {
+    return {
+      id: streamingMsg.id,
+      role: streamingMsg.role,
+      content: streamingMsg.content,
+      timestamp: streamingMsg.timestamp,
+      toolCalls: streamingMsg.toolCalls,
+      toolResults: streamingMsg.toolResults,
+      status: streamingMsg.status === 'streaming' ? 'processing' : 
+              streamingMsg.status === 'completed' ? 'completed' :
+              streamingMsg.status === 'cancelled' ? 'cancelled' : 'completed',
+      model: streamingMsg.model,
+      images: streamingMsg.images,
+      notes: streamingMsg.notes
+    };
   }
 
   protected async executeToolCalls(toolCalls: ToolCall[], messageId: string): Promise<Array<{ name: string; result: any }>> {
     const results = [];
     
     for (const toolCall of toolCalls) {
-      if (this.cancelledMessages.has(messageId)) {
+      // Check if message was cancelled
+      const currentMessage = this.store.getState().messages.find(m => m.id === messageId);
+      if (currentMessage?.status === 'cancelled') {
         break;
       }
       
@@ -479,56 +767,99 @@ export abstract class BaseAgent {
 
   // Common interface methods
   getConversation(): ConversationMessage[] {
-    return this.conversation.filter(msg => msg.role !== 'system');
+    return this.store.getState().messages
+      .filter(msg => msg.role !== 'system')
+      .map(msg => ({
+        id: msg.id,
+        role: msg.role,
+        content: msg.content,
+        timestamp: msg.timestamp,
+        toolCalls: msg.toolCalls,
+        toolResults: msg.toolResults,
+        status: msg.status === 'streaming' ? 'processing' : 
+                msg.status === 'completed' ? 'completed' :
+                msg.status === 'cancelled' ? 'cancelled' : 'completed',
+        model: msg.model,
+        images: msg.images,
+        notes: msg.notes
+      }));
   }
 
   deleteMessage(messageId: string): boolean {
-    const initialLength = this.conversation.length;
-    this.conversation = this.conversation.filter(msg => msg.id !== messageId);
-    return this.conversation.length < initialLength;
+    const messages = this.store.getState().messages;
+    const messageExists = messages.some(msg => msg.id === messageId);
+    if (messageExists) {
+      this.store.getState().deleteMessage(messageId);
+      return true;
+    }
+    return false;
   }
 
   cancelMessage(messageId: string): boolean {
-    const message = this.conversation.find(msg => msg.id === messageId);
-    if (message && message.status === 'processing') {
-      this.cancelledMessages.add(messageId);
+    const message = this.store.getState().messages.find(msg => msg.id === messageId);
+    if (message && message.status === 'streaming') {
+      this.store.getState().cancelStreaming();
       return true;
     }
     return false;
   }
 
   clearConversation(): void {
-    this.conversation = [{
-      id: 'system',
+    this.store.getState().clearConversation();
+    
+    // Re-add system message
+    this.store.getState().addMessage({
       role: 'system',
       content: this.systemPrompt,
-      timestamp: new Date()
-    }];
+      status: 'completed'
+    });
   }
 
   loadConversation(messages: ConversationMessage[]): void {
-    this.conversation = [{
-      id: 'system',
+    this.store.getState().clearConversation();
+    
+    // Add system message
+    this.store.getState().addMessage({
       role: 'system',
       content: this.systemPrompt,
-      timestamp: new Date()
-    }];
+      status: 'completed'
+    });
     
-    this.conversation.push(...messages);
+    // Convert and add messages
+    messages.forEach(msg => {
+      this.store.getState().addMessage({
+        role: msg.role,
+        content: msg.content,
+        status: msg.status === 'processing' ? 'streaming' : 
+                msg.status === 'completed' ? 'completed' :
+                msg.status === 'cancelled' ? 'cancelled' : 'completed',
+        model: msg.model,
+        toolCalls: msg.toolCalls,
+        toolResults: msg.toolResults,
+        images: msg.images,
+        notes: msg.notes
+      });
+    });
   }
 
   updateLLMConfig(newLlmConfig: AgentConfig['llmConfig']): void {
     this.config.llmConfig = newLlmConfig;
     this.llmClient = new LLMClient(newLlmConfig);
+    this.store.getState().updateLLMConfig(newLlmConfig);
   }
 
   updateRole(customRole?: string): void {
     this.config.customRole = customRole;
     this.systemPrompt = this.createSystemPrompt();
+    this.store.getState().updateCustomRole(customRole);
     
-    const systemMessage = this.conversation.find(msg => msg.role === 'system');
+    // Update system message in store
+    const messages = this.store.getState().messages;
+    const systemMessage = messages.find(msg => msg.role === 'system');
     if (systemMessage) {
-      systemMessage.content = this.systemPrompt;
+      this.store.getState().updateMessage(systemMessage.id, {
+        content: this.systemPrompt
+      });
     }
   }
 
@@ -540,6 +871,15 @@ export abstract class BaseAgent {
 
   protected generateId(): string {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  }
+
+  // Public methods to access agent store
+  getAgentId(): string {
+    return this.agentId;
+  }
+
+  getAgentStore() {
+    return this.store;
   }
 
   /**
@@ -562,7 +902,7 @@ export abstract class BaseAgent {
       }
       
       // Estimate tokens used so far (rough approximation: 1 token ≈ 4 characters)
-      const conversationText = this.conversation
+      const conversationText = this.store.getState().messages
         .map(msg => typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content))
         .join('\n');
       

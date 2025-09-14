@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Edit2, Check, RotateCcw } from 'lucide-react';
+import { BaseDialog } from './shared/BaseDialog';
+import { useDialogAnimation } from '../hooks/useDialogAnimation';
 
 interface KeyBinding {
   id: string;
@@ -35,8 +37,8 @@ const DEFAULT_KEY_BINDINGS: KeyBinding[] = [
     id: 'deleteNode',
     action: 'Delete Node',
     description: 'Delete the selected node and its children',
-    defaultKey: 'Delete',
-    currentKey: 'Delete'
+    defaultKey: 'Delete/Backspace',
+    currentKey: 'Delete/Backspace'
   },
   {
     id: 'undo',
@@ -76,6 +78,7 @@ const DEFAULT_KEY_BINDINGS: KeyBinding[] = [
 ];
 
 export function ControlsModal({ isOpen, onClose, onKeyBindingsChange, initialKeyBindings }: ControlsModalProps) {
+  const { shouldRender, isVisible, handleClose } = useDialogAnimation(isOpen, onClose);
   const [keyBindings, setKeyBindings] = useState<KeyBinding[]>(DEFAULT_KEY_BINDINGS);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [capturedKey, setCapturedKey] = useState<string>('');
@@ -84,10 +87,31 @@ export function ControlsModal({ isOpen, onClose, onKeyBindingsChange, initialKey
   // Initialize key bindings from props
   useEffect(() => {
     if (initialKeyBindings) {
-      setKeyBindings(prev => prev.map(binding => ({
-        ...binding,
-        currentKey: initialKeyBindings[binding.id] || binding.defaultKey
-      })));
+      setKeyBindings(prev => prev.map(binding => {
+        // Handle reverse mapping for Delete/Backspace - if we find Delete or Backspace mapped to deleteNode, show as Delete/Backspace
+        let currentKey = binding.defaultKey;
+        
+        if (binding.id === 'deleteNode') {
+          // Check if either Delete or Backspace is mapped to deleteNode
+          const hasDelete = Object.entries(initialKeyBindings).some(([key, action]) => 
+            (key === 'Delete' || key === 'Backspace') && action === 'deleteNode'
+          );
+          if (hasDelete) {
+            currentKey = 'Delete/Backspace';
+          }
+        } else {
+          // For other actions, find the key that maps to this action
+          const mappedKey = Object.entries(initialKeyBindings).find(([key, action]) => action === binding.id)?.[0];
+          if (mappedKey) {
+            currentKey = mappedKey;
+          }
+        }
+        
+        return {
+          ...binding,
+          currentKey
+        };
+      }));
     }
   }, [initialKeyBindings]);
 
@@ -110,6 +134,11 @@ export function ControlsModal({ isOpen, onClose, onKeyBindingsChange, initialKey
         setEditingId(null);
         setCapturedKey('');
         return;
+      }
+      
+      // Normalize Delete and Backspace to be displayed as one option
+      if (key === 'Delete' || key === 'Backspace') {
+        key = 'Delete/Backspace';
       }
       
       const keyString = modifiers.length > 0 ? `${modifiers.join('+')}+${key}` : key;
@@ -179,15 +208,21 @@ export function ControlsModal({ isOpen, onClose, onKeyBindingsChange, initialKey
     onKeyBindingsChange(bindingsObject);
   };
 
-  if (!isOpen) return null;
+  if (!shouldRender) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+    <BaseDialog 
+      isOpen={shouldRender} 
+      onClose={handleClose}
+      isVisible={isVisible}
+      maxWidth="max-w-2xl"
+      className="max-h-[80vh] overflow-y-auto"
+    >
+      <div className="p-6">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-white">Controls & Keyboard Shortcuts</h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded"
           >
             <X size={20} />
@@ -316,6 +351,6 @@ export function ControlsModal({ isOpen, onClose, onKeyBindingsChange, initialKey
           </div>
         </div>
       </div>
-    </div>
+    </BaseDialog>
   );
 }
