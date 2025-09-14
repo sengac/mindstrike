@@ -21,11 +21,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Check for debug flag
-const DEBUG_MODE = process.argv.includes('--debug');
-if (DEBUG_MODE) {
-  console.log('🐛 Debug mode enabled - verbose image logging active');
-}
+
 
 // Middleware
 app.use(cors());
@@ -38,7 +34,7 @@ app.use('/api/local-llm', localLlmRoutes);
 app.use('/api/model-scan', modelScanRoutes);
 
 // Serve static files from the built client
-app.use(express.static(path.join(__dirname, '../client')));
+app.use(express.static(path.join(__dirname, '../../client')));
 
 // Home directory function moved to utils/settings-directory.ts
 
@@ -53,7 +49,7 @@ let currentLlmConfig = {
   displayName: undefined as string | undefined,
   apiKey: undefined as string | undefined,
   type: undefined as 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'local' | undefined,
-  debug: DEBUG_MODE
+  contextLength: undefined as number | undefined
 };
 
 // Store custom roles per thread
@@ -196,6 +192,7 @@ async function refreshModelList() {
           currentLlmConfig.displayName = defaultModel.displayName;
           currentLlmConfig.apiKey = defaultModel.apiKey;
           currentLlmConfig.type = defaultModel.type;
+          currentLlmConfig.contextLength = defaultModel.contextLength;
           
           // Update existing agents with new LLM config
           agentPool.updateAllAgentsLLMConfig(currentLlmConfig);
@@ -214,6 +211,7 @@ async function refreshModelList() {
             currentLlmConfig.displayName = firstAvailableModel.displayName;
             currentLlmConfig.apiKey = firstAvailableModel.apiKey;
             currentLlmConfig.type = firstAvailableModel.type;
+            currentLlmConfig.contextLength = firstAvailableModel.contextLength;
             
             // Update existing agents with new LLM config
             agentPool.updateAllAgentsLLMConfig(currentLlmConfig);
@@ -285,6 +283,7 @@ app.post('/api/llm/default-model', async (req: any, res: any) => {
       currentLlmConfig.displayName = defaultModel.displayName;
       currentLlmConfig.apiKey = defaultModel.apiKey;
       currentLlmConfig.type = defaultModel.type;
+      currentLlmConfig.contextLength = defaultModel.contextLength;
       
       // Update existing agents with new LLM config
       agentPool.updateAllAgentsLLMConfig(currentLlmConfig);
@@ -528,11 +527,25 @@ app.get('/api/llm/model-updates', (req, res) => {
   sseManager.addClient(clientId, res, 'model-updates');
 });
 
+// Server-Sent Events endpoint for debug logging
+app.get('/api/debug/stream', (req, res) => {
+  const clientId = `debug_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  sseManager.addClient(clientId, res, 'debug');
+});
+
 // SSE endpoint for generation streaming
 app.get('/api/generate/stream/:streamId', (req: Request, res: Response) => {
   const { streamId } = req.params;
   const clientId = `generate-${streamId}-${Date.now()}`;
   sseManager.addClient(clientId, res, streamId);
+});
+
+// SSE endpoint for task progress updates
+app.get('/api/tasks/stream/:workflowId', (req: Request, res: Response) => {
+  const { workflowId } = req.params;
+  const clientId = `task-${workflowId}-${Date.now()}`;
+  const topic = `tasks-${workflowId}`;
+  sseManager.addClient(clientId, res, topic);
 });
 
 app.get('/api/conversation', (req, res) => {
@@ -1106,7 +1119,7 @@ app.post('/api/mindmaps/:mindMapId/mindmap', async (req: Request, res: Response)
 app.post('/api/mindmaps/:mindMapId/generate', async (req: Request, res: Response) => {
   try {
     const { mindMapId } = req.params;
-    const { prompt, selectedNodeId, stream } = req.body;
+    const { prompt, selectedNodeId, stream, useAgenticWorkflow = true } = req.body;
 
     if (!prompt || !prompt.trim()) {
       return res.status(400).json({ error: 'Prompt is required' });
@@ -1120,6 +1133,11 @@ app.post('/api/mindmaps/:mindMapId/generate', async (req: Request, res: Response
     // If streaming is requested, set up SSE
     if (stream) {
       const streamId = `mindmap-${mindMapId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Generate workflow ID for agentic processing
+      const workflowId = useAgenticWorkflow ? 
+        `workflow-${mindMapId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}` : 
+        undefined;
       
       // Start the generation process in the background
       setImmediate(async () => {
@@ -1168,7 +1186,19 @@ app.post('/api/mindmaps/:mindMapId/generate', async (req: Request, res: Response
             sseManager.broadcast(streamId, updateData);
           }, 150); // Slightly faster updates
           
-          const response = await mindmapAgent.processMessage(prompt);
+          // Use agentic workflow if enabled, otherwise use regular processing
+          let response;
+          if (useAgenticWorkflow && workflowId) {
+            response = await mindmapAgent.processMessageAgentic(
+              prompt, 
+              [], // images
+              [], // notes  
+              undefined, // onUpdate callback - not used in streaming mode
+              workflowId
+            );
+          } else {
+            response = await mindmapAgent.processMessage(prompt);
+          }
           
           // Clear the progress interval
           clearInterval(progressInterval);
@@ -1197,8 +1227,11 @@ app.post('/api/mindmaps/:mindMapId/generate', async (req: Request, res: Response
         }
       });
 
-      // Return stream ID immediately
-      return res.json({ streamId });
+      // Return stream ID and workflow ID immediately
+      return res.json({ 
+        streamId,
+        workflowId: workflowId || null
+      });
     }
 
     // Non-streaming fallback (original implementation)
@@ -1215,9 +1248,23 @@ app.post('/api/mindmaps/:mindMapId/generate', async (req: Request, res: Response
     await mindmapAgent.setMindmapContext(mindMapId, selectedNodeId);
 
     // Process the generation request
-    logger.info('Processing mindmap generation request:', { mindMapId, selectedNodeId, prompt: prompt.substring(0, 100) });
+    logger.info('Processing mindmap generation request:', { mindMapId, selectedNodeId, prompt: prompt.substring(0, 100), useAgenticWorkflow });
     
-    const response = await mindmapAgent.processMessage(prompt);
+    let response;
+    if (useAgenticWorkflow) {
+      // Generate workflow ID for task tracking
+      const workflowId = `workflow-${mindMapId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      response = await mindmapAgent.processMessageAgentic(
+        prompt, 
+        [], // images
+        [], // notes  
+        undefined, // onUpdate callback
+        workflowId
+      );
+    } else {
+      response = await mindmapAgent.processMessage(prompt);
+    }
     
     res.json({
       success: true,
@@ -1229,6 +1276,101 @@ app.post('/api/mindmaps/:mindMapId/generate', async (req: Request, res: Response
   } catch (error: any) {
     logger.error('Error in mindmap generation:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// New Task-Based Mindmap Generation API
+app.post('/api/mindmaps/:mindMapId/plan-tasks', async (req: Request, res: Response) => {
+  try {
+    const { mindMapId } = req.params;
+    const { prompt, selectedNodeId } = req.body;
+
+    if (!prompt || !prompt.trim()) {
+      return res.status(400).json({ error: 'Prompt is required' });
+    }
+
+    // Check if LLM model is configured
+    if (!currentLlmConfig.model || currentLlmConfig.model.trim() === '') {
+      return res.status(400).json({ error: 'No LLM model configured. Please select a model from the available options.' });
+    }
+
+    // Import MindmapAgent
+    const { MindmapAgent } = await import('./agents/mindmap-agent.js');
+    
+    // Create mindmap agent with current config
+    const mindmapAgent = new MindmapAgent({
+      workspaceRoot,
+      llmConfig: currentLlmConfig
+    });
+
+    // Set mindmap context
+    await mindmapAgent.setMindmapContext(mindMapId, selectedNodeId);
+
+    // Generate workflow ID for this session
+    const workflowId = `workflow-${mindMapId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Plan tasks only
+    const tasks = await mindmapAgent.decomposeUserQuery(prompt);
+    
+    res.json({
+      success: true,
+      workflowId,
+      tasks: tasks.map(t => ({
+        id: t.id,
+        type: t.type,
+        description: t.description,
+        priority: t.priority,
+        status: t.status
+      }))
+    });
+
+  } catch (error: any) {
+    logger.error('Error planning mindmap tasks:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/mindmaps/:mindMapId/execute-task', async (req: Request, res: Response) => {
+  try {
+    const { mindMapId } = req.params;
+    const { taskId, task, selectedNodeId, workflowId } = req.body;
+
+    if (!task) {
+      return res.status(400).json({ error: 'Task is required' });
+    }
+
+    // Check if LLM model is configured
+    if (!currentLlmConfig.model || currentLlmConfig.model.trim() === '') {
+      return res.status(400).json({ error: 'No LLM model configured. Please select a model from the available options.' });
+    }
+
+    // Import MindmapAgent
+    const { MindmapAgent } = await import('./agents/mindmap-agent.js');
+    
+    // Create mindmap agent with current config
+    const mindmapAgent = new MindmapAgent({
+      workspaceRoot,
+      llmConfig: currentLlmConfig
+    });
+
+    // Set mindmap context
+    await mindmapAgent.setMindmapContext(mindMapId, selectedNodeId);
+
+    // Execute individual task
+    const result = await mindmapAgent.executeIndividualTask(task);
+    
+    res.json({
+      success: true,
+      taskId,
+      workflowId,
+      result: {
+        changes: result.changes
+      }
+    });
+
+  } catch (error: any) {
+    logger.error('Error executing mindmap task:', error);
+    res.status(500).json({ error: error.message, taskId: req.body.taskId });
   }
 });
 

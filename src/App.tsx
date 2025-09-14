@@ -12,6 +12,8 @@ import { SettingsPanel } from './components/SettingsPanel';
 import { ModelSelector } from './components/ModelSelector';
 import { HeaderStats } from './components/HeaderStats';
 import { LocalModelLoadDialog } from './components/LocalModelLoadDialog';
+import { LLMDebugDialog } from './components/LLMDebugDialog';
+import { initializeDebugSSE } from './store/useDebugStore';
 import { useThreads } from './hooks/useThreads';
 import { useWorkflows } from './hooks/useWorkflows';
 import { useMindMaps } from './hooks/useMindMaps';
@@ -21,12 +23,13 @@ import { useAppStore } from './store/useAppStore';
 
 import { ConversationMessage } from './types';
 import { Source } from './types/mindMap';
-import { Menu, X, MessageSquare, Workflow, Network, Settings, Cpu } from 'lucide-react';
+import { Menu, X, MessageSquare, Workflow, Network, Settings, Cpu, Bug } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 
 function App() {
   const [workspaceRestored, setWorkspaceRestored] = useState(false);
   const [showLocalModelDialog, setShowLocalModelDialog] = useState(false);
+  const [showLLMDebugDialog, setShowLLMDebugDialog] = useState(false);
   const [pendingNodeUpdate, setPendingNodeUpdate] = useState<{
     nodeId: string
     chatId?: string | null
@@ -53,6 +56,9 @@ function App() {
       try {
         const { initializeWorkspace } = await import('./utils/workspace-initializer');
         await initializeWorkspace();
+        
+        // Initialize debug SSE for real-time logging
+        initializeDebugSSE();
       } catch (error) {
         console.error('Failed to initialize workspace:', error);
       }
@@ -256,6 +262,13 @@ function App() {
                     >
                       <Cpu size={16} />
                     </button>
+                    <button
+                      onClick={() => setShowLLMDebugDialog(true)}
+                      className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
+                      title="LLM Debug"
+                    >
+                      <Bug size={16} />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -304,6 +317,13 @@ function App() {
                     >
                       <Cpu size={16} />
                     </button>
+                    <button
+                      onClick={() => setShowLLMDebugDialog(true)}
+                      className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
+                      title="LLM Debug"
+                    >
+                      <Bug size={16} />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -341,6 +361,13 @@ function App() {
                       title="Manage Local Models"
                     >
                       <Cpu size={16} />
+                    </button>
+                    <button
+                      onClick={() => setShowLLMDebugDialog(true)}
+                      className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
+                      title="LLM Debug"
+                    >
+                      <Bug size={16} />
                     </button>
                   </div>
                 </div>
@@ -425,6 +452,14 @@ function App() {
           onModelLoaded={() => {
             setShowLocalModelDialog(false);
           }}
+        />
+      )}
+
+      {/* LLM Debug Dialog */}
+      {showLLMDebugDialog && (
+        <LLMDebugDialog
+          isOpen={showLLMDebugDialog}
+          onClose={() => setShowLLMDebugDialog(false)}
         />
       )}
     </div>

@@ -21,6 +21,8 @@ import { useMindMapDrag } from '../hooks/useMindMapDrag'
 import { Source } from '../types/mindMap'
 import { GeneratingBlocker } from './shared/GeneratingBlocker'
 import { useGenerationStreaming } from '../hooks/useGenerationStreaming'
+import { useTaskBasedGeneration } from '../hooks/useTaskBasedGeneration'
+import { useTaskStore } from '../store/useTaskStore'
 
 const nodeTypes = {
   mindMapNode: MindMapNode
@@ -76,20 +78,27 @@ function MindMapInner ({
   const [showGenerativePanel, setShowGenerativePanel] = useState(false)
   const [generativeInput, setGenerativeInput] = useState('')
   const [isAnimatingToPanel, setIsAnimatingToPanel] = useState(false)
-  const [isGenerating, setIsGenerating] = useState(false)
   const [generationError, setGenerationError] = useState<string | null>(null)
   const [generationSummary, setGenerationSummary] = useState<string | null>(null)
+
   const generativeInputRef = useRef<HTMLInputElement>(null)
 
   // Generation streaming hook
-  const { isStreaming, stats, startStreaming, cancelGeneration } = useGenerationStreaming()
+  const { isStreaming, stats, startStreaming, cancelGeneration: cancelStreamGeneration } = useGenerationStreaming()
+  const { isGenerating: isTaskGenerating, currentWorkflowId, startGeneration: startTaskGeneration, cancelGeneration: cancelTaskGeneration } = useTaskBasedGeneration()
+  
+  // Use task-based generation by default
+  const isGenerating = isTaskGenerating || isStreaming
   
   // Handle cancel generation  
   const handleCancelGeneration = useCallback(() => {
-    cancelGeneration()
-    setIsGenerating(false)
+    if (isTaskGenerating) {
+      cancelTaskGeneration()
+    } else {
+      cancelStreamGeneration()
+    }
     setGenerationError('Generation cancelled by user')
-  }, [cancelGeneration])
+  }, [isTaskGenerating, cancelTaskGeneration, cancelStreamGeneration])
 
   // Managers (initialized once) - use refs to ensure they never change
   const dataManagerRef = useRef<MindMapDataManager>()
@@ -349,6 +358,8 @@ function MindMapInner ({
       }
     }
   }, [])
+
+
 
   // Optimized action handlers with reduced dependencies
   const handleAddChildNode = useCallback(async (parentNodeId: string) => {
@@ -936,70 +947,82 @@ function MindMapInner ({
       }
     });
 
-    console.log(`Applied ${changes.length} mindmap changes`);
+
   }, [nodes, rootNodeId, layout, onSave])
+
+  // Listen for individual task completions and apply their changes immediately
+  const taskStore = useTaskStore()
+  const currentWorkflow = taskStore.currentWorkflow
+  const processedTasksRef = useRef<Set<string>>(new Set())
+
+  useEffect(() => {
+    if (!currentWorkflow || !currentWorkflowId) return
+    
+    // Find completed tasks that haven't been processed yet
+    const unprocessedTasks = currentWorkflow.tasks.filter(task => 
+      task.status === 'completed' && 
+      task.result?.changes && 
+      task.result.changes.length > 0 &&
+      !processedTasksRef.current.has(task.id)
+    )
+    
+    // Process each unprocessed task
+    unprocessedTasks.forEach(task => {
+      console.log('Processing task completion:', task.id, 'changes:', task.result.changes.length)
+      processedTasksRef.current.add(task.id)
+      
+      applyMindmapChanges(task.result.changes).catch(error => {
+        console.error('Failed to apply task changes:', task.id, error)
+        // Remove from processed set on error so it can be retried
+        processedTasksRef.current.delete(task.id)
+      })
+    })
+  }, [currentWorkflow?.tasks, currentWorkflowId, applyMindmapChanges])
+
+  // Reset processed tasks when workflow changes
+  useEffect(() => {
+    processedTasksRef.current.clear()
+  }, [currentWorkflowId])
 
   // Generation function
   const handleGenerate = useCallback(async () => {
-    if (!generativeInput.trim() || !selectedNodeId || isGenerating || isStreaming) return
+    if (!generativeInput.trim() || !selectedNodeId || isGenerating) return
 
-    setIsGenerating(true)
     setGenerationError(null)
     setGenerationSummary(null)
 
     try {
-      await startStreaming(
-        `/api/mindmaps/${mindMapId}/generate`,
+      await startTaskGeneration(
+        mindMapId,
+        generativeInput.trim(),
+        selectedNodeId,
         {
-          prompt: generativeInput.trim(),
-          selectedNodeId: selectedNodeId
-        },
-        {
-          onProgress: (stats) => {
-            // Progress is handled by the GeneratingBlocker component
+          onProgress: (progress) => {
+            // Progress is handled by the GeneratingBlocker component via task store
           },
-          onComplete: async (result) => {
-            try {
-              // Parse and apply mindmap changes
-              const changes = parseMindmapChanges(result.response)
-              if (changes && changes.length > 0) {
-                await applyMindmapChanges(changes)
-                setGenerationSummary(`Applied ${changes.length} change(s) to the mindmap: ${result.response.split('MINDMAP_CHANGES:')[0].trim()}`)
-              } else {
-                setGenerationSummary(result.response || 'Content generated successfully!')
-              }
-              
-              // Auto-clear success message after 5 seconds
-              setTimeout(() => {
-                setGenerationSummary(null)
-              }, 5000)
-              
-              // Clear input and hide panel
-              setGenerativeInput('')
-              setShowGenerativePanel(false)
-              setIsAnimatingToPanel(false)
-              
-            } catch (error: any) {
-              console.error('Error applying changes:', error)
-              setGenerationError(error.message || 'Error applying changes')
-            } finally {
-              setIsGenerating(false)
-            }
+          onComplete: (result) => {
+            setGenerationSummary(result.summary)
+            
+            // Auto-clear success message after 5 seconds
+            setTimeout(() => {
+              setGenerationSummary(null)
+            }, 5000)
+            
+            // Clear input and hide panel
+            setGenerativeInput('')
+            setShowGenerativePanel(false)
+            setIsAnimatingToPanel(false)
           },
           onError: (error) => {
-            console.error('Generation error:', error)
-            setGenerationError(error || 'An error occurred during generation')
-            setIsGenerating(false)
+            setGenerationError(error)
           }
         }
       )
-      
     } catch (error: any) {
       console.error('Generation error:', error)
       setGenerationError(error.message || 'An error occurred during generation')
-      setIsGenerating(false)
     }
-  }, [generativeInput, selectedNodeId, mindMapId, isGenerating, isStreaming, startStreaming, applyMindmapChanges])
+  }, [generativeInput, selectedNodeId, mindMapId, isGenerating, startTaskGeneration])
 
   // Clear generation status when panel is hidden
   useEffect(() => {
@@ -1546,6 +1569,8 @@ function MindMapInner ({
         </div>
       )}
 
+
+
       {/* Generative Input Panel */}
       {selectedNodeId && (
         <div className={`absolute bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 p-4 z-20 transform transition-transform duration-300 ease-out ${
@@ -1632,11 +1657,12 @@ function MindMapInner ({
       
       {/* Generation Blocker */}
       <GeneratingBlocker
-        isVisible={isStreaming}
+        isVisible={isGenerating}
         onCancel={handleCancelGeneration}
-        status={stats.status}
+        status={generationError || (isStreaming ? stats.status : 'Generating...')}
         tokensPerSecond={stats.tokensPerSecond}
         totalTokens={stats.totalTokens}
+        workflowId={currentWorkflowId || undefined}
       />
 
     </div>

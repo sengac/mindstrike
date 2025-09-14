@@ -1,3 +1,5 @@
+import { serverDebugLogger } from './debug-logger.js';
+
 export interface LLMMessage {
   role: 'system' | 'user' | 'assistant';
   content: string | Array<{
@@ -32,6 +34,7 @@ export interface LLMConfig {
   displayName?: string;
   apiKey?: string;
   type?: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'local';
+  contextLength?: number;
   debug?: boolean;
 }
 
@@ -41,6 +44,34 @@ export class LLMClient {
 
   constructor(config: LLMConfig) {
     this.config = config;
+  }
+
+  private logResponse(response: LLMResponse, startTime: number, endpoint?: string) {
+    const duration = Date.now() - startTime;
+    serverDebugLogger.logResponse(
+      `LLM Response: ${this.config.model}`,
+      JSON.stringify({
+        content: response.content, // FULL content - no truncation
+        toolCalls: response.toolCalls,
+        duration: `${duration}ms`
+      }, null, 2),
+      duration,
+      this.config.model,
+      endpoint || this.config.baseURL
+    );
+  }
+
+  private logError(error: any, startTime: number, endpoint?: string) {
+    const duration = Date.now() - startTime;
+    serverDebugLogger.logError(
+      `LLM Error: ${this.config.model}`,
+      JSON.stringify({
+        error: error instanceof Error ? error.message : String(error),
+        duration: `${duration}ms`
+      }, null, 2),
+      this.config.model,
+      endpoint || this.config.baseURL
+    );
   }
 
   private async getLocalLLMManager() {
@@ -84,6 +115,25 @@ export class LLMClient {
       }
     }
 
+    const requestStartTime = Date.now();
+    let endpoint: string = '';
+    
+    // Log the request
+    serverDebugLogger.logRequest(
+      `LLM Request: ${this.config.model}`,
+      JSON.stringify({
+        model: this.config.model,
+        messages: messages.map(msg => ({
+          role: msg.role,
+          content: msg.content // FULL content - no truncation
+        })),
+        tools: tools,
+        stream
+      }, null, 2),
+      this.config.model,
+      this.config.baseURL
+    );
+
     try {
       // Determine service type
       const isOllama = this.config.type === 'ollama' || this.config.baseURL.includes('11434') || this.config.baseURL.includes('ollama');
@@ -101,15 +151,20 @@ export class LLMClient {
         }));
 
         try {
+          const maxTokens = Math.min(this.config.contextLength || 2048, 4096);
+          console.log(`Local LLM generation: contextLength=${this.config.contextLength}, calculated maxTokens=${maxTokens}`);
+          
           const response = await localManager.generateResponse(this.config.model, localMessages, {
             temperature: 0.7,
-            maxTokens: 2048
+            maxTokens: maxTokens
           });
 
-          return {
+          const result = {
             content: response,
             toolCalls: undefined // Local models don't support tool calls yet
           };
+          this.logResponse(result, requestStartTime, 'local');
+          return result;
         } catch (error) {
           if (error instanceof Error && error.message === 'Model not loaded. Please load the model first.') {
             // Try to load the model automatically
@@ -120,13 +175,15 @@ export class LLMClient {
               // Retry the generation after loading
               const response = await localManager.generateResponse(this.config.model, localMessages, {
                 temperature: 0.7,
-                maxTokens: 2048
+                maxTokens: Math.min(this.config.contextLength || 2048, 4096)
               });
 
-              return {
+              const result = {
                 content: response,
                 toolCalls: undefined
               };
+              this.logResponse(result, requestStartTime, 'local');
+              return result;
             } catch (loadError) {
               // If auto-loading fails, fall back to the original error handling
               const customError = new Error('LOCAL_MODEL_NOT_LOADED');
@@ -142,7 +199,6 @@ export class LLMClient {
       // Check if this is a vision request (has images)
       const hasImages = messages.some(msg => msg.images && msg.images.length > 0);
       
-      let endpoint: string;
       let requestPayload: any;
       
       if (isOllama && hasImages) {
@@ -274,9 +330,11 @@ export class LLMClient {
         toolCalls
       };
 
+      this.logResponse(result, requestStartTime, this.config.baseURL + (endpoint || ''));
       return result;
     } catch (error) {
       console.error('LLM request failed:', error);
+      this.logError(error, requestStartTime, this.config.baseURL + (endpoint || ''));
       throw error;
     }
   }
@@ -470,6 +528,7 @@ export class LLMClient {
   private async handleMultipleImages(userMsgWithImages: LLMMessage, systemMsg?: LLMMessage): Promise<LLMResponse> {
     const images = userMsgWithImages.images || [];
     const responses: string[] = [];
+    const requestStartTime = Date.now();
     
     // Combine system prompt and user message
     let basePrompt = '';
@@ -547,9 +606,12 @@ export class LLMClient {
     // Combine all responses
     const combinedContent = `I've analyzed ${images.length} images. Here are my findings:\n\n${responses.join('\n\n---\n\n')}`;
     
-    return {
+    const result = {
       content: combinedContent,
       toolCalls: undefined
     };
+    
+    this.logResponse(result, requestStartTime, `${this.config.baseURL}/api/generate`);
+    return result;
   }
 }

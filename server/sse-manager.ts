@@ -33,7 +33,7 @@ class SSEManager {
     }
     this.clientsByTopic.get(topic)!.add(id);
 
-    logger.info(`SSE client ${id} connected to topic ${topic}`);
+    // Removed verbose logging - only log errors
 
     // Send periodic keepalive messages to prevent connection timeout
     const keepaliveInterval = setInterval(() => {
@@ -77,7 +77,7 @@ class SSEManager {
         }
       }
 
-      logger.info(`SSE client ${id} disconnected from topic ${client.topic}`);
+      // Removed verbose logging - only log errors
     }
   }
 

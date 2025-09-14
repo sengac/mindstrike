@@ -261,8 +261,10 @@ export abstract class BaseAgent {
       // Get initial response from LLM
       const response = await this.llmClient.generateResponse(llmMessages);
 
+      let responseContent = response.content;
+
       // Parse response for tool calls
-      const { content, toolCalls } = this.parseToolCalls(response.content);
+      const { content, toolCalls } = this.parseToolCalls(responseContent);
 
       // Create assistant message
       const assistantMsg: ConversationMessage = {

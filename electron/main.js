@@ -76,7 +76,7 @@ async function startServer() {
     console.log('Starting embedded server...');
     
     // Import the full server with all API routes
-    const serverModule = await import(path.join(__dirname, '../dist/server/index.js'));
+    const serverModule = await import(path.join(__dirname, '../dist/server/server/index.js'));
     const app = serverModule.default;
     
     if (!app || typeof app.listen !== 'function') {

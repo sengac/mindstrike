@@ -382,6 +382,8 @@ export class LocalLLMManager {
       maxTokens?: number;
     }
   ): Promise<string> {
+    // Removed verbose logging - only log errors and important events
+
     // First try to use it as an ID
     let activeModel = this.activeModels.get(modelIdOrName);
     
@@ -394,19 +396,22 @@ export class LocalLLMManager {
     }
     
     if (!activeModel) {
+      logger.error('Model not loaded', { modelIdOrName, activeModelKeys: Array.from(this.activeModels.keys()) });
       throw new Error('Model not loaded. Please load the model first.');
     }
+
+    // Removed verbose logging
 
     // Use proper chat session with message history
     const { session } = activeModel;
     
     // Process messages in order to build conversation context
+    let systemMessage = '';
     let lastUserMessage = '';
     
     for (const message of messages) {
       if (message.role === 'system') {
-        // System messages should be handled at session creation, skip for now
-        continue;
+        systemMessage = message.content;
       } else if (message.role === 'user') {
         lastUserMessage = message.content;
       } else if (message.role === 'assistant') {
@@ -417,13 +422,26 @@ export class LocalLLMManager {
     }
     
     if (!lastUserMessage) {
+      logger.error('No user message found in messages', { messages });
       throw new Error('No user message found');
     }
 
-    const response = await session.prompt(lastUserMessage, {
+    // For LlamaChatSession, combine system and user message without chat formatting
+    // The session.prompt() method handles chat formatting internally
+    const finalPrompt = systemMessage 
+      ? `${systemMessage}\n\n${lastUserMessage}` 
+      : lastUserMessage;
+
+    // Removed verbose logging
+
+    // Removed verbose logging
+
+    const response = await session.prompt(finalPrompt, {
       temperature: options?.temperature || 0.7,
       maxTokens: options?.maxTokens || 2048
     });
+
+    // Removed verbose logging
 
     return response;
   }

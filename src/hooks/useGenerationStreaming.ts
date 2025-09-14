@@ -10,6 +10,7 @@ interface StreamingOptions {
   onProgress?: (stats: GenerationStats) => void;
   onComplete?: (result: any) => void;
   onError?: (error: string) => void;
+  onWorkflowId?: (workflowId: string | null) => void;
 }
 
 export function useGenerationStreaming() {
@@ -94,10 +95,15 @@ export function useGenerationStreaming() {
         throw new Error(errorData.error || 'Generation failed');
       }
 
-      // Get the stream ID from response
+      // Get the stream ID and workflow ID from response
       const result = await response.json();
       console.log('Generation request response:', result);
-      const { streamId } = result;
+      const { streamId, workflowId } = result;
+      
+      // Call workflow ID callback if provided
+      if (options.onWorkflowId) {
+        options.onWorkflowId(workflowId);
+      }
       
       // Connect to SSE endpoint for real-time updates
       const sseUrl = `/api/generate/stream/${streamId}`;
@@ -111,7 +117,7 @@ export function useGenerationStreaming() {
       eventSourceRef.current.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          console.log('SSE message received:', data);
+          
           
           switch (data.type) {
             case 'connected':
