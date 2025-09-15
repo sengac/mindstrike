@@ -46,6 +46,10 @@ interface MindMapState {
 
   // Save callback
   saveCallback: ((data: MindMapData) => Promise<void>) | null
+  
+  // SSE connection for task updates
+  taskEventSource: EventSource | null
+  currentWorkflowId: string | null
 }
 
 interface MindMapActions {
@@ -101,6 +105,10 @@ interface MindMapActions {
   // Bulk operations
   applyMindmapChanges: (changes: any[]) => Promise<void>
 
+  // Task workflow SSE
+  connectToWorkflow: (workflowId: string) => void
+  disconnectFromWorkflow: () => void
+
   // Utilities
   save: () => Promise<void>
   reset: () => void
@@ -135,6 +143,8 @@ export const useMindMapStore = create<MindMapStore>()(
       isInitialized: false,
       isInitializing: false,
       saveCallback: null,
+      taskEventSource: null,
+      currentWorkflowId: null,
 
       // Initialize mind map
       initializeMindMap: async (mindMapId, initialData, saveCallback) => {
@@ -883,7 +893,59 @@ export const useMindMapStore = create<MindMapStore>()(
           historyIndex: -1,
           isInitialized: false,
           isInitializing: false,
-          saveCallback: null
+          saveCallback: null,
+          taskEventSource: null,
+          currentWorkflowId: null
+        })
+      },
+
+      // SSE connection for task updates
+      connectToWorkflow: (workflowId: string) => {
+        const state = get()
+        
+        // Disconnect any existing connection
+        if (state.taskEventSource) {
+          state.taskEventSource.close()
+        }
+        
+        // Create new SSE connection
+        const eventSource = new EventSource(`/api/tasks/stream/${workflowId}`)
+        
+        eventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data)
+            
+            if (data.type === 'task_completed' && data.result?.changes) {
+              // Apply changes directly in the store
+              get().applyMindmapChanges(data.result.changes).catch(error => {
+                console.error('Failed to apply task changes from SSE:', error)
+              })
+            }
+          } catch (error) {
+            console.error('Error parsing SSE message:', error)
+          }
+        }
+        
+        eventSource.onerror = (error) => {
+          console.error('Task SSE error:', error)
+        }
+        
+        set({
+          taskEventSource: eventSource,
+          currentWorkflowId: workflowId
+        })
+      },
+
+      disconnectFromWorkflow: () => {
+        const state = get()
+        
+        if (state.taskEventSource) {
+          state.taskEventSource.close()
+        }
+        
+        set({
+          taskEventSource: null,
+          currentWorkflowId: null
         })
       }
     }))

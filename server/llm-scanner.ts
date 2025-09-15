@@ -5,7 +5,7 @@ export interface AvailableLLMService {
   name: string;
   baseURL: string;
   models: string[];
-  type: 'ollama' | 'vllm' | 'openai-compatible' | 'anthropic';
+  type: 'ollama' | 'vllm' | 'openai-compatible' | 'anthropic' | 'perplexity' | 'google';
   available: boolean;
   modelsWithMetadata?: ModelMetadata[];
 }
@@ -130,6 +130,14 @@ export class LLMScanner {
           };
           break;
         
+        case 'perplexity':
+          // Perplexity doesn't have a models endpoint, so we'll return known models
+          return this.getPerplexityModels();
+        
+        case 'google':
+          // Google doesn't expose a models endpoint via API, so we'll return known models
+          return this.getGoogleModels();
+        
         default:
           throw new Error(`Unknown service type: ${service.type}`);
       }
@@ -181,8 +189,26 @@ export class LLMScanner {
       };
     }
     
+    if (service.type === 'perplexity') {
+      // Get context length from documented values
+      const contextLength = this.getPerplexityContextLength(modelName);
+      return {
+        name: modelName,
+        context_length: contextLength
+      };
+    }
+    
+    if (service.type === 'google') {
+      // Get context length from documented values
+      const contextLength = this.getGoogleContextLength(modelName);
+      return {
+        name: modelName,
+        context_length: contextLength
+      };
+    }
+    
     if (service.type !== 'ollama') {
-      logger.debug(`Model metadata only supported for Ollama and Anthropic services, service type: ${service.type}`);
+      logger.debug(`Model metadata only supported for Ollama, Anthropic, Perplexity, and Google services, service type: ${service.type}`);
       return null;
     }
 
@@ -247,7 +273,7 @@ export class LLMScanner {
   }
 
   async getAllModelsWithMetadata(service: AvailableLLMService): Promise<ModelMetadata[]> {
-    if (service.type !== 'ollama' && service.type !== 'anthropic') {
+    if (service.type !== 'ollama' && service.type !== 'anthropic' && service.type !== 'perplexity' && service.type !== 'google') {
       return service.models.map(name => ({ name }));
     }
 
@@ -310,5 +336,107 @@ export class LLMScanner {
     
     logger.debug(`Unknown Anthropic model: ${modelName}, using default context length`);
     return 200000; // Default for unknown Anthropic models
+  }
+
+  private async scanPerplexityService(service: AvailableLLMService): Promise<AvailableLLMService> {
+    // Perplexity doesn't expose a models endpoint, so we'll use the known models
+    const knownModels = [
+      'sonar-pro',
+      'sonar',
+      'sonar-deep-research'
+    ];
+
+    const modelsWithMetadata = knownModels.map(modelName => ({
+      name: modelName,
+      contextLength: this.getPerplexityContextLength(modelName)
+    }));
+
+    return {
+      ...service,
+      models: knownModels,
+      available: true,
+      modelsWithMetadata
+    };
+  }
+
+  private getPerplexityContextLength(modelName: string): number {
+    const model = modelName.toLowerCase();
+    
+    // Perplexity's documented context lengths
+    if (model.includes('sonar-pro')) {
+      return 127000; // sonar-pro context length
+    }
+    
+    if (model.includes('sonar-deep-research')) {
+      return 127000; // sonar-deep-research context length  
+    }
+    
+    if (model.includes('sonar')) {
+      return 127000; // sonar context length
+    }
+    
+    logger.debug(`Unknown Perplexity model: ${modelName}, using default context length`);
+    return 127000; // Default for unknown Perplexity models
+  }
+
+  private async scanGoogleService(service: AvailableLLMService): Promise<AvailableLLMService> {
+    // Google doesn't expose a models endpoint via API, so we'll use the known models
+    const knownModels = [
+      'gemini-1.5-pro',
+      'gemini-1.5-flash',
+      'gemini-2.5-pro',
+      'gemini-2.5-flash',
+      'gemini-pro'
+    ];
+
+    const modelsWithMetadata = knownModels.map(modelName => ({
+      name: modelName,
+      contextLength: this.getGoogleContextLength(modelName)
+    }));
+
+    return {
+      ...service,
+      models: knownModels,
+      available: true,
+      modelsWithMetadata
+    };
+  }
+
+  private getGoogleContextLength(modelName: string): number {
+    const model = modelName.toLowerCase();
+    
+    // Google Gemini documented context lengths
+    if (model.includes('gemini-1.5-pro') || model.includes('gemini-2.5-pro')) {
+      return 2000000; // 2M tokens for Gemini 1.5/2.5 Pro
+    }
+    
+    if (model.includes('gemini-1.5-flash') || model.includes('gemini-2.5-flash')) {
+      return 1000000; // 1M tokens for Gemini 1.5/2.5 Flash
+    }
+    
+    if (model.includes('gemini-pro')) {
+      return 32768; // 32K tokens for Gemini Pro (1.0)
+    }
+    
+    logger.debug(`Unknown Google model: ${modelName}, using default context length`);
+    return 1000000; // Default for unknown Google models
+  }
+
+  private getPerplexityModels(): string[] {
+    return [
+      'sonar-pro',
+      'sonar',
+      'sonar-deep-research'
+    ];
+  }
+
+  private getGoogleModels(): string[] {
+    return [
+      'gemini-1.5-pro',
+      'gemini-1.5-flash',
+      'gemini-2.5-pro',
+      'gemini-2.5-flash',
+      'gemini-pro'
+    ];
   }
 }

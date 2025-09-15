@@ -361,7 +361,7 @@ export function SettingsPanel() {
                     </p>
                     <ul className="text-blue-300 space-y-1 text-xs">
                       <li>• Use "Rescan" to automatically detect local services (Ollama, vLLM, etc.)</li>
-                      <li>• Manually add LLM services like OpenAI, Anthropic, or custom endpoints</li>
+                      <li>• Manually add LLM services like OpenAI, Anthropic, Perplexity, Google, or custom endpoints</li>
                       <li>• API keys are stored securely and sent only to specified endpoints</li>
                       <li>• Local services run on your machine, LLM services require internet</li>
                     </ul>
@@ -399,7 +399,7 @@ export function SettingsPanel() {
                 <Cpu size={48} className="text-gray-600 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-400 mb-2">No LLM Services</h3>
                 <p className="text-gray-500 mb-4">
-                  Add LLM services (OpenAI, Anthropic, etc.) to get started.
+                  Add LLM services (OpenAI, Anthropic, Perplexity, Google, etc.) to get started.
                 </p>
                 <button
                   onClick={() => setShowAddForm(true)}
@@ -478,9 +478,9 @@ export function SettingsPanel() {
         isOpen={showAddEditDialog}
         onClose={handleCloseDialog}
         onSave={handleSaveService}
-        editingService={editingService ? {
+        editingService={editingService && editingService.type !== 'local' ? {
           name: editingService.name,
-          type: editingService.type,
+          type: editingService.type as LLMServiceFormData['type'],
           baseURL: editingService.baseURL,
           apiKey: editingService.apiKey || ''
         } : null}

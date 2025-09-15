@@ -10,7 +10,7 @@ export interface LLMModel {
   displayName: string;
   baseURL: string;
   apiKey?: string;
-  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'local';
+  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'perplexity' | 'google' | 'local';
   contextLength?: number;
   parameterCount?: string;
   quantization?: string;
@@ -23,7 +23,7 @@ export interface CustomLLMService {
   id: string;
   name: string;
   baseURL: string;
-  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'local';
+  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'perplexity' | 'google' | 'local';
   apiKey?: string;
   enabled: boolean;
   custom: boolean;

@@ -258,29 +258,12 @@ export class MindmapAgent extends BaseAgent {
         this.store.getState().updateMessage(systemMessage.id, {
           content: this.systemPrompt
         });
-        logger.info('Updated system message with context', { 
-          systemMessageLength: systemMessage.content.length,
-          includesContext: systemMessage.content.includes('MINDMAP CONTEXT')
-        });
+
       }
 
-      logger.info('Mindmap context set:', { 
-        mindMapId, 
-        selectedNodeId, 
-        hasSelectedNode: !!selectedNode,
-        mindmapDataExists: !!mindMapData,
-        rootNodeExists: !!mindMapData?.root,
-        systemPromptLength: this.systemPrompt.length
-      });
+
       
-      // Log the actual context being sent to debug content issues
-      if (this.currentMindmapContext) {
-        const contextPrompt = this.createMindmapContextPrompt();
-        logger.info('Actual mindmap context being sent to LLM:', {
-          contextLength: contextPrompt.length,
-          contextPreview: contextPrompt.substring(0, 500) + '...'
-        });
-      }
+
     } catch (error) {
       logger.error('Failed to set mindmap context:', error);
       throw error;
@@ -754,7 +737,7 @@ export class MindmapAgent extends BaseAgent {
    * Decompose user query into individual mindmap tasks using ReAct methodology
    */
   public async decomposeUserQuery(userMessage: string): Promise<MindmapTask[]> {
-    logger.info('Decomposing user query into tasks', { userMessage });
+
 
     const decompositionPrompt = `You are a task decomposition expert for mindmap operations. Your job is to break down a user's mindmap request into specific, actionable tasks.
 
@@ -826,11 +809,7 @@ IMPORTANT: Return ONLY the JSON array, no other text.`;
         nodeId: task.nodeId
       }));
 
-      logger.info('Decomposed user query into tasks', { 
-        originalQuery: userMessage,
-        taskCount: tasks.length,
-        tasks: tasks.map(t => ({ id: t.id, type: t.type, description: t.description }))
-      });
+
 
       return tasks;
 
@@ -853,7 +832,7 @@ IMPORTANT: Return ONLY the JSON array, no other text.`;
    * Execute an individual task
    */
   public async executeIndividualTask(task: MindmapTask): Promise<{ changes: any[] }> {
-    logger.info('Executing individual task', { taskId: task.id, type: task.type, description: task.description });
+
 
     // Create a focused prompt for this specific task
     const taskPrompt = this.createTaskSpecificPrompt(task);
@@ -871,10 +850,7 @@ IMPORTANT: Return ONLY the JSON array, no other text.`;
         return { changes: [] };
       }
 
-      logger.info('Task executed successfully', { 
-        taskId: task.id, 
-        changesCount: result.changes.length 
-      });
+
 
       return { changes: result.changes };
 
@@ -975,8 +951,10 @@ CRITICAL CONSTRAINTS:
     }
     
     parentNode.children.push(newNode);
-    logger.info('Applied create change', { nodeId: change.nodeId, parentId: change.parentId });
+
   }
+
+
 
   /**
    * Apply update change to mindmap data
@@ -993,8 +971,10 @@ CRITICAL CONSTRAINTS:
     if (change.notes !== undefined) targetNode.notes = change.notes;
     if (change.sources !== undefined) targetNode.sources = change.sources;
     
-    logger.info('Applied update change', { nodeId: change.nodeId });
+
   }
+
+
 
   /**
    * Apply delete change to mindmap data
@@ -1202,10 +1182,7 @@ CRITICAL CONSTRAINTS:
         generatedIds.push(newId);
         return newId;
       });
-      logger.info('Replaced node ID placeholders', { 
-        count: nodeMatches.length,
-        generatedIds
-      });
+
     }
     
     // Reset counter for source IDs

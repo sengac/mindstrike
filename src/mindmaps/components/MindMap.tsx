@@ -326,33 +326,8 @@ function MindMapInner({
   const currentWorkflow = taskStore.currentWorkflow
   const processedTasksRef = useRef<Set<string>>(new Set())
 
-  useEffect(() => {
-    if (!currentWorkflow || !currentWorkflowId) return
-    
-    // Find completed tasks that haven't been processed yet
-    const unprocessedTasks = currentWorkflow.tasks.filter(task => 
-      task.status === 'completed' && 
-      task.result?.changes && 
-      task.result.changes.length > 0 &&
-      !processedTasksRef.current.has(task.id)
-    )
-    
-    // Process each unprocessed task
-    unprocessedTasks.forEach(task => {
-      processedTasksRef.current.add(task.id)
-      
-      applyMindmapChanges(task.result.changes).catch(error => {
-        console.error('Failed to apply task changes:', task.id, error)
-        // Remove from processed set on error so it can be retried
-        processedTasksRef.current.delete(task.id)
-      })
-    })
-  }, [currentWorkflow?.tasks, currentWorkflowId, applyMindmapChanges])
-
-  // Reset processed tasks when workflow changes
-  useEffect(() => {
-    processedTasksRef.current.clear()
-  }, [currentWorkflowId])
+  // Note: Task processing is now handled by SSE in the mindmap store
+  // This eliminates the issue where closing the dialog would disconnect task processing
 
   // Generation function
   const handleGenerate = useCallback(async () => {    

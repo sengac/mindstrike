@@ -46,7 +46,7 @@ export interface AgentState {
     model: string;
     displayName?: string;
     apiKey?: string;
-    type?: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'local';
+    type?: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'perplexity' | 'google' | 'local';
   };
   customRole?: string;
   

@@ -1,8 +1,20 @@
-import { LLMClient, LLMMessage, ToolCall } from '../llm-client.js';
+import { BaseChatModel } from '@langchain/core/language_models/chat_models';
+import { BaseMessage, HumanMessage, AIMessage, SystemMessage } from '@langchain/core/messages';
+import { ChatOllama } from '@langchain/ollama';
+import { ChatOpenAI } from '@langchain/openai';
+import { ChatAnthropic } from '@langchain/anthropic';
+import { ChatPerplexity } from '@langchain/community/chat_models/perplexity';
+import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
+import { DynamicTool } from '@langchain/core/tools';
+import { AgentExecutor, createToolCallingAgent } from 'langchain/agents';
+import { ChatPromptTemplate } from '@langchain/core/prompts';
+import { Runnable } from '@langchain/core/runnables';
 import { ToolSystem } from '../tools.js';
 import { logger } from '../logger.js';
 import { cleanContentForLLM } from '../utils/content-filter.js';
 import { LLMConfigManager } from '../llm-config-manager.js';
+import { serverDebugLogger } from '../debug-logger.js';
+import { sseManager } from '../sse-manager.js';
 import { getAgentStore, StreamingMessage } from '../../src/store/useAgentStore.js';
 
 export interface AgentConfig {
@@ -11,8 +23,10 @@ export interface AgentConfig {
     baseURL: string;
     model: string;
     displayName?: string;
-    apiKey?: string;
-    type?: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'local';
+    apiKey?: string; 
+    type?: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'perplexity' | 'google' | 'local';
+    temperature?: number;
+    maxTokens?: number;
   };
   customRole?: string;
 }
@@ -23,8 +37,8 @@ export interface ImageAttachment {
   filepath: string;
   mimeType: string;
   size: number;
-  thumbnail: string; // base64 encoded thumbnail for UI display
-  fullImage: string; // base64 encoded full-size image for LLM
+  thumbnail: string;
+  fullImage: string;
   uploadedAt: Date;
 }
 
@@ -32,7 +46,7 @@ export interface NotesAttachment {
   id: string;
   title: string;
   content: string;
-  nodeLabel?: string; // Optional label of the source node
+  nodeLabel?: string;
   attachedAt: Date;
 }
 
@@ -41,37 +55,57 @@ export interface ConversationMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: Date;
-  toolCalls?: ToolCall[];
+  toolCalls?: Array<{id: string; name: string; parameters: Record<string, any>}>;
   toolResults?: Array<{ name: string; result: any }>;
   status?: 'processing' | 'completed' | 'cancelled';
-  model?: string; // LLM model used for assistant messages
-  images?: ImageAttachment[]; // Image attachments for user messages
-  notes?: NotesAttachment[]; // Notes attachments for user messages
+  model?: string;
+  images?: ImageAttachment[];
+  notes?: NotesAttachment[];
 }
 
 export abstract class BaseAgent {
-  protected llmClient: LLMClient;
+  protected chatModel: BaseChatModel;
   protected toolSystem: ToolSystem;
   protected systemPrompt: string;
   protected config: AgentConfig;
   protected agentId: string;
   protected store: ReturnType<typeof getAgentStore>;
+  protected langChainTools: DynamicTool[] = [];
+  protected agentExecutor?: AgentExecutor;
+  protected promptTemplate: ChatPromptTemplate;
 
   constructor(config: AgentConfig, agentId?: string) {
     this.config = config;
     this.agentId = agentId || this.generateId();
-    this.llmClient = new LLMClient(config.llmConfig);
-    this.toolSystem = new ToolSystem(config.workspaceRoot);
     this.systemPrompt = this.createSystemPrompt();
     
-    // Initialize the agent store
-    this.store = getAgentStore(this.agentId, this.constructor.name, config.workspaceRoot);
+    // Initialize chat model based on type
+    this.chatModel = this.createChatModel(config.llmConfig);
     
-    // Update store with current config
+    // Initialize tool system
+    this.toolSystem = new ToolSystem(config.workspaceRoot);
+    
+    // Initialize store
+    this.store = getAgentStore(this.agentId, this.constructor.name, config.workspaceRoot);
     this.store.getState().updateLLMConfig(config.llmConfig);
     this.store.getState().updateCustomRole(config.customRole);
     
-    // Add system message if not already present
+    // Initialize LangChain tools
+    this.initializeLangChainTools();
+    
+    // Create prompt template - escape curly braces in system prompt for LangChain
+    const escapedSystemPrompt = this.systemPrompt.replace(/{/g, '{{').replace(/}/g, '}}');
+    this.promptTemplate = ChatPromptTemplate.fromMessages([
+      ['system', escapedSystemPrompt],
+      ['placeholder', '{chat_history}'],
+      ['human', '{input}'],
+      ['placeholder', '{agent_scratchpad}']
+    ]);
+    
+    // Initialize agent executor
+    this.initializeAgentExecutor();
+    
+    // Add system message if not present
     const messages = this.store.getState().messages;
     if (messages.length === 0 || messages[0].role !== 'system') {
       this.store.getState().addMessage({
@@ -84,46 +118,155 @@ export abstract class BaseAgent {
 
   // Abstract methods that must be implemented by derived classes
   abstract createSystemPrompt(): string;
+  abstract getDefaultRole(): string;
 
-  // Common LLM message conversion logic
-  protected convertToLLMMessages(): LLMMessage[] {
-    const isOllama = this.config.llmConfig.baseURL.includes('11434') || this.config.llmConfig.baseURL.includes('ollama');
+  protected createChatModel(llmConfig: AgentConfig['llmConfig']): BaseChatModel {
+    const baseConfig = {
+      temperature: llmConfig.temperature || 0.7,
+      maxTokens: llmConfig.maxTokens || 4000,
+    };
+
+    switch (llmConfig.type) {
+      case 'ollama':
+        return new ChatOllama({
+          baseUrl: llmConfig.baseURL,
+          model: llmConfig.model,
+          ...baseConfig
+        });
+      
+      case 'openai':
+        return new ChatOpenAI({
+          openAIApiKey: llmConfig.apiKey,
+          modelName: llmConfig.model,
+          ...baseConfig
+        });
+      
+      case 'anthropic':
+        return new ChatAnthropic({
+          anthropicApiKey: llmConfig.apiKey,
+          modelName: llmConfig.model,
+          ...baseConfig
+        });
+      
+      case 'perplexity':
+        return new ChatPerplexity({
+          apiKey: llmConfig.apiKey,
+          model: llmConfig.model,
+          ...baseConfig
+        });
+      
+      case 'google':
+        return new ChatGoogleGenerativeAI({
+          apiKey: llmConfig.apiKey,
+          model: llmConfig.model,
+          ...baseConfig
+        });
+      
+      case 'openai-compatible':
+      case 'vllm':
+      default:
+        return new ChatOpenAI({
+          openAIApiKey: llmConfig.apiKey || 'dummy-key',
+          modelName: llmConfig.model,
+          configuration: {
+            baseURL: llmConfig.baseURL,
+          },
+          ...baseConfig
+        });
+    }
+  }
+
+  protected initializeLangChainTools(): void {
+    // Get available tools from the tool system
+    const availableTools = this.toolSystem.getToolDefinitions();
+    
+    this.langChainTools = availableTools.map((tool: any) => 
+      new DynamicTool({
+        name: tool.name,
+        description: tool.description,
+        func: async (input: string) => {
+          try {
+            const parameters = JSON.parse(input);
+            const result = await this.toolSystem.executeTool(tool.name, parameters);
+            return typeof result === 'string' ? result : JSON.stringify(result);
+          } catch (error: any) {
+            logger.error(`Tool execution failed for ${tool.name}:`, error);
+            return `Error: ${error.message}`;
+          }
+        }
+      })
+    );
+  }
+
+  protected async initializeAgentExecutor(): Promise<void> {
+    if (this.chatModel.bindTools && this.langChainTools.length > 0) {
+      // Create tool-calling agent - recreate prompt template with escaped system prompt
+      const escapedSystemPrompt = this.systemPrompt.replace(/{/g, '{{').replace(/}/g, '}}');
+      const promptTemplate = ChatPromptTemplate.fromMessages([
+        ['system', escapedSystemPrompt],
+        ['placeholder', '{chat_history}'],
+        ['human', '{input}'],
+        ['placeholder', '{agent_scratchpad}']
+      ]);
+      
+      const boundModel = this.chatModel.bindTools(this.langChainTools);
+      const agent = createToolCallingAgent({
+        llm: boundModel,
+        tools: this.langChainTools,
+        prompt: promptTemplate
+      });
+      
+      this.agentExecutor = new AgentExecutor({
+        agent,
+        tools: this.langChainTools,
+        verbose: true,
+        returnIntermediateSteps: true
+      });
+    }
+  }
+
+  protected formatAttachedNotes(notes: NotesAttachment[]): string {
+    if (!notes || notes.length === 0) {
+      return '';
+    }
+    
+    return notes.map(note => 
+      `\n\n--- ATTACHED NOTES: ${note.title} ---${note.nodeLabel ? ` (from node: ${note.nodeLabel})` : ''}\n${note.content}\n--- END NOTES ---`
+    ).join('');
+  }
+
+  protected convertToLangChainMessages(): BaseMessage[] {
     const messages = this.store.getState().messages;
     
-    // Get the latest user message ID to determine which message can have images
-    const latestUserMessage = messages[messages.length - 1];
-    const isLatestUserMessage = latestUserMessage && latestUserMessage.role === 'user';
+    // Check if this is Perplexity to apply special message formatting
+    const isPerplexity = this.config.llmConfig.baseURL?.includes('perplexity') || 
+                       this.config.llmConfig.type === 'perplexity' ||
+                       this.config.llmConfig.model?.includes('sonar');
     
-    return messages.map(msg => {
-      // For user messages with images
-      if (msg.role === 'user' && msg.images && msg.images.length > 0) {
-        // Only include images if this is the latest user message
-        if (isLatestUserMessage && msg.id === latestUserMessage.id) {
-          if (isOllama) {
-            // For Ollama vision models, include images directly in the message
-            const images: string[] = [];
+    const langChainMessages = messages.map(msg => {
+      const content = cleanContentForLLM(msg.content);
+      
+      switch (msg.role) {
+        case 'system':
+          return new SystemMessage(content);
+        case 'user':
+          // Handle images and notes for user messages
+          if (msg.images && msg.images.length > 0) {
+            // Check if this is Anthropic vs Perplexity vs OpenAI-compatible vs Ollama
+            const isAnthropic = this.config.llmConfig.baseURL?.includes('anthropic') || 
+                              this.config.llmConfig.type === 'anthropic' ||
+                              this.config.llmConfig.model?.includes('claude');
             
-            for (const image of msg.images) {
-              let imageData = image.fullImage || image.thumbnail;
-              
-              // Extract base64 data from data URL
-              if (imageData.startsWith('data:')) {
-                const base64Data = imageData.split(',')[1];
-                images.push(base64Data);
-              } else {
-                // Assume it's already base64
-                images.push(imageData);
-              }
-            }
+            const isPerplexity = this.config.llmConfig.baseURL?.includes('perplexity') || 
+                               this.config.llmConfig.type === 'perplexity' ||
+                               this.config.llmConfig.model?.includes('sonar');
             
-            return {
-              role: msg.role,
-              content: cleanContentForLLM(msg.content),
-              images: images
-            };
-          } else {
-            // Check if this is Anthropic vs OpenAI-compatible
-            const isAnthropic = this.config.llmConfig.baseURL.includes('anthropic') || this.config.llmConfig.type === 'anthropic';
+            const isGoogle = this.config.llmConfig.baseURL?.includes('generativelanguage') || 
+                           this.config.llmConfig.type === 'google' ||
+                           this.config.llmConfig.model?.includes('gemini');
+            
+            const isOllama = this.config.llmConfig.baseURL?.includes('ollama') || 
+                           this.config.llmConfig.type === 'ollama';
             
             if (isAnthropic) {
               // For Anthropic APIs, use their specific image format
@@ -133,7 +276,7 @@ export abstract class BaseAgent {
               if (msg.content && msg.content.trim()) {
                 contentArray.push({
                   type: 'text',
-                  text: cleanContentForLLM(msg.content)
+                  text: content
                 });
               }
               
@@ -163,11 +306,85 @@ export abstract class BaseAgent {
                   }
                 });
               }
+
+              // Add notes content to the text portion
+              if (msg.notes && msg.notes.length > 0) {
+                const notesText = this.formatAttachedNotes(msg.notes);
+                
+                if (contentArray.length > 0 && contentArray[0].type === 'text') {
+                  contentArray[0].text += notesText;
+                } else {
+                  contentArray.unshift({
+                    type: 'text',
+                    text: content + notesText
+                  });
+                }
+              }
               
-              return {
-                role: msg.role,
-                content: contentArray
-              };
+              return new HumanMessage({ content: contentArray });
+            } else if (isPerplexity) {
+              // Perplexity doesn't support images, so just return text content
+              return new HumanMessage(content);
+            } else if (isGoogle) {
+              // Google supports images, use OpenAI-compatible format
+              const contentArray: Array<{type: 'text' | 'image_url'; text?: string; image_url?: {url: string}}> = [];
+              
+              // Add text content if present
+              if (msg.content && msg.content.trim()) {
+                contentArray.push({
+                  type: 'text',
+                  text: content
+                });
+              }
+              
+              // Add images
+              for (const image of msg.images) {
+                contentArray.push({
+                  type: 'image_url',
+                  image_url: {
+                    url: image.fullImage // Use fullImage property from ImageAttachment
+                  }
+                });
+              }
+              
+              return new HumanMessage({ content: contentArray });
+            } else if (isOllama) {
+              // For Ollama vision models, use proper LangChain format
+              // The convertToOllamaMessages utility will handle the conversion to Ollama's expected format
+              const contentArray: Array<{type: 'text' | 'image_url'; text?: string; image_url?: string}> = [];
+              
+              // Handle text content and notes
+              let textContent = content;
+              if (msg.notes && msg.notes.length > 0) {
+                const notesText = this.formatAttachedNotes(msg.notes);
+                textContent += notesText;
+              }
+              
+              // Add text content if present
+              if (textContent && textContent.trim()) {
+                contentArray.push({
+                  type: "text",
+                  text: textContent
+                });
+              }
+              
+              // Add images - use proper data URL format for LangChain
+              for (const image of msg.images) {
+                let imageUrl = image.fullImage || image.thumbnail;
+                
+                // Ensure it's a proper data URL
+                if (!imageUrl.startsWith('data:')) {
+                  const mimeType = image.mimeType || 'image/jpeg';
+                  imageUrl = `data:${mimeType};base64,${imageUrl}`;
+                }
+                
+                contentArray.push({
+                  type: "image_url",
+                  image_url: imageUrl
+                });
+              }
+              
+              return new HumanMessage({ content: contentArray });
             } else {
               // For OpenAI-compatible APIs, use proper image format
               const contentArray: Array<{type: 'text' | 'image_url'; text?: string; image_url?: {url: string}}> = [];
@@ -176,7 +393,7 @@ export abstract class BaseAgent {
               if (msg.content && msg.content.trim()) {
                 contentArray.push({
                   type: 'text',
-                  text: cleanContentForLLM(msg.content)
+                  text: content
                 });
               }
               
@@ -197,60 +414,104 @@ export abstract class BaseAgent {
                 });
               }
 
-              // Add notes content
+              // Add notes content to the text portion
               if (msg.notes && msg.notes.length > 0) {
-                let allNotesText = '';
-                for (const note of msg.notes) {
-                  allNotesText += `\n\n--- ATTACHED NOTES: ${note.title} ---${note.nodeLabel ? ` (from node: ${note.nodeLabel})` : ''}\n${note.content}\n--- END NOTES ---`;
-                }
+                const notesText = this.formatAttachedNotes(msg.notes);
                 
                 if (contentArray.length > 0 && contentArray[0].type === 'text') {
-                  contentArray[0].text += allNotesText;
+                  contentArray[0].text += notesText;
                 } else {
                   contentArray.unshift({
                     type: 'text',
-                    text: msg.content + allNotesText
+                    text: content + notesText
                   });
                 }
               }
               
-              return {
-                role: msg.role,
-                content: contentArray
-              };
+              return new HumanMessage({ content: contentArray });
             }
+          } else {
+            // No images, just handle text and notes
+            let userContent = content;
+            if (msg.notes && msg.notes.length > 0) {
+              const notesText = this.formatAttachedNotes(msg.notes);
+              userContent += notesText;
+            }
+            return new HumanMessage(userContent);
           }
-        } else {
-          // For historical messages, strip images and just send text content
-          const textContent = msg.content || 'Please analyze the uploaded image.';
-          const imageNote = msg.images.length === 1 
-            ? '\n[Note: An image was uploaded with this message. The assistant response that follows should contain the image analysis.]'
-            : `\n[Note: ${msg.images.length} images were uploaded with this message. The assistant response that follows should contain the image analysis.]`;
-          
-          return {
-            role: msg.role,
-            content: cleanContentForLLM(textContent + imageNote)
-          };
-        }
-      } else {
-        // Regular text message
-        let messageContent = msg.content;
-        
-        // Add notes content for user messages
-        if (msg.role === 'user' && msg.notes && msg.notes.length > 0) {
-          let allNotesText = '';
-          for (const note of msg.notes) {
-            allNotesText += `\n\n--- ATTACHED NOTES: ${note.title} ---${note.nodeLabel ? ` (from node: ${note.nodeLabel})` : ''}\n${note.content}\n--- END NOTES ---`;
-          }
-          messageContent += allNotesText;
-        }
-        
-        return {
-          role: msg.role,
-          content: cleanContentForLLM(messageContent)
-        };
+        case 'assistant':
+          return new AIMessage(content);
+        default:
+          return new HumanMessage(content);
       }
     });
+
+    // Special handling for Perplexity: ensure proper message alternation
+    if (isPerplexity && langChainMessages.length > 0) {
+      return this.reorderMessagesForPerplexity(langChainMessages);
+    }
+
+    return langChainMessages;
+  }
+
+  private reorderMessagesForPerplexity(messages: BaseMessage[]): BaseMessage[] {
+    // Perplexity requires:
+    // 1. Optional system messages first
+    // 2. Then strict alternation starting with user message: User, Assistant, User, Assistant...
+    // 3. Must end with a user message
+    
+    const systemMessages = messages.filter(msg => msg instanceof SystemMessage);
+    const conversationMessages = messages.filter(msg => !(msg instanceof SystemMessage));
+    
+    // If no conversation messages, just return system messages
+    if (conversationMessages.length === 0) {
+      return systemMessages;
+    }
+    
+    // Separate user and assistant messages while preserving order
+    const userMessages = conversationMessages.filter(msg => msg instanceof HumanMessage);
+    const assistantMessages = conversationMessages.filter(msg => msg instanceof AIMessage);
+    
+    // If no user messages, we can't create a valid Perplexity conversation
+    if (userMessages.length === 0) {
+      return messages; // Return original, let Perplexity handle the error
+    }
+    
+    // Create properly alternating conversation: System, User, Assistant, User, Assistant...
+    const result = [...systemMessages];
+    
+    // Start with first user message
+    result.push(userMessages[0]);
+    
+    // Now alternate between assistant and user messages
+    let userIndex = 1;
+    let assistantIndex = 0;
+    
+    while (userIndex < userMessages.length || assistantIndex < assistantMessages.length) {
+      // Add assistant message if available
+      if (assistantIndex < assistantMessages.length) {
+        result.push(assistantMessages[assistantIndex]);
+        assistantIndex++;
+      }
+      
+      // Add user message if available
+      if (userIndex < userMessages.length) {
+        result.push(userMessages[userIndex]);
+        userIndex++;
+      }
+    }
+    
+    // Ensure we end with a user message
+    const lastMessage = result[result.length - 1];
+    if (!(lastMessage instanceof HumanMessage)) {
+      // If the last message is not a user message, remove the last assistant message
+      // This ensures we end with the previous user message
+      if (result.length > 1 && result[result.length - 2] instanceof HumanMessage) {
+        result.pop(); // Remove the last assistant message
+      }
+    }
+    
+    return result;
   }
 
   async processMessageStreaming(userMessage: string, images?: ImageAttachment[], notes?: NotesAttachment[]): Promise<string> {
@@ -262,9 +523,6 @@ export abstract class BaseAgent {
       images: images || [],
       notes: notes || []
     });
-
-    // Convert conversation to LLM format
-    const llmMessages = this.convertToLLMMessages();
 
     try {
       // Create assistant message in streaming state
@@ -279,18 +537,21 @@ export abstract class BaseAgent {
       const abortController = new AbortController();
       this.store.getState().setAbortController(abortController);
 
+      // Always use direct streaming with tool parsing for consistent behavior
+      const messages = this.convertToLangChainMessages();
+      
+      const stream = await this.chatModel.stream(messages);
       let fullContent = '';
-      const streamGenerator = this.llmClient.generateStreamResponse(llmMessages);
 
-      for await (const chunk of streamGenerator) {
-        // Check if streaming was cancelled
+      for await (const chunk of stream) {
         if (abortController.signal.aborted) {
           this.store.getState().setStreamingStatus(assistantMsgId, 'cancelled');
           return assistantMsgId;
         }
 
-        fullContent += chunk;
-        this.store.getState().appendToMessage(assistantMsgId, chunk);
+        const chunkContent = chunk.content.toString();
+        fullContent += chunkContent;
+        this.store.getState().appendToMessage(assistantMsgId, chunkContent);
       }
 
       // Parse the full response for tool calls
@@ -321,7 +582,7 @@ export abstract class BaseAgent {
 
         // Get follow-up response after tool execution
         const toolResultContent = toolResults
-          .map(result => {
+          .map((result: any) => {
             let resultText = '';
             if (typeof result.result === 'string') {
               resultText = result.result;
@@ -345,32 +606,27 @@ export abstract class BaseAgent {
           .join('\n\n');
 
         const followUpMessages = [
-          ...llmMessages,
-          {
-            role: 'assistant' as const,
-            content: fullContent
-          },
-          {
-            role: 'user' as const,
-            content: `Tool execution results:\n${toolResultContent}\n\nPlease respond to the user with the relevant information from the tool results. Include the actual content/data from the tools when it's helpful to the user.`
-          }
+          ...messages,
+          new AIMessage(fullContent),
+          new HumanMessage(`Tool execution results:\n${toolResultContent}\n\nPlease respond to the user with the relevant information from the tool results. Include the actual content/data from the tools when it's helpful to the user.`)
         ];
 
         // Stream the follow-up response
         this.store.getState().updateMessage(assistantMsgId, { content: '' });
         
-        const followUpGenerator = this.llmClient.generateStreamResponse(followUpMessages);
+        const followUpStream = await this.chatModel.stream(followUpMessages);
         let followUpContent = '';
 
-        for await (const chunk of followUpGenerator) {
+        for await (const chunk of followUpStream) {
           // Check if streaming was cancelled
           if (abortController.signal.aborted) {
             this.store.getState().setStreamingStatus(assistantMsgId, 'cancelled');
             return assistantMsgId;
           }
 
-          followUpContent += chunk;
-          this.store.getState().appendToMessage(assistantMsgId, chunk);
+          const chunkContent = chunk.content.toString();
+          followUpContent += chunkContent;
+          this.store.getState().appendToMessage(assistantMsgId, chunkContent);
         }
 
         this.store.getState().updateMessage(assistantMsgId, {
@@ -383,7 +639,6 @@ export abstract class BaseAgent {
     } catch (error: any) {
       logger.error('Error in processMessageStreaming:', error);
       
-      // Find the assistant message and mark it as error
       const messages = this.store.getState().messages;
       const assistantMsg = messages.find(m => m.role === 'assistant' && m.status === 'streaming');
       if (assistantMsg) {
@@ -398,9 +653,7 @@ export abstract class BaseAgent {
     }
   }
 
-  // Legacy method with streaming support
   async processMessage(userMessage: string, images?: ImageAttachment[], notes?: NotesAttachment[], onUpdate?: (message: ConversationMessage) => void): Promise<ConversationMessage> {
-    
     // Add user message to store
     const userMsgId = this.store.getState().addMessage({
       role: 'user',
@@ -410,9 +663,9 @@ export abstract class BaseAgent {
       notes: notes || []
     });
 
-    // Convert conversation to LLM format
-    const llmMessages = this.convertToLLMMessages();
-
+    // Start timing for debug logging
+    const startTime = Date.now();
+    
     try {
       // Create assistant message in streaming state
       const assistantMsgId = this.store.getState().addMessage({
@@ -426,18 +679,55 @@ export abstract class BaseAgent {
       const abortController = new AbortController();
       this.store.getState().setAbortController(abortController);
 
+      // Always use direct streaming with tool parsing for consistent behavior
+      const messages = this.convertToLangChainMessages();
+      
+      // Log the request for debugging
+      serverDebugLogger.logRequest(
+        `LLM Request: ${this.config.llmConfig.model}`,
+        JSON.stringify({
+          messages: messages.map(msg => ({
+            role: msg._getType(),
+            content: typeof msg.content === 'string' ? msg.content.substring(0, 500) + (msg.content.length > 500 ? '...' : '') : '[Complex Content]'
+          })),
+          model: this.config.llmConfig.model
+        }, null, 2),
+        this.config.llmConfig.model,
+        this.config.llmConfig.baseURL
+      );
+      
+      const stream = await this.chatModel.stream(messages);
       let fullContent = '';
-      const streamGenerator = this.llmClient.generateStreamResponse(llmMessages);
+      let tokenCount = 0; // Track tokens generated
+      let lastTokenUpdate = startTime; // Track last token stats update
 
-      for await (const chunk of streamGenerator) {
-        // Check if streaming was cancelled
+      for await (const chunk of stream) {
         if (abortController.signal.aborted) {
           this.store.getState().setStreamingStatus(assistantMsgId, 'cancelled');
           break;
         }
 
-        fullContent += chunk;
+        const chunkContent = chunk.content.toString();
+        fullContent += chunkContent;
         this.store.getState().updateMessage(assistantMsgId, { content: fullContent });
+        
+        // Count tokens (approximate: 1 token ≈ 4 characters)
+        tokenCount += Math.max(1, Math.floor(chunkContent.length / 4));
+        
+        // Send token stats update every 1 second during streaming
+        const now = Date.now();
+        if (now - lastTokenUpdate > 1000) {
+          const elapsed = (now - startTime) / 1000;
+          if (elapsed > 0.5 && tokenCount > 0) {
+            const tokensPerSecond = tokenCount / elapsed;
+            sseManager.broadcast('debug', {
+              type: 'token-stats',
+              tokensPerSecond: tokensPerSecond,
+              totalTokens: tokenCount
+            });
+            lastTokenUpdate = now;
+          }
+        }
         
         // Send real-time update via callback
         if (onUpdate) {
@@ -462,6 +752,25 @@ export abstract class BaseAgent {
 
       // Parse the full response for tool calls
       const { content, toolCalls } = this.parseToolCalls(fullContent);
+      
+      // Log the response for debugging
+      const duration = Date.now() - startTime;
+      const tokensPerSecond = duration > 0 ? (tokenCount / (duration / 1000)) : 0;
+      serverDebugLogger.logResponse(
+        `LLM Response: ${this.config.llmConfig.model}`,
+        JSON.stringify({
+          content: content || fullContent,
+          toolCalls: toolCalls,
+          duration: `${duration}ms`,
+          tokens: tokenCount,
+          tokensPerSecond: tokensPerSecond.toFixed(2)
+        }, null, 2),
+        duration,
+        this.config.llmConfig.model,
+        this.config.llmConfig.baseURL,
+        tokensPerSecond,
+        tokenCount
+      );
 
       // Update message with final content and tool calls
       this.store.getState().updateMessage(assistantMsgId, {
@@ -508,7 +817,7 @@ export abstract class BaseAgent {
 
         // Get follow-up response after tool execution
         const toolResultContent = toolResults
-          .map(result => {
+          .map((result: any) => {
             let resultText = '';
             if (typeof result.result === 'string') {
               resultText = result.result;
@@ -532,32 +841,31 @@ export abstract class BaseAgent {
           .join('\n\n');
 
         const followUpMessages = [
-          ...llmMessages,
-          {
-            role: 'assistant' as const,
-            content: fullContent
-          },
-          {
-            role: 'user' as const,
-            content: `Tool execution results:\n${toolResultContent}\n\nPlease respond to the user with the relevant information from the tool results. Include the actual content/data from the tools when it's helpful to the user.`
-          }
+          ...messages,
+          new AIMessage(fullContent),
+          new HumanMessage(`Tool execution results:\n${toolResultContent}\n\nPlease respond to the user with the relevant information from the tool results. Include the actual content/data from the tools when it's helpful to the user.`)
         ];
 
         // Stream the follow-up response
         this.store.getState().updateMessage(assistantMsgId, { content: '' });
         
-        const followUpGenerator = this.llmClient.generateStreamResponse(followUpMessages);
+        const followUpStream = await this.chatModel.stream(followUpMessages);
         let followUpContent = '';
+        let followUpTokenCount = 0; // Track tokens in follow-up response
 
-        for await (const chunk of followUpGenerator) {
+        for await (const chunk of followUpStream) {
           // Check if streaming was cancelled
           if (abortController.signal.aborted) {
             this.store.getState().setStreamingStatus(assistantMsgId, 'cancelled');
             break;
           }
 
-          followUpContent += chunk;
+          const chunkContent = chunk.content.toString();
+          followUpContent += chunkContent;
           this.store.getState().updateMessage(assistantMsgId, { content: followUpContent });
+          
+          // Count tokens in follow-up response
+          followUpTokenCount += Math.max(1, Math.floor(chunkContent.length / 4));
           
           // Send real-time update via callback
           if (onUpdate) {
@@ -579,6 +887,9 @@ export abstract class BaseAgent {
             }
           }
         }
+        
+        // Update total token count
+        tokenCount += followUpTokenCount;
 
         this.store.getState().updateMessage(assistantMsgId, {
           status: 'completed'
@@ -602,6 +913,18 @@ export abstract class BaseAgent {
 
     } catch (error: any) {
       logger.error('Error in processMessage:', error);
+      
+      // Log the error for debugging
+      const duration = Date.now() - startTime;
+      serverDebugLogger.logError(
+        `LLM Error: ${this.config.llmConfig.model}`,
+        JSON.stringify({
+          error: error instanceof Error ? error.message : String(error),
+          duration: `${duration}ms`
+        }, null, 2),
+        this.config.llmConfig.model,
+        this.config.llmConfig.baseURL
+      );
       
       // Find the assistant message and mark it as error
       const messages = this.store.getState().messages;
@@ -640,7 +963,138 @@ export abstract class BaseAgent {
     };
   }
 
-  protected async executeToolCalls(toolCalls: ToolCall[], messageId: string): Promise<Array<{ name: string; result: any }>> {
+  // Chain-specific methods
+  async invokeChain(input: string, options?: { streaming?: boolean }): Promise<string> {
+    const messages = this.convertToLangChainMessages();
+    messages.push(new HumanMessage(input));
+
+    if (options?.streaming) {
+      const stream = await this.chatModel.stream(messages);
+      let result = '';
+      for await (const chunk of stream) {
+        result += chunk.content.toString();
+      }
+      return result;
+    } else {
+      const result = await this.chatModel.invoke(messages);
+      return result.content.toString();
+    }
+  }
+
+  // Existing interface methods
+  getConversation(): ConversationMessage[] {
+    return this.store.getState().messages
+      .filter(msg => msg.role !== 'system')
+      .map(msg => this.convertToConversationMessage(msg));
+  }
+
+  deleteMessage(messageId: string): boolean {
+    const messages = this.store.getState().messages;
+    const messageExists = messages.some(msg => msg.id === messageId);
+    if (messageExists) {
+      this.store.getState().deleteMessage(messageId);
+      return true;
+    }
+    return false;
+  }
+
+  cancelMessage(messageId: string): boolean {
+    const message = this.store.getState().messages.find(msg => msg.id === messageId);
+    if (message && message.status === 'streaming') {
+      this.store.getState().cancelStreaming();
+      return true;
+    }
+    return false;
+  }
+
+  clearConversation(): void {
+    this.store.getState().clearConversation();
+    this.store.getState().addMessage({
+      role: 'system',
+      content: this.systemPrompt,
+      status: 'completed'
+    });
+  }
+
+  loadConversation(messages: ConversationMessage[]): void {
+    this.store.getState().clearConversation();
+    this.store.getState().addMessage({
+      role: 'system',
+      content: this.systemPrompt,
+      status: 'completed'
+    });
+    
+    messages.forEach(msg => {
+      this.store.getState().addMessage({
+        role: msg.role,
+        content: msg.content,
+        status: msg.status === 'processing' ? 'streaming' : 
+                msg.status === 'completed' ? 'completed' :
+                msg.status === 'cancelled' ? 'cancelled' : 'completed',
+        model: msg.model,
+        toolCalls: msg.toolCalls,
+        toolResults: msg.toolResults,
+        images: msg.images,
+        notes: msg.notes
+      });
+    });
+  }
+
+  updateLLMConfig(newLlmConfig: AgentConfig['llmConfig']): void {
+    this.config.llmConfig = newLlmConfig;
+    this.chatModel = this.createChatModel(newLlmConfig);
+    this.store.getState().updateLLMConfig(newLlmConfig);
+    this.initializeAgentExecutor(); // Reinitialize agent executor with new model
+  }
+
+  updateRole(customRole?: string): void {
+    this.config.customRole = customRole;
+    this.systemPrompt = this.createSystemPrompt();
+    this.store.getState().updateCustomRole(customRole);
+    
+    // Update system message in store
+    const messages = this.store.getState().messages;
+    const systemMessage = messages.find(msg => msg.role === 'system');
+    if (systemMessage) {
+      this.store.getState().updateMessage(systemMessage.id, {
+        content: this.systemPrompt
+      });
+    }
+    
+    // Reinitialize agent executor with new system prompt
+    this.initializeAgentExecutor();
+  }
+
+  getCurrentRole(): string {
+    return this.config.customRole || this.getDefaultRole();
+  }
+
+  protected generateId(): string {
+    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  }
+
+  getAgentId(): string {
+    return this.agentId;
+  }
+
+  getAgentStore() {
+    return this.store;
+  }
+
+  // Access to LangChain components
+  getChatModel(): BaseChatModel {
+    return this.chatModel;
+  }
+
+  getTools(): DynamicTool[] {
+    return this.langChainTools;
+  }
+
+  getAgentExecutor(): AgentExecutor | undefined {
+    return this.agentExecutor;
+  }
+
+  protected async executeToolCalls(toolCalls: Array<{id: string; name: string; parameters: Record<string, any>}>, messageId: string): Promise<Array<{ name: string; result: any }>> {
     const results = [];
     
     for (const toolCall of toolCalls) {
@@ -670,9 +1124,9 @@ export abstract class BaseAgent {
     return results;
   }
 
-  protected parseToolCalls(content: string): { content: string; toolCalls?: ToolCall[] } {
+  protected parseToolCalls(content: string): { content: string; toolCalls?: Array<{id: string; name: string; parameters: Record<string, any>}> } {
     logger.debug('Parsing content for tool calls:', { content });
-    const toolCalls: ToolCall[] = [];
+    const toolCalls: Array<{id: string; name: string; parameters: Record<string, any>}> = [];
     let cleanContent = content;
     const jsonBlocksToRemove: string[] = [];
 
@@ -763,123 +1217,6 @@ export abstract class BaseAgent {
       content: cleanContent || content,
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined
     };
-  }
-
-  // Common interface methods
-  getConversation(): ConversationMessage[] {
-    return this.store.getState().messages
-      .filter(msg => msg.role !== 'system')
-      .map(msg => ({
-        id: msg.id,
-        role: msg.role,
-        content: msg.content,
-        timestamp: msg.timestamp,
-        toolCalls: msg.toolCalls,
-        toolResults: msg.toolResults,
-        status: msg.status === 'streaming' ? 'processing' : 
-                msg.status === 'completed' ? 'completed' :
-                msg.status === 'cancelled' ? 'cancelled' : 'completed',
-        model: msg.model,
-        images: msg.images,
-        notes: msg.notes
-      }));
-  }
-
-  deleteMessage(messageId: string): boolean {
-    const messages = this.store.getState().messages;
-    const messageExists = messages.some(msg => msg.id === messageId);
-    if (messageExists) {
-      this.store.getState().deleteMessage(messageId);
-      return true;
-    }
-    return false;
-  }
-
-  cancelMessage(messageId: string): boolean {
-    const message = this.store.getState().messages.find(msg => msg.id === messageId);
-    if (message && message.status === 'streaming') {
-      this.store.getState().cancelStreaming();
-      return true;
-    }
-    return false;
-  }
-
-  clearConversation(): void {
-    this.store.getState().clearConversation();
-    
-    // Re-add system message
-    this.store.getState().addMessage({
-      role: 'system',
-      content: this.systemPrompt,
-      status: 'completed'
-    });
-  }
-
-  loadConversation(messages: ConversationMessage[]): void {
-    this.store.getState().clearConversation();
-    
-    // Add system message
-    this.store.getState().addMessage({
-      role: 'system',
-      content: this.systemPrompt,
-      status: 'completed'
-    });
-    
-    // Convert and add messages
-    messages.forEach(msg => {
-      this.store.getState().addMessage({
-        role: msg.role,
-        content: msg.content,
-        status: msg.status === 'processing' ? 'streaming' : 
-                msg.status === 'completed' ? 'completed' :
-                msg.status === 'cancelled' ? 'cancelled' : 'completed',
-        model: msg.model,
-        toolCalls: msg.toolCalls,
-        toolResults: msg.toolResults,
-        images: msg.images,
-        notes: msg.notes
-      });
-    });
-  }
-
-  updateLLMConfig(newLlmConfig: AgentConfig['llmConfig']): void {
-    this.config.llmConfig = newLlmConfig;
-    this.llmClient = new LLMClient(newLlmConfig);
-    this.store.getState().updateLLMConfig(newLlmConfig);
-  }
-
-  updateRole(customRole?: string): void {
-    this.config.customRole = customRole;
-    this.systemPrompt = this.createSystemPrompt();
-    this.store.getState().updateCustomRole(customRole);
-    
-    // Update system message in store
-    const messages = this.store.getState().messages;
-    const systemMessage = messages.find(msg => msg.role === 'system');
-    if (systemMessage) {
-      this.store.getState().updateMessage(systemMessage.id, {
-        content: this.systemPrompt
-      });
-    }
-  }
-
-  getCurrentRole(): string {
-    return this.config.customRole || this.getDefaultRole();
-  }
-
-  abstract getDefaultRole(): string;
-
-  protected generateId(): string {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
-  }
-
-  // Public methods to access agent store
-  getAgentId(): string {
-    return this.agentId;
-  }
-
-  getAgentStore() {
-    return this.store;
   }
 
   /**

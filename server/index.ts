@@ -48,7 +48,7 @@ let currentLlmConfig = {
   model: '',
   displayName: undefined as string | undefined,
   apiKey: undefined as string | undefined,
-  type: undefined as 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'local' | undefined,
+  type: undefined as 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'perplexity' | 'google' | 'local' | undefined,
   contextLength: undefined as number | undefined
 };
 
@@ -457,6 +457,12 @@ app.post('/api/llm/test-service', async (req: any, res: any) => {
       case 'anthropic':
         endpoint = '/v1/models';
         break;
+      case 'perplexity':
+        // Return known Perplexity models
+        return res.json(['sonar-pro', 'sonar', 'sonar-deep-research']);
+      case 'google':
+        // Return known Google models
+        return res.json(['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-pro']);
       default:
         return res.status(400).json({ error: `Unknown service type: ${type}` });
     }
@@ -472,6 +478,14 @@ app.post('/api/llm/test-service', async (req: any, res: any) => {
     if (apiKey && type === 'anthropic') {
       headers['x-api-key'] = apiKey;
       headers['anthropic-version'] = '2023-06-01';
+    }
+    
+    if (apiKey && type === 'perplexity') {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    }
+    
+    if (apiKey && type === 'google') {
+      headers['Authorization'] = `Bearer ${apiKey}`;
     }
 
     const controller = new AbortController();
@@ -499,6 +513,12 @@ app.post('/api/llm/test-service', async (req: any, res: any) => {
         models = data?.models?.map((m: any) => m.name || m.model || '').filter(Boolean) || [];
       } else if (type === 'anthropic') {
         models = data?.data?.map((m: any) => m.id || m.name || '').filter(Boolean) || [];
+      } else if (type === 'perplexity') {
+        // This shouldn't be reached since we return early for perplexity, but just in case
+        models = ['sonar-pro', 'sonar', 'sonar-deep-research'];
+      } else if (type === 'google') {
+        // This shouldn't be reached since we return early for google, but just in case
+        models = ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-pro'];
       } else {
         models = data?.data?.map((m: any) => m.id || m.model || '').filter(Boolean) || [];
       }
@@ -1398,6 +1418,20 @@ app.post('/api/mindmaps/:mindMapId/execute-task', async (req: Request, res: Resp
 
     // Execute individual task
     const result = await mindmapAgent.executeIndividualTask(task);
+
+    // Broadcast task completion to frontend if workflowId is provided
+    if (workflowId) {
+      const { broadcastTaskUpdate } = await import('./routes/tasks.js');
+      broadcastTaskUpdate(workflowId, {
+        type: 'task_completed',
+        workflowId: workflowId,
+        taskId: taskId,
+        description: task.description,
+        status: 'completed',
+        changes: result.changes,
+        result: result
+      });
+    }
     
     res.json({
       success: true,

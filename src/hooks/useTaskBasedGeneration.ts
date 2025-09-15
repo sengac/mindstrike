@@ -58,6 +58,10 @@ export function useTaskBasedGeneration() {
       // Initialize task store
       taskStore.startWorkflow(workflowId, prompt, mindMapId);
       taskStore.setWorkflowTasks(workflowId, tasks);
+      
+      // Connect mindmap store to workflow SSE for task completion updates
+      const mindMapStore = await import('../store/useMindMapStore');
+      mindMapStore.useMindMapStore.getState().connectToWorkflow(workflowId);
 
       // Step 2: Execute tasks sequentially
       let totalChanges = 0;
@@ -114,6 +118,9 @@ export function useTaskBasedGeneration() {
       // Step 3: Complete workflow
       taskStore.completeWorkflow(workflowId, totalChanges);
       
+      // Disconnect from workflow SSE
+      (await import('../store/useMindMapStore')).useMindMapStore.getState().disconnectFromWorkflow();
+      
       // Final progress update
       if (options.onProgress) {
         options.onProgress({
@@ -135,6 +142,9 @@ export function useTaskBasedGeneration() {
         taskStore.failWorkflow(currentWorkflowId, error instanceof Error ? error.message : String(error));
       }
       
+      // Disconnect from workflow SSE on error
+      (await import('../store/useMindMapStore')).useMindMapStore.getState().disconnectFromWorkflow();
+      
       if (options.onError) {
         options.onError(error instanceof Error ? error.message : String(error));
       }
@@ -144,10 +154,14 @@ export function useTaskBasedGeneration() {
     }
   }, [isGenerating, taskStore, setGenerating]);
 
-  const cancelGeneration = useCallback(() => {
+  const cancelGeneration = useCallback(async () => {
     if (currentWorkflowId) {
       taskStore.failWorkflow(currentWorkflowId, 'Cancelled by user');
     }
+    
+    // Disconnect from workflow SSE on cancel
+    (await import('../store/useMindMapStore')).useMindMapStore.getState().disconnectFromWorkflow();
+    
     setIsGenerating(false);
     setGenerating(false); // Update debug store
     setCurrentWorkflowId(null);

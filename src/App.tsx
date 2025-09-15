@@ -414,11 +414,9 @@ function App() {
                   setActivePanel('chat');
                 }}
                 onDeleteMessage={(threadId: string, messageId: string) => {
-                  console.log('Deleting message:', { threadId, messageId });
                   deleteMessage(threadId, messageId);
                 }}
                 onMessagesUpdate={(threadId: string, messages) => {
-                  console.log('Updating messages for thread:', { threadId, messageCount: messages.length });
                   updateThreadMessages(threadId, messages);
                 }}
                 onFirstMessage={() => {}}

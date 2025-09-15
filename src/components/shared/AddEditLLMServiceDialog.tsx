@@ -5,7 +5,7 @@ import { useDialogAnimation } from '../../hooks/useDialogAnimation';
 
 export interface LLMServiceFormData {
   name: string;
-  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic';
+  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'perplexity' | 'google';
   baseURL: string;
   apiKey: string;
 }
@@ -68,7 +68,11 @@ export function AddEditLLMServiceDialog({
       case 'openai':
         return 'https://api.openai.com/v1';
       case 'anthropic':
-        return 'https://api.anthropic.com';
+      return 'https://api.anthropic.com';
+    case 'perplexity':
+      return 'https://api.perplexity.ai';
+    case 'google':
+      return 'https://generativelanguage.googleapis.com';
       case 'openai-compatible':
         return 'http://localhost:8080/v1';
       default:
@@ -77,7 +81,7 @@ export function AddEditLLMServiceDialog({
   };
 
   const requiresApiKey = (type: string) => {
-    return ['openai', 'anthropic'].includes(type);
+    return ['openai', 'anthropic', 'perplexity', 'google'].includes(type);
   };
 
   return (
@@ -128,6 +132,8 @@ export function AddEditLLMServiceDialog({
                 <option value="openai-compatible">OpenAI Compatible</option>
                 <option value="openai">OpenAI</option>
                 <option value="anthropic">Anthropic</option>
+                <option value="perplexity">Perplexity</option>
+                <option value="google">Google Generative AI</option>
               </select>
             </div>
           </div>

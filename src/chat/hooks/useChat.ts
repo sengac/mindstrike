@@ -58,6 +58,12 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
       return;
     }
     
+    // If threadId is null/undefined, clear messages
+    if (threadId === null || threadId === undefined) {
+      setMessages([]);
+      return;
+    }
+    
     try {
       const response = await fetch('/api/conversation');
       if (response.ok) {

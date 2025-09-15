@@ -11,7 +11,7 @@ export interface LLMModel {
   displayName: string;
   baseURL: string;
   apiKey?: string;
-  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'local';
+  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'perplexity' | 'google' | 'local';
   contextLength?: number;
   parameterCount?: string;
   quantization?: string;
@@ -24,7 +24,7 @@ export interface CustomLLMService {
   id: string;
   name: string;
   baseURL: string;
-  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'local';
+  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'perplexity' | 'google' | 'local';
   apiKey?: string;
   enabled: boolean;
   custom: boolean;
@@ -272,8 +272,8 @@ export class LLMConfigManager {
         // Test the service and get its models
         const models = await this.testCustomServiceModels(customService);
         
-        // Get metadata for Ollama and Anthropic custom services
-        if ((customService.type === 'ollama' || customService.type === 'anthropic') && models.length > 0) {
+        // Get metadata for Ollama, Anthropic, Perplexity, and Google custom services
+        if ((customService.type === 'ollama' || customService.type === 'anthropic' || customService.type === 'perplexity' || customService.type === 'google') && models.length > 0) {
           try {
             const { LLMScanner } = await import('./llm-scanner.js');
             const scanner = new LLMScanner();
@@ -281,7 +281,7 @@ export class LLMConfigManager {
               id: customService.id,
               name: customService.name,
               baseURL: customService.baseURL,
-              type: customService.type as 'ollama' | 'anthropic',
+              type: customService.type as 'ollama' | 'anthropic' | 'perplexity' | 'google',
               models,
               available: true
             };
@@ -319,7 +319,7 @@ export class LLMConfigManager {
             }
           }
         } else {
-          // Non-Ollama/Anthropic services or fallback
+          // Non-Ollama/Anthropic/Perplexity/Google services or fallback
           for (const modelName of models) {
             newModels.push({
               id: `${customService.id}:${modelName}`,
@@ -391,6 +391,12 @@ export class LLMConfigManager {
       case 'anthropic':
         endpoint = '/v1/models';
         break;
+      case 'perplexity':
+        // Perplexity doesn't have a models endpoint, return known models
+        return ['sonar-pro', 'sonar', 'sonar-deep-research'];
+      case 'google':
+        // Google doesn't expose a models endpoint via API, return known models
+        return ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-pro'];
       default:
         throw new Error(`Unknown service type: ${service.type}`);
     }
