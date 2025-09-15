@@ -17,7 +17,7 @@ export class ChatAgent extends BaseAgent {
       '',
       this.createGoalSpecification(),
       '',
-      this.createExplicitToolUsage(),
+      // this.createExplicitToolUsage(),
       '',
       this.createErrorHandling(),
       '',

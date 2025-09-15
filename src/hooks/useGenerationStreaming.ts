@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useDebugStore } from '../store/useDebugStore';
 
 interface GenerationStats {
   tokensPerSecond: number;
@@ -21,6 +22,9 @@ export function useGenerationStreaming() {
     status: 'Preparing...'
   });
   
+  // Connect to debug store for centralized token tracking
+  const { updateTokenStats, setGenerating } = useDebugStore();
+  
   const eventSourceRef = useRef<EventSource | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const startTimeRef = useRef<number>(0);
@@ -41,13 +45,18 @@ export function useGenerationStreaming() {
 
   const updateStats = useCallback((newTokens: number, status?: string) => {
     tokenCountRef.current += newTokens;
+    const tokensPerSecond = calculateTokensPerSecond();
+    const totalTokens = tokenCountRef.current;
     
     setStats(prevStats => ({
-      tokensPerSecond: calculateTokensPerSecond(),
-      totalTokens: tokenCountRef.current,
+      tokensPerSecond,
+      totalTokens,
       status: status || prevStats.status
     }));
-  }, [calculateTokensPerSecond]);
+    
+    // Update debug store with current token stats
+    updateTokenStats(tokensPerSecond, totalTokens);
+  }, [calculateTokensPerSecond, updateTokenStats]);
 
   const startStreaming = useCallback(async (
     url: string, 
@@ -60,6 +69,7 @@ export function useGenerationStreaming() {
     }
 
     setIsStreaming(true);
+    setGenerating(true); // Update debug store
     startTimeRef.current = Date.now();
     tokenCountRef.current = 0;
     lastUpdateTimeRef.current = Date.now();
@@ -132,6 +142,8 @@ export function useGenerationStreaming() {
                   totalTokens: data.totalTokens,
                   status: 'Generating...'
                 }));
+                // Update debug store with server values
+                updateTokenStats(data.tokensPerSecond, data.totalTokens);
               } else {
                 // Fallback to counting individual tokens
                 updateStats(1, 'Generating...');
@@ -213,7 +225,8 @@ export function useGenerationStreaming() {
     }
     
     setIsStreaming(false);
-  }, []);
+    setGenerating(false); // Update debug store
+  }, [setGenerating]);
 
   const cancelGeneration = useCallback(() => {
     stopStreaming();

@@ -8,6 +8,8 @@ interface DebugEntry {
   duration?: number;
   model?: string;
   endpoint?: string;
+  tokensPerSecond?: number;
+  totalTokens?: number;
 }
 
 class ServerDebugLogger {
@@ -33,14 +35,16 @@ class ServerDebugLogger {
     });
   }
 
-  logResponse(title: string, content: string, duration?: number, model?: string, endpoint?: string) {
+  logResponse(title: string, content: string, duration?: number, model?: string, endpoint?: string, tokensPerSecond?: number, totalTokens?: number) {
     this.broadcastDebugEntry({
       entryType: 'response',
       title,
       content,
       duration,
       model,
-      endpoint
+      endpoint,
+      tokensPerSecond,
+      totalTokens
     });
   }
 

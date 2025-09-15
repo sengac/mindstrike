@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useTaskStore } from '../store/useTaskStore';
+import { useDebugStore } from '../store/useDebugStore';
 
 interface TaskBasedGenerationOptions {
   onProgress?: (progress: { completed: number; total: number; currentTask?: string }) => void;
@@ -20,6 +21,7 @@ export function useTaskBasedGeneration() {
   const [currentWorkflowId, setCurrentWorkflowId] = useState<string | null>(null);
   
   const taskStore = useTaskStore();
+  const { setGenerating } = useDebugStore();
 
   const startGeneration = useCallback(async (
     mindMapId: string,
@@ -28,16 +30,15 @@ export function useTaskBasedGeneration() {
     options: TaskBasedGenerationOptions = {}
   ) => {
     if (isGenerating) {
-      console.warn('Already generating, ignoring new request');
       return;
     }
 
     setIsGenerating(true);
+    setGenerating(true); // Update debug store
     setCurrentWorkflowId(null);
 
     try {
       // Step 1: Plan tasks
-      console.log('🔍 Planning tasks for:', prompt);
       const planResponse = await fetch(`/api/mindmaps/${mindMapId}/plan-tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -52,7 +53,6 @@ export function useTaskBasedGeneration() {
       const planResult = await planResponse.json();
       const { workflowId, tasks } = planResult;
       
-      console.log('📋 Tasks planned:', tasks.length, 'tasks for workflow:', workflowId);
       setCurrentWorkflowId(workflowId);
 
       // Initialize task store
@@ -79,8 +79,6 @@ export function useTaskBasedGeneration() {
         }
 
         try {
-          console.log(`🔄 Executing task ${i + 1}/${tasks.length}:`, task.description);
-          
           // Execute individual task
           const taskResponse = await fetch(`/api/mindmaps/${mindMapId}/execute-task`, {
             method: 'POST',
@@ -99,7 +97,6 @@ export function useTaskBasedGeneration() {
           }
 
           const taskResult = await taskResponse.json();
-          console.log('✅ Task completed:', task.id, 'changes:', taskResult.result.changes.length);
           
           // Update task status to completed
           taskStore.updateTaskStatus(workflowId, task.id, 'completed', taskResult.result);
@@ -107,7 +104,6 @@ export function useTaskBasedGeneration() {
           totalChanges += taskResult.result.changes.length;
 
         } catch (taskError) {
-          console.error('❌ Task failed:', task.id, taskError);
           taskStore.updateTaskStatus(workflowId, task.id, 'failed', undefined, taskError instanceof Error ? taskError.message : String(taskError));
           
           // Continue with next task instead of failing the entire workflow
@@ -134,11 +130,7 @@ export function useTaskBasedGeneration() {
         });
       }
 
-      console.log('🎉 Workflow completed:', workflowId, 'total changes:', totalChanges);
-
     } catch (error) {
-      console.error('💥 Generation failed:', error);
-      
       if (currentWorkflowId) {
         taskStore.failWorkflow(currentWorkflowId, error instanceof Error ? error.message : String(error));
       }
@@ -148,16 +140,18 @@ export function useTaskBasedGeneration() {
       }
     } finally {
       setIsGenerating(false);
+      setGenerating(false); // Update debug store
     }
-  }, [isGenerating, taskStore]);
+  }, [isGenerating, taskStore, setGenerating]);
 
   const cancelGeneration = useCallback(() => {
     if (currentWorkflowId) {
       taskStore.failWorkflow(currentWorkflowId, 'Cancelled by user');
     }
     setIsGenerating(false);
+    setGenerating(false); // Update debug store
     setCurrentWorkflowId(null);
-  }, [currentWorkflowId, taskStore]);
+  }, [currentWorkflowId, taskStore, setGenerating]);
 
   return {
     isGenerating,

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist, subscribeWithSelector } from 'zustand/middleware';
+import { subscribeWithSelector } from 'zustand/middleware';
 
 export interface Task {
   id: string;
@@ -69,8 +69,7 @@ interface TaskState {
 
 export const useTaskStore = create<TaskState>()(
   subscribeWithSelector(
-    persist(
-      (set, get) => ({
+    (set, get) => ({
         // Initial state
         currentWorkflow: null,
         workflows: [],
@@ -179,25 +178,43 @@ export const useTaskStore = create<TaskState>()(
         
         completeWorkflow: (workflowId: string, totalChanges: number) => {
           set((state) => {
-            const updatedWorkflows = state.workflows.map(workflow => 
-              workflow.id === workflowId 
-                ? { 
-                    ...workflow, 
-                    status: 'completed' as const, 
-                    completedAt: new Date(),
-                    totalChanges
-                  }
-                : workflow
-            );
+            let updatedWorkflows = [...state.workflows];
+            let currentWorkflow = state.currentWorkflow;
             
-            const currentWorkflow = state.currentWorkflow?.id === workflowId
-              ? { 
-                  ...state.currentWorkflow, 
-                  status: 'completed' as const, 
-                  completedAt: new Date(),
-                  totalChanges
-                }
-              : state.currentWorkflow;
+            // If completing the current workflow, move it to workflows array and clear current
+            if (state.currentWorkflow?.id === workflowId) {
+              const completedWorkflow = {
+                ...state.currentWorkflow,
+                status: 'completed' as const,
+                completedAt: new Date(),
+                totalChanges
+              };
+              
+              // Add to workflows array if not already there
+              if (!updatedWorkflows.some(w => w.id === workflowId)) {
+                updatedWorkflows.push(completedWorkflow);
+              } else {
+                // Update existing workflow in array
+                updatedWorkflows = updatedWorkflows.map(workflow => 
+                  workflow.id === workflowId ? completedWorkflow : workflow
+                );
+              }
+              
+              // Clear current workflow
+              currentWorkflow = null;
+            } else {
+              // Update workflow in workflows array
+              updatedWorkflows = updatedWorkflows.map(workflow => 
+                workflow.id === workflowId 
+                  ? { 
+                      ...workflow, 
+                      status: 'completed' as const, 
+                      completedAt: new Date(),
+                      totalChanges
+                    }
+                  : workflow
+              );
+            }
             
             return {
               workflows: updatedWorkflows,
@@ -209,23 +226,41 @@ export const useTaskStore = create<TaskState>()(
         
         failWorkflow: (workflowId: string, error: string) => {
           set((state) => {
-            const updatedWorkflows = state.workflows.map(workflow => 
-              workflow.id === workflowId 
-                ? { 
-                    ...workflow, 
-                    status: 'failed' as const, 
-                    completedAt: new Date()
-                  }
-                : workflow
-            );
+            let updatedWorkflows = [...state.workflows];
+            let currentWorkflow = state.currentWorkflow;
             
-            const currentWorkflow = state.currentWorkflow?.id === workflowId
-              ? { 
-                  ...state.currentWorkflow, 
-                  status: 'failed' as const, 
-                  completedAt: new Date()
-                }
-              : state.currentWorkflow;
+            // If failing the current workflow, move it to workflows array and clear current
+            if (state.currentWorkflow?.id === workflowId) {
+              const failedWorkflow = {
+                ...state.currentWorkflow,
+                status: 'failed' as const,
+                completedAt: new Date()
+              };
+              
+              // Add to workflows array if not already there
+              if (!updatedWorkflows.some(w => w.id === workflowId)) {
+                updatedWorkflows.push(failedWorkflow);
+              } else {
+                // Update existing workflow in array
+                updatedWorkflows = updatedWorkflows.map(workflow => 
+                  workflow.id === workflowId ? failedWorkflow : workflow
+                );
+              }
+              
+              // Clear current workflow
+              currentWorkflow = null;
+            } else {
+              // Update workflow in workflows array
+              updatedWorkflows = updatedWorkflows.map(workflow => 
+                workflow.id === workflowId 
+                  ? { 
+                      ...workflow, 
+                      status: 'failed' as const, 
+                      completedAt: new Date()
+                    }
+                  : workflow
+              );
+            }
             
             return {
               workflows: updatedWorkflows,
@@ -290,14 +325,7 @@ export const useTaskStore = create<TaskState>()(
           const currentTask = state.currentWorkflow.tasks[state.currentWorkflow.currentTaskIndex];
           return currentTask || null;
         }
-      }),
-      {
-        name: 'task-store',
-        partialize: (state) => ({
-          workflows: state.workflows.slice(-10), // Keep only last 10 workflows
-        }),
-      }
-    )
+      })
   )
 );
 

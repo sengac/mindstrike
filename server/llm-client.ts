@@ -341,11 +341,30 @@ export class LLMClient {
 
   async *generateStreamResponse(
     messages: LLMMessage[],
-    tools?: any[]
+    tools?: any[],
+    streamId?: string
   ): AsyncGenerator<string> {
     if (!this.config.model || this.config.model.trim() === '') {
       throw new Error('No LLM model configured. Please select a model from the available options.');
     }
+
+    const requestStartTime = Date.now();
+    
+    // Log the streaming request
+    serverDebugLogger.logRequest(
+      `LLM Streaming Request: ${this.config.model}`,
+      JSON.stringify({
+        model: this.config.model,
+        messages: messages.map(msg => ({
+          role: msg.role,
+          content: msg.content
+        })),
+        tools: tools,
+        stream: true
+      }, null, 2),
+      this.config.model,
+      this.config.baseURL
+    );
 
     const isOllama = this.config.type === 'ollama' || this.config.baseURL.includes('11434') || this.config.baseURL.includes('ollama');
     const isAnthropic = this.config.type === 'anthropic';
@@ -362,11 +381,37 @@ export class LLMClient {
       }));
 
       // Use the streaming generator from local manager
+      let fullContent = '';
       try {
-        yield* localManager.generateStreamResponse(this.config.model, localMessages, {
+        const generator = localManager.generateStreamResponse(this.config.model, localMessages, {
           temperature: 0.7,
           maxTokens: 2048
         });
+        
+        let tokenCount = 0;
+        for await (const chunk of generator) {
+          fullContent += chunk;
+          tokenCount += Math.max(1, Math.floor(chunk.length / 4)); // Approximate token count
+          yield chunk;
+        }
+        
+        // Log successful local streaming response
+        const duration = Date.now() - requestStartTime;
+        const tokensPerSecond = duration > 0 ? (tokenCount / (duration / 1000)) : 0;
+        
+        serverDebugLogger.logResponse(
+          `Local LLM Streaming Response: ${this.config.model}`,
+          JSON.stringify({
+            content: fullContent,
+            duration: `${duration}ms`,
+            streamedChunks: fullContent.length
+          }, null, 2),
+          duration,
+          this.config.model,
+          'local',
+          tokensPerSecond,
+          tokenCount
+        );
         return;
       } catch (error) {
         if (error instanceof Error && error.message === 'Model not loaded. Please load the model first.') {
@@ -376,19 +421,70 @@ export class LLMClient {
             await localManager.loadModel(this.config.model);
             
             // Retry the streaming generation after loading
-            yield* localManager.generateStreamResponse(this.config.model, localMessages, {
+            const retryGenerator = localManager.generateStreamResponse(this.config.model, localMessages, {
               temperature: 0.7,
               maxTokens: 2048
             });
+            
+            let retryTokenCount = 0;
+            for await (const chunk of retryGenerator) {
+              fullContent += chunk;
+              retryTokenCount += Math.max(1, Math.floor(chunk.length / 4)); // Approximate token count
+              yield chunk;
+            }
+            
+            // Log successful retry response
+            const duration = Date.now() - requestStartTime;
+            const tokensPerSecond = duration > 0 ? (retryTokenCount / (duration / 1000)) : 0;
+            
+            serverDebugLogger.logResponse(
+              `Local LLM Streaming Response (auto-loaded): ${this.config.model}`,
+              JSON.stringify({
+                content: fullContent,
+                duration: `${duration}ms`,
+                streamedChunks: fullContent.length
+              }, null, 2),
+              duration,
+              this.config.model,
+              'local',
+              tokensPerSecond,
+              retryTokenCount
+            );
             return;
           } catch (loadError) {
             // If auto-loading fails, fall back to the original error handling
             const customError = new Error('LOCAL_MODEL_NOT_LOADED');
             (customError as any).modelId = this.config.model;
             (customError as any).originalMessage = error.message;
+            
+            // Log the error
+            const duration = Date.now() - requestStartTime;
+            serverDebugLogger.logError(
+              `Local LLM Streaming Error: ${this.config.model}`,
+              JSON.stringify({
+                error: customError.message,
+                duration: `${duration}ms`,
+                partialContent: fullContent
+              }, null, 2),
+              this.config.model,
+              'local'
+            );
             throw customError;
           }
         }
+        
+        // Log other streaming errors
+        const duration = Date.now() - requestStartTime;
+        serverDebugLogger.logError(
+          `Local LLM Streaming Error: ${this.config.model}`,
+          JSON.stringify({
+            error: error instanceof Error ? error.message : String(error),
+            duration: `${duration}ms`,
+            partialContent: fullContent
+          }, null, 2),
+          this.config.model,
+          'local'
+        );
         throw error;
       }
     }
@@ -464,6 +560,9 @@ export class LLMClient {
 
     const decoder = new TextDecoder();
     let buffer = '';
+    let fullContent = ''; // Collect full response for debug logging
+    let tokenCount = 0; // Track tokens generated
+    let lastTokenUpdate = Date.now(); // Track when we last sent token update
 
     try {
       while (true) {
@@ -497,6 +596,28 @@ export class LLMClient {
               }
               
               if (delta) {
+                fullContent += delta; // Collect for debug logging
+                tokenCount += Math.max(1, Math.floor(delta.length / 4)); // Approximate token count
+                
+                // Send token update every 1 second during streaming  
+                const now = Date.now();
+                if (now - lastTokenUpdate > 1000) {
+                  const elapsed = (now - requestStartTime) / 1000;
+                  if (elapsed > 0.5 && tokenCount > 0) {
+                    const tokensPerSecond = tokenCount / elapsed;
+                  serverDebugLogger.logResponse(
+                    `LLM Live Update: ${this.config.model}`,
+                    '', // Empty content to avoid showing streaming message
+                       elapsed * 1000,
+                       this.config.model,
+                       this.config.baseURL,
+                       tokensPerSecond,
+                       tokenCount
+                     );
+                     lastTokenUpdate = now;
+                  }
+                }
+                
                 yield delta;
               }
             } catch (e) {
@@ -510,9 +631,15 @@ export class LLMClient {
               const isAnthropic = this.config.type === 'anthropic';
               
               if (isOllama && parsed.message?.content) {
-                yield parsed.message.content;
+                const delta = parsed.message.content;
+                fullContent += delta; // Collect for debug logging
+                tokenCount += Math.max(1, Math.floor(delta.length / 4)); // Approximate token count
+                yield delta;
               } else if (isAnthropic && parsed.delta?.text) {
-                yield parsed.delta.text;
+                const delta = parsed.delta.text;
+                fullContent += delta; // Collect for debug logging
+                tokenCount += Math.max(1, Math.floor(delta.length / 4)); // Approximate token count
+                yield delta;
               }
             } catch (e) {
               // Skip invalid JSON
@@ -520,6 +647,40 @@ export class LLMClient {
           }
         }
       }
+      
+      // Log the complete streaming response
+      if (fullContent) {
+        const duration = Date.now() - requestStartTime;
+        const tokensPerSecond = duration > 0 ? (tokenCount / (duration / 1000)) : 0;
+        
+        serverDebugLogger.logResponse(
+          `LLM Streaming Response: ${this.config.model}`,
+          JSON.stringify({
+            content: fullContent,
+            duration: `${duration}ms`,
+            streamedChunks: fullContent.length // Number of characters streamed
+          }, null, 2),
+          duration,
+          this.config.model,
+          this.config.baseURL,
+          tokensPerSecond,
+          tokenCount
+        );
+      }
+    } catch (error) {
+      // Log streaming errors
+      const duration = Date.now() - requestStartTime;
+      serverDebugLogger.logError(
+        `LLM Streaming Error: ${this.config.model}`,
+        JSON.stringify({
+          error: error instanceof Error ? error.message : String(error),
+          duration: `${duration}ms`,
+          partialContent: fullContent
+        }, null, 2),
+        this.config.model,
+        this.config.baseURL
+      );
+      throw error;
     } finally {
       reader.releaseLock();
     }

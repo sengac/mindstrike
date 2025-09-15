@@ -429,6 +429,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
                 
                 setMessages([...currentMessages]);
                 notifyMessagesUpdate([...currentMessages]);
+                setIsLoading(false); // Ensure loading state is cleared on completion
                 
               } else if (data.type === 'error') {
                 toast.error(`Regenerate Error: ${data.error}`);

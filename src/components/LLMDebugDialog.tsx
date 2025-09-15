@@ -17,6 +17,8 @@ export function LLMDebugDialog({ isOpen, onClose }: LLMDebugDialogProps) {
   const { entries, isConnected, clearEntries } = useDebugStore();
   const { currentWorkflow, workflows, getWorkflowProgress, getActiveTask } = useTaskStore();
   const [expandedEntries, setExpandedEntries] = useState<Set<string>>(new Set());
+  const [expandedWorkflows, setExpandedWorkflows] = useState<Set<string>>(new Set());
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [filterType, setFilterType] = useState<'all' | 'request' | 'response' | 'error'>('all');
   const [activeTab, setActiveTab] = useState<'debug' | 'tasks'>('debug');
 
@@ -41,8 +43,29 @@ export function LLMDebugDialog({ isOpen, onClose }: LLMDebugDialogProps) {
     setExpandedEntries(newExpanded);
   };
 
+  const toggleWorkflow = (workflowId: string) => {
+    const newExpanded = new Set(expandedWorkflows);
+    if (newExpanded.has(workflowId)) {
+      newExpanded.delete(workflowId);
+    } else {
+      newExpanded.add(workflowId);
+    }
+    setExpandedWorkflows(newExpanded);
+  };
+
+  const toggleTask = (taskId: string) => {
+    const newExpanded = new Set(expandedTasks);
+    if (newExpanded.has(taskId)) {
+      newExpanded.delete(taskId);
+    } else {
+      newExpanded.add(taskId);
+    }
+    setExpandedTasks(newExpanded);
+  };
+
   const filteredEntries = entries.filter(entry => 
-    filterType === 'all' || entry.type === filterType
+    (filterType === 'all' || entry.type === filterType) &&
+    !(entry.type === 'response' && (!entry.content || entry.content.trim() === ''))
   );
 
   const getTypeColor = (type: string) => {
@@ -188,6 +211,8 @@ export function LLMDebugDialog({ isOpen, onClose }: LLMDebugDialogProps) {
                             {new Date(entry.timestamp).toLocaleString()}
                             {entry.model && ` • ${entry.model}`}
                             {entry.duration && ` • ${entry.duration}ms`}
+                            {entry.tokensPerSecond && ` • ${entry.tokensPerSecond.toFixed(1)} tokens/sec`}
+                            {entry.totalTokens && ` • ${entry.totalTokens.toLocaleString()} tokens`}
                           </div>
                         </div>
                       </div>
@@ -203,13 +228,12 @@ export function LLMDebugDialog({ isOpen, onClose }: LLMDebugDialogProps) {
                       </button>
                     </div>
                     {expandedEntries.has(entry.id) && (
-                      <div className="border-t border-gray-700 p-3 bg-gray-900">
-                        <div className="mb-2 text-xs text-gray-500">
-                          Debug: content type = {typeof entry.content}, length = {entry.content?.length || 0}
-                        </div>
+                    <div className="border-t border-gray-700 p-3 bg-black/80 border border-gray-600">
+                    <div className="font-mono">
                         <JSONViewer content={entry.content} />
-                      </div>
-                    )}
+                        </div>
+                       </div>
+                     )}
                   </div>
                 ))}
               </div>
@@ -262,44 +286,91 @@ export function LLMDebugDialog({ isOpen, onClose }: LLMDebugDialogProps) {
                     <div className="space-y-2">
                       <h4 className="text-white font-medium">All Tasks:</h4>
                       {currentWorkflow.tasks.map((task, index) => (
-                        <div
-                          key={task.id}
-                          className={`flex items-center space-x-3 p-3 rounded ${
-                            task.status === 'in-progress'
-                              ? 'bg-blue-700/30 border border-blue-500/50'
-                              : task.status === 'completed'
-                              ? 'bg-green-700/30 border border-green-500/50'
-                              : task.status === 'failed'
-                              ? 'bg-red-700/30 border border-red-500/50'
-                              : 'bg-gray-700/30'
-                          }`}
-                        >
-                          <span className="text-lg">
-                            {task.status === 'completed' ? '✅' : 
-                             task.status === 'in-progress' ? '🔄' : 
-                             task.status === 'failed' ? '❌' : '⏳'}
-                          </span>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs px-2 py-1 bg-gray-600 text-gray-200 rounded uppercase">
-                                {task.type}
-                              </span>
-                              <span className={`text-xs px-2 py-1 rounded uppercase ${
-                                task.priority === 'high' ? 'bg-red-600 text-white' :
-                                task.priority === 'medium' ? 'bg-yellow-600 text-white' :
-                                'bg-green-600 text-white'
-                              }`}>
-                                {task.priority}
-                              </span>
-                            </div>
-                            <p className="text-gray-200 mt-1">{task.description}</p>
-                            {task.error && (
-                              <p className="text-red-400 text-sm mt-1">Error: {task.error}</p>
-                            )}
-                          </div>
-                          <span className="text-gray-400 font-mono text-sm">#{index + 1}</span>
-                        </div>
-                      ))}
+                      <div
+                      key={task.id}
+                      className={`rounded ${
+                      task.status === 'in-progress'
+                      ? 'bg-blue-700/30 border border-blue-500/50'
+                      : task.status === 'completed'
+                      ? 'bg-green-700/30 border border-green-500/50'
+                      : task.status === 'failed'
+                      ? 'bg-red-700/30 border border-red-500/50'
+                      : 'bg-gray-700/30'
+                      }`}
+                      >
+                      <div 
+                      className={`p-3 flex items-center space-x-3 ${
+                      task.status === 'completed' && (task.details || task.result) 
+                       ? 'cursor-pointer hover:opacity-80 transition-opacity' 
+                       : ''
+                      }`}
+                      onClick={task.status === 'completed' && (task.details || task.result) ? () => toggleTask(task.id) : undefined}
+                      >
+                      <span className="text-lg">
+                      {task.status === 'completed' ? '✅' : 
+                      task.status === 'in-progress' ? '🔄' : 
+                      task.status === 'failed' ? '❌' : '⏳'}
+                      </span>
+                      <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                      <span className="text-xs px-2 py-1 bg-gray-600 text-gray-200 rounded uppercase">
+                      {task.type}
+                      </span>
+                        <span className={`text-xs px-2 py-1 rounded uppercase ${
+                          task.priority === 'high' ? 'bg-red-600 text-white' :
+                            task.priority === 'medium' ? 'bg-yellow-600 text-white' :
+                            'bg-green-600 text-white'
+                        }`}>
+                          {task.priority}
+                        </span>
+                      </div>
+                      <p className="text-gray-200 mt-1">{task.description}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                      <span className="text-gray-400 font-mono text-sm">#{index + 1}</span>
+                      {/* Show expand/collapse icon for completed tasks with details/results */}
+                      {task.status === 'completed' && (task.details || task.result) && (
+                      <span className="text-gray-400">
+                      {expandedTasks.has(task.id) ? (
+                          <ChevronDown size={16} />
+                          ) : (
+                              <ChevronRight size={16} />
+                              )}
+                                 </span>
+                               )}
+                             </div>
+                           </div>
+                      
+                      {/* Expanded Details - Show for non-completed tasks or when expanded */}
+                      {(task.status !== 'completed' || expandedTasks.has(task.id)) && (
+                          <div className="mt-3 pl-8">
+                              {/* Task Details */}
+                               {task.details && (
+                                 <div className="mt-2 p-3 bg-black/80 rounded border border-gray-600 text-xs">
+                                   <span className="text-green-400 font-medium block mb-2">Details:</span>
+                                   <div className="font-mono">
+                                     <JSONViewer content={JSON.stringify(task.details, null, 2)} />
+                                   </div>
+                                 </div>
+                               )}
+                               
+                               {/* Task Result */}
+                               {task.result && (
+                                 <div className="mt-2 p-3 bg-black/80 rounded border border-gray-600 text-xs">
+                                   <span className="text-green-400 font-medium block mb-2">Result:</span>
+                                   <div className="font-mono">
+                                     <JSONViewer content={JSON.stringify(task.result, null, 2)} />
+                                   </div>
+                                 </div>
+                               )}
+                               
+                               {task.error && (
+                                 <p className="text-red-400 text-sm mt-2">Error: {task.error}</p>
+                               )}
+                             </div>
+                           )}
+                         </div>
+                       ))}
                     </div>
                   </div>
                 </div>
@@ -310,31 +381,145 @@ export function LLMDebugDialog({ isOpen, onClose }: LLMDebugDialogProps) {
                 <div>
                   <h3 className="text-lg font-semibold text-white mb-4">Recent Workflows</h3>
                   <div className="space-y-3">
-                    {workflows.slice(-5).reverse().map((workflow) => (
-                      <div key={workflow.id} className="border border-gray-600 rounded-lg p-4 bg-gray-800/50">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className={`px-2 py-1 text-xs rounded ${
-                            workflow.status === 'completed' ? 'bg-green-600 text-white' :
-                            workflow.status === 'failed' ? 'bg-red-600 text-white' :
-                            workflow.status === 'executing' ? 'bg-blue-600 text-white' :
-                            'bg-gray-600 text-white'
-                          }`}>
-                            {workflow.status.toUpperCase()}
-                          </span>
-                          <span className="text-gray-400 text-sm">
-                            {new Date(workflow.createdAt).toLocaleString()}
-                          </span>
-                        </div>
-                        <p className="text-gray-300 text-sm mb-2">{workflow.originalQuery}</p>
-                        <div className="flex items-center gap-4 text-xs text-gray-400">
-                          <span>{workflow.tasks.filter(t => t.status === 'completed').length}/{workflow.tasks.length} tasks</span>
-                          {workflow.totalChanges > 0 && <span>{workflow.totalChanges} changes</span>}
-                          {workflow.completedAt && (
-                            <span>Duration: {Math.round((new Date(workflow.completedAt).getTime() - new Date(workflow.createdAt).getTime()) / 1000)}s</span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                  {workflows.slice(-5).reverse().map((workflow) => (
+                  <div key={workflow.id} className="border border-gray-600 rounded-lg bg-gray-800/50">
+                  <div 
+                  className="p-4 cursor-pointer hover:bg-gray-800/70 transition-colors"
+                  onClick={() => toggleWorkflow(workflow.id)}
+                  >
+                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                  <span className="text-gray-400">
+                  {expandedWorkflows.has(workflow.id) ? (
+                  <ChevronDown size={16} />
+                  ) : (
+                  <ChevronRight size={16} />
+                  )}
+                  </span>
+                  <span className={`px-2 py-1 text-xs rounded ${
+                  workflow.status === 'completed' ? 'bg-green-600 text-white' :
+                  workflow.status === 'failed' ? 'bg-red-600 text-white' :
+                  workflow.status === 'executing' ? 'bg-blue-600 text-white' :
+                  'bg-gray-600 text-white'
+                  }`}>
+                  {workflow.status.toUpperCase()}
+                  </span>
+                  </div>
+                  <span className="text-gray-400 text-sm">
+                  {new Date(workflow.createdAt).toLocaleString()}
+                  </span>
+                  </div>
+                  <p className="text-gray-300 text-sm mb-2">{workflow.originalQuery}</p>
+                  <div className="flex items-center gap-4 text-xs text-gray-400">
+                  <span>{workflow.tasks.filter(t => t.status === 'completed').length}/{workflow.tasks.length} tasks</span>
+                  {workflow.totalChanges > 0 && <span>{workflow.totalChanges} changes</span>}
+                  {workflow.completedAt && (
+                  <span>Duration: {Math.round((new Date(workflow.completedAt).getTime() - new Date(workflow.createdAt).getTime()) / 1000)}s</span>
+                  )}
+                  </div>
+                  </div>
+                         
+                         {/* Expanded Task Details */}
+                         {expandedWorkflows.has(workflow.id) && (
+                           <div className="border-t border-gray-600 p-4">
+                             <h4 className="text-white font-medium mb-3">Tasks:</h4>
+                             <div className="space-y-2">
+                               {workflow.tasks.map((task, index) => (
+                                 <div
+                                   key={task.id}
+                                   className={`rounded ${
+                                     task.status === 'in-progress'
+                                       ? 'bg-blue-700/30 border border-blue-500/50'
+                                       : task.status === 'completed'
+                                       ? 'bg-green-700/30 border border-green-500/50'
+                                       : task.status === 'failed'
+                                       ? 'bg-red-700/30 border border-red-500/50'
+                                       : 'bg-gray-700/30'
+                                   }`}
+                                 >
+                                   <div 
+                                     className={`p-3 flex items-start space-x-3 ${
+                                       task.status === 'completed' && (task.details || task.result) 
+                                         ? 'cursor-pointer hover:opacity-80 transition-opacity' 
+                                         : ''
+                                     }`}
+                                     onClick={task.status === 'completed' && (task.details || task.result) ? () => toggleTask(task.id) : undefined}
+                                   >
+                                     <span className="text-lg mt-1">
+                                       {task.status === 'completed' ? '✅' : 
+                                        task.status === 'in-progress' ? '🔄' : 
+                                        task.status === 'failed' ? '❌' : '⏳'}
+                                     </span>
+                                     <div className="flex-1">
+                                       <div className="flex items-center gap-2 mb-1">
+                                         <span className="text-xs px-2 py-1 bg-gray-600 text-gray-200 rounded uppercase">
+                                           {task.type}
+                                         </span>
+                                         <span className={`text-xs px-2 py-1 rounded uppercase ${
+                                           task.priority === 'high' ? 'bg-red-600 text-white' :
+                                           task.priority === 'medium' ? 'bg-yellow-600 text-white' :
+                                           'bg-green-600 text-white'
+                                         }`}>
+                                           {task.priority}
+                                         </span>
+                                         <span className="text-gray-400 font-mono text-xs">#{index + 1}</span>
+                                       </div>
+                                       <p className="text-gray-200 text-sm mb-2">{task.description}</p>
+                                       
+                                       {task.completedAt && (
+                                         <p className="text-gray-500 text-xs">
+                                           Completed: {new Date(task.completedAt).toLocaleString()}
+                                         </p>
+                                       )}
+                                     </div>
+                                     
+                                     {/* Show expand/collapse icon for completed tasks with details/results */}
+                                     {task.status === 'completed' && (task.details || task.result) && (
+                                       <span className="text-gray-400">
+                                         {expandedTasks.has(task.id) ? (
+                                           <ChevronDown size={16} />
+                                         ) : (
+                                           <ChevronRight size={16} />
+                                         )}
+                                       </span>
+                                     )}
+                                   </div>
+                                   
+                                   {/* Expanded Details - Show for non-completed tasks or when expanded */}
+                                   {(task.status !== 'completed' || expandedTasks.has(task.id)) && (
+                                     <div className="mt-3 pl-8">
+                                       {/* Task Details */}
+                                       {task.details && (
+                                         <div className="mt-2 p-3 bg-black/80 rounded border border-gray-600 text-xs">
+                                           <span className="text-green-400 font-medium block mb-2">Details:</span>
+                                           <div className="font-mono">
+                                             <JSONViewer content={JSON.stringify(task.details, null, 2)} />
+                                           </div>
+                                         </div>
+                                       )}
+                                       
+                                       {/* Task Result */}
+                                       {task.result && (
+                                         <div className="mt-2 p-3 bg-black/80 rounded border border-gray-600 text-xs">
+                                           <span className="text-green-400 font-medium block mb-2">Result:</span>
+                                           <div className="font-mono">
+                                             <JSONViewer content={JSON.stringify(task.result, null, 2)} />
+                                           </div>
+                                         </div>
+                                       )}
+                                       
+                                       {task.error && (
+                                         <p className="text-red-400 text-sm mt-2">Error: {task.error}</p>
+                                       )}
+                                     </div>
+                                   )}
+                                 </div>
+                               ))}
+                             </div>
+                           </div>
+                         )}
+                       </div>
+                     ))}
                   </div>
                 </div>
               )}

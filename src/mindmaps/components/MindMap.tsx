@@ -339,7 +339,6 @@ function MindMapInner({
     
     // Process each unprocessed task
     unprocessedTasks.forEach(task => {
-      console.log('Processing task completion:', task.id, 'changes:', task.result.changes.length)
       processedTasksRef.current.add(task.id)
       
       applyMindmapChanges(task.result.changes).catch(error => {
@@ -356,19 +355,8 @@ function MindMapInner({
   }, [currentWorkflowId])
 
   // Generation function
-  const handleGenerate = useCallback(async () => {
-    console.log('handleGenerate called', { 
-      generativeInput: generativeInput.trim(), 
-      selectedNodeId, 
-      totalIsGenerating 
-    });
-    
+  const handleGenerate = useCallback(async () => {    
     if (!generativeInput.trim() || !selectedNodeId || totalIsGenerating) {
-      console.log('Generation blocked:', {
-        noInput: !generativeInput.trim(),
-        noSelectedNode: !selectedNodeId,
-        alreadyGenerating: totalIsGenerating
-      });
       return;
     }
 
@@ -381,9 +369,6 @@ function MindMapInner({
         generativeInput.trim(),
         selectedNodeId,
         {
-          onProgress: (progress) => {
-            console.log('Generation progress:', progress)
-          },
           onComplete: (result) => {
             setGenerationSummary(result.summary)
             setGenerativeInput('')
@@ -395,7 +380,6 @@ function MindMapInner({
         }
       )
     } catch (error) {
-      console.error('Generation failed:', error)
       setGenerationError(error instanceof Error ? error.message : 'Generation failed')
     }
   }, [generativeInput, selectedNodeId, totalIsGenerating, mindMapId, startTaskGeneration])

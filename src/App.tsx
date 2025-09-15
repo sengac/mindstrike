@@ -25,11 +25,24 @@ import { ConversationMessage } from './types';
 import { Source } from './types/mindMap';
 import { Menu, X, MessageSquare, Workflow, Network, Settings, Cpu, Bug } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
+import { ConnectionMonitorDialog } from './components/shared/ConnectionMonitorDialog';
+import { useConnectionMonitor } from './hooks/useConnectionMonitor';
 
 function App() {
   const [workspaceRestored, setWorkspaceRestored] = useState(false);
   const [showLocalModelDialog, setShowLocalModelDialog] = useState(false);
   const [showLLMDebugDialog, setShowLLMDebugDialog] = useState(false);
+  const [showConnectionDialog, setShowConnectionDialog] = useState(false);
+  const { isConnected } = useConnectionMonitor();
+  
+  // Manage connection dialog state
+  useEffect(() => {
+    if (!isConnected && !showConnectionDialog) {
+      setShowConnectionDialog(true);
+    }
+    // Don't auto-close here - let the dialog handle its own close animation
+  }, [isConnected, showConnectionDialog]);
+
   const [pendingNodeUpdate, setPendingNodeUpdate] = useState<{
     nodeId: string
     chatId?: string | null
@@ -464,6 +477,12 @@ function App() {
           onClose={() => setShowLLMDebugDialog(false)}
         />
       )}
+
+      {/* Connection Monitor Dialog */}
+      <ConnectionMonitorDialog
+        isOpen={showConnectionDialog}
+        onClose={() => setShowConnectionDialog(false)}
+      />
     </div>
   );
 }

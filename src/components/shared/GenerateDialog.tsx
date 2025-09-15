@@ -3,7 +3,7 @@ import { X, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useTaskStore, type Task } from '../../store/useTaskStore';
 import { useDialogAnimation } from '../../hooks/useDialogAnimation';
-import { useGenerationStreaming } from '../../hooks/useGenerationStreaming';
+import { useDebugStore } from '../../store/useDebugStore';
 import { BaseDialog } from './BaseDialog';
 
 interface GenerateDialogProps {
@@ -34,8 +34,12 @@ export function GenerateDialog({
   // Add animation for smooth appearance/disappearance
   const { shouldRender, isVisible, handleClose } = useDialogAnimation(isOpen, onClose);
   
-  // Generation streaming hook for performance metrics
-  const { stats } = useGenerationStreaming();
+  // Use debug store for token performance metrics with explicit selectors
+  const currentTokensPerSecond = useDebugStore(state => state.currentTokensPerSecond);
+  const currentTotalTokens = useDebugStore(state => state.currentTotalTokens);
+  const updateTokenStats = useDebugStore(state => state.updateTokenStats);
+  
+
   
   // PURE Zustand store consumer - NO EventSource here!
   const storeState = useTaskStore();
@@ -61,6 +65,25 @@ export function GenerateDialog({
 
     return () => clearInterval(interval);
   }, [isVisible, isGenerating]);
+
+  // Force component updates every second during generation to ensure token stats refresh
+  useEffect(() => {
+    if (!isVisible || !isGenerating) return;
+
+    const tokenInterval = setInterval(() => {
+      // Force re-render by accessing store state (triggers subscription check)
+      const currentState = useDebugStore.getState();
+      if (currentState.currentTokensPerSecond > 0) {
+        // If we have real token data, force component update
+        updateTokenStats(currentState.currentTokensPerSecond, currentState.currentTotalTokens);
+      } else {
+        // Force re-render even with 0 values
+        updateTokenStats(0, 0);
+      }
+    }, 1000);
+
+    return () => clearInterval(tokenInterval);
+  }, [isVisible, isGenerating, updateTokenStats]);
 
   // Focus input when dialog opens and not generating
   useEffect(() => {
@@ -150,7 +173,6 @@ export function GenerateDialog({
           /* Input Form */
           <form className="p-6" onSubmit={(e) => { 
             e.preventDefault(); 
-            console.log('Generate form submitted', { input, onGenerate: !!onGenerate });
             onGenerate?.(); 
           }}>
             <div className="mb-4">
@@ -200,7 +222,7 @@ export function GenerateDialog({
             {/* Status */}
             <div className="mb-6">
               <p className="text-gray-300 text-lg font-medium">
-                {stats?.status || 'Generating...'}{dots}
+                Generating...{dots}
               </p>
             </div>
 
@@ -301,7 +323,7 @@ export function GenerateDialog({
                 <span className="text-gray-300 font-medium">Generation Speed</span>
                 <div className="text-right">
                   <span className="text-white font-mono text-lg">
-                    {(stats?.tokensPerSecond || 0).toFixed(1)}
+                    {currentTokensPerSecond.toFixed(1)}
                   </span>
                   <span className="text-gray-400 text-sm ml-1">tokens/sec</span>
                 </div>
@@ -312,7 +334,7 @@ export function GenerateDialog({
                 <span className="text-gray-300 font-medium">Tokens Generated</span>
                 <div className="text-right">
                   <span className="text-white font-mono text-lg">
-                    {(stats?.totalTokens || 0).toLocaleString()}
+                    {currentTotalTokens.toLocaleString()}
                   </span>
                   <span className="text-gray-400 text-sm ml-1">tokens</span>
                 </div>

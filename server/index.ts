@@ -557,8 +557,8 @@ app.get('/api/conversation', (req, res) => {
 app.post('/api/message', async (req: any, res: any) => {
   try {
     const { message, threadId, images, notes } = req.body;
-    if (!message) {
-      return res.status(400).json({ error: 'Message is required' });
+    if (!message && (!images || images.length === 0)) {
+      return res.status(400).json({ error: 'Message or images are required' });
     }
 
     // Check if LLM model is configured
@@ -583,8 +583,8 @@ app.post('/api/message', async (req: any, res: any) => {
 app.post('/api/message/stream', async (req: any, res: any) => {
   try {
     const { message, threadId, images, notes } = req.body;
-    if (!message) {
-      return res.status(400).json({ error: 'Message is required' });
+    if (!message && (!images || images.length === 0)) {
+      return res.status(400).json({ error: 'Message or images are required' });
     }
 
     // Check if LLM model is configured
@@ -1193,21 +1193,27 @@ app.post('/api/mindmaps/:mindMapId/generate', async (req: Request, res: Response
           
           logger.info('Processing mindmap generation request:', { mindMapId, selectedNodeId, prompt: prompt.substring(0, 100) });
           
-          // Simple token counting simulation
+          // Simple token counting simulation with smoothed rate calculation
           let tokenCount = 0;
           let lastValidTokensPerSecond = 0;
+          let smoothedTokensPerSecond = 0;
           const startTime = Date.now();
+          const targetTokensPerSecond = 25 + Math.random() * 20; // Target rate between 25-45 tokens/sec
           
           // Simulate token generation updates
           const progressInterval = setInterval(() => {
-            tokenCount += Math.floor(Math.random() * 3) + 2; // 2-4 tokens per update
+            // Use consistent rate instead of random fluctuations
+            const tokensThisSecond = Math.round(targetTokensPerSecond + (Math.random() - 0.5) * 4); // Small variance
+            tokenCount += tokensThisSecond;
             
             const elapsed = (Date.now() - startTime) / 1000;
             
             // Only update tokensPerSecond if we have a meaningful value
             if (elapsed > 0.5) { // Wait at least 500ms before calculating rate
-              const tokensPerSecond = tokenCount / elapsed;
-              lastValidTokensPerSecond = Math.round(tokensPerSecond * 10) / 10; // Round to 1 decimal place
+              const currentRate = tokenCount / elapsed;
+              // Smooth the rate using exponential moving average
+              smoothedTokensPerSecond = smoothedTokensPerSecond === 0 ? currentRate : (smoothedTokensPerSecond * 0.8 + currentRate * 0.2);
+              lastValidTokensPerSecond = Math.round(smoothedTokensPerSecond * 10) / 10; // Round to 1 decimal place
             }
             
             const updateData = {

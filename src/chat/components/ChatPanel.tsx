@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useImperativeHandle, forwardRef, useCallback } from 'react';
-import { Send, Loader2, Github, Youtube, Trash2, User, Paperclip, X, Square } from 'lucide-react';
+import { Send, Loader2, Github, Youtube, Trash2, User, Paperclip, X, Square, Bot, ImageIcon } from 'lucide-react';
 import { MindStrikeIcon } from '../../components/MindStrikeIcon';
 import { DiscordIcon } from '../../components/DiscordIcon';
 import { ChatMessage } from './ChatMessage';
@@ -11,6 +11,7 @@ import toast from 'react-hot-toast';
 
 import { useChat } from '../hooks/useChat';
 import { useAppStore } from '../../store/useAppStore';
+import { useModelsStore } from '../../store/useModelsStore';
 import { ConversationMessage, Thread, ImageAttachment, NotesAttachment } from '../../types';
 
 interface ChatPanelProps {
@@ -38,7 +39,11 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
   const [attachedImages, setAttachedImages] = useState<ImageAttachment[]>([]);
   const [attachedNotes, setAttachedNotes] = useState<NotesAttachment[]>([]);
   const [chatLoadTime, setChatLoadTime] = useState<number>(0);
+  const [isAgentActive, setIsAgentActive] = useState(false);
   const { fontSize, workspaceRoot, defaultCustomRole } = useAppStore();
+  const { getDefaultModel } = useModelsStore();
+  const currentModel = getDefaultModel();
+  const isLocalModel = currentModel?.type === 'local';
   
   const { shouldRender: shouldRenderClearConfirm, isVisible: isClearConfirmVisible, handleClose: handleCloseClearConfirm } = useDialogAnimation(showClearConfirm, () => setShowClearConfirm(false));
   const { messages, isLoading, sendMessage, clearConversation, regenerateMessage, cancelToolCalls, cancelStreaming, editMessage, validation, localModelError, clearLocalModelError, retryLastMessage } = useChat({
@@ -462,7 +467,8 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
                   <DiscordIcon size={24} />
                 </a>
               </div>
-              <p className="text-sm">Start a conversation with your current workspace:</p>
+              <p className="text-sm mt-8">Use Agent Mode <span className="inline-flex items-center mx-1 p-1 border border-gray-600 rounded bg-gray-800"><Bot size={12} className="text-gray-400" /></span> for complex tasks that need tools and workflows.</p>
+              <p className="text-sm mt-4">Start a conversation with your current workspace:</p>
               <div className="flex items-center justify-center gap-3 mt-1">
                 <p className="text-xs font-mono text-gray-400">{workspaceRoot || 'No workspace selected'}</p>
                 {onNavigateToWorkspaces && (
@@ -475,15 +481,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
                 )}
               </div>
             </div>
-            <div className="text-left max-w-md mx-auto space-y-2 text-sm">
-              <p className="font-medium">Try asking:</p>
-              <ul className="space-y-1">
-                <li>• "List the files in this directory"</li>
-                <li>• "Read the package.json file"</li>
-                <li>• "Create a simple React component"</li>
-                <li>• "Help me fix this bug in my code"</li>
-              </ul>
-            </div>
+
           </div>
         )}
         
@@ -622,13 +620,48 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
           />
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isLoading}
-            className="p-2 border border-gray-600 hover:bg-gray-800 disabled:bg-gray-900 disabled:border-gray-700 disabled:cursor-not-allowed rounded-lg transition-colors text-gray-400 hover:text-gray-200 disabled:text-gray-600"
-            title="Attach images"
+            onClick={() => setIsAgentActive(!isAgentActive)}
+            className={`relative p-2 border rounded-lg transition-all duration-300 ${
+              isAgentActive 
+                ? 'border-blue-400 bg-blue-900/30 shadow-lg shadow-blue-500/30 text-blue-300' 
+                : 'border-gray-600 hover:bg-gray-800 text-gray-400 hover:text-gray-200'
+            }`}
+            title="Agent Mode"
           >
-            <Paperclip size={16} />
+            <div className={`transition-all duration-300 ${isAgentActive ? 'scale-110' : 'scale-100'}`}>
+              <Bot 
+                size={16} 
+                className={`transition-all duration-300 ${
+                  isAgentActive 
+                    ? 'text-blue-300 animate-pulse' 
+                    : 'text-gray-400'
+                }`} 
+              />
+            </div>
+            {isAgentActive && (
+              <div className="absolute inset-0 rounded-lg bg-blue-400/20 animate-ping"></div>
+            )}
           </button>
+          <div className="relative group">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isLoading || isLocalModel}
+              className="p-2 border border-gray-600 hover:bg-gray-800 disabled:bg-gray-900 disabled:border-gray-700 disabled:cursor-not-allowed rounded-lg transition-colors text-gray-400 hover:text-gray-200 disabled:text-gray-600"
+              title={!isLocalModel ? "Attach images" : undefined}
+            >
+              <ImageIcon size={16} />
+            </button>
+            {isLocalModel && (
+              <div className="absolute bottom-full right-0 mb-2 px-3 py-2 bg-gray-900 text-yellow-300 text-sm rounded-lg shadow-lg border border-gray-600 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
+                <div className="flex items-center gap-2">
+                  <ImageIcon size={12} className="text-yellow-400" />
+                  <span>Multimodal support is not available for built-in models</span>
+                </div>
+                <div className="absolute top-full right-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+              </div>
+            )}
+          </div>
           <button
             type="button"
             onClick={() => setShowPersonalityModal(true)}
