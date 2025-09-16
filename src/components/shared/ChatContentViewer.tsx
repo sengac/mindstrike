@@ -15,6 +15,7 @@ interface ChatContentViewerProps {
   nodeLabel: string;
   nodeNotes?: string | null;
   nodeSources?: Source[];
+  focusChat?: boolean;
   focusNotes?: boolean;
   focusSources?: boolean;
   onNavigateToChat?: (threadId?: string) => void;
@@ -41,6 +42,7 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
   nodeLabel,
   nodeNotes,
   nodeSources,
+  focusChat,
   focusNotes,
   focusSources,
   onNavigateToChat,
@@ -86,14 +88,16 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
     }
   }));
 
-  // Update active tab when focusNotes or focusSources prop changes
+  // Update active tab when focusChat, focusNotes or focusSources prop changes
   useEffect(() => {
-    if (focusNotes) {
+    if (focusChat) {
+      setActiveTab('chat');
+    } else if (focusNotes) {
       setActiveTab('notes');
     } else if (focusSources) {
       setActiveTab('sources');
     }
-  }, [focusNotes, focusSources]);
+  }, [focusChat, focusNotes, focusSources]);
 
   // Add pending notes attachment when ChatPanel becomes available
   useEffect(() => {

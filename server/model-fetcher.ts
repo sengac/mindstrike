@@ -9,7 +9,6 @@ export interface DynamicModelInfo {
   filename: string;
   size: number;
   description: string;
-  modelType: 'chat' | 'code' | 'embedding' | 'vision';
   contextLength?: number;
   parameterCount?: string;
   quantization?: string;
@@ -530,8 +529,7 @@ export class ModelFetcher {
           return model.username.toLowerCase().includes(lowerQuery);
         case 'description':
           return model.description?.toLowerCase().includes(lowerQuery) || false;
-        case 'modelType':
-          return model.modelType.toLowerCase().includes(lowerQuery);
+
         default:
           return true; // 'all' or unknown type - return all
       }
@@ -724,7 +722,7 @@ export class ModelFetcher {
     const username = this.extractUsername(model.id);
     const parameterCount = this.extractParameterCount(model.id, selectedFile.rfilename, username);
     const quantization = this.extractQuantization(selectedFile.rfilename);
-    const modelType = this.determineModelType(model.tags, model.id);
+
     
     // Generate download URL
     const downloadUrl = `https://huggingface.co/${model.id}/resolve/main/${selectedFile.rfilename}`;
@@ -758,8 +756,7 @@ export class ModelFetcher {
       url: downloadUrl,
       filename: selectedFile.rfilename,
       size: selectedFile.size,
-      description: this.generateDescription(model.id, parameterCount, quantization, modelType, username),
-      modelType,
+      description: this.generateDescription(model.id, parameterCount, quantization, username),
       contextLength: this.estimateContextLength(model.tags, model.id),
       parameterCount,
       quantization,
@@ -829,21 +826,7 @@ export class ModelFetcher {
     return 'Unknown';
   }
 
-  private determineModelType(tags: string[], modelId: string): 'chat' | 'code' | 'embedding' | 'vision' {
-    const lowerModelId = modelId.toLowerCase();
-    const allTags = tags.join(' ').toLowerCase();
-    
-    if (lowerModelId.includes('code') || allTags.includes('code')) {
-      return 'code';
-    }
-    if (lowerModelId.includes('embed') || allTags.includes('embed')) {
-      return 'embedding';
-    }
-    if (lowerModelId.includes('vision') || allTags.includes('vision')) {
-      return 'vision';
-    }
-    return 'chat';
-  }
+
 
   private estimateContextLength(tags: string[], modelId: string): number {
     const modelIdLower = modelId.toLowerCase();
@@ -878,27 +861,12 @@ export class ModelFetcher {
     return `${cleanName} ${parameterCount} ${quantization}`;
   }
 
-  private generateDescription(modelId: string, parameterCount: string, quantization: string, modelType: string, username: string): string {
+  private generateDescription(modelId: string, parameterCount: string, quantization: string, username: string): string {
     const modelName = modelId.split('/').pop() || modelId;
     
     // Show parameter count if available, otherwise show username
     const paramInfo = parameterCount.includes('B') ? `(${parameterCount})` : `by ${parameterCount}`;
-    let description = `${modelName} ${paramInfo} with ${quantization} quantization`;
-    
-    switch (modelType) {
-      case 'chat':
-        description += ' - optimized for conversational AI and general tasks';
-        break;
-      case 'code':
-        description += ' - specialized for code generation and programming tasks';
-        break;
-      case 'embedding':
-        description += ' - designed for text embeddings and semantic search';
-        break;
-      case 'vision':
-        description += ' - multimodal model with vision capabilities';
-        break;
-    }
+    const description = `${modelName} ${paramInfo} with ${quantization} quantization`;
     
     return description;
   }

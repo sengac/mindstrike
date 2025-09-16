@@ -4,6 +4,8 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import { fileURLToPath } from 'url';
+// NOTE: .js extensions are required for ES modules in Node.js/Electron
+// Without them, we get ERR_MODULE_NOT_FOUND errors in the packaged app
 import { Agent, AgentConfig } from './agent.js';
 import { logger } from './logger.js';
 import { cleanContentForLLM } from './utils/content-filter.js';
@@ -14,6 +16,7 @@ import { sseManager } from './sse-manager.js';
 import { getLocalLLMManager } from './local-llm-singleton.js';
 import localLlmRoutes from './routes/local-llm.js';
 import modelScanRoutes from './routes/model-scan.js';
+import { MindmapAgentIterative } from './agents/mindmap-agent-iterative.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1169,11 +1172,33 @@ app.post('/api/mindmaps/:mindMapId/mindmap', async (req: Request, res: Response)
   }
 });
 
+// Cancel Mindmap Generation API
+app.post('/api/mindmaps/cancel/:workflowId', async (req: Request, res: Response) => {
+  try {
+    const { workflowId } = req.params;
+    
+    // Import and call the cancel function
+    const { cancelWorkflow } = await import('./agents/mindmap-agent-iterative');
+    const cancelled = cancelWorkflow(workflowId);
+    
+    res.json({ 
+      success: true, 
+      cancelled: cancelled, 
+      workflowId 
+    });
+  } catch (error) {
+    console.error('❌ Failed to cancel workflow:', error);
+    res.status(500).json({ error: 'Failed to cancel generation' });
+  }
+});
+
 // Mindmap Generation API
 app.post('/api/mindmaps/:mindMapId/generate', async (req: Request, res: Response) => {
   try {
     const { mindMapId } = req.params;
     const { prompt, selectedNodeId, stream, useAgenticWorkflow = true } = req.body;
+    
+
 
     if (!prompt || !prompt.trim()) {
       return res.status(400).json({ error: 'Prompt is required' });
@@ -1196,11 +1221,8 @@ app.post('/api/mindmaps/:mindMapId/generate', async (req: Request, res: Response
       // Start the generation process in the background
       setImmediate(async () => {
         try {
-          // Import MindmapAgent
-          const { MindmapAgent } = await import('./agents/mindmap-agent.js');
-          
           // Create mindmap agent with current config
-          const mindmapAgent = new MindmapAgent({
+          const mindmapAgent = new MindmapAgentIterative({
             workspaceRoot,
             llmConfig: currentLlmConfig
           });
@@ -1210,8 +1232,6 @@ app.post('/api/mindmaps/:mindMapId/generate', async (req: Request, res: Response
 
           // Process with streaming callback
           sseManager.broadcast(streamId, { type: 'progress', status: 'Starting generation...' });
-          
-          logger.info('Processing mindmap generation request:', { mindMapId, selectedNodeId, prompt: prompt.substring(0, 100) });
           
           // Simple token counting simulation with smoothed rate calculation
           let tokenCount = 0;
@@ -1246,15 +1266,17 @@ app.post('/api/mindmaps/:mindMapId/generate', async (req: Request, res: Response
             sseManager.broadcast(streamId, updateData);
           }, 150); // Slightly faster updates
           
-          // Use agentic workflow if enabled, otherwise use regular processing
+          // Use iterative reasoning workflow if enabled, otherwise use regular processing
           let response;
+          
           if (useAgenticWorkflow && workflowId) {
-            response = await mindmapAgent.processMessageAgentic(
+            response = await mindmapAgent.processMessageIterative(
               prompt, 
               [], // images
               [], // notes  
               undefined, // onUpdate callback - not used in streaming mode
-              workflowId
+              workflowId,
+              streamId // Pass streamId for real-time SSE updates
             );
           } else {
             response = await mindmapAgent.processMessage(prompt);
@@ -1267,11 +1289,22 @@ app.post('/api/mindmaps/:mindMapId/generate', async (req: Request, res: Response
           const finalElapsed = (Date.now() - startTime) / 1000;
           const finalTokensPerSecond = finalElapsed > 0 ? tokenCount / finalElapsed : 0;
           
+          // Parse the response content to extract changes and workflow info
+          let parsedResponse;
+          try {
+            parsedResponse = JSON.parse(response.content);
+          } catch (error) {
+            logger.error('Failed to parse streaming response content:', error);
+            parsedResponse = { changes: [], workflow: {} };
+          }
+
           // Broadcast completion
           sseManager.broadcast(streamId, {
             type: 'complete',
             result: {
               success: true,
+              changes: parsedResponse.changes || [],
+              workflow: parsedResponse.workflow || {},
               response: response.content,
               toolCalls: response.toolCalls,
               toolResults: response.toolResults
@@ -1295,11 +1328,8 @@ app.post('/api/mindmaps/:mindMapId/generate', async (req: Request, res: Response
     }
 
     // Non-streaming fallback (original implementation)
-    // Import MindmapAgent
-    const { MindmapAgent } = await import('./agents/mindmap-agent.js');
-    
     // Create mindmap agent with current config
-    const mindmapAgent = new MindmapAgent({
+    const mindmapAgent = new MindmapAgentIterative({
       workspaceRoot,
       llmConfig: currentLlmConfig
     });
@@ -1315,7 +1345,7 @@ app.post('/api/mindmaps/:mindMapId/generate', async (req: Request, res: Response
       // Generate workflow ID for task tracking
       const workflowId = `workflow-${mindMapId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       
-      response = await mindmapAgent.processMessageAgentic(
+      response = await mindmapAgent.processMessageIterative(
         prompt, 
         [], // images
         [], // notes  
@@ -1326,8 +1356,19 @@ app.post('/api/mindmaps/:mindMapId/generate', async (req: Request, res: Response
       response = await mindmapAgent.processMessage(prompt);
     }
     
+    // Parse the response content to extract changes and workflow info
+    let parsedResponse;
+    try {
+      parsedResponse = JSON.parse(response.content);
+    } catch (error) {
+      logger.error('Failed to parse response content:', error);
+      parsedResponse = { changes: [], workflow: {} };
+    }
+
     res.json({
       success: true,
+      changes: parsedResponse.changes || [],
+      workflow: parsedResponse.workflow || {},
       response: response.content,
       toolCalls: response.toolCalls,
       toolResults: response.toolResults
@@ -1354,34 +1395,14 @@ app.post('/api/mindmaps/:mindMapId/plan-tasks', async (req: Request, res: Respon
       return res.status(400).json({ error: 'No LLM model configured. Please select a model from the available options.' });
     }
 
-    // Import MindmapAgent
-    const { MindmapAgent } = await import('./agents/mindmap-agent.js');
-    
-    // Create mindmap agent with current config
-    const mindmapAgent = new MindmapAgent({
-      workspaceRoot,
-      llmConfig: currentLlmConfig
-    });
-
-    // Set mindmap context
-    await mindmapAgent.setMindmapContext(mindMapId, selectedNodeId);
-
-    // Generate workflow ID for this session
-    const workflowId = `workflow-${mindMapId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
-    // Plan tasks only
-    const tasks = await mindmapAgent.decomposeUserQuery(prompt);
+    // Task planning is no longer needed with iterative reasoning
+    // The new system decides what to do step-by-step during execution
     
     res.json({
       success: true,
-      workflowId,
-      tasks: tasks.map(t => ({
-        id: t.id,
-        type: t.type,
-        description: t.description,
-        priority: t.priority,
-        status: t.status
-      }))
+      message: 'Task planning is no longer used. The iterative reasoning system decides actions dynamically during execution.',
+      tasks: [],
+      workflowId: null
     });
 
   } catch (error: any) {

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { Plus, Minus, PanelRightOpen, Edit, Trash2, Share, FileText, BookOpen } from 'lucide-react';
+import { Plus, Minus, PanelRightOpen, Edit, Trash2, Share, FileText, BookOpen, MessageCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import { Source, MindMapNodeData } from '../types/mindMap';
 import { useMindMapActions, useMindMapSelection } from '../../store/useMindMapStore';
@@ -377,13 +377,13 @@ export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) 
         onPointerDown={handlePointerDown}
         onDoubleClick={handleDoubleClick}
       >
-        {/* Icon container for sources and notes */}
-        {((data.sources && data.sources.length > 0) || (data.notes && data.notes.trim())) && (
+        {/* Icon container for chat, notes, and sources */}
+        {(data.chatId || (data.notes && data.notes.trim()) || (data.sources && data.sources.length > 0)) && (
           <div className="absolute -bottom-2.5 -right-2.5 flex items-center gap-1 z-10">
-            {/* Sources watermark icon */}
-            {data.sources && data.sources.length > 0 && (
+            {/* Chat watermark icon */}
+            {data.chatId && (
               <div 
-                className="w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center cursor-pointer hover:bg-orange-600 transition-colors"
+                className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center cursor-pointer hover:bg-green-600 transition-colors"
                 onClick={(e) => {
                   e.stopPropagation();
                   window.dispatchEvent(new CustomEvent('mindmap-inference-open', {
@@ -393,13 +393,13 @@ export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) 
                       chatId: data.chatId,
                       notes: data.notes,
                       sources: data.sources,
-                      focusSources: true
+                      focusChat: true
                     }
                   }));
                 }}
-                title="View sources"
+                title="View chat"
               >
-                <BookOpen size={12} className="text-white" />
+                <MessageCircle size={12} className="text-white" />
               </div>
             )}
 
@@ -423,6 +423,29 @@ export function MindMapNode({ id, data, selected }: NodeProps<MindMapNodeData>) 
                 title="View notes"
               >
                 <FileText size={12} className="text-white" />
+              </div>
+            )}
+
+            {/* Sources watermark icon */}
+            {data.sources && data.sources.length > 0 && (
+              <div 
+                className="w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center cursor-pointer hover:bg-orange-600 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.dispatchEvent(new CustomEvent('mindmap-inference-open', {
+                    detail: { 
+                      nodeId: id, 
+                      label: data.label,
+                      chatId: data.chatId,
+                      notes: data.notes,
+                      sources: data.sources,
+                      focusSources: true
+                    }
+                  }));
+                }}
+                title="View sources"
+              >
+                <BookOpen size={12} className="text-white" />
               </div>
             )}
           </div>

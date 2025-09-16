@@ -34,3 +34,14 @@ export function getContextDescription(tokens: number): string {
   
   return `${tokenCount} tokens (${memorySize})`;
 }
+
+/**
+ * Get the actual context size for a model, using the same priority logic as ModelCard:
+ * 1. User settings (contextSize)
+ * 2. GGUF metadata (maxContextLength) 
+ * 3. Model info (contextLength)
+ * 4. Default (4096)
+ */
+export function getActualContextSize(model: any): number {
+  return model.loadingSettings?.contextSize || model.maxContextLength || model.contextLength || 4096;
+}

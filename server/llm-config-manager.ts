@@ -15,7 +15,6 @@ export interface LLMModel {
   contextLength?: number;
   parameterCount?: string;
   quantization?: string;
-  modelType?: string;
   available: boolean;
   isDefault?: boolean;
 }
@@ -238,7 +237,6 @@ export class LLMConfigManager {
             contextLength: modelMeta.context_length,
             parameterCount: modelMeta.parameter_count,
             quantization: modelMeta.quantization,
-            modelType: modelMeta.model_type,
             available: true
           });
         }
@@ -353,7 +351,6 @@ export class LLMConfigManager {
           contextLength: localModel.contextLength,
           parameterCount: localModel.parameterCount,
           quantization: localModel.quantization,
-          modelType: localModel.modelType,
           available: true
         });
       }

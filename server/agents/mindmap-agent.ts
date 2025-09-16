@@ -3,6 +3,10 @@ import { MindMapData, MindMapNode } from '../../src/utils/mindMapData.js';
 import { logger } from '../logger.js';
 import { sseManager } from '../sse-manager.js';
 import * as path from 'path';
+import { DynamicStructuredTool } from '@langchain/core/tools';
+import { AgentExecutor, createToolCallingAgent } from 'langchain/agents';
+import { ChatPromptTemplate } from '@langchain/core/prompts';
+import { z } from 'zod';
 
 const DEFAULT_MINDMAP_ROLE = `You are a specialized mindmap agent designed to work with knowledge structures, mind maps, and interconnected information. You excel at organizing, analyzing, and visualizing complex information hierarchies.`;
 
@@ -47,6 +51,12 @@ export interface AgenticWorkflowState {
     status: string;
     changes?: any;
   }>;
+  // Stopping conditions
+  maxTotalTasks: number;
+  maxExpansionDepth: number;
+  currentExpansionDepth: number;
+  expansionBudget: number; // How many expansion tasks allowed
+  usedExpansionBudget: number;
 }
 
 export class MindmapAgent extends BaseAgent {
@@ -439,10 +449,7 @@ export class MindmapAgent extends BaseAgent {
         this.store.getState().updateMessage(systemMessage.id, {
           content: dynamicSystemPrompt
         });
-        logger.info('Updated existing system message with context', { 
-          systemMessageLength: dynamicSystemPrompt.length,
-          includesContext: dynamicSystemPrompt.includes('MINDMAP CONTEXT')
-        });
+
       } else {
         // Add system message if none exists
         this.store.getState().addMessage({
@@ -499,14 +506,20 @@ export class MindmapAgent extends BaseAgent {
       // Step 1: Task Decomposition
       const tasks = await this.decomposeUserQuery(userMessage);
       
-      // Initialize workflow state
+      // Initialize workflow state with stopping conditions
       this.workflowState = {
         originalQuery: userMessage,
         tasks,
         currentTaskIndex: 0,
         updatedMindmapData: this.currentMindmapContext ? 
           JSON.parse(JSON.stringify(this.currentMindmapContext.mindMapData)) : undefined,
-        progressHistory: []
+        progressHistory: [],
+        // Stopping conditions - prevent infinite expansion
+        maxTotalTasks: 20, // Maximum total tasks (original + expansion)
+        maxExpansionDepth: 2, // Maximum expansion iterations per original task
+        currentExpansionDepth: 0,
+        expansionBudget: 10, // Maximum expansion tasks allowed total
+        usedExpansionBudget: 0
       };
 
       // Broadcast tasks planned
@@ -539,52 +552,96 @@ export class MindmapAgent extends BaseAgent {
         });
       }
 
-      // Step 3: Execute tasks iteratively
+      // Step 3: Execute iterative reasoning with accumulated results feedback
       const allChanges: any[] = [];
+      const accumulatedResults: any[] = []; // Feed results back to next iteration
+      const taskQueue = [...tasks]; // Dynamic queue that grows with reasoning
       
-      for (let i = 0; i < tasks.length; i++) {
+      for (let i = 0; i < taskQueue.length; i++) {
         this.workflowState.currentTaskIndex = i;
-        const task = tasks[i];
+        const task = taskQueue[i];
         
         // Update task status to in-progress
         task.status = 'in-progress';
         
-        // Broadcast task progress
+        // Broadcast progress - unknown total since reasoning decides next steps
         broadcastTaskUpdate(finalWorkflowId, {
-          type: 'task_progress',
+          type: 'iterative_progress',
           workflowId: finalWorkflowId,
           taskId: task.id,
           description: task.description,
           status: 'in-progress',
-          currentIndex: i,
-          totalTasks: tasks.length
+          currentStep: i + 1,
+          reasoningStep: task.details?.step || 1,
+          maxReasoningSteps: task.details?.maxSteps || 10,
+          accumulatedResults: accumulatedResults.length,
+          isIterativeReasoning: true
         });
 
         // Send progress update
         if (onUpdate) {
           onUpdate({
-            type: 'task_progress',
+            type: 'iterative_progress',
             data: {
               taskId: task.id,
               description: task.description,
               status: 'in-progress',
-              currentIndex: i,
-              totalTasks: tasks.length
+              currentStep: i + 1,
+              reasoningStep: task.details?.step || 1,
+              accumulatedResults: accumulatedResults.length,
+              isIterativeReasoning: true
             }
           });
         }
 
         try {
-          // Execute individual task
-          const taskResult = await this.executeIndividualTask(task);
+          // Execute iterative reasoning task with accumulated context
+          const taskResult = await this.executeIndividualTask(task, accumulatedResults);
           
           if (taskResult.changes && taskResult.changes.length > 0) {
             allChanges.push(...taskResult.changes);
             
-            // Update the mindmap data with changes for next iteration
+            // Add results to accumulated context for next iteration
+            accumulatedResults.push(...taskResult.changes);
+            
+            // Update the mindmap data with changes for context
             if (this.workflowState.updatedMindmapData) {
               this.applyChangesToMindmapData(this.workflowState.updatedMindmapData, taskResult.changes);
             }
+          }
+
+          // Handle next iteration tasks (reasoning decides what to do next)
+          if (taskResult.nextTasks && taskResult.nextTasks.length > 0) {
+            taskQueue.push(...taskResult.nextTasks);
+            
+            logger.info('Added next reasoning iteration to queue:', {
+              originalTask: task.id,
+              nextTasks: taskResult.nextTasks.length,
+              newQueueLength: taskQueue.length,
+              accumulatedResults: accumulatedResults.length
+            });
+
+            // Broadcast next iteration added
+            broadcastTaskUpdate(finalWorkflowId, {
+              type: 'next_iteration_added',
+              workflowId: finalWorkflowId,
+              parentTaskId: task.id,
+              nextTasks: taskResult.nextTasks.map(t => ({
+                id: t.id,
+                description: t.description,
+                step: t.details?.step
+              })),
+              totalAccumulatedResults: accumulatedResults.length
+            });
+          }
+
+          // Check if reasoning is complete
+          if (taskResult.isComplete) {
+            logger.info('Iterative reasoning completed:', {
+              taskId: task.id,
+              totalResults: accumulatedResults.length,
+              finalStep: task.details?.step
+            });
           }
 
           // Mark task as completed
@@ -662,6 +719,10 @@ export class MindmapAgent extends BaseAgent {
         }
       }
 
+      // Update final task counts including expansion tasks
+      const completedTasks = taskQueue.filter(t => t.status === 'completed').length;
+      const failedTasks = taskQueue.filter(t => t.status === 'failed').length;
+
       // Step 4: Return final result
       const finalResult = {
         content: JSON.stringify({
@@ -669,9 +730,11 @@ export class MindmapAgent extends BaseAgent {
           workflow: {
             id: finalWorkflowId,
             originalQuery: userMessage,
-            tasksCompleted: tasks.filter(t => t.status === 'completed').length,
-            tasksFailed: tasks.filter(t => t.status === 'failed').length,
-            totalTasks: tasks.length
+            tasksCompleted: completedTasks,
+            tasksFailed: failedTasks,
+            totalTasks: taskQueue.length,
+            originalTasksCount: tasks.length,
+            expansionTasksCount: taskQueue.length - tasks.length
           }
         }),
         id: this.generateId(),
@@ -683,10 +746,12 @@ export class MindmapAgent extends BaseAgent {
       broadcastTaskUpdate(finalWorkflowId, {
         type: 'workflow_completed',
         workflowId: finalWorkflowId,
-        message: 'Agentic workflow completed successfully',
-        tasksCompleted: tasks.filter(t => t.status === 'completed').length,
-        tasksFailed: tasks.filter(t => t.status === 'failed').length,
-        totalTasks: tasks.length,
+        message: 'Iterative agentic workflow completed successfully',
+        tasksCompleted: completedTasks,
+        tasksFailed: failedTasks,
+        totalTasks: taskQueue.length,
+        originalTasksCount: tasks.length,
+        expansionTasksCount: taskQueue.length - tasks.length,
         totalChanges: allChanges.length
       });
 
@@ -695,10 +760,12 @@ export class MindmapAgent extends BaseAgent {
         onUpdate({
           type: 'workflow_completed',
           data: {
-            message: 'Agentic workflow completed successfully',
-            tasksCompleted: tasks.filter(t => t.status === 'completed').length,
-            tasksFailed: tasks.filter(t => t.status === 'failed').length,
-            totalTasks: tasks.length,
+            message: 'Iterative agentic workflow completed successfully',
+            tasksCompleted: completedTasks,
+            tasksFailed: failedTasks,
+            totalTasks: taskQueue.length,
+            originalTasksCount: tasks.length,
+            expansionTasksCount: taskQueue.length - tasks.length,
             totalChanges: allChanges.length
           }
         });
@@ -734,173 +801,313 @@ export class MindmapAgent extends BaseAgent {
   // Agentic Workflow Methods
 
   /**
-   * Decompose user query into individual mindmap tasks using ReAct methodology
+   * Start iterative reasoning with ONE initial task based on user request
    */
   public async decomposeUserQuery(userMessage: string): Promise<MindmapTask[]> {
-
-
-    const decompositionPrompt = `You are a task decomposition expert for mindmap operations. Your job is to break down a user's mindmap request into specific, actionable tasks.
-
-CURRENT MINDMAP CONTEXT:
-${this.currentMindmapContext ? this.createMindmapContextPrompt(1000) : 'No mindmap context available'}
-
-USER REQUEST: "${userMessage}"
-
-Break this down into individual tasks. Each task should be one of these types:
-- "create": Add new nodes, topics, or subtopics
-- "update": Modify existing node content, notes, or structure  
-- "delete": Remove nodes or content
-- "analyze": Analyze content to determine what to add/change
-
-For each task, provide:
-1. A clear, specific description
-2. The task type
-3. Priority level (high/medium/low)
-4. Any relevant details (parent node, content focus, etc.)
-
-Return ONLY a JSON array of tasks in this format:
-[
-  {
-    "type": "create",
-    "description": "Add main topic node for machine learning concepts",
-    "priority": "high",
-    "parentId": "root",
-    "details": {
-      "content": "machine learning",
-      "focus": "main topic creation"
-    }
-  },
-  {
-    "type": "create", 
-    "description": "Add subtopic for supervised learning under machine learning",
-    "priority": "medium",
-    "parentId": "machine-learning-node",
-    "details": {
-      "content": "supervised learning",
-      "focus": "subtopic with examples"
-    }
-  }
-]
-
-IMPORTANT: Return ONLY the JSON array, no other text.`;
-
-    try {
-      // Use a temporary conversation for task decomposition  
-      const decompositionResponse = await this.processMessage(decompositionPrompt);
-      const cleanedResponse = this.cleanJsonResponse(decompositionResponse.content);
-      
-      logger.info('Raw decomposition response:', { response: cleanedResponse });
-
-      const tasksArray = JSON.parse(cleanedResponse);
-      
-      if (!Array.isArray(tasksArray)) {
-        throw new Error('Decomposition did not return an array');
+    const selectedNode = this.currentMindmapContext?.selectedNode;
+    const selectedTopic = selectedNode?.text || 'Unknown';
+    const parentId = selectedNode?.id || 'root';
+    
+    // Create ONE initial reasoning task - let it decide what to do next
+    const initialTask: MindmapTask = {
+      id: `reasoning-${Date.now()}`,
+      type: 'create', 
+      description: `Process request: ${userMessage}`,
+      priority: 'high',
+      status: 'todo',
+      parentId: parentId,
+      details: {
+        originalRequest: userMessage,
+        parentTopic: selectedTopic,
+        isReasoning: true,
+        step: 1,
+        maxSteps: 10 // Prevent infinite reasoning
       }
+    };
 
-      // Convert to MindmapTask objects with generated IDs
-      const tasks: MindmapTask[] = tasksArray.map((task, index) => ({
-        id: `task-${Date.now()}-${index}`,
-        type: task.type,
-        description: task.description,
-        priority: task.priority || 'medium',
-        status: 'todo' as const,
-        parentId: task.parentId,
-        details: task.details || {},
-        nodeId: task.nodeId
-      }));
+    logger.info('Created initial reasoning task:', { 
+      taskId: initialTask.id,
+      request: userMessage,
+      parentTopic: selectedTopic
+    });
 
-
-
-      return tasks;
-
-    } catch (error) {
-      logger.error('Failed to decompose user query:', error);
-      
-      // Fallback: create a single general task
-      return [{
-        id: `task-${Date.now()}-0`,
-        type: 'create',
-        description: `Process user request: ${userMessage}`,
-        priority: 'high',
-        status: 'todo',
-        details: { originalQuery: userMessage }
-      }];
-    }
+    return [initialTask];
   }
 
   /**
-   * Execute an individual task
+   * Execute iterative reasoning task that decides next action based on accumulated results
    */
-  public async executeIndividualTask(task: MindmapTask): Promise<{ changes: any[] }> {
+  public async executeIndividualTask(task: MindmapTask, accumulatedResults: any[] = []): Promise<{ changes: any[], nextTasks?: MindmapTask[], isComplete?: boolean }> {
+    logger.info('Executing iterative reasoning task:', { 
+      taskId: task.id, 
+      step: task.details?.step || 1,
+      previousResults: accumulatedResults.length
+    });
 
-
-    // Create a focused prompt for this specific task
-    const taskPrompt = this.createTaskSpecificPrompt(task);
+    // Use iterative reasoning prompt with accumulated context
+    const reasoningPrompt = this.createIterativeReasoningPrompt(task, accumulatedResults);
     
     try {
-      // Execute the task using the focused prompt
-      const response = await this.processMessage(taskPrompt);
+      // Execute the reasoning task
+      const response = await this.processMessage(reasoningPrompt);
       const cleanedResponse = this.cleanMindmapResponse(response.content);
-      
-      // Parse the response
       const result = JSON.parse(cleanedResponse);
       
       if (!result.changes || !Array.isArray(result.changes)) {
         logger.warn('Task response missing changes array', { taskId: task.id, result });
-        return { changes: [] };
+        return { changes: [], isComplete: true };
       }
 
+      logger.info('Iterative reasoning completed:', { 
+        taskId: task.id, 
+        changesCount: result.changes.length,
+        decision: result.reasoning?.decision,
+        isComplete: result.reasoning?.isComplete
+      });
 
+      // Check if we should create next iteration task
+      let nextTasks: MindmapTask[] = [];
+      const reasoning = result.reasoning || {};
+      
+      if (!reasoning.isComplete && reasoning.decision !== 'completed') {
+        const currentStep = task.details?.step || 1;
+        const maxSteps = task.details?.maxSteps || 10;
+        
+        if (currentStep < maxSteps) {
+          // Create next iteration task with updated context
+          const nextTask: MindmapTask = {
+            id: `reasoning-${Date.now()}-step${currentStep + 1}`,
+            type: 'create',
+            description: `Continue processing: ${task.details?.originalRequest}`,
+            priority: 'high',
+            status: 'todo',
+            parentId: task.parentId,
+            details: {
+              ...task.details,
+              step: currentStep + 1,
+              previousReasoning: reasoning
+            }
+          };
+          
+          nextTasks.push(nextTask);
+          
+          logger.info('Created next iteration task:', {
+            nextStep: currentStep + 1,
+            maxSteps,
+            nextAction: reasoning.nextAction
+          });
+        } else {
+          logger.info('Max reasoning steps reached, ending iteration');
+        }
+      }
 
-      return { changes: result.changes };
+      return { 
+        changes: result.changes,
+        nextTasks,
+        isComplete: reasoning.isComplete || nextTasks.length === 0
+      };
 
     } catch (error) {
-      logger.error('Task execution failed', { taskId: task.id, error });
+      logger.error('Iterative reasoning task failed', { taskId: task.id, error });
       throw error;
     }
   }
 
   /**
-   * Create task-specific prompt for focused execution
+   * Create iterative reasoning prompt that decides next action based on context
    */
-  private createTaskSpecificPrompt(task: MindmapTask): string {
-    const contextInfo = this.workflowState?.updatedMindmapData ? 
-      this.serializeMindmapStructure(this.workflowState.updatedMindmapData.root) :
-      (this.currentMindmapContext ? this.createMindmapContextPrompt(800) : 'No mindmap context');
+  private createIterativeReasoningPrompt(task: MindmapTask, previousResults: any[] = []): string {
+    const originalRequest = task.details?.originalRequest || 'Unknown request';
+    const parentTopic = task.details?.parentTopic || 'the parent topic';
+    const step = task.details?.step || 1;
+    const maxSteps = task.details?.maxSteps || 10;
 
-    const basePrompt = `You are executing a specific mindmap task. Focus ONLY on this task, do not add extra content.
+    // Build context from previous results
+    let contextInfo = '';
+    if (previousResults.length > 0) {
+      contextInfo = `\nPREVIOUS RESULTS:\n${previousResults.map((result, i) => 
+        `Step ${i + 1}: Created "${result.text}" with ${result.notes?.length || 0} chars of content`
+      ).join('\n')}\n`;
+    }
 
-CURRENT MINDMAP STATE:
+    const reasoningPrompt = `ITERATIVE MINDMAP REASONING - Step ${step}/${maxSteps}
+
+ORIGINAL REQUEST: "${originalRequest}"
+PARENT NODE: "${parentTopic}"
 ${contextInfo}
 
-TASK TO EXECUTE:
-- Type: ${task.type}
-- Description: ${task.description}
-- Priority: ${task.priority}
-${task.parentId ? `- Parent Node ID: ${task.parentId}` : ''}
-${task.nodeId ? `- Target Node ID: ${task.nodeId}` : ''}
+Your task: Analyze the request and current progress, then decide what to do next.
 
-TASK DETAILS:
-${JSON.stringify(task.details, null, 2)}
+If request asks for multiple items (like "3 topics"):
+- Create ONE topic now with comprehensive content
+- Plan for remaining items in next iterations
 
-Execute ONLY this specific task. Return valid JSON with changes array.
+If request is satisfied:
+- Return empty changes array: {"changes": []}
 
-For notes content, you can use rich markdown including:
-- Headers: ## Title
-- Lists: - item
-- Code blocks: \`\`\`javascript\\ncode\\n\`\`\`
-- Math: $formula$ or $$block formula$$
-- Mermaid diagrams: \`\`\`mermaid\\nflowchart TD\\n    A --> B\\n\`\`\`
+If more work needed:
+- Create ONE high-quality node with detailed content (3+ paragraphs)
+- Include rich markdown, code examples, diagrams as appropriate
 
-CRITICAL CONSTRAINTS:
-- Return ONLY valid JSON starting with { and ending with }
-- Focus on the specific task described above
-- Use nodeId: [[GENERATE_NODE_ID]] for new nodes
-- Use id: [[GENERATE_SOURCE_ID]] for new sources  
-- Escape newlines in JSON strings as \\n
-- Keep content focused and relevant to the task`;
+Return ONLY valid JSON:
+{
+  "changes": [
+    {
+      "action": "create",
+      "nodeId": "[[GENERATE_NODE_ID]]", 
+      "parentId": "${task.parentId}",
+      "text": "Specific Topic Title",
+      "notes": "## Overview\\n\\nDetailed content...\\n\\n## Key Points\\n\\n- Point 1\\n- Point 2",
+      "sources": []
+    }
+  ],
+  "reasoning": {
+    "decision": "created_topic | completed | need_more",
+    "nextAction": "Description of what should happen next",
+    "progress": "X of Y items completed",
+    "isComplete": false
+  }
+}
 
-    return basePrompt;
+CRITICAL:
+- Focus on ONE quality item per iteration
+- Use full context window for rich content
+- Include reasoning object to guide next iteration`;
+
+    return reasoningPrompt;
+  }
+
+  /**
+   * Evaluate if a completed task needs content expansion and create follow-up tasks
+   */
+  private async evaluateContentExpansion(originalTask: MindmapTask, changes: any[]): Promise<MindmapTask[]> {
+    const createdNodes = changes.filter(c => c.action === 'create');
+    if (createdNodes.length === 0) return [];
+
+    const evaluationPrompt = `Evaluate if this content needs expansion:
+
+Task completed: ${originalTask.description}
+Node created: "${createdNodes[0].text}"
+Content length: ${createdNodes[0].notes?.length || 0} characters
+
+Should this node be expanded with:
+1. More detailed content (if notes are brief)
+2. Subtopic nodes (if complex topic)
+3. Additional sources/references
+
+Return ONLY a JSON object:
+{
+  "needsExpansion": true/false,
+  "expansionType": "content" | "subtopics" | "sources" | "none",
+  "reason": "brief explanation"
+}`;
+
+    try {
+      const response = await this.processMessage(evaluationPrompt);
+      const evaluation = JSON.parse(this.cleanJsonResponse(response.content));
+      
+      const expansionTasks: MindmapTask[] = [];
+      
+      if (evaluation.needsExpansion) {
+        const nodeId = createdNodes[0].nodeId;
+        const nodeTopic = createdNodes[0].text;
+        
+        switch (evaluation.expansionType) {
+          case 'content':
+            expansionTasks.push({
+              id: `expand-content-${Date.now()}`,
+              type: 'update',
+              description: `Expand content for: ${nodeTopic}`,
+              priority: 'medium',
+              status: 'todo',
+              nodeId: nodeId,
+              details: {
+                expansionType: 'content',
+                originalTopic: nodeTopic
+              }
+            });
+            break;
+            
+          case 'subtopics':
+            expansionTasks.push({
+              id: `expand-subtopics-${Date.now()}`,
+              type: 'create',
+              description: `Add subtopics under: ${nodeTopic}`,
+              priority: 'medium',
+              status: 'todo',
+              parentId: nodeId,
+              details: {
+                expansionType: 'subtopics',
+                parentTopic: nodeTopic
+              }
+            });
+            break;
+        }
+        
+        logger.info('Content expansion needed:', { 
+          originalTask: originalTask.id,
+          expansionType: evaluation.expansionType,
+          reason: evaluation.reason,
+          expansionTasks: expansionTasks.length
+        });
+      }
+      
+      return expansionTasks;
+      
+    } catch (error) {
+      logger.error('Content expansion evaluation failed:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Check if expansion tasks can be added based on stopping conditions
+   */
+  private checkExpansionLimits(requestedTasks: number): { allowed: boolean; allowedCount: number; reason?: string } {
+    if (!this.workflowState) {
+      return { allowed: false, allowedCount: 0, reason: 'No workflow state' };
+    }
+
+    const currentTotalTasks = this.workflowState.tasks.length + this.workflowState.usedExpansionBudget;
+    const remainingBudget = this.workflowState.expansionBudget - this.workflowState.usedExpansionBudget;
+    
+    // Check total task limit
+    if (currentTotalTasks >= this.workflowState.maxTotalTasks) {
+      return { 
+        allowed: false, 
+        allowedCount: 0, 
+        reason: `Maximum total tasks reached (${this.workflowState.maxTotalTasks})` 
+      };
+    }
+    
+    // Check expansion budget
+    if (remainingBudget <= 0) {
+      return { 
+        allowed: false, 
+        allowedCount: 0, 
+        reason: `Expansion budget exhausted (${this.workflowState.expansionBudget} used)` 
+      };
+    }
+    
+    // Calculate how many tasks we can actually add
+    const maxNewTasks = Math.min(
+      requestedTasks,
+      remainingBudget,
+      this.workflowState.maxTotalTasks - currentTotalTasks
+    );
+    
+    if (maxNewTasks <= 0) {
+      return { 
+        allowed: false, 
+        allowedCount: 0, 
+        reason: 'No capacity for expansion tasks' 
+      };
+    }
+    
+    return { 
+      allowed: true, 
+      allowedCount: maxNewTasks 
+    };
   }
 
   /**
@@ -1009,6 +1216,11 @@ CRITICAL CONSTRAINTS:
   private cleanJsonResponse(response: string): string {
     let cleaned = response.trim();
     
+    // Handle escaped newlines if present
+    if (cleaned.includes('\\n')) {
+      cleaned = cleaned.replace(/\\n/g, '\n');
+    }
+    
     // Remove markdown code block markers
     if (cleaned.startsWith('```json')) {
       cleaned = cleaned.replace(/^```json\s*/, '').replace(/\s*```$/, '');
@@ -1092,9 +1304,7 @@ CRITICAL CONSTRAINTS:
         // Removed verbose logging
         return cleanedContent;
       } else {
-        logger.warn('Cleaned response is not valid mindmap format', { 
-          parsedKeys: Object.keys(parsed) 
-        });
+        
         return cleanedContent;
       }
     } catch (error) {

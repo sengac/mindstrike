@@ -11,6 +11,7 @@ interface MindMapChatIntegrationProps {
   chatId?: string | null;
   nodeNotes?: string | null;
   nodeSources?: Source[];
+  focusChat?: boolean;
   focusNotes?: boolean;
   focusSources?: boolean;
   threads: Thread[];
@@ -40,6 +41,7 @@ export function MindMapChatIntegration({
   chatId,
   nodeNotes,
   nodeSources,
+  focusChat,
   focusNotes,
   focusSources,
   threads,
@@ -110,6 +112,7 @@ export function MindMapChatIntegration({
       nodeLabel={nodeLabel}
       nodeNotes={nodeNotes}
       nodeSources={nodeSources}
+      focusChat={focusChat}
       focusNotes={focusNotes}
       focusSources={focusSources}
       onNavigateToChat={onNavigateToChat}

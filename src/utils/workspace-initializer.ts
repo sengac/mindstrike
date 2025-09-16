@@ -17,9 +17,11 @@ export async function initializeWorkspace() {
     try {
       const { useAppStore } = await import('../store/useAppStore');
       const { initializeModelsSSE } = await import('../store/useModelsStore');
+      const { initializeLocalModelsStore } = await import('../store/useLocalModelsStore');
       
-      // Initialize the global models store SSE listener
+      // Initialize the global stores
       initializeModelsSSE();
+      initializeLocalModelsStore();
       
       const { workspaceRoot } = useAppStore.getState();
       

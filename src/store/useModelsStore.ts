@@ -39,6 +39,46 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
 
   setDefaultModel: async (modelId: string) => {
     try {
+      const { models, defaultModelId } = get();
+      
+      // Check if we're switching away from a local model
+      const currentModel = models.find(m => m.id === defaultModelId);
+      const newModel = models.find(m => m.id === modelId);
+      
+      // If switching from local to non-local model, unload all local models
+      if (currentModel?.type === 'local' && newModel?.type !== 'local') {
+        try {
+          // Find all currently loaded local models and unload them
+          const localModelsResponse = await fetch('/api/local-llm/models');
+          if (localModelsResponse.ok) {
+            const localModels = await localModelsResponse.json();
+            
+            // Check if any local models are loaded
+            const loadedModels = localModels.filter((model: any) => model.status === 'loaded');
+            if (loadedModels.length > 0) {
+              console.log(`Unloading ${loadedModels.length} local model(s) to free memory...`);
+            }
+            
+            // Unload all loaded local models
+            for (const model of localModels) {
+              if (model.status === 'loaded') {
+                try {
+                  await fetch(`/api/local-llm/models/${model.id}/unload`, {
+                    method: 'POST'
+                  });
+                  console.log(`Unloaded local model: ${model.name}`);
+                } catch (unloadError) {
+                  console.warn(`Failed to unload local model ${model.name}:`, unloadError);
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.warn('Failed to unload local models:', error);
+          // Continue with model switching even if unloading fails
+        }
+      }
+
       const response = await fetch('/api/llm/default-model', {
         method: 'POST',
         headers: {
@@ -52,7 +92,6 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
       }
 
       // Update local state
-      const { models } = get();
       const updatedModels = models.map(model => ({
         ...model,
         isDefault: model.id === modelId

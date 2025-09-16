@@ -64,6 +64,7 @@ export function MindMapsPanel({
     chatId?: string | null;
     notes?: string | null;
     sources?: Source[];
+    focusChat?: boolean;
     focusNotes?: boolean;
     focusSources?: boolean;
   } | null>(null);
@@ -71,8 +72,8 @@ export function MindMapsPanel({
   // Listen for mindmap inference events
   useEffect(() => {
     const handleInferenceOpen = (event: CustomEvent) => {
-      const { nodeId, label, chatId, notes, sources, focusNotes, focusSources } = event.detail;
-      setInferenceChatNode({ id: nodeId, label, chatId, notes, sources, focusNotes, focusSources });
+      const { nodeId, label, chatId, notes, sources, focusChat, focusNotes, focusSources } = event.detail;
+      setInferenceChatNode({ id: nodeId, label, chatId, notes, sources, focusChat, focusNotes, focusSources });
       setShowInferenceChat(true);
       
       // Broadcast the active inference node ID for UI updates
@@ -274,6 +275,7 @@ export function MindMapsPanel({
             chatId={inferenceChatNode.chatId}
             nodeNotes={inferenceChatNode.notes}
             nodeSources={inferenceChatNode.sources}
+            focusChat={inferenceChatNode.focusChat}
             focusNotes={inferenceChatNode.focusNotes}
             focusSources={inferenceChatNode.focusSources}
             threads={threads}

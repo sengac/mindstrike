@@ -4,13 +4,11 @@ import {
   startDownloadTracking
 } from '../../store/useDownloadStore'
 import { useAvailableModelsStore } from '../../store/useAvailableModelsStore'
+import { useLocalModelsStore } from '../../store/useLocalModelsStore'
 import {
   Download,
   Trash2,
-  Play,
-  Square,
   HardDrive,
-  Cpu,
   Loader2,
   CheckCircle,
   Clock,
@@ -35,6 +33,7 @@ import { ConfirmDialog } from '../../components/shared/ConfirmDialog'
 import { ModelSearchProgress } from '../../components/ModelSearchProgress'
 import { useModelScanStore } from '../../store/useModelScanStore'
 import { HuggingFaceConfigDialog } from './HuggingFaceConfigDialog'
+import { ModelList } from '../../components/shared/ModelList'
 
 interface LocalModelInfo {
   id: string
@@ -45,7 +44,6 @@ interface LocalModelInfo {
   downloaded: boolean
   downloading: boolean
   downloadProgress?: number
-  modelType: string
   contextLength?: number
   parameterCount?: string
   quantization?: string
@@ -58,7 +56,6 @@ interface ModelDownloadInfo {
   modelId?: string
   size?: number
   description?: string
-  modelType: string
   contextLength?: number
   parameterCount?: string
   quantization?: string
@@ -75,11 +72,18 @@ interface ModelStatus {
 }
 
 export function LocalLLMManager () {
-  const [localModels, setLocalModels] = useState<LocalModelInfo[]>([])
-  const [modelStatuses, setModelStatuses] = useState<Map<string, ModelStatus>>(
-    new Map()
-  )
-  const [loadingLocalModels, setLoadingLocalModels] = useState(true)
+  // Use local models store
+  const {
+    localModels,
+    modelStatuses,
+    isLoading: loadingLocalModels,
+    fetchModelsAndStatuses: loadLocalModels,
+    loadModel: handleLoadModel,
+    unloadModel: handleUnloadModel,
+    deleteModel: handleDeleteModel,
+    updateModelSettings: handleUpdateModelSettings,
+    formatFileSize
+  } = useLocalModelsStore()
 
   const [hfToken, setHfToken] = useState<string>('')
   const [showHfToken, setShowHfToken] = useState(false)
@@ -90,7 +94,7 @@ export function LocalLLMManager () {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [pendingDeleteModelId, setPendingDeleteModelId] = useState<string>('')
   const [pendingCancelFilename, setPendingCancelFilename] = useState<string>('')
-  const [selectedModelType, setSelectedModelType] = useState<string>('all')
+
   const [selectedParameterSize, setSelectedParameterSize] =
     useState<string>('all')
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
@@ -100,7 +104,7 @@ export function LocalLLMManager () {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [showHfConfigDialog, setShowHfConfigDialog] = useState(false)
   const [searchType, setSearchType] = useState<
-    'all' | 'name' | 'username' | 'description' | 'modelType'
+    'all' | 'name' | 'username' | 'description'
   >('all')
 
   // Model scan store
@@ -143,25 +147,6 @@ export function LocalLLMManager () {
   const modelsToFilter = uniqueModels
 
   const filteredModels = modelsToFilter.filter(model => {
-    // Client-side search filter disabled - no filtering on search input
-    // if (!hasSearched && searchQuery.trim() && searchQuery.trim().length >= 1) {
-    //   const query = searchQuery.toLowerCase().trim();
-    //   const matchesName = model.name.toLowerCase().includes(query);
-    //   const matchesDescription = model.description?.toLowerCase().includes(query);
-    //   const matchesUsername = model.username?.toLowerCase().includes(query);
-    //   const matchesModelType = model.modelType.toLowerCase().includes(query);
-    //   const matchesParameterCount = model.parameterCount?.toLowerCase().includes(query);
-    //   const matchesQuantization = model.quantization?.toLowerCase().includes(query);
-    //
-    //   if (!matchesName && !matchesDescription && !matchesUsername && !matchesModelType && !matchesParameterCount && !matchesQuantization) {
-    //     return false;
-    //   }
-    // }
-
-    // Model type filter
-    if (selectedModelType !== 'all' && model.modelType !== selectedModelType) {
-      return false
-    }
 
     // Parameter size filter
     if (selectedParameterSize !== 'all') {
@@ -305,7 +290,7 @@ export function LocalLLMManager () {
   // Reset pagination when filters change
   useEffect(() => {
     setLocalCurrentPage(1)
-  }, [selectedModelType, selectedParameterSize, sortBy, sortOrder])
+  }, [selectedParameterSize, sortBy, sortOrder])
 
   // Reset pagination when search results change
   useEffect(() => {
@@ -315,7 +300,6 @@ export function LocalLLMManager () {
   const handleSearchButton = async () => {
     // If there's no search query and no advanced filters, trigger a model scan
     const hasFilters =
-      selectedModelType !== 'all' ||
       selectedParameterSize !== 'all' ||
       sortBy !== 'downloads' ||
       sortOrder !== 'desc'
@@ -332,7 +316,6 @@ export function LocalLLMManager () {
       // Has search query or filters - use unified search system
       try {
         const filters = {
-          selectedModelType,
           selectedParameterSize,
           sortBy,
           sortOrder
@@ -345,43 +328,7 @@ export function LocalLLMManager () {
     }
   }
 
-  const loadLocalModels = async () => {
-    try {
-      setLoadingLocalModels(true)
 
-      // Load local models
-      const modelsResponse = await fetch('/api/local-llm/models')
-      if (modelsResponse.ok) {
-        const models = await modelsResponse.json()
-        setLocalModels(models)
-
-        // Load status for each model
-        const statuses = new Map<string, ModelStatus>()
-        for (const model of models) {
-          const statusResponse = await fetch(
-            `/api/local-llm/models/${model.id}/status`
-          )
-          if (statusResponse.ok) {
-            const status = await statusResponse.json()
-            statuses.set(model.id, status)
-          }
-        }
-        setModelStatuses(statuses)
-      }
-    } catch (error) {
-      console.error('Error loading local models:', error)
-      if (
-        error instanceof TypeError &&
-        error.message.includes('NetworkError')
-      ) {
-        toast.error('Server not running.', { duration: 5000 })
-      } else {
-        toast.error('Failed to load downloaded models')
-      }
-    } finally {
-      setLoadingLocalModels(false)
-    }
-  }
 
   const loadData = async () => {
     // Load local models first (instant)
@@ -443,7 +390,6 @@ export function LocalLLMManager () {
           filename: model.filename,
           size: model.size,
           description: model.description,
-          modelType: model.modelType,
           contextLength: model.contextLength,
           parameterCount: model.parameterCount,
           quantization: model.quantization
@@ -499,79 +445,9 @@ export function LocalLLMManager () {
 
   const confirmDelete = async () => {
     try {
-      const response = await fetch(
-        `/api/local-llm/models/${pendingDeleteModelId}`,
-        {
-          method: 'DELETE'
-        }
-      )
-
-      if (response.ok) {
-        toast.success('Model deleted successfully')
-        loadLocalModels() // Reload downloaded models only
-
-        // Emit event to trigger global model rescan
-        modelEvents.emit('models-changed')
-      } else {
-        const error = await response.json()
-        toast.error(error.error || 'Failed to delete model')
-      }
-    } catch (error) {
-      console.error('Error deleting model:', error)
-      toast.error('Failed to delete model')
-    }
-    setPendingDeleteModelId('')
-  }
-
-  const handleLoadModel = async (modelId: string) => {
-    try {
-      const response = await fetch(`/api/local-llm/models/${modelId}/load`, {
-        method: 'POST'
-      })
-
-      if (response.ok) {
-        toast.success('Model loaded successfully')
-        // Update status
-        const statusResponse = await fetch(
-          `/api/local-llm/models/${modelId}/status`
-        )
-        if (statusResponse.ok) {
-          const status = await statusResponse.json()
-          setModelStatuses(prev => new Map(prev.set(modelId, status)))
-        }
-      } else {
-        const error = await response.json()
-        toast.error(error.error || 'Failed to load model')
-      }
-    } catch (error) {
-      console.error('Error loading model:', error)
-      toast.error('Failed to load model')
-    }
-  }
-
-  const handleUnloadModel = async (modelId: string) => {
-    try {
-      const response = await fetch(`/api/local-llm/models/${modelId}/unload`, {
-        method: 'POST'
-      })
-
-      if (response.ok) {
-        toast.success('Model unloaded successfully')
-        // Update status
-        const statusResponse = await fetch(
-          `/api/local-llm/models/${modelId}/status`
-        )
-        if (statusResponse.ok) {
-          const status = await statusResponse.json()
-          setModelStatuses(prev => new Map(prev.set(modelId, status)))
-        }
-      } else {
-        const error = await response.json()
-        toast.error(error.error || 'Failed to unload model')
-      }
-    } catch (error) {
-      console.error('Error unloading model:', error)
-      toast.error('Failed to unload model')
+      await handleDeleteModel(pendingDeleteModelId)
+    } finally {
+      setPendingDeleteModelId('')
     }
   }
 
@@ -593,31 +469,9 @@ export function LocalLLMManager () {
     }
   }
 
-  const formatFileSize = (bytes: number): string => {
-    const units = ['B', 'KB', 'MB', 'GB', 'TB']
-    let size = bytes
-    let unitIndex = 0
 
-    while (size >= 1024 && unitIndex < units.length - 1) {
-      size /= 1024
-      unitIndex++
-    }
 
-    return `${size.toFixed(1)} ${units[unitIndex]}`
-  }
 
-  const getModelTypeColor = (type: string) => {
-    switch (type) {
-      case 'chat':
-        return 'bg-blue-600'
-      case 'code':
-        return 'bg-green-600'
-      case 'unknown':
-        return 'bg-gray-600'
-      default:
-        return 'bg-purple-600'
-    }
-  }
 
   return (
     <div className='space-y-6'>
@@ -655,119 +509,19 @@ export function LocalLLMManager () {
           </div>
         </div>
 
-        {loadingLocalModels ? (
-          <div className='text-center py-8'>
-            <Loader2
-              size={48}
-              className='text-blue-400 animate-spin mx-auto mb-4'
-            />
-            <h4 className='text-lg font-medium text-gray-400 mb-2'>
-              Scanning for Downloaded Models
-            </h4>
-            <p className='text-gray-500'>
-              Checking for models in your local storage...
-            </p>
-          </div>
-        ) : localModels.length === 0 ? (
-          <div className='text-center py-8'>
-            <HardDrive size={48} className='text-gray-600 mx-auto mb-4' />
-            <h4 className='text-lg font-medium text-gray-400 mb-2'>
-              No Local Models
-            </h4>
-            <p className='text-gray-500'>
-              Download models from the available models section below.
-            </p>
-          </div>
-        ) : (
-          <div className='space-y-3'>
-            {localModels.map(model => {
-              const status = modelStatuses.get(model.id)
-              const isLoaded = status?.loaded || false
-
-              return (
-                <div
-                  key={model.id}
-                  className='p-4 bg-gray-800 rounded-lg border border-gray-700'
-                >
-                  <div className='flex items-start justify-between'>
-                    <div className='flex-1'>
-                      <div className='flex items-center gap-3 mb-2'>
-                        <Cpu size={16} className='text-blue-400' />
-                        <h4 className='text-white font-medium'>{model.name}</h4>
-                        <span
-                          className={`px-2 py-1 text-xs rounded-full ${
-                            isLoaded
-                              ? 'bg-green-600 text-white'
-                              : 'bg-gray-600 text-gray-300'
-                          }`}
-                        >
-                          {isLoaded ? 'Loaded' : 'Not Loaded'}
-                        </span>
-                        <span
-                          className={`px-2 py-1 text-xs rounded-full text-white ${getModelTypeColor(
-                            model.modelType
-                          )}`}
-                        >
-                          {model.modelType}
-                        </span>
-                      </div>
-
-                      <div className='space-y-1 text-sm'>
-                        <div className='flex items-center gap-2'>
-                          <span className='text-gray-400 w-20'>File:</span>
-                          <span className='text-gray-300 font-mono'>
-                            {model.filename}
-                          </span>
-                        </div>
-                        <div className='flex items-center gap-2'>
-                          <span className='text-gray-400 w-20'>Size:</span>
-                          <span className='text-gray-300'>
-                            {formatFileSize(model.size)}
-                          </span>
-                        </div>
-                        {model.contextLength && (
-                          <div className='flex items-center gap-2'>
-                            <span className='text-gray-400 w-20'>Context:</span>
-                            <span className='text-gray-300'>
-                              {model.contextLength.toLocaleString()} tokens
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className='flex items-center gap-2 ml-4'>
-                      {isLoaded ? (
-                        <button
-                          onClick={() => handleUnloadModel(model.id)}
-                          className='p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-orange-400'
-                          title='Unload model'
-                        >
-                          <Square size={14} />
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleLoadModel(model.id)}
-                          className='p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-green-400'
-                          title='Load model'
-                        >
-                          <Play size={14} />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleDelete(model.id)}
-                        className='p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-red-400'
-                        title='Delete model'
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
+        <ModelList
+          models={localModels}
+          modelStatuses={modelStatuses}
+          loading={loadingLocalModels}
+          onLoad={handleLoadModel}
+          onUnload={handleUnloadModel}
+          onDelete={handleDelete}
+          onUpdateSettings={handleUpdateModelSettings}
+          formatFileSize={formatFileSize}
+          emptyStateTitle="No Local Models"
+          emptyStateDescription="Download models from the available models section below."
+          emptyStateIcon={<HardDrive size={48} className="text-gray-600 mx-auto mb-4" />}
+        />
       </div>
 
       {/* Available Models for Download */}
@@ -861,14 +615,13 @@ export function LocalLLMManager () {
             <select
               value={searchType}
               onChange={e =>
-                setSearchType(
-                  e.target.value as
-                    | 'all'
-                    | 'name'
-                    | 'username'
-                    | 'description'
-                    | 'modelType'
-                )
+              setSearchType(
+              e.target.value as
+              | 'all'
+              | 'name'
+              | 'username'
+              | 'description'
+              )
               }
               className='px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500'
             >
@@ -876,7 +629,7 @@ export function LocalLLMManager () {
               <option value='name'>Model Name</option>
               <option value='username'>Username</option>
               <option value='description'>Description</option>
-              <option value='modelType'>Model Type</option>
+
             </select>
             <button
               onClick={handleSearchButton}
@@ -909,24 +662,8 @@ export function LocalLLMManager () {
 
           {/* Advanced Filters */}
           {showAdvancedFilters && (
-            <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 pt-2'>
-              {/* Model Type Filter */}
-              <div>
-                <label className='block text-sm font-medium text-gray-300 mb-2'>
-                  Model Type
-                </label>
-                <select
-                  value={selectedModelType}
-                  onChange={e => setSelectedModelType(e.target.value)}
-                  className='w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500'
-                >
-                  <option value='all'>All Types</option>
-                  <option value='chat'>Chat</option>
-                  <option value='code'>Code</option>
-                  <option value='embedding'>Embedding</option>
-                  <option value='vision'>Vision</option>
-                </select>
-              </div>
+            <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-2'>
+
 
               {/* Parameter Size Filter */}
               <div>
@@ -1013,8 +750,7 @@ export function LocalLLMManager () {
               {hasSearched && searchQuery.trim() ? (
                 <>
                   Found {searchResults.length} models for "{searchQuery.trim()}"
-                  {selectedModelType !== 'all' ||
-                  selectedParameterSize !== 'all'
+                  {selectedParameterSize !== 'all'
                     ? ` (${sortedModels.length} after filters)`
                     : ''}
                   {sortedModels.length > localItemsPerPage && (
@@ -1044,7 +780,6 @@ export function LocalLLMManager () {
               )}
             </div>
             {(searchQuery ||
-              selectedModelType !== 'all' ||
               selectedParameterSize !== 'all' ||
               sortBy !== 'downloads' ||
               sortOrder !== 'desc' ||
@@ -1052,7 +787,6 @@ export function LocalLLMManager () {
               <button
                 onClick={() => {
                   setSearchQuery('')
-                  setSelectedModelType('all')
                   setSelectedParameterSize('all')
                   setSortBy('downloads')
                   setSortOrder('desc')
@@ -1171,13 +905,7 @@ export function LocalLLMManager () {
                               <ExternalLink size={12} />
                             </a>
                           )}
-                          <span
-                            className={`px-2 py-1 text-xs rounded-full text-white ${getModelTypeColor(
-                              model.modelType
-                            )}`}
-                          >
-                            {model.modelType}
-                          </span>
+
                         </div>
 
                         {model.description && (

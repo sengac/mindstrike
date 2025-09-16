@@ -7,6 +7,14 @@ export interface LastUsedModel {
   timestamp: Date;
 }
 
+// Model loading settings for persistence
+export interface ModelLoadingSettings {
+  gpuLayers?: number; // -1 for auto, 0 for CPU only, positive number for specific layers
+  contextSize?: number;
+  batchSize?: number;
+  threads?: number;
+}
+
 interface AppState {
   // UI State
   fontSize: number;
@@ -22,6 +30,9 @@ interface AppState {
   
   // LLM Configuration - simplified to only store last used model
   lastUsedModel?: LastUsedModel;
+  
+  // Model Settings Storage - key: modelId, value: settings
+  modelSettings: Record<string, ModelLoadingSettings>;
   
   // Personality/Role Configuration
   defaultCustomRole?: string; // fallback custom role for new threads
@@ -41,6 +52,12 @@ interface AppState {
   setLastUsedModel: (modelId: string) => void;
   increaseFontSize: () => void;
   decreaseFontSize: () => void;
+  
+  // Model Settings Actions
+  setModelSettings: (modelId: string, settings: ModelLoadingSettings) => void;
+  getModelSettings: (modelId: string) => ModelLoadingSettings | undefined;
+  removeModelSettings: (modelId: string) => void;
+  cleanupModelSettings: (existingModelIds: string[]) => void;
   
   // Role/Personality Actions
   setDefaultCustomRole: (role?: string) => void;
@@ -62,6 +79,7 @@ export const useAppStore = create<AppState>()(
       isLoading: false,
       workspaceVersion: 0,
       lastUsedModel: undefined,
+      modelSettings: {},
       defaultCustomRole: undefined,
       mindMapKeyBindings: undefined,
       
@@ -92,6 +110,28 @@ export const useAppStore = create<AppState>()(
         set({ fontSize: Math.max(currentSize - 2, 10) });
       },
       
+      // Model Settings Actions
+      setModelSettings: (modelId: string, settings: ModelLoadingSettings) => set((state) => ({
+        modelSettings: {
+          ...state.modelSettings,
+          [modelId]: settings
+        }
+      })),
+      getModelSettings: (modelId: string) => get().modelSettings[modelId],
+      removeModelSettings: (modelId: string) => set((state) => {
+        const { [modelId]: removed, ...rest } = state.modelSettings;
+        return { modelSettings: rest };
+      }),
+      cleanupModelSettings: (existingModelIds: string[]) => set((state) => {
+        const cleaned = Object.entries(state.modelSettings)
+          .filter(([modelId]) => existingModelIds.includes(modelId))
+          .reduce((acc, [modelId, settings]) => {
+            acc[modelId] = settings;
+            return acc;
+          }, {} as Record<string, ModelLoadingSettings>);
+        return { modelSettings: cleaned };
+      }),
+      
       // Role/Personality Actions
       setDefaultCustomRole: (defaultCustomRole?: string) => set({ defaultCustomRole }),
       
@@ -104,6 +144,7 @@ export const useAppStore = create<AppState>()(
         fontSize: state.fontSize,
         workspaceRoot: state.workspaceRoot,
         lastUsedModel: state.lastUsedModel,
+        modelSettings: state.modelSettings,
         defaultCustomRole: state.defaultCustomRole,
         mindMapKeyBindings: state.mindMapKeyBindings,
       }),

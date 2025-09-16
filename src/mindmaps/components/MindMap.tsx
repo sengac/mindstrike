@@ -14,7 +14,7 @@ import { MindMapNodeData } from '../types/mindMap'
 import { Source } from '../types/mindMap'
 import { GenerateDialog } from '../../components/shared/GenerateDialog'
 import { useGenerationStreaming } from '../../hooks/useGenerationStreaming'
-import { useTaskBasedGeneration } from '../../hooks/useTaskBasedGeneration'
+import { useIterativeGeneration } from '../../hooks/useIterativeGeneration'
 import { useTaskStore } from '../../store/useTaskStore'
 import { useMindMapDrag } from '../hooks/useMindMapDrag'
 import { MindMapData } from '../../utils/mindMapData'
@@ -142,7 +142,7 @@ function MindMapInner({
 
   // Generation streaming hook
   const { isStreaming, cancelGeneration: cancelStreamGeneration } = useGenerationStreaming()
-  const { isGenerating: isTaskGenerating, currentWorkflowId, startGeneration: startTaskGeneration, cancelGeneration: cancelTaskGeneration } = useTaskBasedGeneration()
+  const { isGenerating: isTaskGenerating, startGeneration: startTaskGeneration, cancelGeneration: cancelTaskGeneration } = useIterativeGeneration()
   
   // Use task-based generation by default
   const totalIsGenerating = isTaskGenerating || isStreaming || isGenerating
@@ -342,18 +342,11 @@ function MindMapInner({
       await startTaskGeneration(
         mindMapId,
         generativeInput.trim(),
-        selectedNodeId,
-        {
-          onComplete: (result) => {
-            setGenerationSummary(result.summary)
-            setGenerativeInput('')
-            setShowGenerativePanel(false)
-          },
-          onError: (error) => {
-            setGenerationError(error)
-          }
-        }
+        selectedNodeId
       )
+      // Clear input and hide panel on successful generation
+      setGenerativeInput('')
+      setShowGenerativePanel(false)
     } catch (error) {
       setGenerationError(error instanceof Error ? error.message : 'Generation failed')
     }
@@ -819,12 +812,9 @@ function MindMapInner({
         <GenerateDialog
           isOpen={isGenerativePanelVisible}
           onClose={totalIsGenerating ? handleCancelGeneration : handleCloseGenerativePanel}
-          workflowId={currentWorkflowId || undefined}
-          isGenerating={totalIsGenerating}
           input={generativeInput}
           onInputChange={setGenerativeInput}
           onGenerate={handleGenerate}
-          generationSummary={generationSummary}
         />
       )}
 

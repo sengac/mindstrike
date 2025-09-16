@@ -326,7 +326,7 @@ router.post('/clear-search-cache', async (req, res) => {
  * Download a model
  */
 router.post('/download', async (req, res) => {
-  const { modelUrl, modelName, filename, size, description, modelType, contextLength, parameterCount, quantization } = req.body;
+  const { modelUrl, modelName, filename, size, description, contextLength, parameterCount, quantization } = req.body;
   
   if (!modelUrl || !filename) {
     return res.status(400).json({ error: 'Model URL and filename are required' });
@@ -339,7 +339,6 @@ router.post('/download', async (req, res) => {
       filename,
       size,
       description,
-      modelType: modelType || 'chat',
       contextLength,
       parameterCount,
       quantization
@@ -579,10 +578,42 @@ router.get('/models/:modelId/status', async (req, res) => {
   
   try {
     const status = await llmManager.getModelStatus(modelId);
-    res.json(status);
+    const runtimeInfo = llmManager.getModelRuntimeInfo(modelId);
+    res.json({ ...status, runtimeInfo });
   } catch (error) {
     console.error('Error getting model status:', error);
     res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to get model status' });
+  }
+});
+
+/**
+ * Update model loading settings
+ */
+router.put('/models/:modelId/settings', async (req, res) => {
+  const { modelId } = req.params;
+  const settings = req.body;
+  
+  try {
+    llmManager.setModelSettings(modelId, settings);
+    res.json({ message: 'Model settings updated successfully' });
+  } catch (error) {
+    console.error('Error updating model settings:', error);
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to update model settings' });
+  }
+});
+
+/**
+ * Get model loading settings
+ */
+router.get('/models/:modelId/settings', async (req, res) => {
+  const { modelId } = req.params;
+  
+  try {
+    const settings = llmManager.getModelSettings(modelId);
+    res.json(settings);
+  } catch (error) {
+    console.error('Error getting model settings:', error);
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to get model settings' });
   }
 });
 

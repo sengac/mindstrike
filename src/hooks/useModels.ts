@@ -14,7 +14,7 @@ export interface LLMModel {
   contextLength?: number;
   parameterCount?: string;
   quantization?: string;
-  modelType?: string;
+
   available: boolean;
   isDefault?: boolean;
 }

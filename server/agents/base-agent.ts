@@ -5,11 +5,13 @@ import { ChatOpenAI } from '@langchain/openai';
 import { ChatAnthropic } from '@langchain/anthropic';
 import { ChatPerplexity } from '@langchain/community/chat_models/perplexity';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
-import { DynamicTool } from '@langchain/core/tools';
+import { DynamicStructuredTool } from '@langchain/core/tools';
 import { AgentExecutor, createToolCallingAgent } from 'langchain/agents';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
+import { z } from 'zod';
 import { Runnable } from '@langchain/core/runnables';
 import { ToolSystem } from '../tools.js';
+import { ChatLocalLLM } from './chat-local-llm.js';
 import { logger } from '../logger.js';
 import { cleanContentForLLM } from '../utils/content-filter.js';
 import { LLMConfigManager } from '../llm-config-manager.js';
@@ -70,7 +72,7 @@ export abstract class BaseAgent {
   protected config: AgentConfig;
   protected agentId: string;
   protected store: ReturnType<typeof getAgentStore>;
-  protected langChainTools: DynamicTool[] = [];
+  protected langChainTools: DynamicStructuredTool[] = [];
   protected agentExecutor?: AgentExecutor;
   protected promptTemplate: ChatPromptTemplate;
 
@@ -162,14 +164,26 @@ export abstract class BaseAgent {
           ...baseConfig
         });
       
+      case 'local':
+        return new ChatLocalLLM({
+          modelName: llmConfig.model,
+          ...baseConfig
+        });
+      
       case 'openai-compatible':
       case 'vllm':
       default:
+        // Convert relative URLs to full URLs for local models
+        let baseURL = llmConfig.baseURL;
+        if (baseURL && baseURL.startsWith('/api/')) {
+          baseURL = `http://localhost:3001${baseURL}`;
+        }
+        
         return new ChatOpenAI({
           openAIApiKey: llmConfig.apiKey || 'dummy-key',
           modelName: llmConfig.model,
           configuration: {
-            baseURL: llmConfig.baseURL,
+            baseURL: baseURL,
           },
           ...baseConfig
         });
@@ -181,13 +195,13 @@ export abstract class BaseAgent {
     const availableTools = this.toolSystem.getToolDefinitions();
     
     this.langChainTools = availableTools.map((tool: any) => 
-      new DynamicTool({
+      new DynamicStructuredTool({
         name: tool.name,
         description: tool.description,
-        func: async (input: string) => {
+        schema: z.object({}).optional().nullable(),
+        func: async (input: any) => {
           try {
-            const parameters = JSON.parse(input);
-            const result = await this.toolSystem.executeTool(tool.name, parameters);
+            const result = await this.toolSystem.executeTool(tool.name, input || {});
             return typeof result === 'string' ? result : JSON.stringify(result);
           } catch (error: any) {
             logger.error(`Tool execution failed for ${tool.name}:`, error);
@@ -238,12 +252,17 @@ export abstract class BaseAgent {
   protected convertToLangChainMessages(): BaseMessage[] {
     const messages = this.store.getState().messages;
     
+    // Filter out empty assistant messages (typically streaming placeholders)
+    const filteredMessages = messages.filter(msg => 
+      !(msg.role === 'assistant' && (!msg.content || msg.content.trim() === ''))
+    );
+    
     // Check if this is Perplexity to apply special message formatting
     const isPerplexity = this.config.llmConfig.baseURL?.includes('perplexity') || 
                        this.config.llmConfig.type === 'perplexity' ||
                        this.config.llmConfig.model?.includes('sonar');
     
-    const langChainMessages = messages.map(msg => {
+    const langChainMessages = filteredMessages.map(msg => {
       const content = cleanContentForLLM(msg.content);
       
       switch (msg.role) {
@@ -688,7 +707,7 @@ export abstract class BaseAgent {
         JSON.stringify({
           messages: messages.map(msg => ({
             role: msg._getType(),
-            content: typeof msg.content === 'string' ? msg.content.substring(0, 500) + (msg.content.length > 500 ? '...' : '') : '[Complex Content]'
+            content: typeof msg.content === 'string' ? msg.content : '[Complex Content]'
           })),
           model: this.config.llmConfig.model
         }, null, 2),
@@ -1018,13 +1037,27 @@ export abstract class BaseAgent {
 
   loadConversation(messages: ConversationMessage[]): void {
     this.store.getState().clearConversation();
-    this.store.getState().addMessage({
-      role: 'system',
-      content: this.systemPrompt,
-      status: 'completed'
-    });
     
-    messages.forEach(msg => {
+    // Find the first system message from conversation history (if any)
+    const firstSystemMessage = messages.find(msg => msg.role === 'system');
+    
+    // Add system message first (either from conversation history or default)
+    if (firstSystemMessage) {
+      this.store.getState().addMessage({
+        role: 'system',
+        content: firstSystemMessage.content,
+        status: 'completed'
+      });
+    } else {
+      this.store.getState().addMessage({
+        role: 'system',
+        content: this.systemPrompt,
+        status: 'completed'
+      });
+    }
+    
+    // Load all non-system messages from conversation history
+    messages.filter(msg => msg.role !== 'system').forEach(msg => {
       this.store.getState().addMessage({
         role: msg.role,
         content: msg.content,
@@ -1086,7 +1119,7 @@ export abstract class BaseAgent {
     return this.chatModel;
   }
 
-  getTools(): DynamicTool[] {
+  getTools(): DynamicStructuredTool[] {
     return this.langChainTools;
   }
 

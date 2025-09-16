@@ -30,6 +30,15 @@ interface MindMapState {
   generationError: string | null
   generationSummary: string | null
 
+  // Iterative generation state
+  generationProgress: {
+    currentStep: number
+    maxSteps: number
+    reasoning: string | null
+    decision: string | null
+    isComplete: boolean
+  } | null
+
   // History state for undo/redo
   history: HistoryState[]
   historyIndex: number
@@ -50,6 +59,10 @@ interface MindMapState {
   // SSE connection for task updates
   taskEventSource: EventSource | null
   currentWorkflowId: string | null
+
+  // Active generation tracking
+  currentGenerationEventSource: EventSource | null
+  currentGenerationWorkflowId: string | null
 }
 
 interface MindMapActions {
@@ -101,6 +114,17 @@ interface MindMapActions {
   setGenerating: (isGenerating: boolean) => void
   setGenerationError: (error: string | null) => void
   setGenerationSummary: (summary: string | null) => void
+  setGenerationProgress: (progress: {
+    currentStep: number
+    maxSteps: number
+    reasoning: string | null
+    decision: string | null
+    isComplete: boolean
+  } | null) => void
+
+  // Iterative generation
+  startIterativeGeneration: (mindMapId: string, prompt: string, selectedNodeId: string) => Promise<void>
+  cancelIterativeGeneration: () => void
 
   // Bulk operations
   applyMindmapChanges: (changes: any[]) => Promise<void>
@@ -134,6 +158,7 @@ export const useMindMapStore = create<MindMapStore>()(
       isGenerating: false,
       generationError: null,
       generationSummary: null,
+      generationProgress: null,
       history: [],
       historyIndex: -1,
       maxHistorySize: 50,
@@ -145,6 +170,8 @@ export const useMindMapStore = create<MindMapStore>()(
       saveCallback: null,
       taskEventSource: null,
       currentWorkflowId: null,
+      currentGenerationEventSource: null,
+      currentGenerationWorkflowId: null,
 
       // Initialize mind map
       initializeMindMap: async (mindMapId, initialData, saveCallback) => {
@@ -695,6 +722,184 @@ export const useMindMapStore = create<MindMapStore>()(
       setGenerating: isGenerating => set({ isGenerating }),
       setGenerationError: generationError => set({ generationError }),
       setGenerationSummary: generationSummary => set({ generationSummary }),
+      setGenerationProgress: generationProgress => set({ generationProgress }),
+
+      // Iterative generation
+      startIterativeGeneration: async (mindMapId, prompt, selectedNodeId) => {
+        const state = get()
+        if (state.isGenerating) return
+
+        set({ 
+          isGenerating: true, 
+          generationError: null, 
+          generationSummary: null,
+          generationProgress: {
+            currentStep: 0,
+            maxSteps: 1,
+            reasoning: 'Starting iterative reasoning...',
+            decision: null,
+            isComplete: false
+          }
+        })
+
+        try {
+          // Use SSE streaming to get real backend progress
+          const streamResponse = await fetch(`/api/mindmaps/${mindMapId}/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              prompt, 
+              selectedNodeId, 
+              useAgenticWorkflow: true,
+              stream: true
+            })
+          })
+
+          if (!streamResponse.ok) {
+            throw new Error('Failed to start streaming generation')
+          }
+
+          const streamData = await streamResponse.json()
+          const streamId = streamData.streamId
+
+          if (!streamId) {
+            throw new Error('No stream ID received')
+          }
+
+          // Connect to SSE stream to get real progress updates
+          const eventSource = new EventSource(`/api/generate/stream/${streamId}`)
+          let finalResult = null
+          let currentStepNumber = 0
+
+          // Track the current generation
+          set({
+            currentGenerationEventSource: eventSource,
+            currentGenerationWorkflowId: streamData.workflowId || streamId
+          })
+
+          eventSource.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data)
+
+              if (data.type === 'mindmap_change') {
+                // Real mindmap operation from backend
+                currentStepNumber++
+                
+                const actionText = data.action === 'create' ? 'Creating node' :
+                                 data.action === 'update' ? 'Updating node' :
+                                 data.action === 'delete' ? 'Deleting node' : 'Processing node'
+
+                set({
+                  generationProgress: {
+                    currentStep: currentStepNumber,
+                    maxSteps: 5,
+                    reasoning: `${actionText}: "${data.text || 'Untitled'}"`,
+                    decision: data.action,
+                    isComplete: false
+                  }
+                })
+
+                // Apply the change immediately to the mindmap
+                get().applyMindmapChanges([data])
+              } else if (data.type === 'complete') {
+                // Store final result
+                finalResult = data.result
+                eventSource.close()
+
+                // Update progress to show completion
+                set({
+                  generationProgress: {
+                    currentStep: currentStepNumber || 1,
+                    maxSteps: currentStepNumber || 1,
+                    reasoning: `Completed ${currentStepNumber || 1} reasoning steps`,
+                    decision: 'completed',
+                    isComplete: true
+                  }
+                })
+
+                // Process the final result - NO MINDMAP CHANGES HERE!
+                if (finalResult) {
+                  const workflow = finalResult.workflow || {}
+                  const changes = finalResult.changes || []
+                  
+                  // Just mark as complete - changes already applied via SSE events
+                  set({
+                    generationSummary: `Iterative reasoning completed! Created ${changes.length} node(s) through ${currentStepNumber || 1} reasoning steps.`,
+                    isGenerating: false,
+                    currentGenerationEventSource: null,
+                    currentGenerationWorkflowId: null
+                  })
+                }
+              }
+            } catch (error) {
+              console.error('Failed to parse SSE data:', error)
+            }
+          }
+
+          eventSource.onerror = (error) => {
+            console.error('SSE error:', error)
+            eventSource.close()
+            set({
+              generationError: 'Connection error during generation',
+              isGenerating: false,
+              generationProgress: null
+            })
+          }
+
+          // Return a promise that resolves when generation is complete
+          return new Promise((resolve, reject) => {
+            const checkComplete = () => {
+              const state = get()
+              if (!state.isGenerating) {
+                if (state.generationError) {
+                  reject(new Error(state.generationError))
+                } else {
+                  resolve(undefined)
+                }
+              } else {
+                setTimeout(checkComplete, 100)
+              }
+            }
+            checkComplete()
+          })
+
+        } catch (error) {
+          console.error('❌ Generation failed:', error)
+          set({
+            generationError: error instanceof Error ? error.message : String(error),
+            isGenerating: false,
+            generationProgress: null
+          })
+        }
+      },
+
+      // Cancel iterative generation
+      cancelIterativeGeneration: () => {
+        const state = get()
+        
+        // Close EventSource connection
+        if (state.currentGenerationEventSource) {
+          state.currentGenerationEventSource.close()
+        }
+        
+        // Tell server to cancel the workflow
+        if (state.currentGenerationWorkflowId) {
+          fetch(`/api/mindmaps/cancel/${state.currentGenerationWorkflowId}`, {
+            method: 'POST'
+          }).catch(error => {
+            console.warn('Failed to cancel server-side generation:', error)
+          })
+        }
+        
+        // Reset generation state
+        set({
+          isGenerating: false,
+          generationError: 'Generation cancelled by user',
+          generationProgress: null,
+          currentGenerationEventSource: null,
+          currentGenerationWorkflowId: null
+        })
+      },
 
       // Bulk operations
       applyMindmapChanges: async changes => {
@@ -889,13 +1094,16 @@ export const useMindMapStore = create<MindMapStore>()(
           isGenerating: false,
           generationError: null,
           generationSummary: null,
+          generationProgress: null,
           history: [],
           historyIndex: -1,
           isInitialized: false,
           isInitializing: false,
           saveCallback: null,
           taskEventSource: null,
-          currentWorkflowId: null
+          currentWorkflowId: null,
+          currentGenerationEventSource: null,
+          currentGenerationWorkflowId: null
         })
       },
 
@@ -980,28 +1188,38 @@ export const useMindMapGeneration = () => {
   const isGenerating = useMindMapStore(state => state.isGenerating)
   const generationError = useMindMapStore(state => state.generationError)
   const generationSummary = useMindMapStore(state => state.generationSummary)
+  const generationProgress = useMindMapStore(state => state.generationProgress)
   const setGenerating = useMindMapStore(state => state.setGenerating)
   const setGenerationError = useMindMapStore(state => state.setGenerationError)
-  const setGenerationSummary = useMindMapStore(
-    state => state.setGenerationSummary
-  )
+  const setGenerationSummary = useMindMapStore(state => state.setGenerationSummary)
+  const setGenerationProgress = useMindMapStore(state => state.setGenerationProgress)
+  const startIterativeGeneration = useMindMapStore(state => state.startIterativeGeneration)
+  const cancelIterativeGeneration = useMindMapStore(state => state.cancelIterativeGeneration)
 
   return useMemo(
     () => ({
       isGenerating,
       generationError,
       generationSummary,
+      generationProgress,
       setGenerating,
       setGenerationError,
-      setGenerationSummary
+      setGenerationSummary,
+      setGenerationProgress,
+      startIterativeGeneration,
+      cancelIterativeGeneration
     }),
     [
       isGenerating,
       generationError,
       generationSummary,
+      generationProgress,
       setGenerating,
       setGenerationError,
-      setGenerationSummary
+      setGenerationSummary,
+      setGenerationProgress,
+      startIterativeGeneration,
+      cancelIterativeGeneration
     ]
   )
 }

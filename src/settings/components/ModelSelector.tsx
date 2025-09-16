@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, RefreshCw, Cpu, Settings } from 'lucide-react';
 import { LLMModel } from '../../hooks/useModels';
-import { getContextDescription } from '../../utils/tokenUtils';
+import { getContextDescription, getActualContextSize } from '../../utils/tokenUtils';
 import { useAppStore } from '../../store/useAppStore';
 import { useModelsStore } from '../../store/useModelsStore';
 import toast from 'react-hot-toast';
@@ -140,7 +140,8 @@ export function ModelSelector({ className = '' }: ModelSelectorProps) {
                     )}
 
                     {models.map((model: LLMModel) => {
-                        const contextInfo = model.contextLength ? getContextDescription(model.contextLength) : '';
+                        const actualContext = getActualContextSize(model);
+                        const contextInfo = actualContext ? getContextDescription(actualContext) : '';
                         return (
                             <button
                                 key={`${model.serviceId}-${model.model}`}

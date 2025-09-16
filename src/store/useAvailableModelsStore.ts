@@ -8,7 +8,7 @@ export interface AvailableModel {
   modelId?: string;
   size?: number;
   description?: string;
-  modelType: string;
+  
   contextLength?: number;
   parameterCount?: string;
   quantization?: string;
