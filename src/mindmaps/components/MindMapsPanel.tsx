@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Network } from 'lucide-react';
 import { MindMap } from '../hooks/useMindMaps';
-import { Thread, ConversationMessage } from '../../types';
+import { ConversationMessage } from '../../types';
+import { ThreadMetadata } from '../../store/useThreadsStore';
 import { ListPanel } from '../../components/shared/ListPanel';
 import { MindMapChatIntegration } from './MindMapChatIntegration';
 import { Source } from '../types/mindMap';
@@ -14,7 +15,7 @@ interface MindMapsPanelProps {
   onMindMapRename: (mindMapId: string, newName: string) => void;
   onMindMapDelete: (mindMapId: string) => void;
   // Thread-related props
-  threads: Thread[];
+  threads: ThreadMetadata[];
   onThreadAssociate: (nodeId: string, threadId: string) => void;
   onThreadUnassign: (nodeId: string) => void;
   onThreadCreate?: () => void;

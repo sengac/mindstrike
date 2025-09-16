@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
+import { decodeSseData } from '../utils/sseDecoder';
 
 export interface LLMDebugEntry {
   id: string;
@@ -92,54 +93,36 @@ function createDebugSSEConnection(): EventSource {
     try {
       const data = JSON.parse(event.data);
 
-      // Helper function to decode base64 encoded values (UTF-8 compatible)
-      const decodeValue = async (value: any): Promise<any> => {
-        if (value && typeof value === 'object' && value._base64 === true) {
-          const binaryString = atob(value.data);
-          const bytes = Uint8Array.from(binaryString, c => c.charCodeAt(0));
-          return new TextDecoder('utf-8').decode(bytes);
-        }
-        if (value && typeof value === 'object' && value._large_content === true) {
-          try {
-            const response = await fetch(`/api/large-content/${value.contentId}`);
-            const responseData = await response.json();
-            return responseData.content || `[Large content not found: ${value.contentId}]`;
-          } catch (error) {
-            return `[Error fetching large content: ${value.contentId}]`;
-          }
-        }
-        return value;
-      };
+      // Decode the entire data object
+      const decodedData = await decodeSseData(data);
 
-      if (await decodeValue(data.type) === 'debug-entry') {
-        const entryType = await decodeValue(data.entryType);
-        const title = await decodeValue(data.title);
+      if (decodedData.type === 'debug-entry') {
         const { addEntry, isGenerating } = useDebugStore.getState();
 
         addEntry({
-          type: entryType,
-          title: title,
-          content: await decodeValue(data.content),
-          duration: data.duration,
-          model: await decodeValue(data.model),
-          endpoint: await decodeValue(data.endpoint),
-          tokensPerSecond: data.tokensPerSecond,
-          totalTokens: data.totalTokens,
+          type: decodedData.entryType,
+          title: decodedData.title,
+          content: decodedData.content,
+          duration: decodedData.duration,
+          model: decodedData.model,
+          endpoint: decodedData.endpoint,
+          tokensPerSecond: decodedData.tokensPerSecond,
+          totalTokens: decodedData.totalTokens,
         });
 
         // Update current stats from any response with token stats (regardless of generation state)
-        if (data.entryType === 'response' && data.tokensPerSecond && data.totalTokens) {
+        if (decodedData.entryType === 'response' && decodedData.tokensPerSecond && decodedData.totalTokens) {
           const { updateTokenStats } = useDebugStore.getState();
-          updateTokenStats(data.tokensPerSecond, data.totalTokens);
+          updateTokenStats(decodedData.tokensPerSecond, decodedData.totalTokens);
         }
-      } else if (await decodeValue(data.type) === 'token-stats') {
+      } else if (decodedData.type === 'token-stats') {
         // Handle real-time token statistics updates
         const { updateTokenStats } = useDebugStore.getState();
-        updateTokenStats(data.tokensPerSecond || 0, data.totalTokens || 0);
-      } else if (await decodeValue(data.type) === 'generation-status') {
+        updateTokenStats(decodedData.tokensPerSecond || 0, decodedData.totalTokens || 0);
+      } else if (decodedData.type === 'generation-status') {
         // Handle generation start/stop
         const { setGenerating } = useDebugStore.getState();
-        setGenerating(data.generating || false);
+        setGenerating(decodedData.generating || false);
       }
     } catch (error) {
       console.error('Error parsing debug SSE data:', error);

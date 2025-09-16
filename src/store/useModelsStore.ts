@@ -193,8 +193,6 @@ function createSSEConnection(): EventSource {
   };
 
   eventSource.onerror = (error) => {
-    console.error('SSE connection error:', error);
-    
     // Only attempt reconnect if connection was closed
     if (eventSource.readyState === EventSource.CLOSED) {
       setTimeout(() => {

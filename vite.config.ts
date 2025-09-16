@@ -15,6 +15,9 @@ export default defineConfig({
                 req.url?.includes('/api/message/stream') ||
                 req.url?.includes('/api/local-llm/update-models-stream') ||
                 req.url?.includes('/api/local-llm/download-progress-stream') ||
+                req.url?.includes('/api/tasks/stream') ||
+                req.url?.includes('/api/debug/stream') ||
+                req.url?.includes('/api/mcp/logs/stream') ||
                 req.url?.includes('/api/local-llm/models/') && req.url?.includes('/generate-stream')) {
               proxyReq.setHeader('Accept', 'text/event-stream');
               proxyReq.setHeader('Cache-Control', 'no-cache');

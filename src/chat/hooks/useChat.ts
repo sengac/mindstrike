@@ -2,45 +2,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { ConversationMessage, ImageAttachment, NotesAttachment } from '../../types';
 import { useResponseValidation } from '../../hooks/useResponseValidation';
+import { decodeSseData } from '../../utils/sseDecoder';
 
-// Decode base64 encoded strings and fetch large content in SSE data
-async function decodeBase64Fields(obj: any): Promise<any> {
-  if (!obj || typeof obj !== 'object') {
-    return obj;
-  }
-  
-  if (obj._base64 && typeof obj.data === 'string') {
-    // Properly decode UTF-8 base64 string
-    const bytes = Uint8Array.from(atob(obj.data), c => c.charCodeAt(0));
-    return new TextDecoder('utf-8').decode(bytes);
-  }
-  
-  if (obj._large_content && obj.contentId) {
-    try {
-      const response = await fetch(`/api/large-content/${obj.contentId}`);
-      if (response.ok) {
-        const data = await response.json();
-        return data.content;
-      } else {
-        return `[Large content not available - ${obj.length} characters]`;
-      }
-    } catch (error) {
-      console.error('Failed to fetch large content:', error);
-      return `[Large content fetch failed - ${obj.length} characters]`;
-    }
-  }
-  
-  if (Array.isArray(obj)) {
-    const results = await Promise.all(obj.map(item => decodeBase64Fields(item)));
-    return results;
-  }
-  
-  const result: any = {};
-  for (const [key, value] of Object.entries(obj)) {
-    result[key] = await decodeBase64Fields(value);
-  }
-  return result;
-}
+
 
 
 
@@ -107,7 +71,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
     }
     
     try {
-      const response = await fetch('/api/conversation');
+      const response = await fetch(`/api/conversation/${threadId}`);
       if (response.ok) {
         const data = await response.json();
         setMessages(data.map((msg: any) => ({
@@ -282,7 +246,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
   try {
   const data = JSON.parse(line.slice(6));
   
-  const decodedData = await decodeBase64Fields(data);
+  const decodedData = await decodeSseData(data);
   await processSSEData(decodedData);
   } catch (parseError) {
   console.error('Error parsing SSE data:', parseError);
@@ -301,7 +265,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
 
   const clearConversation = useCallback(async () => {
     try {
-      const response = await fetch('/api/conversation/clear', {
+      const response = await fetch(`/api/conversation/${threadId}/clear`, {
         method: 'POST'
       });
       if (response.ok) {
@@ -427,12 +391,12 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
                   currentMessages = [...currentMessages, assistantMessage];
                   // Set loading to false once streaming starts
                   setIsLoading(false);
-                } else if (assistantMessage) {
+                } else {
                   // Append chunk to existing message
                   assistantMessage = {
                     ...assistantMessage,
                     content: assistantMessage.content + data.chunk
-                  };
+                  } as ConversationMessage;
                   currentMessages = currentMessages.map(msg => 
                     msg.id === assistantMessage!.id ? assistantMessage! : msg
                   );
@@ -585,12 +549,12 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
                 currentMessages = [...currentMessages, assistantMessage];
                 // Set loading to false once streaming starts
                 setIsLoading(false);
-              } else if (assistantMessage) {
+              } else {
                 // Append chunk to existing message
                 assistantMessage = {
                   ...assistantMessage,
                   content: assistantMessage.content + data.chunk
-                };
+                } as ConversationMessage;
                 currentMessages = currentMessages.map(msg => 
                   msg.id === assistantMessage!.id ? assistantMessage! : msg
                 );
@@ -725,12 +689,12 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
                   currentMessages = [...currentMessages, assistantMessage];
                   // Set loading to false once streaming starts
                   setIsLoading(false);
-                } else if (assistantMessage) {
+                } else {
                   // Append chunk to existing message
                   assistantMessage = {
                     ...assistantMessage,
                     content: assistantMessage.content + data.chunk
-                  };
+                  } as ConversationMessage;
                   currentMessages = currentMessages.map(msg => 
                     msg.id === assistantMessage!.id ? assistantMessage! : msg
                   );

@@ -1,9 +1,9 @@
 import { MessageSquare, UserCheck } from 'lucide-react';
-import { Thread } from '../../types';
+import { ThreadMetadata } from '../../store/useThreadsStore';
 import { ListPanel } from '../../components/shared/ListPanel';
 
 interface ThreadsPanelProps {
-  threads: Thread[];
+  threads: ThreadMetadata[];
   activeThreadId?: string;
   onThreadSelect: (threadId: string) => void;
   onThreadCreate: () => void;

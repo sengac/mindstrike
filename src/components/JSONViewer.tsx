@@ -231,7 +231,7 @@ function JSONValue({ value, name, level = 0, isLast = true }: JSONViewerProps) {
   return <div className="group">{renderValue(value)}</div>;
 }
 
-export function JSONViewer({ content }: { content: any }) {
+export function JSONViewer({ content, showControls = true }: { content: any, showControls?: boolean }) {
   const [rawView, setRawView] = useState(false);
 
 
@@ -257,7 +257,7 @@ export function JSONViewer({ content }: { content: any }) {
   if (!isValidJSON || rawView) {
     return (
       <div className="relative">
-        {isValidJSON && (
+        {isValidJSON && showControls && (
           <div className="absolute top-2 right-2">
             <button
               onClick={() => setRawView(!rawView)}
@@ -267,7 +267,7 @@ export function JSONViewer({ content }: { content: any }) {
             </button>
           </div>
         )}
-        <pre className="text-sm text-gray-300 whitespace-pre-wrap overflow-auto min-h-[50vh] h-full font-mono">
+        <pre className={`text-sm text-gray-300 whitespace-pre-wrap overflow-auto ${showControls ? 'min-h-[50vh] h-full' : ''} font-mono`}>
           {content}
         </pre>
       </div>
@@ -276,25 +276,27 @@ export function JSONViewer({ content }: { content: any }) {
 
   return (
     <div className="relative">
-      <div className="absolute top-2 right-2 flex gap-2">
-        <button
-          onClick={() => {
-            navigator.clipboard.writeText(JSON.stringify(jsonData, null, 2));
-            toast.success('Copied formatted JSON');
-          }}
-          className="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded text-white flex items-center gap-1"
-        >
-          <Copy size={12} />
-          Copy JSON
-        </button>
-        <button
-          onClick={() => setRawView(true)}
-          className="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-white"
-        >
-          Raw View
-        </button>
-      </div>
-      <div className="text-sm text-gray-300 overflow-auto min-h-[50vh] h-full font-mono pt-8">
+      {showControls && (
+        <div className="absolute top-2 right-2 flex gap-2">
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(JSON.stringify(jsonData, null, 2));
+              toast.success('Copied formatted JSON');
+            }}
+            className="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded text-white flex items-center gap-1"
+          >
+            <Copy size={12} />
+            Copy JSON
+          </button>
+          <button
+            onClick={() => setRawView(true)}
+            className="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-white"
+          >
+            Raw View
+          </button>
+        </div>
+      )}
+      <div className={`text-sm text-gray-300 overflow-auto ${showControls ? 'min-h-[50vh] h-full pt-8' : ''} font-mono`}>
         <JSONValue value={jsonData} level={0} />
       </div>
     </div>

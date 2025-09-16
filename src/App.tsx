@@ -13,7 +13,9 @@ import { HeaderStats } from './components/HeaderStats';
 import { LocalModelLoadDialog } from './components/LocalModelLoadDialog';
 import { LLMDebugDialog } from './components/LLMDebugDialog';
 import { initializeDebugSSE } from './store/useDebugStore';
-import { useThreads } from './chat/hooks/useThreads';
+import { initializeMCPLogsSSE, useMCPLogsStore } from './store/useMCPLogsStore';
+import { useThreadsRefactored } from './chat/hooks/useThreadsRefactored';
+import { useChatMessagesStore } from './store/useChatMessagesStore';
 
 import { useMindMaps } from './mindmaps/hooks/useMindMaps';
 import { useWorkspaceStore } from './workspace/hooks/useWorkspaceStore';
@@ -22,7 +24,7 @@ import { useAppStore } from './store/useAppStore';
 
 import { ConversationMessage } from './types';
 import { Source } from './types/mindMap';
-import { Menu, X, MessageSquare, Network, Settings, Cpu, Bug } from 'lucide-react';
+import { Menu, X, MessageSquare, Network, Settings, Cpu, FileText } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 import { ConnectionMonitorDialog } from './components/shared/ConnectionMonitorDialog';
 import { useConnectionMonitor } from './hooks/useConnectionMonitor';
@@ -31,8 +33,18 @@ function App() {
   const [workspaceRestored, setWorkspaceRestored] = useState(false);
   const [showLocalModelDialog, setShowLocalModelDialog] = useState(false);
   const [showLLMDebugDialog, setShowLLMDebugDialog] = useState(false);
+  const [debugDialogInitialTab, setDebugDialogInitialTab] = useState<'debug' | 'tasks' | 'mcp'>('debug');
   const [showConnectionDialog, setShowConnectionDialog] = useState(false);
   const { isConnected } = useConnectionMonitor();
+
+  // Function to open debug dialog with specific tab
+  const openDebugDialog = (tab: 'debug' | 'tasks' | 'mcp' = 'debug') => {
+    setDebugDialogInitialTab(tab);
+    setShowLLMDebugDialog(true);
+  };
+
+  // Make it available globally
+  (window as any).openDebugDialog = openDebugDialog;
   
   // Manage connection dialog state
   useEffect(() => {
@@ -59,6 +71,7 @@ function App() {
 
   } = useAppStore();
   const chatPanelRef = useRef<ChatPanelRef>(null);
+  const currentMessages = useChatMessagesStore(state => state.messages);
   
   // LLM config is now managed server-side through ModelSelector
   
@@ -71,6 +84,11 @@ function App() {
         
         // Initialize debug SSE for real-time logging
         initializeDebugSSE();
+        
+        // Initialize MCP logs SSE for real-time MCP server logging
+        initializeMCPLogsSSE();
+        // Fetch any existing MCP logs
+        useMCPLogsStore.getState().fetchLogs();
       } catch (error) {
         console.error('Failed to initialize workspace:', error);
       }
@@ -89,10 +107,8 @@ function App() {
     deleteThread,
     renameThread,
     updateThreadRole,
-    selectThread,
-    updateThreadMessages,
-    deleteMessage
-  } = useThreads();
+    selectThread
+  } = useThreadsRefactored();
 
 
 
@@ -128,19 +144,17 @@ function App() {
   };
 
   const handleFirstMessage = () => {
-    // Title generation now happens automatically in updateThreadMessages
+    // Title generation now happens automatically server-side
   };
 
   const handleMessagesUpdate = async (messages: any[]) => {
-    if (activeThreadId) {
-      await updateThreadMessages(activeThreadId, messages);
-    }
+    // Messages are now automatically persisted server-side during streaming
+    // No client-side persistence needed
   };
 
   const handleDeleteMessage = async (messageId: string) => {
-    if (activeThreadId) {
-      await deleteMessage(activeThreadId, messageId);
-    }
+    // TODO: Implement server-side message deletion if needed
+    console.log('Delete message not yet implemented in refactored architecture:', messageId);
   };
 
   // Helper functions for node updates using the new props-based approach
@@ -252,10 +266,10 @@ function App() {
                   <h1 className="text-xl font-semibold text-white">Chat</h1>
                 </div>
                 <div className="flex items-center space-x-4">
-                  <HeaderStats 
-                    messages={activeThread?.messages || []}
-                  />
-                  <div className="flex items-center gap-2">
+                <HeaderStats 
+                messages={currentMessages}
+                />
+                <div className="flex items-center gap-2">
                     <ModelSelector />
                     <button
                       onClick={() => setShowLocalModelDialog(true)}
@@ -267,9 +281,9 @@ function App() {
                     <button
                       onClick={() => setShowLLMDebugDialog(true)}
                       className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
-                      title="LLM Debug"
+                      title="Application Logs"
                     >
-                      <Bug size={16} />
+                      <FileText size={16} />
                     </button>
                   </div>
                 </div>
@@ -289,11 +303,8 @@ function App() {
               <ChatPanel
                 ref={chatPanelRef}
                 threadId={activeThreadId || undefined}
-                messages={activeThread?.messages || []}
-                onMessagesUpdate={handleMessagesUpdate}
                 onFirstMessage={handleFirstMessage}
                 onDeleteMessage={handleDeleteMessage}
-                activeThread={activeThread}
                 onRoleUpdate={updateThreadRole}
                 onNavigateToWorkspaces={() => setActivePanel('files')}
               />
@@ -323,9 +334,9 @@ function App() {
                     <button
                       onClick={() => setShowLLMDebugDialog(true)}
                       className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
-                      title="LLM Debug"
+                      title="Application Logs"
                     >
-                      <Bug size={16} />
+                      <FileText size={16} />
                     </button>
                   </div>
                 </div>
@@ -358,10 +369,10 @@ function App() {
                   setActivePanel('chat');
                 }}
                 onDeleteMessage={(threadId: string, messageId: string) => {
-                  deleteMessage(threadId, messageId);
+                  // TODO: Implement delete message functionality
                 }}
                 onMessagesUpdate={(threadId: string, messages) => {
-                  updateThreadMessages(threadId, messages);
+                  // TODO: Implement update messages functionality
                 }}
                 onFirstMessage={() => {}}
                 onRoleUpdate={updateThreadRole}
@@ -417,6 +428,7 @@ function App() {
         <LLMDebugDialog
           isOpen={showLLMDebugDialog}
           onClose={() => setShowLLMDebugDialog(false)}
+          initialTab={debugDialogInitialTab}
         />
       )}
 

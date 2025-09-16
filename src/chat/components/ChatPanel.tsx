@@ -9,7 +9,7 @@ import { LocalModelLoadDialog } from '../../components/LocalModelLoadDialog';
 import { useDialogAnimation } from '../../hooks/useDialogAnimation';
 import toast from 'react-hot-toast';
 
-import { useChat } from '../hooks/useChat';
+import { useChatRefactored } from '../hooks/useChatRefactored';
 import { useAppStore } from '../../store/useAppStore';
 import { useModelsStore } from '../../store/useModelsStore';
 import { useTaskStore } from '../../store/useTaskStore';
@@ -49,13 +49,12 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
   const isLocalModel = currentModel?.type === 'local';
   
   const { shouldRender: shouldRenderClearConfirm, isVisible: isClearConfirmVisible, handleClose: handleCloseClearConfirm } = useDialogAnimation(showClearConfirm, () => setShowClearConfirm(false));
-  const { messages, isLoading, sendMessage, clearConversation, regenerateMessage, cancelToolCalls, cancelStreaming, editMessage, validation, localModelError, clearLocalModelError, retryLastMessage } = useChat({
+  const { messages, isLoading, sendMessage, clearConversation, cancelStreaming, regenerateMessage, editMessage, cancelToolCalls, retryLastMessage, validation, localModelError, clearLocalModelError, error } = useChatRefactored({
     threadId,
-    messages: initialMessages,
-    onMessagesUpdate,
-    onFirstMessage,
     isAgentMode: isAgentActive
   });
+
+  // console.log('[ChatPanel] ThreadId:', threadId, 'Messages:', messages?.length, 'isLoading:', isLoading);
 
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -82,44 +81,26 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
     }
   };
 
-  // Create truly stable callbacks that don't change on re-renders
-  const stableCallbacks = useRef({
-    onDelete: onDeleteMessage,
-    onRegenerate: regenerateMessage,
-    onEdit: editMessage,
-    onCancelToolCalls: cancelToolCalls
-  });
-
-  // Update refs when the actual functions change
-  useEffect(() => {
-    stableCallbacks.current = {
-      onDelete: onDeleteMessage,
-      onRegenerate: regenerateMessage, 
-      onEdit: editMessage,
-      onCancelToolCalls: cancelToolCalls
-    };
-  }, [onDeleteMessage, regenerateMessage, editMessage, cancelToolCalls]);
-
   // Create stable callback functions that never change reference
   const handleDeleteMessage = useCallback((messageId: string) => {
-    stableCallbacks.current.onDelete?.(messageId);
-  }, []);
+    onDeleteMessage?.(messageId);
+  }, [onDeleteMessage]);
 
   const handleRegenerateMessage = useCallback((messageId: string) => {
-    stableCallbacks.current.onRegenerate(messageId);
-  }, []);
+    regenerateMessage(messageId);
+  }, [regenerateMessage]);
+
+  const handleEditMessage = useCallback((messageId: string, newContent: string) => {
+    editMessage(messageId, newContent);
+  }, [editMessage]);
+
+  const handleCancelToolCalls = useCallback((messageId: string) => {
+    cancelToolCalls(messageId);
+  }, [cancelToolCalls]);
 
   // Set chat load time on mount
   useEffect(() => {
     setChatLoadTime(Date.now());
-  }, []);
-
-  const handleEditMessage = useCallback((messageId: string, newContent: string) => {
-    stableCallbacks.current.onEdit(messageId, newContent);
-  }, []);
-
-  const handleCancelToolCalls = useCallback((messageId: string) => {
-    stableCallbacks.current.onCancelToolCalls(messageId);
   }, []);
 
   useEffect(() => {

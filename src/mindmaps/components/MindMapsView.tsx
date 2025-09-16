@@ -117,7 +117,6 @@ export function MindMapsView({ activeMindMap, loadMindMaps, pendingNodeUpdate }:
       });
       
       if (response.ok) {
-        console.log('Mindmap saved successfully');
         // Reload mindmaps to refresh the updated timestamp, preserving active mindmap
         loadMindMaps(true);
       } else {

@@ -2,6 +2,7 @@ import { BaseChatModel, BaseChatModelParams } from '@langchain/core/language_mod
 import { BaseMessage, AIMessage, HumanMessage, AIMessageChunk } from '@langchain/core/messages';
 import { CallbackManagerForLLMRun } from '@langchain/core/callbacks/manager';
 import { ChatGenerationChunk, ChatResult } from '@langchain/core/outputs';
+import { DynamicStructuredTool } from '@langchain/core/tools';
 import { getLocalLLMManager } from '../local-llm-singleton.js';
 
 export interface ChatLocalLLMInput extends BaseChatModelParams {
@@ -14,6 +15,7 @@ export class ChatLocalLLM extends BaseChatModel {
   modelName: string;
   temperature: number;
   maxTokens: number;
+  private tools: DynamicStructuredTool[] = [];
 
   constructor(fields: ChatLocalLLMInput) {
     super(fields);
@@ -24,6 +26,19 @@ export class ChatLocalLLM extends BaseChatModel {
 
   _llmType(): string {
     return 'local-llm';
+  }
+
+  bindTools(tools: DynamicStructuredTool[]): ChatLocalLLM {
+    // Built-in local models don't support native tool calling,
+    // but we provide this method so they can be treated the same as other models.
+    // Tool calls will be handled via text parsing in the base agent.
+    const bound = new ChatLocalLLM({
+      modelName: this.modelName,
+      temperature: this.temperature,
+      maxTokens: this.maxTokens,
+    });
+    bound.tools = [...tools];
+    return bound;
   }
 
   async _generate(

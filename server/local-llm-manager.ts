@@ -797,13 +797,13 @@ export class LocalLLMManager {
     // Use proper chat session with message history
     const { session } = activeModel;
     
-    // Process messages to find the last user message
+    // Process messages to build conversation context (same as non-streaming method)
+    let systemMessage = '';
     let lastUserMessage = '';
     
     for (const message of messages) {
       if (message.role === 'system') {
-        // System messages should be handled at session creation, skip for now
-        continue;
+        systemMessage = message.content;
       } else if (message.role === 'user') {
         lastUserMessage = message.content;
       } else if (message.role === 'assistant') {
@@ -817,8 +817,13 @@ export class LocalLLMManager {
       throw new Error('No user message found');
     }
 
+    // For LlamaChatSession, combine system and user message (same as non-streaming method)
+    const finalPrompt = systemMessage 
+      ? `${systemMessage}\n\n${lastUserMessage}` 
+      : lastUserMessage;
+
     // Generate streaming response with async yielding to prevent blocking
-    const response = await session.prompt(lastUserMessage, {
+    const response = await session.prompt(finalPrompt, {
       temperature: options?.temperature || 0.7,
       maxTokens: options?.maxTokens || 2048,
       // Enable async processing with yielding to prevent blocking

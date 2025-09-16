@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { X, Bug, Trash2, Copy, ChevronDown, ChevronRight, Wifi, WifiOff } from 'lucide-react';
+import { X, FileText, Trash2, Copy, ChevronDown, ChevronRight, Wifi, WifiOff, Server } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useDebugStore, LLMDebugEntry } from '../store/useDebugStore';
 import { useTaskStore } from '../store/useTaskStore';
+import { useMCPLogsStore } from '../store/useMCPLogsStore';
 import { JSONViewer } from './JSONViewer';
 import { BaseDialog } from './shared/BaseDialog';
 import { useDialogAnimation } from '../hooks/useDialogAnimation';
@@ -10,27 +11,147 @@ import { useDialogAnimation } from '../hooks/useDialogAnimation';
 interface LLMDebugDialogProps {
   isOpen: boolean;
   onClose: () => void;
+  initialTab?: 'debug' | 'tasks' | 'mcp';
 }
 
-export function LLMDebugDialog({ isOpen, onClose }: LLMDebugDialogProps) {
+export function LLMDebugDialog({ isOpen, onClose, initialTab = 'debug' }: LLMDebugDialogProps) {
   const { shouldRender, isVisible, handleClose } = useDialogAnimation(isOpen, onClose);
   const { entries, isConnected, clearEntries } = useDebugStore();
   const { currentWorkflow, workflows, getWorkflowProgress, getActiveTask } = useTaskStore();
+  const { logs, isConnected: mcpConnected, clearLogs } = useMCPLogsStore();
   const [expandedEntries, setExpandedEntries] = useState<Set<string>>(new Set());
   const [expandedWorkflows, setExpandedWorkflows] = useState<Set<string>>(new Set());
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
+  const [expandedMCPLogs, setExpandedMCPLogs] = useState<Set<string>>(new Set());
   const [filterType, setFilterType] = useState<'all' | 'request' | 'response' | 'error'>('all');
-  const [activeTab, setActiveTab] = useState<'debug' | 'tasks'>('debug');
+  const [mcpServerFilter, setMcpServerFilter] = useState<string>('all');
+  const [mcpLevelFilter, setMcpLevelFilter] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState<'debug' | 'tasks' | 'mcp'>(initialTab);
 
   const handleClearEntries = () => {
     clearEntries();
-    toast.success('Debug entries cleared');
+    toast.success('LLM logs cleared');
+  };
+
+  const handleClearMCPLogs = () => {
+    clearLogs();
+    toast.success('MCP logs cleared');
   };
 
   const copyEntry = (entry: LLMDebugEntry) => {
     const text = `[${new Date(entry.timestamp).toISOString()}] ${entry.title}\n\n${entry.content}`;
     navigator.clipboard.writeText(text);
     toast.success('Copied to clipboard');
+  };
+
+  const copyMCPLog = (log: any) => {
+    const text = `[${new Date(log.timestamp).toLocaleString()}] [${log.level?.toUpperCase()}] [${log.serverId}]\n\n${log.message}`;
+    navigator.clipboard.writeText(text);
+    toast.success('Copied to clipboard');
+  };
+
+  const renderMessageWithJSON = (message: string) => {
+    // Helper function to find JSON structures (objects and arrays)
+    const findJsonStructures = (text: string) => {
+      const results = [];
+      let i = 0;
+      
+      while (i < text.length) {
+        const char = text[i];
+        
+        // Look for start of JSON (object or array)
+        if (char === '{' || char === '[') {
+          const startChar = char;
+          const endChar = char === '{' ? '}' : ']';
+          let depth = 1;
+          let j = i + 1;
+          let inString = false;
+          let escaped = false;
+          
+          // Find the matching closing bracket/brace
+          while (j < text.length && depth > 0) {
+            const currentChar = text[j];
+            
+            if (escaped) {
+              escaped = false;
+            } else if (currentChar === '\\') {
+              escaped = true;
+            } else if (currentChar === '"' && !escaped) {
+              inString = !inString;
+            } else if (!inString) {
+              if (currentChar === startChar) {
+                depth++;
+              } else if (currentChar === endChar) {
+                depth--;
+              }
+            }
+            
+            j++;
+          }
+          
+          if (depth === 0) {
+            const jsonCandidate = text.slice(i, j);
+            try {
+              const parsed = JSON.parse(jsonCandidate);
+              results.push({
+                start: i,
+                end: j,
+                text: jsonCandidate,
+                parsed: parsed
+              });
+              i = j;
+              continue;
+            } catch (error) {
+              // Not valid JSON, continue searching
+            }
+          }
+        }
+        
+        i++;
+      }
+      
+      return results;
+    };
+
+    const jsonStructures = findJsonStructures(message);
+    
+    if (jsonStructures.length === 0) {
+      return message;
+    }
+
+    const parts = [];
+    let lastIndex = 0;
+
+    jsonStructures.forEach((structure, index) => {
+      // Add text before the JSON
+      if (structure.start > lastIndex) {
+        parts.push(
+          <span key={`text-${lastIndex}`}>
+            {message.slice(lastIndex, structure.start)}
+          </span>
+        );
+      }
+
+      // Add the JSON viewer
+      parts.push(
+        <div key={`json-${structure.start}`} className="my-2 border border-gray-600 rounded bg-black/80 p-2">
+          <JSONViewer content={structure.parsed} showControls={true} />
+        </div>
+      );
+
+      lastIndex = structure.end;
+    });
+
+    // Add remaining text
+    if (lastIndex < message.length) {
+      parts.push(
+        <span key={`text-${lastIndex}`}>
+          {message.slice(lastIndex)}
+        </span>
+      );
+    }
+
+    return parts;
   };
 
   const toggleExpanded = (entryId: string) => {
@@ -41,6 +162,16 @@ export function LLMDebugDialog({ isOpen, onClose }: LLMDebugDialogProps) {
       newExpanded.add(entryId);
     }
     setExpandedEntries(newExpanded);
+  };
+
+  const toggleMCPLogExpanded = (logId: string) => {
+    const newExpanded = new Set(expandedMCPLogs);
+    if (newExpanded.has(logId)) {
+      newExpanded.delete(logId);
+    } else {
+      newExpanded.add(logId);
+    }
+    setExpandedMCPLogs(newExpanded);
   };
 
   const toggleWorkflow = (workflowId: string) => {
@@ -67,6 +198,16 @@ export function LLMDebugDialog({ isOpen, onClose }: LLMDebugDialogProps) {
     (filterType === 'all' || entry.type === filterType) &&
     !(entry.type === 'response' && (!entry.content || entry.content.trim() === ''))
   );
+
+  const filteredMCPLogs = logs.filter(log => {
+    if (mcpServerFilter !== 'all' && log.serverId !== mcpServerFilter) return false;
+    if (mcpLevelFilter !== 'all' && log.level !== mcpLevelFilter) return false;
+    return true;
+  });
+
+  // Get unique servers and levels for filter dropdowns
+  const mcpServers = Array.from(new Set(logs.map(log => log.serverId))).sort();
+  const mcpLevels = Array.from(new Set(logs.map(log => log.level))).sort();
 
   const getTypeColor = (type: string) => {
     switch (type) {
@@ -99,8 +240,8 @@ export function LLMDebugDialog({ isOpen, onClose }: LLMDebugDialogProps) {
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-700">
         <div className="flex items-center gap-3">
-          <Bug className="text-yellow-400" size={20} />
-          <h2 className="text-xl font-semibold text-white">LLM Debug & Tasks</h2>
+          <FileText className="text-yellow-400" size={20} />
+          <h2 className="text-xl font-semibold text-white">Application Logs</h2>
           <div className="flex items-center gap-2">
             {isConnected ? (
               <Wifi className="text-green-400" size={16} title="Connected to debug stream" />
@@ -130,7 +271,12 @@ export function LLMDebugDialog({ isOpen, onClose }: LLMDebugDialogProps) {
                 : 'text-gray-400 hover:text-gray-200'
             }`}
           >
-            Debug Logs
+            LLM Logs
+            {entries.length > 0 && (
+              <span className="ml-2 px-2 py-1 text-xs bg-blue-600 text-white rounded-full">
+                {entries.length}
+              </span>
+            )}
           </button>
           <button
             onClick={() => setActiveTab('tasks')}
@@ -147,28 +293,86 @@ export function LLMDebugDialog({ isOpen, onClose }: LLMDebugDialogProps) {
               </span>
             )}
           </button>
+          <button
+            onClick={() => setActiveTab('mcp')}
+            className={`px-4 py-2 font-medium transition-colors ${
+              activeTab === 'mcp'
+                ? 'text-blue-400 border-b-2 border-blue-400 bg-gray-800/50'
+                : 'text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            MCP Logs
+            {logs.length > 0 && (
+              <span className="ml-2 px-2 py-1 text-xs bg-blue-600 text-white rounded-full">
+                {logs.length}
+              </span>
+            )}
+          </button>
         </div>
 
-        {/* Controls - Only show for debug tab */}
-        {activeTab === 'debug' && (
+        {/* Controls - Show for debug and mcp tabs */}
+        {(activeTab === 'debug' || activeTab === 'mcp') && (
           <div className="flex items-center justify-between p-4 border-b border-gray-700">
             <div className="flex items-center gap-4">
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value as any)}
-                className="bg-gray-700 text-white px-3 py-1 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">All Types</option>
-                <option value="request">Requests</option>
-                <option value="response">Responses</option>
-                <option value="error">Errors</option>
-              </select>
-              <span className="text-gray-400 text-sm">
-                {filteredEntries.length} entries
-              </span>
+              {activeTab === 'debug' && (
+                <>
+                  <select
+                    value={filterType}
+                    onChange={(e) => setFilterType(e.target.value as any)}
+                    className="bg-gray-700 text-white px-3 py-1 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="all">All Types</option>
+                    <option value="request">Requests</option>
+                    <option value="response">Responses</option>
+                    <option value="error">Errors</option>
+                  </select>
+                  <span className="text-gray-400 text-sm">
+                    {filteredEntries.length} entries
+                  </span>
+                </>
+              )}
+              {activeTab === 'mcp' && (
+                <>
+                  <select
+                    value={mcpServerFilter}
+                    onChange={(e) => setMcpServerFilter(e.target.value)}
+                    className="bg-gray-700 text-white px-3 py-1 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="all">All Servers</option>
+                    {mcpServers.map(server => (
+                      <option key={server} value={server}>{server}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={mcpLevelFilter}
+                    onChange={(e) => setMcpLevelFilter(e.target.value)}
+                    className="bg-gray-700 text-white px-3 py-1 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="all">All Levels</option>
+                    {mcpLevels.map(level => (
+                      <option key={level} value={level}>{level.toUpperCase()}</option>
+                    ))}
+                  </select>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      {mcpConnected ? (
+                        <Wifi className="text-green-400" size={16} title="Connected to MCP stream" />
+                      ) : (
+                        <WifiOff className="text-red-400" size={16} title="Disconnected from MCP stream" />
+                      )}
+                      <span className="text-xs text-gray-400">
+                        {mcpConnected ? 'Live' : 'Offline'}
+                      </span>
+                    </div>
+                    <span className="text-gray-400 text-sm">
+                      {filteredMCPLogs.length} of {logs.length} logs
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
             <button
-              onClick={handleClearEntries}
+              onClick={activeTab === 'debug' ? handleClearEntries : handleClearMCPLogs}
               className="flex items-center gap-2 px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
             >
               <Trash2 size={14} />
@@ -180,11 +384,11 @@ export function LLMDebugDialog({ isOpen, onClose }: LLMDebugDialogProps) {
         {/* Content */}
         <div className="flex-1 overflow-auto p-4">
           {activeTab === 'debug' ? (
-            // Debug Logs Tab
+            // LLM Logs Tab
             filteredEntries.length === 0 ? (
               <div className="text-center text-gray-400 py-8">
-                <Bug size={48} className="mx-auto mb-4 opacity-50" />
-                <p>No debug entries yet</p>
+                <FileText size={48} className="mx-auto mb-4 opacity-50" />
+                <p>No LLM entries yet</p>
                 <p className="text-sm mt-2">LLM requests and responses will appear here</p>
               </div>
             ) : (
@@ -238,7 +442,7 @@ export function LLMDebugDialog({ isOpen, onClose }: LLMDebugDialogProps) {
                 ))}
               </div>
             )
-          ) : (
+          ) : activeTab === 'tasks' ? (
             // Task Workflows Tab
             <div className="space-y-6">
               {/* Current Active Workflow */}
@@ -527,13 +731,87 @@ export function LLMDebugDialog({ isOpen, onClose }: LLMDebugDialogProps) {
               {/* Empty State */}
               {!currentWorkflow && workflows.length === 0 && (
                 <div className="text-center text-gray-400 py-8">
-                  <Bug size={48} className="mx-auto mb-4 opacity-50" />
+                  <FileText size={48} className="mx-auto mb-4 opacity-50" />
                   <p>No task workflows yet</p>
-                  <p className="text-sm mt-2">Agentic mindmap generations will appear here</p>
+                  <p className="text-sm mt-2">Agentic workflows will appear here</p>
                 </div>
               )}
             </div>
-          )}
+          ) : activeTab === 'mcp' ? (
+            // MCP Logs Tab
+            filteredMCPLogs.length === 0 ? (
+              <div className="text-center text-gray-400 py-8">
+                <Server size={48} className="mx-auto mb-4 opacity-50" />
+                <p>{logs.length === 0 ? 'No MCP logs yet' : 'No logs match the current filters'}</p>
+                <p className="text-sm mt-2">{logs.length === 0 ? 'MCP server activity will appear here' : 'Try adjusting your server or level filters'}</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {filteredMCPLogs.map((log) => {
+                  const getLevelColor = (level: string) => {
+                    switch (level?.toLowerCase()) {
+                      case 'error': return 'text-red-400';
+                      case 'warn': return 'text-yellow-400';
+                      case 'info': return 'text-blue-400';
+                      default: return 'text-gray-400';
+                    }
+                  };
+
+
+
+                  return (
+                    <div key={log.id} className="border border-gray-700 rounded-lg">
+                      <div 
+                        className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-750 transition-colors"
+                        onClick={() => toggleMCPLogExpanded(log.id)}
+                      >
+                        <div className="flex items-center gap-3 flex-1">
+                          <div className="flex items-center gap-2">
+                            {expandedMCPLogs.has(log.id) ? 
+                              <ChevronDown size={16} /> : 
+                              <ChevronRight size={16} />
+                            }
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`text-xs px-2 py-1 bg-gray-600 text-gray-200 rounded uppercase font-mono`}>
+                                {log.level || 'LOG'}
+                              </span>
+                              {log.serverId && (
+                                <span className="text-xs px-2 py-1 bg-green-600 text-white rounded font-mono">
+                                  {log.serverId}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-gray-400 text-sm">
+                              {new Date(log.timestamp).toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            copyMCPLog(log);
+                          }}
+                          className="p-1 hover:bg-gray-600 rounded transition-colors"
+                          title="Copy to clipboard"
+                        >
+                          <Copy size={14} />
+                        </button>
+                      </div>
+                      {expandedMCPLogs.has(log.id) && (
+                        <div className="border-t border-gray-700 p-3">
+                          <div className="font-mono">
+                            {renderMessageWithJSON(log.message)}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          ) : null}
         </div>
     </BaseDialog>
   );

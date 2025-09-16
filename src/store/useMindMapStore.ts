@@ -7,6 +7,7 @@ import { MindMapNodeData, Source } from '../types/mindMap'
 import { MindMapData, MindMapDataManager } from '../utils/mindMapData'
 import { MindMapLayoutManager } from '../utils/mindMapLayout'
 import { MindMapActionsManager } from '../utils/mindMapActions'
+import { decodeSseDataSync } from '../utils/sseDecoder'
 
 interface HistoryState {
   nodes: Node<MindMapNodeData>[]
@@ -771,6 +772,8 @@ export const useMindMapStore = create<MindMapStore>()(
           let finalResult = null
           let currentStepNumber = 0
 
+
+
           // Track the current generation
           set({
             currentGenerationEventSource: eventSource,
@@ -779,7 +782,8 @@ export const useMindMapStore = create<MindMapStore>()(
 
           eventSource.onmessage = (event) => {
             try {
-              const data = JSON.parse(event.data)
+              const rawData = JSON.parse(event.data)
+              const data = decodeSseDataSync(rawData)  // Decode base64 strings
 
               if (data.type === 'mindmap_change') {
                 // Real mindmap operation from backend
@@ -819,12 +823,18 @@ export const useMindMapStore = create<MindMapStore>()(
 
                 // Process the final result - NO MINDMAP CHANGES HERE!
                 if (finalResult) {
-                  const workflow = finalResult.workflow || {}
                   const changes = finalResult.changes || []
                   
                   // Just mark as complete - changes already applied via SSE events
                   set({
                     generationSummary: `Iterative reasoning completed! Created ${changes.length} node(s) through ${currentStepNumber || 1} reasoning steps.`,
+                    isGenerating: false,
+                    currentGenerationEventSource: null,
+                    currentGenerationWorkflowId: null
+                  })
+                } else {
+                  set({
+                    generationSummary: `Generation completed with ${currentStepNumber || 1} steps.`,
                     isGenerating: false,
                     currentGenerationEventSource: null,
                     currentGenerationWorkflowId: null
@@ -842,7 +852,9 @@ export const useMindMapStore = create<MindMapStore>()(
             set({
               generationError: 'Connection error during generation',
               isGenerating: false,
-              generationProgress: null
+              generationProgress: null,
+              currentGenerationEventSource: null,
+              currentGenerationWorkflowId: null
             })
           }
 

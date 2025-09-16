@@ -1,6 +1,7 @@
-import React, { useState, useRef } from 'react';
-import { Thread, ConversationMessage, NotesAttachment } from '../../types';
-import { ChatThreadSelector } from '../../components/shared/ChatThreadSelector';
+import { useRef } from 'react';
+import { ConversationMessage, NotesAttachment } from '../../types';
+import { ThreadMetadata } from '../../store/useThreadsStore';
+
 import { ChatContentViewer } from '../../components/shared/ChatContentViewer';
 import { Source } from '../types/mindMap';
 import { ChatPanelRef } from '../../chat/components/ChatPanel';
@@ -14,7 +15,7 @@ interface MindMapChatIntegrationProps {
   focusChat?: boolean;
   focusNotes?: boolean;
   focusSources?: boolean;
-  threads: Thread[];
+  threads: ThreadMetadata[];
   onThreadAssociate: (nodeId: string, threadId: string) => void;
   onThreadUnassign: (nodeId: string) => void;
   onThreadCreate?: () => void;
@@ -67,7 +68,7 @@ export function MindMapChatIntegration({
   const chatPanelRef = useRef<ChatPanelRef>(null);
 
   // Find the associated thread if chatId exists
-  const associatedThread = chatId ? threads.find(t => t.id === chatId) : null;
+  const associatedThreadMetadata = chatId ? threads.find(t => t.id === chatId) : null;
 
   const handleThreadSelect = (threadId: string) => {
     onThreadAssociate(nodeId, threadId);
@@ -107,7 +108,7 @@ export function MindMapChatIntegration({
   return (
     <ChatContentViewer
       ref={chatPanelRef}
-      thread={associatedThread}
+      threadId={associatedThreadMetadata?.id}
       threads={threads}
       nodeLabel={nodeLabel}
       nodeNotes={nodeNotes}

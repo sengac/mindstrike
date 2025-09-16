@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
+import { decodeSseData } from '../utils/sseDecoder';
 
 export interface Task {
   id: string;
@@ -353,9 +354,12 @@ let currentEventSource: EventSource | null = null;
 function createWorkflowSSEConnection(): EventSource {
   const eventSource = new EventSource('/api/tasks/stream/workflow-general');
   
-  eventSource.onmessage = (event) => {
+  eventSource.onmessage = async (event) => {
     try {
-      const data = JSON.parse(event.data);
+      const rawData = JSON.parse(event.data);
+      
+      // Decode base64 fields if needed
+      const data = await decodeSseData(rawData);
       
       switch (data.type) {
         case 'workflow_started':
@@ -414,7 +418,6 @@ function createWorkflowSSEConnection(): EventSource {
   };
   
   eventSource.onerror = (error) => {
-    console.error('[TaskStore] Global SSE connection error:', error);
     if (eventSource.readyState === EventSource.CLOSED) {
       // Auto-reconnect after 3 seconds
       setTimeout(() => {

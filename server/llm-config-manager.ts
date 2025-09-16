@@ -333,6 +333,12 @@ export class LLMConfigManager {
           }
         }
       } catch (error) {
+        // Skip logging connection refused errors for Ollama (it's expected when not running)
+        if (customService.name === 'Ollama (Local)' && error && typeof error === 'object' && 
+            'cause' in error && error.cause && typeof error.cause === 'object' && 
+            'code' in error.cause && error.cause.code === 'ECONNREFUSED') {
+          continue;
+        }
         logger.warn(`Failed to refresh models for custom service ${customService.name}:`, error);
       }
     }

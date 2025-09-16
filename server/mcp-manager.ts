@@ -9,6 +9,8 @@ import { logger } from './logger.js';
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { getMindstrikeDirectory } from './utils/settings-directory.js';
+import { sseManager } from './sse-manager.js';
+import { CommandResolver } from './utils/command-resolver.js';
 
 export interface MCPServerConfig {
   id: string;
@@ -35,11 +37,40 @@ export class MCPManager extends EventEmitter {
   private tools: Map<string, MCPTool> = new Map();
   private configPath: string;
   private workspaceRoot: string;
+  private logs: Array<{id: string, timestamp: number, serverId: string, level: 'info' | 'error' | 'warn', message: string}> = [];
 
   constructor(configPath?: string, workspaceRoot?: string) {
     super();
-    this.configPath = configPath || path.join(getMindstrikeDirectory(), 'mcp-config.json');
+    const mindstrikeDir = getMindstrikeDirectory();
+    this.configPath = configPath || path.join(mindstrikeDir, 'mcp-config.json');
     this.workspaceRoot = workspaceRoot || process.cwd();
+  }
+
+  private logMCP(serverId: string, level: 'info' | 'error' | 'warn', message: string, logToConsole: boolean = true): void {
+    const logEntry = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: Date.now(),
+      serverId,
+      level,
+      message
+    };
+    
+    // Keep only the last 1000 logs
+    this.logs.unshift(logEntry);
+    if (this.logs.length > 1000) {
+      this.logs = this.logs.slice(0, 1000);
+    }
+    
+    // Broadcast to clients via SSE
+    sseManager.broadcast('mcp-logs', {
+      type: 'mcp-log',
+      ...logEntry
+    });
+    
+    // Optionally log to console
+    if (logToConsole) {
+      logger[level](`[MCP:${serverId}] ${message}`);
+    }
   }
 
   async initialize(): Promise<void> {
@@ -50,7 +81,7 @@ export class MCPManager extends EventEmitter {
       
       await this.loadConfig();
       await this.connectToEnabledServers();
-      logger.info('[MCPManager] Initialized successfully');
+      this.logMCP('manager', 'info', 'Initialized successfully');
     } catch (error: any) {
       logger.error('[MCPManager] Failed to initialize:', error);
     }
@@ -59,7 +90,7 @@ export class MCPManager extends EventEmitter {
   setWorkspaceRoot(workspaceRoot: string): void {
     if (this.workspaceRoot !== workspaceRoot) {
       this.workspaceRoot = workspaceRoot;
-      logger.info(`[MCPManager] Workspace root updated to: ${workspaceRoot}`);
+      this.logMCP('manager', 'info', `Workspace root updated to: ${workspaceRoot}`);
       // Reconnect to all servers with updated workspace root
       this.reconnectAllServers();
     }
@@ -78,14 +109,30 @@ export class MCPManager extends EventEmitter {
 
   private async loadConfig(): Promise<void> {
     try {
-      logger.info(`[MCPManager] Loading config from: ${this.configPath}`);
+      this.logMCP('manager', 'info', `Loading config from: ${this.configPath}`);
+      
+      // Check if config file exists
+      try {
+        await fs.access(this.configPath, fs.constants.F_OK);
+        this.logMCP('manager', 'info', `Config file exists at ${this.configPath}`);
+      } catch (err) {
+        this.logMCP('manager', 'warn', `Config file does not exist at ${this.configPath}`);
+        throw { code: 'ENOENT' };
+      }
+      
       const configData = await fs.readFile(this.configPath, 'utf-8');
+      this.logMCP('manager', 'info', `Config file size: ${configData.length} bytes`);
+      
       const config = JSON.parse(configData);
+      this.logMCP('manager', 'info', `Parsed config with keys: ${Object.keys(config).join(', ')}`);
       
       // Clear existing servers before loading new ones
       this.servers.clear();
       
       if (config.mcpServers && typeof config.mcpServers === 'object') {
+        const serverIds = Object.keys(config.mcpServers);
+        this.logMCP('manager', 'info', `Found ${serverIds.length} server configs: ${serverIds.join(', ')}`);
+        
         for (const [serverId, serverConfig] of Object.entries(config.mcpServers)) {
           const fullConfig: MCPServerConfig = {
             id: serverId,
@@ -96,19 +143,22 @@ export class MCPManager extends EventEmitter {
           
           if (this.isValidServerConfig(fullConfig)) {
             this.servers.set(serverId, fullConfig);
+            this.logMCP('manager', 'info', `Added server config: ${serverId}`);
           } else {
-            logger.warn(`[MCPManager] Invalid server config for ${serverId}:`, serverConfig);
+            this.logMCP('manager', 'warn', `Invalid server config for ${serverId}: ${JSON.stringify(serverConfig)}`);
           }
         }
+      } else {
+        this.logMCP('manager', 'warn', `No mcpServers section found in config`);
       }
       
-      logger.info(`[MCPManager] Loaded ${this.servers.size} server configurations from ${this.configPath}`);
+      this.logMCP('manager', 'info', `Loaded ${this.servers.size} server configurations from ${this.configPath}`);
     } catch (error: any) {
       if (error.code === 'ENOENT') {
-        logger.info(`[MCPManager] No config file found at ${this.configPath}, creating default`);
+        this.logMCP('manager', 'info', `No config file found at ${this.configPath}, creating default`);
         await this.createDefaultConfig();
       } else {
-        logger.error(`[MCPManager] Failed to load config from ${this.configPath}:`, error);
+        this.logMCP('manager', 'error', `Failed to load config from ${this.configPath}: ${error.message}`);
       }
     }
   }
@@ -126,13 +176,14 @@ export class MCPManager extends EventEmitter {
       mcpServers: {
         filesystem: {
           command: 'npx',
-          args: ['@modelcontextprotocol/server-filesystem', '[[WORKSPACE_ROOT]]']
+          args: ['@modelcontextprotocol/server-filesystem', '[[WORKSPACE_ROOT]]'],
+          description: 'File system operations - read, write, and list files'
         }
       }
     };
 
     await fs.writeFile(this.configPath, JSON.stringify(defaultConfig, null, 2));
-    logger.info('[MCPManager] Created default config file');
+    this.logMCP('manager', 'info', 'Created default config file');
   }
 
   private async connectToEnabledServers(): Promise<void> {
@@ -142,7 +193,7 @@ export class MCPManager extends EventEmitter {
       try {
         await this.connectToServer(server);
       } catch (error: any) {
-        logger.error(`[MCPManager] Failed to connect to server ${server.id}:`, error);
+        this.logMCP(server.id, 'error', `Failed to connect: ${error.message}`);
       }
     }
   }
@@ -182,6 +233,8 @@ export class MCPManager extends EventEmitter {
   }
 
   private async connectToServer(serverConfig: MCPServerConfig): Promise<void> {
+    this.logMCP(serverConfig.id, 'info', `Attempting to connect to server`);
+    
     // Replace workspace root placeholders in configuration
     const processedConfig = this.replaceWorkspaceRoot(serverConfig);
     
@@ -200,17 +253,43 @@ export class MCPManager extends EventEmitter {
     try {
       if (processedConfig.transport === 'sse' && processedConfig.url) {
         // SSE transport
+        this.logMCP(serverConfig.id, 'info', `Using SSE transport: ${processedConfig.url}`);
         const transport = new SSEClientTransport(new URL(processedConfig.url));
         await client.connect(transport);
       } else {
-        // Default to stdio transport
+        // Default to stdio transport - resolve command first
+        const commandResolution = await CommandResolver.resolveCommand(
+          processedConfig.command,
+          processedConfig.args || []
+        );
+
+        if (!commandResolution.available) {
+          const instructions = CommandResolver.getInstallationInstructions(processedConfig.command);
+          this.logMCP(serverConfig.id, 'error', `Command '${processedConfig.command}' not available. ${instructions.message}`);
+          
+          // Broadcast installation instructions via SSE
+          sseManager.broadcast('mcp-command-missing', {
+            type: 'command-missing',
+            serverId: serverConfig.id,
+            command: processedConfig.command,
+            instructions
+          });
+          
+          throw new Error(`Command '${processedConfig.command}' not available. Please install ${processedConfig.command} and ensure it's in your PATH.`);
+        }
+
+        this.logMCP(serverConfig.id, 'info', 
+          `Using stdio transport: ${commandResolution.command} ${commandResolution.args.join(' ')}`
+          + (commandResolution.fallbackUsed ? ` (using ${commandResolution.fallbackUsed})` : '')
+        );
+
         const filteredEnv = Object.fromEntries(
           Object.entries(process.env).filter(([_, value]) => value !== undefined)
         ) as Record<string, string>;
         
         const transport = new StdioClientTransport({
-          command: processedConfig.command,
-          args: processedConfig.args || [],
+          command: commandResolution.command,
+          args: commandResolution.args,
           env: { ...filteredEnv, ...processedConfig.env }
         });
 
@@ -234,13 +313,13 @@ export class MCPManager extends EventEmitter {
       }
 
       this.clients.set(serverConfig.id, client);
-      logger.info(`[MCPManager] Connected to server ${serverConfig.id} with ${listResult.tools?.length || 0} tools`);
+      this.logMCP(serverConfig.id, 'info', `Connected successfully with ${listResult.tools?.length || 0} tools`);
       
       this.emit('serverConnected', serverConfig.id);
       this.emit('toolsChanged');
       
     } catch (error: any) {
-      logger.error(`[MCPManager] Failed to connect to server ${serverConfig.id}:`, error);
+      this.logMCP(serverConfig.id, 'error', `Failed to connect: ${error.message}`);
       throw error;
     }
   }
@@ -258,11 +337,11 @@ export class MCPManager extends EventEmitter {
           this.tools.delete(toolKey);
         }
         
-        logger.info(`[MCPManager] Disconnected from server ${serverId}`);
+        this.logMCP(serverId, 'info', 'Disconnected from server');
         this.emit('serverDisconnected', serverId);
         this.emit('toolsChanged');
       } catch (error: any) {
-        logger.error(`[MCPManager] Error disconnecting from server ${serverId}:`, error);
+        this.logMCP(serverId, 'error', `Error disconnecting: ${error.message}`);
       }
     }
   }
@@ -270,18 +349,29 @@ export class MCPManager extends EventEmitter {
   async executeTool(serverId: string, toolName: string, args: any): Promise<any> {
     const client = this.clients.get(serverId);
     if (!client) {
+      this.logMCP(serverId, 'error', `No client connected for server ${serverId} when trying to execute tool ${toolName}`);
       throw new Error(`No client connected for server ${serverId}`);
     }
 
     try {
+      // Log the tool execution request (only to MCP logs, not console)
+      const argsStr = args && Object.keys(args).length > 0 ? JSON.stringify(args) : '{}';
+      this.logMCP(serverId, 'info', `🔧 Executing tool ${toolName} with args: ${argsStr}`, false);
+
       const result = await client.callTool({
         name: toolName,
         arguments: args || {}
       });
 
+      // Log successful execution with full result (only to MCP logs, not console)
+      const resultContent = typeof result.content === 'string' 
+        ? result.content
+        : JSON.stringify(result.content);
+      this.logMCP(serverId, 'info', `✅ Tool ${toolName} completed successfully. Result: ${resultContent}`, false);
+      
       return result.content;
     } catch (error: any) {
-      logger.error(`[MCPManager] Tool execution failed for ${serverId}:${toolName}:`, error);
+      this.logMCP(serverId, 'error', `❌ Tool ${toolName} execution failed: ${error.message}`);
       throw error;
     }
   }
@@ -302,9 +392,12 @@ export class MCPManager extends EventEmitter {
           schema: zodSchema,
           func: async (input: any) => {
             try {
+              this.logMCP(serverId, 'info', `LangChain tool wrapper calling ${toolName} with input: ${JSON.stringify(input)}`, false);
               const result = await this.executeTool(serverId, toolName, input);
+              this.logMCP(serverId, 'info', `LangChain tool wrapper received result from ${toolName}`, false);
               return typeof result === 'string' ? result : JSON.stringify(result);
             } catch (error: any) {
+              this.logMCP(serverId, 'error', `LangChain tool wrapper error for ${toolName}: ${error.message}`);
               return `Error executing MCP tool: ${error.message}`;
             }
           }
@@ -418,32 +511,60 @@ export class MCPManager extends EventEmitter {
   }
 
   private async saveConfig(): Promise<void> {
-    const mcpServers: Record<string, any> = {};
-    
-    for (const [id, server] of this.servers.entries()) {
-      mcpServers[id] = {
-        command: server.command,
-        args: server.args || []
-      };
-      if (server.env) {
-        mcpServers[id].env = server.env;
+    try {
+      this.logMCP('manager', 'info', `Saving config to: ${this.configPath}`);
+      
+      // Ensure the directory exists
+      const configDir = path.dirname(this.configPath);
+      await fs.mkdir(configDir, { recursive: true });
+      this.logMCP('manager', 'info', `Ensured config directory exists: ${configDir}`);
+      
+      const mcpServers: Record<string, any> = {};
+      
+      this.logMCP('manager', 'info', `Preparing to save ${this.servers.size} server configs`);
+      
+      for (const [id, server] of this.servers.entries()) {
+        mcpServers[id] = {
+          command: server.command,
+          args: server.args || []
+        };
+        if (server.env) {
+          mcpServers[id].env = server.env;
+        }
+        if (server.transport && server.transport !== 'stdio') {
+          mcpServers[id].transport = server.transport;
+        }
+        if (server.url) {
+          mcpServers[id].url = server.url;
+        }
+        
+        this.logMCP('manager', 'info', `Prepared config for server: ${id}`);
       }
-      if (server.transport && server.transport !== 'stdio') {
-        mcpServers[id].transport = server.transport;
+      
+      const config = { mcpServers };
+      const configJson = JSON.stringify(config, null, 2);
+      
+      this.logMCP('manager', 'info', `Writing config: ${configJson.length} bytes`);
+      await fs.writeFile(this.configPath, configJson);
+      
+      // Verify the file was written
+      try {
+        const verifyData = await fs.readFile(this.configPath, 'utf-8');
+        this.logMCP('manager', 'info', `Verified config file written: ${verifyData.length} bytes`);
+      } catch (verifyError) {
+        this.logMCP('manager', 'error', `Failed to verify config file: ${verifyError}`);
       }
-      if (server.url) {
-        mcpServers[id].url = server.url;
-      }
+      
+      this.logMCP('manager', 'info', 'Successfully saved configuration');
+    } catch (error: any) {
+      this.logMCP('manager', 'error', `Failed to save config: ${error.message}`);
+      throw error;
     }
-    
-    const config = { mcpServers };
-    await fs.writeFile(this.configPath, JSON.stringify(config, null, 2));
-    logger.info('[MCPManager] Saved configuration');
   }
 
   async reload(): Promise<void> {
     try {
-      logger.info('[MCPManager] Reloading configuration...');
+      this.logMCP('manager', 'info', 'Reloading configuration...');
       
       // Disconnect all current clients
       for (const [serverId] of this.clients) {
@@ -454,10 +575,10 @@ export class MCPManager extends EventEmitter {
       await this.loadConfig();
       await this.connectToEnabledServers();
       
-      logger.info('[MCPManager] Configuration reloaded successfully');
+      this.logMCP('manager', 'info', 'Configuration reloaded successfully');
       this.emit('configReloaded');
     } catch (error: any) {
-      logger.error('[MCPManager] Failed to reload configuration:', error);
+      this.logMCP('manager', 'error', `Failed to reload configuration: ${error.message}`);
       throw error;
     }
   }
@@ -466,7 +587,68 @@ export class MCPManager extends EventEmitter {
     for (const [serverId] of this.clients) {
       await this.disconnectFromServer(serverId);
     }
-    logger.info('[MCPManager] Shutdown complete');
+    this.logMCP('manager', 'info', 'Shutdown complete');
+  }
+
+  getLogs(): Array<{id: string, timestamp: number, serverId: string, level: 'info' | 'error' | 'warn', message: string}> {
+    return [...this.logs];
+  }
+
+  /**
+   * Get diagnostic information about command availability
+   */
+  async getDiagnostics(): Promise<{
+    bundledServers: Array<{name: string, available: boolean, path?: string}>;
+    commandResolutions: Array<{command: string, available: boolean, resolvedPath?: string; fallbackUsed?: string}>;
+    systemInfo: {
+      platform: string;
+      nodeVersion?: string;
+      npmVersion?: string;
+    };
+  }> {
+    const bundledServers = Array.from(CommandResolver.getBundledServers().entries()).map(([key, info]) => ({
+      name: key,
+      available: !!info.bundledPath,
+      path: info.bundledPath
+    }));
+
+    const commandResolutions = Array.from(CommandResolver.getCachedResolutions().entries()).map(([key, resolution]) => ({
+      command: key,
+      available: resolution.available,
+      resolvedPath: resolution.resolvedPath,
+      fallbackUsed: resolution.fallbackUsed
+    }));
+
+    let nodeVersion: string | undefined;
+    let npmVersion: string | undefined;
+
+    try {
+      const { execSync } = await import('child_process');
+      nodeVersion = execSync('node --version', { encoding: 'utf8', timeout: 5000 }).trim();
+    } catch {}
+
+    try {
+      const { execSync } = await import('child_process');
+      npmVersion = execSync('npm --version', { encoding: 'utf8', timeout: 5000 }).trim();
+    } catch {}
+
+    return {
+      bundledServers,
+      commandResolutions,
+      systemInfo: {
+        platform: process.platform,
+        nodeVersion,
+        npmVersion
+      }
+    };
+  }
+
+  /**
+   * Force refresh of command resolver cache
+   */
+  refreshCommandCache(): void {
+    CommandResolver.clearCache();
+    this.logMCP('manager', 'info', 'Command cache refreshed');
   }
 }
 

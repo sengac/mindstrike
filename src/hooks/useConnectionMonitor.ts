@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 
 export function useConnectionMonitor() {
   const [isConnected, setIsConnected] = useState(true);
-  const intervalRef = useRef<NodeJS.Timeout>();
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isConnectedRef = useRef(true);
 
   // Keep ref in sync with state
@@ -11,64 +12,59 @@ export function useConnectionMonitor() {
   }, [isConnected]);
 
   useEffect(() => {
-    let currentAbortController: AbortController | null = null;
+    const connect = () => {
+      // Clean up existing connection
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
+      
+      eventSourceRef.current = new EventSource('/api/health/stream');
+      
+      eventSourceRef.current.onopen = () => {
+        setIsConnected(true);
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current);
+          reconnectTimeoutRef.current = null;
+        }
+      };
+      
+      eventSourceRef.current.onerror = () => {
+        setIsConnected(false);
+        eventSourceRef.current?.close();
+        
+        // Keep trying to reconnect while offline
+        if (!reconnectTimeoutRef.current) {
+          const attemptReconnect = () => {
+            // Only reconnect if still disconnected
+            if (!isConnectedRef.current) {
+              connect();
+            }
+          };
+          reconnectTimeoutRef.current = setTimeout(attemptReconnect, 2000);
+        }
+      };
+    };
+
+    // Initial connection
+    connect();
+
+    // Handle browser network events
+    const handleOnline = () => {
+      connect();
+    };
     
-    const checkConnection = () => {
-      // Cancel previous request if still pending
-      if (currentAbortController) {
-        currentAbortController.abort();
-      }
-      
-      currentAbortController = new AbortController();
-      const timeoutId = setTimeout(() => currentAbortController?.abort(), 3000);
-      
-      fetch('/api/health', { 
-        method: 'GET',
-        cache: 'no-cache',
-        signal: currentAbortController.signal
-      })
-        .then(response => {
-          clearTimeout(timeoutId);
-          const connected = response.ok;
-          setIsConnected(connected);
-          scheduleNextCheck();
-        })
-        .catch((error) => {
-          clearTimeout(timeoutId);
-          // Don't set disconnected if the request was just aborted
-          if (error.name !== 'AbortError') {
-            setIsConnected(false);
-          }
-          scheduleNextCheck();
-        });
+    const handleOffline = () => {
+      setIsConnected(false);
+      eventSourceRef.current?.close();
     };
-
-    const scheduleNextCheck = () => {
-      if (intervalRef.current) {
-        clearTimeout(intervalRef.current);
-      }
-      const delay = isConnectedRef.current ? 3000 : 1000;
-      intervalRef.current = setTimeout(checkConnection, delay);
-    };
-
-    // Initial check
-    checkConnection();
-
-    // Handle network events
-    const handleOnline = () => checkConnection();
-    const handleOffline = () => setIsConnected(false);
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
     return () => {
-      // Cancel any pending request
-      if (currentAbortController) {
-        currentAbortController.abort();
-      }
-      
-      if (intervalRef.current) {
-        clearTimeout(intervalRef.current);
+      eventSourceRef.current?.close();
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
       }
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);

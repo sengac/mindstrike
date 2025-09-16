@@ -128,11 +128,36 @@ export abstract class BaseAgent {
       return '';
     }
 
-    const toolDescriptions = this.langChainTools.map(tool => {
-      return `- ${tool.name}: ${tool.description}`;
-    }).join('\n');
+    // For built-in models that rely on text parsing, provide detailed tool schemas
+    const isBuiltInModel = this.config.llmConfig.type === 'local';
+    
+    if (isBuiltInModel) {
+      const toolDescriptions = this.langChainTools.map(tool => {
+        // Get parameter schema information
+        let paramInfo = '';
+        if (tool.schema && typeof tool.schema === 'object' && 'shape' in tool.schema) {
+          const shape = (tool.schema as any).shape;
+          const params = Object.keys(shape).map(key => {
+            const param = shape[key];
+            const required = !param.isOptional?.() ? ' (required)' : ' (optional)';
+            return `    - ${key}: ${param.description || 'parameter'}${required}`;
+          }).join('\n');
+          if (params) {
+            paramInfo = `\n  Parameters:\n${params}`;
+          }
+        }
+        return `- ${tool.name}: ${tool.description}${paramInfo}`;
+      }).join('\n');
 
-    return `\nYou have access to the following tools:\n${toolDescriptions}\n\nThese tools are available through function calling. Use them when you need to perform actions to help the user.`;
+      return `\nYou have access to the following tools:\n${toolDescriptions}\n\nTo use a tool, you MUST format your response with a JSON code block using this exact format:\n\n\`\`\`json\n{"tool": "tool_name", "parameters": {"param1": "value1", "param2": "value2"}}\n\`\`\`\n\nExamples:\n\nTo read a file:\n\`\`\`json\n{"tool": "mcp_filesystem_read_file", "parameters": {"path": "/path/to/file.txt"}}\n\`\`\`\n\nTo navigate to a website:\n\`\`\`json\n{"tool": "mcp_playwright_browser_navigate", "parameters": {"url": "https://google.com"}}\n\`\`\`\n\nTo list directory contents:\n\`\`\`json\n{"tool": "mcp_filesystem_list_directory", "parameters": {"path": "/some/directory"}}\n\`\`\`\n\nIMPORTANT: You MUST use the exact tool names listed above. Always wrap tool calls in \`\`\`json code blocks.\n\nIf a tool call fails or you encounter an error:\n- Retry the operation once if appropriate.\n- If the issue persists, escalate the issue back to the user, providing a summary of actions taken and the error encountered.\n\nFor each user interaction:\n- Clearly summarize the actions you have taken.\n- Provide the outcome or next steps.\n- If a tool was used, mention which tool and the result.`;
+    } else {
+      // For models with native tool calling, use simple descriptions
+      const toolDescriptions = this.langChainTools.map(tool => {
+        return `- ${tool.name}: ${tool.description}`;
+      }).join('\n');
+
+      return `\nYou have access to the following tools:\n${toolDescriptions}\n\nThese tools are available through function calling. Use them when you need to perform actions to help the user.`;
+    }
   }
 
   protected createChatModel(llmConfig: AgentConfig['llmConfig']): BaseChatModel {
@@ -207,8 +232,6 @@ export abstract class BaseAgent {
     // Only use MCP tools - no built-in tools
     const mcpTools = mcpManager.getLangChainTools();
     this.langChainTools = mcpTools;
-    
-    logger.info(`[BaseAgent] Initialized ${mcpTools.length} MCP tools`);
   }
 
   protected async initializeAgentExecutor(): Promise<void> {
@@ -1166,7 +1189,7 @@ export abstract class BaseAgent {
             
             results.push({
               name: toolCall.name,
-              result: content // Return content directly, not wrapped in object
+              result: { success: true, output: content }
             });
           } else {
             results.push({

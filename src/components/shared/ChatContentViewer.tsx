@@ -1,7 +1,8 @@
 import { forwardRef, useState, useEffect, useRef, useImperativeHandle } from 'react';
 import { MessageSquare, ExternalLink, Unlink, X, StickyNote, BookOpen, Copy, ChevronLeft, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Thread, ConversationMessage, NotesAttachment } from '../../types';
+import { ConversationMessage, NotesAttachment } from '../../types';
+import { ThreadMetadata } from '../../store/useThreadsStore';
 import { Source } from '../../types/mindMap';
 import { ChatPanel, ChatPanelRef } from '../../chat/components/ChatPanel';
 import { MarkdownEditor } from './MarkdownEditor';
@@ -10,8 +11,8 @@ import { SourcesList } from './SourcesList';
 import { MultiChoiceDialog } from './MultiChoiceDialog';
 
 interface ChatContentViewerProps {
-  thread?: Thread;
-  threads?: Thread[];
+  threadId?: string;
+  threads?: ThreadMetadata[];
   nodeLabel: string;
   nodeNotes?: string | null;
   nodeSources?: Source[];
@@ -37,7 +38,7 @@ interface ChatContentViewerProps {
 }
 
 export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps>(({
-  thread,
+  threadId,
   threads,
   nodeLabel,
   nodeNotes,
@@ -105,7 +106,7 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
       chatPanelRef.current.addNotesAttachment(pendingNotesAttachment);
       setPendingNotesAttachment(null);
     }
-  }, [pendingNotesAttachment, activeTab, thread]);
+  }, [pendingNotesAttachment, activeTab, threadId]);
 
   const handleSaveNotes = async (value: string) => {
     if (onNotesUpdate) {
@@ -275,7 +276,7 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
       {/* Tab Content */}
       <div className="flex-1 min-h-0 relative">
         {/* Floating Action Buttons - Only show when chat tab is active and thread exists */}
-        {activeTab === 'chat' && thread && (
+        {activeTab === 'chat' && threadId && (
           <div className="absolute top-4 right-4 z-10 flex gap-2 bg-black/20 p-3 rounded-lg backdrop-blur-sm">
             {onUnassignThread && (
               <button
@@ -288,7 +289,7 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
             )}
             {onNavigateToChat && (
               <button
-                onClick={() => onNavigateToChat(thread?.id)}
+                onClick={() => onNavigateToChat(threadId)}
                 className="bg-transparent hover:bg-blue-700 text-white p-3 rounded-full shadow-lg transition-colors border border-white"
                 title="Open in chat view"
               >
@@ -299,11 +300,10 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
         )}
         
         {activeTab === 'chat' ? (
-          thread ? (
+          threadId ? (
             <ChatPanel
               ref={chatPanelRef}
-              threadId={thread.id}
-              messages={thread.messages}
+              threadId={threadId}
               onMessagesUpdate={(messages) => {
                 if (onMessagesUpdate) {
                   onMessagesUpdate(messages);
@@ -315,7 +315,6 @@ export const ChatContentViewer = forwardRef<ChatPanelRef, ChatContentViewerProps
                   onDeleteMessage(messageId);
                 }
               }}
-              activeThread={thread}
               onRoleUpdate={onRoleUpdate}
               onCopyToNotes={handleCopyToNotes}
             />

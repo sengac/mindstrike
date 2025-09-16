@@ -20,12 +20,16 @@ import localLlmRoutes from './routes/local-llm.js';
 import modelScanRoutes from './routes/model-scan.js';
 import { MindmapAgentIterative } from './agents/mindmap-agent-iterative.js';
 import { WorkflowAgent } from './agents/workflow-agent.js';
+import { ConversationManager } from './conversation-manager.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Increase max listeners for development
+process.setMaxListeners(200);
 
 
 
@@ -61,6 +65,9 @@ let currentLlmConfig = {
 // Store custom roles per thread
 const threadRoles = new Map<string, string>();
 
+// Initialize conversation manager
+const conversationManager = new ConversationManager(workspaceRoot);
+
 const getAgentConfig = (threadId?: string): AgentConfig => ({
   workspaceRoot,
   llmConfig: currentLlmConfig,
@@ -75,16 +82,17 @@ class AgentPool {
 
   setCurrentThread(threadId: string): void {
     this.currentThreadId = threadId;
-    if (!this.agents.has(threadId)) {
-      this.agents.set(threadId, new Agent(getAgentConfig(threadId)));
-    }
   }
 
   getCurrentAgent(): Agent {
-    if (!this.agents.has(this.currentThreadId)) {
-      this.agents.set(this.currentThreadId, new Agent(getAgentConfig(this.currentThreadId)));
+    return this.getOrCreateAgent(this.currentThreadId);
+  }
+
+  private getOrCreateAgent(threadId: string): Agent {
+    if (!this.agents.has(threadId)) {
+      this.agents.set(threadId, new Agent(getAgentConfig(threadId)));
     }
-    return this.agents.get(this.currentThreadId)!;
+    return this.agents.get(threadId)!;
   }
 
   clearAllAgents(): void {
@@ -102,13 +110,14 @@ class AgentPool {
   }
 
   getAgent(threadId: string): Agent {
-    if (!this.agents.has(threadId)) {
-      this.agents.set(threadId, new Agent(getAgentConfig(threadId)));
-    }
-    return this.agents.get(threadId)!;
+    return this.getOrCreateAgent(threadId);
   }
 
   getWorkflowAgent(threadId: string): WorkflowAgent {
+    return this.getOrCreateWorkflowAgent(threadId);
+  }
+
+  private getOrCreateWorkflowAgent(threadId: string): WorkflowAgent {
     if (!this.workflowAgents.has(threadId)) {
       this.workflowAgents.set(threadId, new WorkflowAgent(getAgentConfig(threadId), threadId));
     }
@@ -280,9 +289,38 @@ async function refreshModelList() {
 
 initializeLLMServices();
 
+// Initialize conversation manager
+conversationManager.load().catch(error => {
+  logger.error('Failed to load conversation manager:', error);
+});
+
 // API Routes
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', workspace: workspaceRoot });
+// Health stream endpoint for connection monitoring
+app.get('/api/health/stream', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Cache-Control'
+  });
+
+  // Send initial ping
+  res.write('data: {"status":"connected"}\n\n');
+
+  // Send ping every 30 seconds to keep connection alive
+  const pingInterval = setInterval(() => {
+    res.write('data: {"status":"connected"}\n\n');
+  }, 30000);
+
+  // Clean up on client disconnect
+  req.on('close', () => {
+    clearInterval(pingInterval);
+  });
+
+  req.on('aborted', () => {
+    clearInterval(pingInterval);
+  });
 });
 
 // Legacy LLM configuration endpoints removed - now handled by server-side model management
@@ -639,8 +677,21 @@ app.get('/api/tasks/stream/:workflowId', (req: Request, res: Response) => {
   sseManager.addClient(clientId, res, topic);
 });
 
-app.get('/api/conversation', (req, res) => {
-  res.json(agentPool.getCurrentAgent().getConversation());
+app.get('/api/conversation/:threadId', (req, res) => {
+  const { threadId } = req.params;
+  if (!threadId) {
+    return res.status(400).json({ error: 'Thread ID is required' });
+  }
+  
+  // Temporarily set the thread to get its conversation
+  const previousThreadId = agentPool['currentThreadId'];
+  agentPool.setCurrentThread(threadId);
+  const conversation = agentPool.getCurrentAgent().getConversation();
+  
+  // Restore the previous thread
+  agentPool.setCurrentThread(previousThreadId);
+  
+  res.json(conversation);
 });
 
 
@@ -708,14 +759,42 @@ app.post('/api/message/stream', async (req: any, res: any) => {
       (agent as any).setChatTopic(topic);
     }
     
+    // Persist the user message
+    await conversationManager.load();
+    const userMessage = {
+      id: `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      role: 'user' as const,
+      content: message,
+      timestamp: new Date(),
+      images: images || [],
+      notes: notes || []
+    };
+    conversationManager.addMessage(threadId || 'default', userMessage);
+    
     // Create a custom streaming callback that sends character-by-character updates
     let assistantMessage: any = null;
     let lastContentLength = 0;
     
-    const streamingCallback = (updatedMessage: any) => {
+    const streamingCallback = async (updatedMessage: any) => {
       // For the first update, create the assistant message
       if (!assistantMessage) {
         assistantMessage = updatedMessage;
+        
+        // Persist the new assistant message
+        await conversationManager.load();
+        conversationManager.addMessage(threadId || 'default', {
+          id: updatedMessage.id,
+          role: 'assistant',
+          content: updatedMessage.content,
+          timestamp: new Date(updatedMessage.timestamp),
+          status: updatedMessage.status,
+          model: updatedMessage.model,
+          toolCalls: updatedMessage.toolCalls,
+          toolResults: updatedMessage.toolResults,
+          images: updatedMessage.images || [],
+          notes: updatedMessage.notes || []
+        });
+        
         sseManager.broadcast(topic, {
           type: 'message-update',
           message: updatedMessage
@@ -739,6 +818,18 @@ app.post('/api/message/stream', async (req: any, res: any) => {
       
       // Always send the full message update for status changes
       assistantMessage = updatedMessage;
+      
+      // Update the persisted message
+      await conversationManager.load();
+      conversationManager.updateMessage(threadId || 'default', updatedMessage.id, {
+        content: updatedMessage.content,
+        status: updatedMessage.status,
+        model: updatedMessage.model,
+        toolCalls: updatedMessage.toolCalls,
+        toolResults: updatedMessage.toolResults,
+        timestamp: new Date(updatedMessage.timestamp)
+      });
+      
       sseManager.broadcast(topic, {
         type: 'message-update',
         message: updatedMessage
@@ -749,11 +840,29 @@ app.post('/api/message/stream', async (req: any, res: any) => {
       // Use the legacy processMessage method with streaming callback
       const response = await agent.processMessage(message, images, notes, streamingCallback);
 
+      // Persist the final completed message
+      await conversationManager.load();
+      conversationManager.updateMessage(threadId || 'default', response.id, {
+        content: response.content,
+        status: 'completed',
+        model: response.model,
+        toolCalls: response.toolCalls,
+        toolResults: response.toolResults,
+        timestamp: new Date(response.timestamp)
+      });
+      
       // Send final completion event
       sseManager.broadcast(topic, {
         type: 'completed',
         message: response
       });
+      
+      // Close the response stream to signal completion to the client
+      setTimeout(() => {
+        res.end();
+        sseManager.removeClient(clientId);
+      }, 100); // Small delay to ensure the completion event is sent
+      
     } catch (processingError: any) {
       console.error('Error processing message:', processingError);
       
@@ -770,12 +879,13 @@ app.post('/api/message/stream', async (req: any, res: any) => {
           error: processingError.message
         });
       }
+      
+      // Close the response stream on error too
+      setTimeout(() => {
+        res.end();
+        sseManager.removeClient(clientId);
+      }, 100);
     }
-
-    // Remove client after processing (connection will be closed automatically)
-    setTimeout(() => {
-      sseManager.removeClient(clientId);
-    }, 1000);
 
   } catch (error: any) {
     console.error('Error setting up message stream:', error);
@@ -783,8 +893,20 @@ app.post('/api/message/stream', async (req: any, res: any) => {
   }
 });
 
-app.post('/api/conversation/clear', (req, res) => {
+app.post('/api/conversation/:threadId/clear', (req, res) => {
+  const { threadId } = req.params;
+  if (!threadId) {
+    return res.status(400).json({ error: 'Thread ID is required' });
+  }
+  
+  // Temporarily set the thread to clear its conversation
+  const previousThreadId = agentPool['currentThreadId'];
+  agentPool.setCurrentThread(threadId);
   agentPool.getCurrentAgent().clearConversation();
+  
+  // Restore the previous thread
+  agentPool.setCurrentThread(previousThreadId);
+  
   res.json({ success: true });
 });
 
@@ -999,38 +1121,115 @@ app.delete('/api/message/:messageId', (req: any, res: any) => {
   }
 });
 
-// Conversations (threads) API
-app.get('/api/conversations', async (req, res) => {
+// New Thread-based API
+app.get('/api/threads', async (req, res) => {
   try {
-    const fs = await import('fs/promises');
-    const conversationsPath = path.join(workspaceRoot, 'mindstrike-chats.json');
-    
-    try {
-      const data = await fs.readFile(conversationsPath, 'utf-8');
-      const conversations = JSON.parse(data);
-      res.json(conversations);
-    } catch (error) {
-      // File doesn't exist or is invalid, return empty array
-      res.json([]);
+    await conversationManager.load();
+    const threads = conversationManager.getThreadList();
+    res.json(threads);
+  } catch (error: any) {
+    console.error('Error loading threads:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/threads/:threadId/messages', async (req, res) => {
+  try {
+    const { threadId } = req.params;
+    await conversationManager.load();
+    const messages = conversationManager.getThreadMessages(threadId);
+    res.json(messages);
+  } catch (error: any) {
+    console.error('Error loading thread messages:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/threads', async (req, res) => {
+  try {
+    const { name } = req.body;
+    await conversationManager.load();
+    const thread = conversationManager.createThread(name);
+    res.json(thread);
+  } catch (error: any) {
+    console.error('Error creating thread:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/threads/:threadId', async (req, res) => {
+  try {
+    const { threadId } = req.params;
+    await conversationManager.load();
+    const deleted = conversationManager.deleteThread(threadId);
+    if (deleted) {
+      res.json({ success: true });
+    } else {
+      res.status(404).json({ error: 'Thread not found' });
     }
   } catch (error: any) {
-    console.error('Error loading conversations:', error);
+    console.error('Error deleting thread:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/threads/:threadId', async (req, res) => {
+  try {
+    const { threadId } = req.params;
+    const { name, customRole } = req.body;
+    await conversationManager.load();
+    
+    if (name !== undefined) {
+      conversationManager.renameThread(threadId, name);
+    }
+    if (customRole !== undefined) {
+      conversationManager.updateThreadRole(threadId, customRole);
+      threadRoles.set(threadId, customRole);
+    }
+    
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error updating thread:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/threads/:threadId/clear', async (req, res) => {
+  try {
+    const { threadId } = req.params;
+    await conversationManager.load();
+    const cleared = conversationManager.clearThread(threadId);
+    if (cleared) {
+      res.json({ success: true });
+    } else {
+      res.status(404).json({ error: 'Thread not found' });
+    }
+  } catch (error: any) {
+    console.error('Error clearing thread:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Legacy API compatibility - redirect to new endpoints
+app.get('/api/conversations', async (req, res) => {
+  try {
+    await conversationManager.load();
+    const threadList = conversationManager.getThreadList();
+    // Convert to old format for backward compatibility
+    const conversations = threadList.map(thread => ({
+      ...conversationManager.getThread(thread.id),
+      messageCount: thread.messageCount
+    }));
+    res.json(conversations);
+  } catch (error: any) {
+    console.error('Error loading conversations (legacy):', error);
     res.status(500).json({ error: error.message });
   }
 });
 
 app.post('/api/conversations', async (req, res) => {
-  try {
-    const fs = await import('fs/promises');
-    const conversations = req.body;
-    const conversationsPath = path.join(workspaceRoot, 'mindstrike-chats.json');
-    
-    await fs.writeFile(conversationsPath, JSON.stringify(conversations, null, 2));
-    res.json({ success: true });
-  } catch (error: any) {
-    console.error('Error saving conversations:', error);
-    res.status(500).json({ error: error.message });
-  }
+  // Legacy endpoint - deprecated
+  res.status(410).json({ error: 'This endpoint is deprecated. Use /api/threads endpoints instead.' });
 });
 
 // Workflows API
@@ -1645,7 +1844,7 @@ app.post('/api/workspace/directory', (req: any, res: any) => {
 });
 
 // Set workspace root
-app.post('/api/workspace/root', (req: any, res: any) => {
+app.post('/api/workspace/root', async (req: any, res: any) => {
   try {
     const { path: newPath } = req.body;
     if (!newPath) {
@@ -1676,6 +1875,9 @@ app.post('/api/workspace/root', (req: any, res: any) => {
     
     // Update workspace root for all agents in the pool
     agentPool.updateAllAgentsWorkspace(workspaceRoot);
+    
+    // Update conversation manager workspace
+    conversationManager.updateWorkspaceRoot(workspaceRoot);
     
     logger.info(`Workspace root changed to: ${workspaceRoot}`);
     
@@ -1830,6 +2032,44 @@ app.get('/api/mcp/status', async (req, res) => {
   }
 });
 
+app.get('/api/mcp/logs', async (req, res) => {
+  try {
+    const logs = mcpManager.getLogs();
+    res.json({ logs });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/mcp/diagnostics', async (req, res) => {
+  try {
+    const diagnostics = await mcpManager.getDiagnostics();
+    res.json(diagnostics);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/mcp/refresh-cache', async (req, res) => {
+  try {
+    mcpManager.refreshCommandCache();
+    res.json({ success: true, message: 'Command cache refreshed' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/mcp/logs/stream', (req, res) => {
+  const clientId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+  
+  // Add client to SSE manager for MCP logs
+  sseManager.addClient(clientId, res, 'mcp-logs');
+  
+  req.on('close', () => {
+    sseManager.removeClient(clientId);
+  });
+});
+
 app.get('/api/mcp/config', async (req, res) => {
   try {
     const { getMindstrikeDirectory } = await import('./utils/settings-directory.js');
@@ -1898,28 +2138,28 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/index.html'));
 });
 
+// Initialize MCP manager - always needed whether run directly or imported
+mcpManager.setWorkspaceRoot(workspaceRoot);
+mcpManager.initialize().then(() => {
+  logger.info('MCP Manager initialized');
+}).catch((error) => {
+  logger.error('Failed to initialize MCP Manager:', error);
+});
+
+// Listen for MCP tool changes and refresh agent tools
+mcpManager.on('toolsChanged', async () => {
+  logger.info('MCP tools changed, refreshing agent tools...');
+  await agentPool.refreshAllAgentsTools();
+});
+
+// Listen for MCP config reload and refresh agent tools
+mcpManager.on('configReloaded', async () => {
+  logger.info('MCP config reloaded, refreshing agent tools...');
+  await agentPool.refreshAllAgentsTools();
+});
+
 // Only start the server if this file is run directly (not imported)
 if (import.meta.url === `file://${process.argv[1]}`) {
-  // Initialize MCP manager with current workspace root
-  mcpManager.setWorkspaceRoot(workspaceRoot);
-  mcpManager.initialize().then(() => {
-    logger.info('MCP Manager initialized');
-  }).catch((error) => {
-    logger.error('Failed to initialize MCP Manager:', error);
-  });
-
-  // Listen for MCP tool changes and refresh agent tools
-  mcpManager.on('toolsChanged', async () => {
-    logger.info('MCP tools changed, refreshing agent tools...');
-    await agentPool.refreshAllAgentsTools();
-  });
-
-  // Listen for MCP config reload and refresh agent tools
-  mcpManager.on('configReloaded', async () => {
-    logger.info('MCP config reloaded, refreshing agent tools...');
-    await agentPool.refreshAllAgentsTools();
-  });
-
   app.listen(PORT, () => {
     logger.info(`Server running on port ${PORT}`);
     logger.info(`Workspace: ${workspaceRoot}`);

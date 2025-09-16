@@ -1,7 +1,8 @@
 // @ts-nocheck
 import { app, BrowserWindow, Menu, shell, dialog } from 'electron';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
+import fixPath from 'fix-path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -10,6 +11,10 @@ let mainWindow;
 let serverApp;
 
 const isDevelopment = process.env.NODE_ENV === 'development';
+
+// Fix PATH environment for GUI-launched Electron apps
+// This ensures npx and other shell commands are available
+fixPath();
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -76,7 +81,8 @@ async function startServer() {
     console.log('Starting embedded server...');
     
     // Import the full server with all API routes
-    const serverModule = await import(path.join(__dirname, '../dist/server/server/index.js'));
+    const serverPath = path.join(__dirname, '../dist/server/server/index.js');
+    const serverModule = await import(pathToFileURL(serverPath).href);
     const app = serverModule.default;
     
     if (!app || typeof app.listen !== 'function') {
@@ -227,7 +233,7 @@ function createMenu() {
   Menu.setApplicationMenu(menu);
 }
 
-// Create menu after app is ready
+// Hide menu bar
 app.whenReady().then(() => {
-  createMenu();
+  Menu.setApplicationMenu(null);
 });

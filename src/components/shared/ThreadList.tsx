@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { MessageSquare, Plus, Edit2, Trash2, UserCheck, Network } from 'lucide-react';
-import { Thread } from '../../types';
+import { MessageSquare, Plus, Edit2, Trash2, UserCheck } from 'lucide-react';
+
+import { ThreadMetadata } from '../../store/useThreadsStore';
 
 interface ThreadListProps {
-  threads: Thread[];
+  threads: ThreadMetadata[];
   activeThreadId?: string;
   onThreadSelect: (threadId: string) => void;
   onThreadCreate?: () => void;
@@ -33,7 +34,7 @@ export function ThreadList({
   const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
 
-  const handleStartEdit = (thread: Thread) => {
+  const handleStartEdit = (thread: ThreadMetadata) => {
     setEditingThreadId(thread.id);
     setEditingName(thread.name);
   };
@@ -117,14 +118,10 @@ export function ThreadList({
                           </div>
                         )}
                       </div>
-                      {thread.summary && (
-                        <p className="text-xs text-gray-400 mt-1 line-clamp-2">
-                          {thread.summary}
-                        </p>
-                      )}
+
                       <div className="flex items-center justify-between mt-1">
                         <p className="text-xs text-gray-500">
-                          {thread.messages.length} message{thread.messages.length !== 1 ? 's' : ''}
+                          {thread.messageCount} message{thread.messageCount !== 1 ? 's' : ''}
                         </p>
                         <p className="text-xs text-gray-500">
                           {thread.updatedAt.toLocaleDateString()}

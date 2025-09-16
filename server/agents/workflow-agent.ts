@@ -3,6 +3,7 @@ import { BaseMessage, HumanMessage, AIMessage, SystemMessage } from '@langchain/
 import { StateGraph, MessagesAnnotation, Annotation, START, END } from '@langchain/langgraph';
 import { logger } from '../logger.js';
 import { sseManager } from '../sse-manager.js';
+import { serverDebugLogger } from '../debug-logger.js';
 
 // Define the workflow state using LangGraph Annotations
 const WorkflowState = Annotation.Root({
@@ -238,6 +239,7 @@ export class WorkflowAgent extends BaseAgent {
 
   private shouldContinue(state: WorkflowStateType): "continue" | "finalize" {
     // Continue if there are more tasks and we haven't exceeded max iterations
+    // Note: iteration is the index of the NEXT task to execute
     if (state.iteration < state.plan.length && state.iteration < state.maxIterations) {
       return "continue";
     }
@@ -288,9 +290,31 @@ export class WorkflowAgent extends BaseAgent {
     Be thorough but concise in your reasoning.
     `;
 
-    const reasoningResponse = await this.chatModel.invoke([
-      new HumanMessage(reasoningPrompt)
-    ]);
+    // Log the request for debugging
+    const messages = [new HumanMessage(reasoningPrompt)];
+    serverDebugLogger.logRequest(
+      `[WorkflowAgent] Reasoning LLM Request: ${this.config.llmConfig.model}`,
+      JSON.stringify({
+        messages: messages.map(msg => ({
+          role: msg._getType(),
+          content: typeof msg.content === 'string' ? msg.content : '[Complex Content]'
+        })),
+        model: this.config.llmConfig.model,
+        phase: 'reasoning'
+      })
+    );
+
+    const reasoningResponse = await this.chatModel.invoke(messages);
+
+    // Log the response for debugging
+    serverDebugLogger.logResponse(
+      `[WorkflowAgent] Reasoning LLM Response: ${this.config.llmConfig.model}`,
+      JSON.stringify({
+        content: reasoningResponse.content.toString(),
+        model: this.config.llmConfig.model,
+        phase: 'reasoning'
+      })
+    );
 
     const reasoning = reasoningResponse.content.toString();
     
@@ -329,17 +353,48 @@ export class WorkflowAgent extends BaseAgent {
     
     Create a detailed step-by-step plan to accomplish the user's goal.
     
+    IMPORTANT CONTEXT: You have access to powerful automation tools including:
+    - Playwright browser automation (browser_navigate, browser_click, browser_type, browser_take_screenshot, etc.)
+    - File system operations (read_file, create_file, list_directory, etc.)
+    - Web search capabilities
+    - Code execution and analysis tools
+    
+    Plan tasks that UTILIZE these tools for automation rather than manual instructions.
+    For browser tasks, plan to use Playwright tools to actually control the browser.
+    
     IMPORTANT: Respond with ONLY a JSON array containing the tasks. No other text or formatting.
     
     Example format:
-    ["Task 1 description", "Task 2 description", "Task 3 description"]
+    ["Use browser_navigate to open google.com", "Use browser_type to enter search term", "Use browser_click to submit search"]
     
-    Keep task descriptions concise (1-2 sentences) and actionable.
+    Keep task descriptions concise (1-2 sentences) and tool-focused.
     `;
 
-    const planningResponse = await this.chatModel.invoke([
-      new HumanMessage(planningPrompt)
-    ]);
+    // Log the request for debugging
+    const planningMessages = [new HumanMessage(planningPrompt)];
+    serverDebugLogger.logRequest(
+      `[WorkflowAgent] Planning LLM Request: ${this.config.llmConfig.model}`,
+      JSON.stringify({
+        messages: planningMessages.map(msg => ({
+          role: msg._getType(),
+          content: typeof msg.content === 'string' ? msg.content : '[Complex Content]'
+        })),
+        model: this.config.llmConfig.model,
+        phase: 'planning'
+      })
+    );
+
+    const planningResponse = await this.chatModel.invoke(planningMessages);
+
+    // Log the response for debugging
+    serverDebugLogger.logResponse(
+      `[WorkflowAgent] Planning LLM Response: ${this.config.llmConfig.model}`,
+      JSON.stringify({
+        content: planningResponse.content.toString(),
+        model: this.config.llmConfig.model,
+        phase: 'planning'
+      })
+    );
 
     const planText = planningResponse.content.toString();
     
@@ -398,7 +453,7 @@ export class WorkflowAgent extends BaseAgent {
     
     if (!currentTask) {
       logger.warn(`[WorkflowAgent] No task found at iteration ${currentTaskIndex}, plan: ${JSON.stringify(state.plan)}`);
-      return {};
+      return { iteration: currentTaskIndex + 1 }; // Still increment to avoid infinite loop
     }
     
     // Broadcast task start
@@ -422,13 +477,32 @@ export class WorkflowAgent extends BaseAgent {
     
     Execute this specific task. Use appropriate tools if needed and provide a clear result.
     Focus only on this task - don't try to complete multiple tasks at once.
+    
+    IMPORTANT: You have access to powerful tools including:
+    - Playwright tools for browser automation (browser_navigate, browser_click, browser_type, etc.)
+    - File system tools for reading/writing files
+    - Web search tools
+    
+    Use these tools to actually perform the task rather than just providing instructions.
     `;
 
-    // Use direct chat model call to avoid system message conflicts
-    const response = await this.chatModel.invoke([
-      new HumanMessage(actionPrompt)
-    ]);
-    const actionResult = response.content.toString();
+    // Use the AgentExecutor to enable tool calling
+    let actionResult: string;
+    if (this.agentExecutor) {
+      try {
+        const result = await this.agentExecutor.invoke({
+          input: actionPrompt
+        });
+        actionResult = result.output || 'Task completed';
+      } catch (toolError: any) {
+        actionResult = `Tool execution failed: ${toolError.message}`;
+      }
+    } else {
+      const response = await this.chatModel.invoke([
+        new HumanMessage(actionPrompt)
+      ]);
+      actionResult = response.content.toString();
+    }
 
     // Store the result
     const taskKey = `task-${currentTaskIndex + 1}`;
@@ -460,30 +534,53 @@ export class WorkflowAgent extends BaseAgent {
   }
 
   private async observationNode(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
+    // Get the most recently completed task (iteration was just incremented in actionNode)
+    const lastCompletedTaskIndex = state.iteration - 1;
+    const lastCompletedTaskKey = `task-${lastCompletedTaskIndex + 1}`;
+    const taskResult = state.taskResults[lastCompletedTaskKey] || 'No results available';
+    
     const observationPrompt = `
     **OBSERVATION PHASE**
     
-    Review the results of the current task:
+    Review the results of the just-completed task:
     Task: ${state.currentTask || 'No task set'}
-    Result: ${JSON.stringify(state.taskResults[`task-${state.iteration}`] || 'No results available', null, 2)}
+    Result: ${JSON.stringify(taskResult, null, 2)}
     
-    Current iteration: ${state.iteration}
-    Total planned tasks: ${state.plan.length}
-    Plan: ${JSON.stringify(state.plan, null, 2)}
+    Progress: ${state.iteration}/${state.plan.length} tasks completed
     
     Analyze:
-    1. Was the task completed successfully?
-    2. Are there any issues or errors that need addressing?
-    3. How does this result contribute to the overall goal?
-    4. What should be done next?
+    1. Was this specific task completed successfully?
+    2. Are there any immediate issues that need addressing before continuing?
+    3. Should we proceed to the next task or finalize?
     
-    Provide a brief assessment.
+    Provide a brief assessment focused only on this task's outcome.
     `;
 
-    const observationResponse = await this.chatModel.invoke([
-      new SystemMessage(this.systemPrompt),
-      new HumanMessage(observationPrompt)
-    ]);
+    // Log the request for debugging
+    const observationMessages = [new SystemMessage(this.systemPrompt), new HumanMessage(observationPrompt)];
+    serverDebugLogger.logRequest(
+      `[WorkflowAgent] Observation LLM Request: ${this.config.llmConfig.model}`,
+      JSON.stringify({
+        messages: observationMessages.map(msg => ({
+          role: msg._getType(),
+          content: typeof msg.content === 'string' ? msg.content : '[Complex Content]'
+        })),
+        model: this.config.llmConfig.model,
+        phase: 'observation'
+      })
+    );
+
+    const observationResponse = await this.chatModel.invoke(observationMessages);
+
+    // Log the response for debugging
+    serverDebugLogger.logResponse(
+      `[WorkflowAgent] Observation LLM Response: ${this.config.llmConfig.model}`,
+      JSON.stringify({
+        content: observationResponse.content.toString(),
+        model: this.config.llmConfig.model,
+        phase: 'observation'
+      })
+    );
 
     const observation = observationResponse.content.toString();
 
@@ -508,23 +605,40 @@ export class WorkflowAgent extends BaseAgent {
     const finalizationPrompt = `
     **FINALIZATION PHASE**
     
-    Summarize the completed workflow:
-    
     Original Request: ${state.messages.filter(msg => msg instanceof HumanMessage).pop()?.content || ''}
     
-    Reasoning: ${state.reasoning}
+    Initial Analysis: ${state.reasoning}
     
-    Completed Tasks: ${Object.entries(state.taskResults).map(([key, result]) => 
-      `${key}: ${(result as any).description} -> ${(result as any).result}`
-    ).join('\n')}
+    Tasks Completed: ${state.plan.length}
     
-    Provide a comprehensive summary of what was accomplished, any key findings, and actionable next steps for the user.
+    Provide a comprehensive summary of what was accomplished and any actionable next steps for the user. Focus on outcomes rather than technical details of each task execution.
     `;
 
-    const finalizationResponse = await this.chatModel.invoke([
-      new SystemMessage(this.systemPrompt),
-      new HumanMessage(finalizationPrompt)
-    ]);
+    // Log the request for debugging
+    const finalizationMessages = [new SystemMessage(this.systemPrompt), new HumanMessage(finalizationPrompt)];
+    serverDebugLogger.logRequest(
+      `[WorkflowAgent] Finalization LLM Request: ${this.config.llmConfig.model}`,
+      JSON.stringify({
+        messages: finalizationMessages.map(msg => ({
+          role: msg._getType(),
+          content: typeof msg.content === 'string' ? msg.content : '[Complex Content]'
+        })),
+        model: this.config.llmConfig.model,
+        phase: 'finalization'
+      })
+    );
+
+    const finalizationResponse = await this.chatModel.invoke(finalizationMessages);
+
+    // Log the response for debugging
+    serverDebugLogger.logResponse(
+      `[WorkflowAgent] Finalization LLM Response: ${this.config.llmConfig.model}`,
+      JSON.stringify({
+        content: finalizationResponse.content.toString(),
+        model: this.config.llmConfig.model,
+        phase: 'finalization'
+      })
+    );
 
     const summary = finalizationResponse.content.toString();
     

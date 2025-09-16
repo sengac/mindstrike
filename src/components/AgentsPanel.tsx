@@ -1,4 +1,4 @@
-import { Settings, Power, AlertCircle, CheckCircle, Edit, Save, X } from 'lucide-react';
+import { Settings, Power, AlertCircle, CheckCircle, Edit, Save, X, Terminal } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { CodeEditor } from './CodeEditor';
 
@@ -155,13 +155,22 @@ export function AgentsPanel() {
               <Settings size={20} className="text-green-400" />
               <h2 className="text-lg font-semibold text-white">MCP Servers</h2>
             </div>
-            <button 
-              onClick={loadConfigContent}
-              className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
-            >
-              <Edit size={16} />
-              Edit Config
-            </button>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => (window as any).openDebugDialog?.('mcp')}
+                className="flex items-center gap-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg transition-colors"
+              >
+                <Terminal size={16} />
+                View Logs
+              </button>
+              <button 
+                onClick={loadConfigContent}
+                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
+              >
+                <Edit size={16} />
+                Edit Config
+              </button>
+            </div>
           </div>
           
           {loading ? (
@@ -243,6 +252,8 @@ export function AgentsPanel() {
             </div>
           )}
         </div>
+
+
       </div>
 
       {/* MCP Config Editor Modal */}
