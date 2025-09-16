@@ -3,14 +3,56 @@ import toast from 'react-hot-toast';
 import { ConversationMessage, ImageAttachment, NotesAttachment } from '../../types';
 import { useResponseValidation } from '../../hooks/useResponseValidation';
 
+// Decode base64 encoded strings and fetch large content in SSE data
+async function decodeBase64Fields(obj: any): Promise<any> {
+  if (!obj || typeof obj !== 'object') {
+    return obj;
+  }
+  
+  if (obj._base64 && typeof obj.data === 'string') {
+    // Properly decode UTF-8 base64 string
+    const bytes = Uint8Array.from(atob(obj.data), c => c.charCodeAt(0));
+    return new TextDecoder('utf-8').decode(bytes);
+  }
+  
+  if (obj._large_content && obj.contentId) {
+    try {
+      const response = await fetch(`/api/large-content/${obj.contentId}`);
+      if (response.ok) {
+        const data = await response.json();
+        return data.content;
+      } else {
+        return `[Large content not available - ${obj.length} characters]`;
+      }
+    } catch (error) {
+      console.error('Failed to fetch large content:', error);
+      return `[Large content fetch failed - ${obj.length} characters]`;
+    }
+  }
+  
+  if (Array.isArray(obj)) {
+    const results = await Promise.all(obj.map(item => decodeBase64Fields(item)));
+    return results;
+  }
+  
+  const result: any = {};
+  for (const [key, value] of Object.entries(obj)) {
+    result[key] = await decodeBase64Fields(value);
+  }
+  return result;
+}
+
+
+
 interface UseChatProps {
   threadId?: string;
   messages?: ConversationMessage[];
   onMessagesUpdate?: (messages: ConversationMessage[]) => void;
   onFirstMessage?: () => void;
+  isAgentMode?: boolean;
 }
 
-export function useChat({ threadId, messages: initialMessages = [], onMessagesUpdate, onFirstMessage }: UseChatProps = {}) {
+export function useChat({ threadId, messages: initialMessages = [], onMessagesUpdate, onFirstMessage, isAgentMode = false }: UseChatProps = {}) {
   const [messages, setMessages] = useState<ConversationMessage[]>(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
   const [localModelError, setLocalModelError] = useState<{ modelId: string; error: string } | null>(null);
@@ -70,7 +112,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
         const data = await response.json();
         setMessages(data.map((msg: any) => ({
           ...msg,
-          timestamp: new Date(msg.timestamp)
+          timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date()
         })));
       }
     } catch (error) {
@@ -107,7 +149,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
   setMessages(currentMessages);
 
   try {
-  const requestBody = { message: content, threadId, images: images || [], notes: notes || [] };
+  const requestBody = { message: content, threadId, images: images || [], notes: notes || [], isAgentMode };
   
   // Start the streaming request - this will set up the SSE connection
   const response = await fetch('/api/message/stream', {
@@ -239,7 +281,9 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
   if (line.startsWith('data: ')) {
   try {
   const data = JSON.parse(line.slice(6));
-  await processSSEData(data);
+  
+  const decodedData = await decodeBase64Fields(data);
+  await processSSEData(decodedData);
   } catch (parseError) {
   console.error('Error parsing SSE data:', parseError);
   }
@@ -335,7 +379,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ message: userMessage.content, threadId, images: userMessage.images || [], notes: userMessage.notes || [] })
+        body: JSON.stringify({ message: userMessage.content, threadId, images: userMessage.images || [], notes: userMessage.notes || [], isAgentMode })
       });
 
       if (!response.ok) {
@@ -383,7 +427,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
                   currentMessages = [...currentMessages, assistantMessage];
                   // Set loading to false once streaming starts
                   setIsLoading(false);
-                } else {
+                } else if (assistantMessage) {
                   // Append chunk to existing message
                   assistantMessage = {
                     ...assistantMessage,
@@ -397,7 +441,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
               } else if (data.type === 'message-update') {
                 const updatedMsg = {
                   ...data.message,
-                  timestamp: new Date(data.message.timestamp)
+                  timestamp: data.message.timestamp ? new Date(data.message.timestamp) : new Date()
                 };
                 
                 // Validate message before adding/updating
@@ -419,7 +463,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
               } else if (data.type === 'completed') {
                 const finalMsg = {
                   ...data.message,
-                  timestamp: new Date(data.message.timestamp)
+                  timestamp: data.message.timestamp ? new Date(data.message.timestamp) : new Date()
                 };
                 
                 // Validate final message
@@ -494,7 +538,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ message: newContent, threadId, images: [] })
+        body: JSON.stringify({ message: newContent, threadId, images: [], isAgentMode })
       });
 
       if (!response.ok) {
@@ -541,7 +585,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
                 currentMessages = [...currentMessages, assistantMessage];
                 // Set loading to false once streaming starts
                 setIsLoading(false);
-              } else {
+              } else if (assistantMessage) {
                 // Append chunk to existing message
                 assistantMessage = {
                   ...assistantMessage,
@@ -555,7 +599,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
             } else if (data.type === 'message-update') {
             const updatedMsg = {
             ...data.message,
-              timestamp: new Date(data.message.timestamp)
+              timestamp: data.message.timestamp ? new Date(data.message.timestamp) : new Date()
             };
             
             // Validate message before adding/updating
@@ -578,7 +622,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
 
               const finalMsg = {
               ...data.message,
-                timestamp: new Date(data.message.timestamp)
+                timestamp: data.message.timestamp ? new Date(data.message.timestamp) : new Date()
                  };
                 
                 // Validate final message
@@ -630,7 +674,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
     setIsLoading(true);
     
     try {
-      const requestBody = { message: lastMessage.content, threadId, images: lastMessage.images || [] };
+      const requestBody = { message: lastMessage.content, threadId, images: lastMessage.images || [], isAgentMode };
       
       // Use SSE for real-time updates
       const response = await fetch('/api/message/stream', {
@@ -647,6 +691,9 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
       }
 
       const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('Failed to get response reader');
+      }
       const decoder = new TextDecoder();
       let currentMessages = [...messages];
       let assistantMessage: ConversationMessage | null = null;
@@ -678,7 +725,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
                   currentMessages = [...currentMessages, assistantMessage];
                   // Set loading to false once streaming starts
                   setIsLoading(false);
-                } else {
+                } else if (assistantMessage) {
                   // Append chunk to existing message
                   assistantMessage = {
                     ...assistantMessage,
@@ -692,7 +739,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
               } else if (data.type === 'message-update') {
                 const updatedMessage = {
                   ...data.message,
-                  timestamp: new Date(data.message.timestamp)
+                  timestamp: data.message.timestamp ? new Date(data.message.timestamp) : new Date()
                 };
                 
                 const validatedMessage = await validateAndProcessMessage(updatedMessage);
@@ -710,7 +757,7 @@ export function useChat({ threadId, messages: initialMessages = [], onMessagesUp
               } else if (data.type === 'completed') {
                 const finalMsg = {
                   ...data.message,
-                  timestamp: new Date(data.message.timestamp)
+                  timestamp: data.message.timestamp ? new Date(data.message.timestamp) : new Date()
                 };
                 
                 const validatedFinalMsg = await validateAndProcessMessage(finalMsg);

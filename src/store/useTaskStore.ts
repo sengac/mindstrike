@@ -38,6 +38,9 @@ interface TaskState {
   // Global task queue (for potential future use)
   globalQueue: Task[];
   
+  // SSE Connection
+  workflowEventSource: EventSource | null;
+  
   // UI State
   isVisible: boolean;
   isLoading: boolean;
@@ -62,6 +65,10 @@ interface TaskState {
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   
+  // SSE actions
+  connectWorkflowSSE: () => void;
+  disconnectWorkflowSSE: () => void;
+  
   // Utilities
   getWorkflowProgress: (workflowId: string) => { completed: number; total: number; percentage: number };
   getActiveTask: () => Task | null;
@@ -74,6 +81,7 @@ export const useTaskStore = create<TaskState>()(
         currentWorkflow: null,
         workflows: [],
         globalQueue: [],
+        workflowEventSource: null,
         isVisible: false,
         isLoading: false,
         error: null,
@@ -302,6 +310,15 @@ export const useTaskStore = create<TaskState>()(
         setLoading: (isLoading: boolean) => set({ isLoading }),
         setError: (error: string | null) => set({ error }),
         
+        // SSE actions (deprecated - now handled globally)
+        connectWorkflowSSE: () => {
+          // No-op - SSE is now connected globally
+        },
+        
+        disconnectWorkflowSSE: () => {
+          // No-op - SSE connection is maintained globally
+        },
+        
         // Utilities
         getWorkflowProgress: (workflowId: string) => {
           const state = get();
@@ -329,5 +346,98 @@ export const useTaskStore = create<TaskState>()(
   )
 );
 
-// Helper function to connect to task SSE updates
-// SSE connection logic removed - now using direct API calls
+// Global SSE listener that runs immediately when the module loads
+let sseInitialized = false;
+let currentEventSource: EventSource | null = null;
+
+function createWorkflowSSEConnection(): EventSource {
+  const eventSource = new EventSource('/api/tasks/stream/workflow-general');
+  
+  eventSource.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      
+      switch (data.type) {
+        case 'workflow_started':
+          useTaskStore.getState().startWorkflow(data.workflowId, data.originalQuery, data.contextId);
+          break;
+          
+        case 'tasks_planned':
+          if (data.tasks && Array.isArray(data.tasks)) {
+            const tasks: Task[] = data.tasks.map((task: any) => ({
+              id: task.id,
+              type: 'analyze',
+              description: task.description,
+              priority: task.priority || 'medium',
+              status: task.status || 'todo',
+              createdAt: new Date()
+            }));
+            useTaskStore.getState().setWorkflowTasks(data.workflowId, tasks);
+          }
+          break;
+          
+        case 'task_progress':
+          if (data.task) {
+            useTaskStore.getState().updateTaskStatus(
+              data.workflowId, 
+              data.task.id, 
+              data.task.status,
+              data.task.result,
+              data.task.error
+            );
+          }
+          break;
+          
+        case 'task_completed':
+          if (data.task) {
+            useTaskStore.getState().updateTaskStatus(
+              data.workflowId, 
+              data.task.id, 
+              'completed',
+              data.task.result,
+              data.task.error
+            );
+          }
+          break;
+          
+        case 'workflow_completed':
+          useTaskStore.getState().completeWorkflow(data.workflowId, data.totalChanges || 0);
+          break;
+          
+        case 'workflow_failed':
+          useTaskStore.getState().failWorkflow(data.workflowId, data.error || 'Unknown error');
+          break;
+      }
+    } catch (error) {
+      console.error('Error parsing workflow SSE message:', error);
+    }
+  };
+  
+  eventSource.onerror = (error) => {
+    console.error('[TaskStore] Global SSE connection error:', error);
+    if (eventSource.readyState === EventSource.CLOSED) {
+      // Auto-reconnect after 3 seconds
+      setTimeout(() => {
+        if (currentEventSource === eventSource) {
+          currentEventSource = createWorkflowSSEConnection();
+        }
+      }, 3000);
+    }
+  };
+  
+  return eventSource;
+}
+
+// Initialize SSE connection when the module loads
+function initializeWorkflowSSE() {
+  if (!sseInitialized) {
+    sseInitialized = true;
+    // Small delay to ensure server is ready
+    setTimeout(() => {
+      currentEventSource = createWorkflowSSEConnection();
+    }, 1000);
+  }
+}
+
+// Start the global SSE connection
+initializeWorkflowSSE();

@@ -11,19 +11,34 @@ export function useConnectionMonitor() {
   }, [isConnected]);
 
   useEffect(() => {
+    let currentAbortController: AbortController | null = null;
+    
     const checkConnection = () => {
+      // Cancel previous request if still pending
+      if (currentAbortController) {
+        currentAbortController.abort();
+      }
+      
+      currentAbortController = new AbortController();
+      const timeoutId = setTimeout(() => currentAbortController?.abort(), 3000);
+      
       fetch('/api/health', { 
         method: 'GET',
         cache: 'no-cache',
-        signal: AbortSignal.timeout(3000)
+        signal: currentAbortController.signal
       })
         .then(response => {
+          clearTimeout(timeoutId);
           const connected = response.ok;
           setIsConnected(connected);
           scheduleNextCheck();
         })
-        .catch(() => {
-          setIsConnected(false);
+        .catch((error) => {
+          clearTimeout(timeoutId);
+          // Don't set disconnected if the request was just aborted
+          if (error.name !== 'AbortError') {
+            setIsConnected(false);
+          }
           scheduleNextCheck();
         });
     };
@@ -47,6 +62,11 @@ export function useConnectionMonitor() {
     window.addEventListener('offline', handleOffline);
 
     return () => {
+      // Cancel any pending request
+      if (currentAbortController) {
+        currentAbortController.abort();
+      }
+      
       if (intervalRef.current) {
         clearTimeout(intervalRef.current);
       }

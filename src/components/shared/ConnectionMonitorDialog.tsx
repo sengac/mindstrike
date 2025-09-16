@@ -1,16 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { BaseDialog } from './BaseDialog';
 import { useDialogAnimation } from '../../hooks/useDialogAnimation';
-import { useConnectionMonitor } from '../../hooks/useConnectionMonitor';
 
 interface ConnectionMonitorDialogProps {
   isOpen: boolean;
   onClose: () => void;
+  isConnected: boolean;
 }
 
-export function ConnectionMonitorDialog({ isOpen, onClose }: ConnectionMonitorDialogProps) {
+export function ConnectionMonitorDialog({ isOpen, onClose, isConnected }: ConnectionMonitorDialogProps) {
   const { shouldRender, isVisible, handleClose } = useDialogAnimation(isOpen, onClose);
-  const { isConnected } = useConnectionMonitor();
 
   // Auto-close when connection is restored
   useEffect(() => {

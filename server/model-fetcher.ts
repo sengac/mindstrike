@@ -920,7 +920,7 @@ export class ModelFetcher {
       const path = await import('path');
       const { getHomeDirectory } = await import('./utils/settings-directory.js');
       
-      const cacheFile = path.join(getHomeDirectory(), '.mindstrike-model-accessibility.json');
+      const cacheFile = path.join(this.cacheDir, 'model-accessibility.json');
       const data = await fs.readFile(cacheFile, 'utf-8');
       this.accessibilityCache = JSON.parse(data);
       logger.debug('Loaded model accessibility cache');
@@ -983,7 +983,7 @@ export class ModelFetcher {
       const path = await import('path');
       const { getHomeDirectory } = await import('./utils/settings-directory.js');
       
-      const cacheFile = path.join(getHomeDirectory(), '.mindstrike-model-accessibility.json');
+      const cacheFile = path.join(this.cacheDir, 'model-accessibility.json');
       await fs.writeFile(cacheFile, JSON.stringify(this.accessibilityCache, null, 2));
       logger.debug('Saved model accessibility cache');
     } catch (error) {

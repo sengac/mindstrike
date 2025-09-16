@@ -781,7 +781,12 @@ function ChatMessageComponent({ message, onDelete, onRegenerate, onCancelToolCal
         
         <div className={`text-xs text-gray-500 mt-1 ${isUser ? 'text-right' : 'flex items-center justify-between'}`}>
           <div>
-            <span>{message.timestamp.toLocaleTimeString()}</span>
+            <span>{
+              (() => {
+                const date = new Date(message.timestamp);
+                return isNaN(date.getTime()) ? 'Now' : date.toLocaleTimeString();
+              })()
+            }</span>
             {!isUser && message.model && (
               <span className="ml-2 text-gray-400">
                 via {message.model}

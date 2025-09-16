@@ -1,7 +1,8 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import path from 'path';
-import fs from 'fs';
+import fs from 'fs/promises';
+import { existsSync, statSync } from 'fs';
 import os from 'os';
 import { fileURLToPath } from 'url';
 // NOTE: .js extensions are required for ES modules in Node.js/Electron
@@ -11,12 +12,14 @@ import { logger } from './logger.js';
 import { cleanContentForLLM } from './utils/content-filter.js';
 import { LLMScanner } from './llm-scanner.js';
 import { LLMConfigManager } from './llm-config-manager.js';
+import { mcpManager } from './mcp-manager.js';
 import { getHomeDirectory } from './utils/settings-directory.js';
 import { sseManager } from './sse-manager.js';
 import { getLocalLLMManager } from './local-llm-singleton.js';
 import localLlmRoutes from './routes/local-llm.js';
 import modelScanRoutes from './routes/model-scan.js';
 import { MindmapAgentIterative } from './agents/mindmap-agent-iterative.js';
+import { WorkflowAgent } from './agents/workflow-agent.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -67,6 +70,7 @@ const getAgentConfig = (threadId?: string): AgentConfig => ({
 // Thread-aware agent pool
 class AgentPool {
   private agents: Map<string, Agent> = new Map();
+  private workflowAgents: Map<string, WorkflowAgent> = new Map();
   private currentThreadId: string = 'default';
 
   setCurrentThread(threadId: string): void {
@@ -85,11 +89,15 @@ class AgentPool {
 
   clearAllAgents(): void {
     this.agents.clear();
+    this.workflowAgents.clear();
   }
 
   updateAllAgentsLLMConfig(newLlmConfig: any): void {
     for (const agent of this.agents.values()) {
       agent.updateLLMConfig(newLlmConfig);
+    }
+    for (const workflowAgent of this.workflowAgents.values()) {
+      workflowAgent.updateLLMConfig(newLlmConfig);
     }
   }
 
@@ -100,20 +108,53 @@ class AgentPool {
     return this.agents.get(threadId)!;
   }
 
+  getWorkflowAgent(threadId: string): WorkflowAgent {
+    if (!this.workflowAgents.has(threadId)) {
+      this.workflowAgents.set(threadId, new WorkflowAgent(getAgentConfig(threadId), threadId));
+    }
+    return this.workflowAgents.get(threadId)!;
+  }
+
   updateAllAgentsWorkspace(newWorkspaceRoot: string): void {
     try {
       // Update global workspace root
       workspaceRoot = newWorkspaceRoot;
+      
+      // Update MCP manager workspace root
+      mcpManager.setWorkspaceRoot(newWorkspaceRoot);
+      
       for (const agent of this.agents.values()) {
-        if (agent && (agent as any).toolSystem) {
-          (agent as any).toolSystem.workspaceRoot = newWorkspaceRoot;
-        }
         if (agent && (agent as any).config) {
           (agent as any).config.workspaceRoot = newWorkspaceRoot;
         }
       }
+      for (const workflowAgent of this.workflowAgents.values()) {
+        if (workflowAgent && (workflowAgent as any).config) {
+          (workflowAgent as any).config.workspaceRoot = newWorkspaceRoot;
+        }
+      }
     } catch (error) {
       logger.error('Error updating agents workspace:', error);
+    }
+  }
+
+  async refreshAllAgentsTools(): Promise<void> {
+    try {
+      // Refresh tools for all regular agents
+      for (const agent of this.agents.values()) {
+        if (agent && typeof (agent as any).refreshTools === 'function') {
+          await (agent as any).refreshTools();
+        }
+      }
+      // Refresh tools for all workflow agents  
+      for (const workflowAgent of this.workflowAgents.values()) {
+        if (workflowAgent && typeof (workflowAgent as any).refreshTools === 'function') {
+          await (workflowAgent as any).refreshTools();
+        }
+      }
+      logger.info('[AgentPool] Refreshed tools for all agents');
+    } catch (error) {
+      logger.error('Error refreshing agents tools:', error);
     }
   }
 
@@ -556,6 +597,18 @@ app.get('/api/debug/stream', (req, res) => {
   sseManager.addClient(clientId, res, 'debug');
 });
 
+// Endpoint to fetch large content by ID
+app.get('/api/large-content/:contentId', (req, res) => {
+  const { contentId } = req.params;
+  const content = sseManager.getLargeContent(contentId);
+  
+  if (content) {
+    res.json({ content });
+  } else {
+    res.status(404).json({ error: 'Content not found' });
+  }
+});
+
 // SSE endpoint for generation streaming
 app.get('/api/generate/stream/:streamId', (req: Request, res: Response) => {
   const { streamId } = req.params;
@@ -564,6 +617,21 @@ app.get('/api/generate/stream/:streamId', (req: Request, res: Response) => {
 });
 
 // SSE endpoint for task progress updates
+// SSE endpoint for general workflow updates (used by chat) - MUST be before the parameterized route
+app.get('/api/tasks/stream/workflow-general', (req: Request, res: Response) => {
+  const clientId = `workflow-${Date.now()}`;
+  sseManager.addClient(clientId, res, 'workflow');
+  
+  // Send a test event after connection
+  setTimeout(() => {
+    sseManager.broadcast('workflow', {
+      type: 'test',
+      message: 'SSE connection working',
+      timestamp: Date.now()
+    });
+  }, 1000);
+});
+
 app.get('/api/tasks/stream/:workflowId', (req: Request, res: Response) => {
   const { workflowId } = req.params;
   const clientId = `task-${workflowId}-${Date.now()}`;
@@ -579,7 +647,7 @@ app.get('/api/conversation', (req, res) => {
 
 app.post('/api/message', async (req: any, res: any) => {
   try {
-    const { message, threadId, images, notes } = req.body;
+    const { message, threadId, images, notes, isAgentMode } = req.body;
     if (!message && (!images || images.length === 0)) {
       return res.status(400).json({ error: 'Message or images are required' });
     }
@@ -594,7 +662,10 @@ app.post('/api/message', async (req: any, res: any) => {
       agentPool.setCurrentThread(threadId);
     }
 
-    const response = await agentPool.getCurrentAgent().processMessage(message, images, notes);
+    const agent = isAgentMode 
+      ? agentPool.getWorkflowAgent(threadId || 'default')
+      : agentPool.getCurrentAgent();
+    const response = await agent.processMessage(message, images, notes);
     res.json(response);
   } catch (error: any) {
     console.error('Error processing message:', error);
@@ -605,7 +676,7 @@ app.post('/api/message', async (req: any, res: any) => {
 // SSE endpoint for real-time message processing
 app.post('/api/message/stream', async (req: any, res: any) => {
   try {
-    const { message, threadId, images, notes } = req.body;
+    const { message, threadId, images, notes, isAgentMode } = req.body;
     if (!message && (!images || images.length === 0)) {
       return res.status(400).json({ error: 'Message or images are required' });
     }
@@ -627,8 +698,15 @@ app.post('/api/message/stream', async (req: any, res: any) => {
     // Add client to SSE manager
     sseManager.addClient(clientId, res, topic);
 
-    // Process message with real-time streaming using thread-specific agent
-    const agent = agentPool.getCurrentAgent();
+    // Process message with real-time streaming using thread-specific agent or workflow agent
+    const agent = isAgentMode 
+      ? agentPool.getWorkflowAgent(threadId || 'default')
+      : agentPool.getCurrentAgent();
+    
+    // Set chat topic for workflow agent so it can broadcast to both workflow and chat topics
+    if (isAgentMode && agent && 'setChatTopic' in agent) {
+      (agent as any).setChatTopic(topic);
+    }
     
     // Create a custom streaming callback that sends character-by-character updates
     let assistantMessage: any = null;
@@ -1411,64 +1489,6 @@ app.post('/api/mindmaps/:mindMapId/plan-tasks', async (req: Request, res: Respon
   }
 });
 
-app.post('/api/mindmaps/:mindMapId/execute-task', async (req: Request, res: Response) => {
-  try {
-    const { mindMapId } = req.params;
-    const { taskId, task, selectedNodeId, workflowId } = req.body;
-
-    if (!task) {
-      return res.status(400).json({ error: 'Task is required' });
-    }
-
-    // Check if LLM model is configured
-    if (!currentLlmConfig.model || currentLlmConfig.model.trim() === '') {
-      return res.status(400).json({ error: 'No LLM model configured. Please select a model from the available options.' });
-    }
-
-    // Import MindmapAgent
-    const { MindmapAgent } = await import('./agents/mindmap-agent.js');
-    
-    // Create mindmap agent with current config
-    const mindmapAgent = new MindmapAgent({
-      workspaceRoot,
-      llmConfig: currentLlmConfig
-    });
-
-    // Set mindmap context
-    await mindmapAgent.setMindmapContext(mindMapId, selectedNodeId);
-
-    // Execute individual task
-    const result = await mindmapAgent.executeIndividualTask(task);
-
-    // Broadcast task completion to frontend if workflowId is provided
-    if (workflowId) {
-      const { broadcastTaskUpdate } = await import('./routes/tasks.js');
-      broadcastTaskUpdate(workflowId, {
-        type: 'task_completed',
-        workflowId: workflowId,
-        taskId: taskId,
-        description: task.description,
-        status: 'completed',
-        changes: result.changes,
-        result: result
-      });
-    }
-    
-    res.json({
-      success: true,
-      taskId,
-      workflowId,
-      result: {
-        changes: result.changes
-      }
-    });
-
-  } catch (error: any) {
-    logger.error('Error executing mindmap task:', error);
-    res.status(500).json({ error: error.message, taskId: req.body.taskId });
-  }
-});
-
 app.post('/api/generate-title', async (req: any, res: any) => {
   try {
     const { context } = req.body;
@@ -1608,11 +1628,11 @@ app.post('/api/workspace/directory', (req: any, res: any) => {
     }
     
     // Check if the path exists and is a directory
-    if (!fs.existsSync(fullPath)) {
+    if (!existsSync(fullPath)) {
       return res.status(404).json({ error: 'Directory does not exist' });
     }
     
-    const stats = fs.statSync(fullPath);
+    const stats = statSync(fullPath);
     if (!stats.isDirectory()) {
       return res.status(400).json({ error: 'Path is not a directory' });
     }
@@ -1641,11 +1661,11 @@ app.post('/api/workspace/root', (req: any, res: any) => {
     }
     
     // Check if the path exists and is a directory
-    if (!fs.existsSync(fullPath)) {
+    if (!existsSync(fullPath)) {
       return res.status(404).json({ error: 'Directory does not exist' });
     }
     
-    const stats = fs.statSync(fullPath);
+    const stats = statSync(fullPath);
     if (!stats.isDirectory()) {
       return res.status(400).json({ error: 'Path is not a directory' });
     }
@@ -1671,38 +1691,19 @@ app.post('/api/workspace/root', (req: any, res: any) => {
 
 app.get('/api/workspace/files', async (req, res) => {
   try {
-    // If we're outside the workspace, use absolute path directly
-    let pathToList;
-    if (currentWorkingDirectory.startsWith(workspaceRoot)) {
-      pathToList = path.relative(workspaceRoot, currentWorkingDirectory) || '.';
-    } else {
-      // When outside workspace, we need to temporarily change the workspace root for this operation
-      const currentAgent = agentPool.getCurrentAgent();
-      const originalRoot = (currentAgent as any).toolSystem.workspaceRoot;
-      (currentAgent as any).toolSystem.workspaceRoot = currentWorkingDirectory;
-      pathToList = '.';
-      
-      const result = await (currentAgent as any)['toolSystem'].executeTool('list_directory', { path: pathToList });
-      
-      // Restore original workspace root
-      (currentAgent as any).toolSystem.workspaceRoot = originalRoot;
-      
-      if (result.success) {
-        const files = result.output?.split('\n').filter((f: string) => f) || [];
-        res.json(files);
-      } else {
-        res.status(500).json({ error: result.error });
-      }
-      return;
-    }
+    const targetDir = currentWorkingDirectory;
+    const entries = await fs.readdir(targetDir, { withFileTypes: true });
     
-    const result = await (agentPool.getCurrentAgent() as any)['toolSystem'].executeTool('list_directory', { path: pathToList });
-    if (result.success) {
-      const files = result.output?.split('\n').filter((f: string) => f) || [];
-      res.json(files);
-    } else {
-      res.status(500).json({ error: result.error });
-    }
+    const files = entries
+      .sort((a, b) => {
+        // Directories first, then files
+        if (a.isDirectory() && !b.isDirectory()) return -1;
+        if (!a.isDirectory() && b.isDirectory()) return 1;
+        return a.name.localeCompare(b.name);
+      })
+      .map(entry => entry.isDirectory() ? `${entry.name}/` : entry.name);
+    
+    res.json(files);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -1711,16 +1712,12 @@ app.get('/api/workspace/files', async (req, res) => {
 app.get('/api/workspace/file/:path(*)', async (req, res) => {
   try {
     const filePath = req.params.path;
-    // Use raw content for file editor (no line numbers)
-    const result = await (agentPool.getCurrentAgent() as any)['toolSystem'].readFileRaw(filePath);
+    const fullPath = path.resolve(workspaceRoot, filePath);
     
-    if (result.success) {
-      res.json({ content: result.output });
-    } else {
-      res.status(404).json({ error: result.error });
-    }
+    const content = await fs.readFile(fullPath, 'utf-8');
+    res.json({ content });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(404).json({ error: error.message });
   }
 });
 
@@ -1731,41 +1728,170 @@ app.post('/api/workspace/save', async (req: any, res: any) => {
       return res.status(400).json({ error: 'Path and content are required' });
     }
 
-    const result = await (agentPool.getCurrentAgent() as any)['toolSystem'].executeTool('create_file', { 
-      path: filePath, 
-      content 
-    });
+    const fullPath = path.resolve(workspaceRoot, filePath);
+    await fs.mkdir(path.dirname(fullPath), { recursive: true });
+    await fs.writeFile(fullPath, content, 'utf-8');
     
-    if (result.success) {
-      res.json({ success: true });
-    } else {
-      res.status(500).json({ error: result.error });
-    }
+    res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
 
 app.post('/api/workspace/delete', async (req: any, res: any) => {
+  const { path: filePath } = req.body;
   try {
-    const { path: filePath } = req.body;
     if (!filePath) {
       return res.status(400).json({ error: 'Path is required' });
     }
 
-    const result = await (agentPool.getCurrentAgent() as any)['toolSystem'].executeTool('delete_file', { 
-      path: filePath
-    });
+    const fullPath = path.resolve(workspaceRoot, filePath);
+    await fs.unlink(fullPath);
     
-    if (result.success) {
-      res.json({ success: true, message: result.output });
+    res.json({ success: true, message: `Successfully deleted file: ${filePath}` });
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      res.status(404).json({ error: `File not found: ${filePath}` });
     } else {
-      res.status(500).json({ error: result.error });
+      res.status(500).json({ error: error.message });
     }
+  }
+});
+
+// MCP API Routes
+app.get('/api/mcp/servers', async (req, res) => {
+  try {
+    const servers = mcpManager.getServerConfigs();
+    res.json({ servers });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
+
+app.get('/api/mcp/tools', async (req, res) => {
+  try {
+    const tools = mcpManager.getAvailableTools();
+    res.json({ tools });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/mcp/servers', async (req, res) => {
+  try {
+    const config = req.body;
+    if (!config.id || !config.name || !config.command) {
+      return res.status(400).json({ error: 'Missing required fields: id, name, command' });
+    }
+    
+    await mcpManager.addServerConfig(config);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/mcp/servers/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    
+    await mcpManager.updateServerConfig(id, updates);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/mcp/servers/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await mcpManager.removeServerConfig(id);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/mcp/status', async (req, res) => {
+  try {
+    const connectedServers = mcpManager.getConnectedServers();
+    const totalServers = mcpManager.getServerConfigs().length;
+    const tools = mcpManager.getAvailableTools();
+    
+    res.json({
+      connectedServers: connectedServers.length,
+      totalServers,
+      totalTools: tools.length,
+      servers: connectedServers
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/mcp/config', async (req, res) => {
+  try {
+    const { getMindstrikeDirectory } = await import('./utils/settings-directory.js');
+    const configPath = path.join(getMindstrikeDirectory(), 'mcp-config.json');
+    const configData = await fs.readFile(configPath, 'utf-8');
+    res.json({ config: configData });
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      // Return default config if file doesn't exist
+      const defaultConfig = {
+        mcpServers: {}
+      };
+      res.json({ config: JSON.stringify(defaultConfig, null, 2) });
+    } else {
+      res.status(500).json({ error: error.message });
+    }
+  }
+});
+
+app.post('/api/mcp/config', async (req, res) => {
+  try {
+    const { config } = req.body;
+    if (typeof config !== 'string') {
+      return res.status(400).json({ error: 'Config must be a string' });
+    }
+
+    // Validate JSON
+    try {
+      const parsed = JSON.parse(config);
+      if (!parsed.mcpServers || typeof parsed.mcpServers !== 'object') {
+        return res.status(400).json({ error: 'Config must contain mcpServers object' });
+      }
+    } catch (e) {
+      return res.status(400).json({ error: 'Invalid JSON format' });
+    }
+
+    const { getMindstrikeDirectory } = await import('./utils/settings-directory.js');
+    const configPath = path.join(getMindstrikeDirectory(), 'mcp-config.json');
+    
+    // Ensure directory exists
+    await fs.mkdir(getMindstrikeDirectory(), { recursive: true });
+    await fs.writeFile(configPath, config, 'utf-8');
+    
+    // Reload MCP manager with new config
+    await mcpManager.reload();
+    
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/mcp/refresh', async (req, res) => {
+  try {
+    await mcpManager.reload();
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 
 // Serve React app for all non-API routes (SPA catch-all)
 app.get('*', (req, res) => {
@@ -1774,6 +1900,26 @@ app.get('*', (req, res) => {
 
 // Only start the server if this file is run directly (not imported)
 if (import.meta.url === `file://${process.argv[1]}`) {
+  // Initialize MCP manager with current workspace root
+  mcpManager.setWorkspaceRoot(workspaceRoot);
+  mcpManager.initialize().then(() => {
+    logger.info('MCP Manager initialized');
+  }).catch((error) => {
+    logger.error('Failed to initialize MCP Manager:', error);
+  });
+
+  // Listen for MCP tool changes and refresh agent tools
+  mcpManager.on('toolsChanged', async () => {
+    logger.info('MCP tools changed, refreshing agent tools...');
+    await agentPool.refreshAllAgentsTools();
+  });
+
+  // Listen for MCP config reload and refresh agent tools
+  mcpManager.on('configReloaded', async () => {
+    logger.info('MCP config reloaded, refreshing agent tools...');
+    await agentPool.refreshAllAgentsTools();
+  });
+
   app.listen(PORT, () => {
     logger.info(`Server running on port ${PORT}`);
     logger.info(`Workspace: ${workspaceRoot}`);

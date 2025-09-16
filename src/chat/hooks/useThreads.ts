@@ -21,7 +21,7 @@ export function useThreads() {
           updatedAt: new Date(thread.updatedAt),
           messages: thread.messages.map((msg: any) => ({
             ...msg,
-            timestamp: new Date(msg.timestamp)
+            timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date()
           }))
         }));
         setThreads(parsedThreads);
@@ -192,7 +192,7 @@ export function useThreads() {
               updatedAt: new Date(thread.updatedAt),
               messages: thread.messages.map((msg: any) => ({
                 ...msg,
-                timestamp: new Date(msg.timestamp)
+                timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date()
               }))
             }));
             setThreads(formattedThreads);

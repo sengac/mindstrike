@@ -2,8 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ChatPanel, ChatPanelRef } from './chat/components/ChatPanel';
 import { ThreadsPanel } from './chat/components/ThreadsPanel';
-import { WorkflowsPanel } from './workflows/components/WorkflowsPanel';
-import { WorkflowsView } from './workflows/components/WorkflowsView';
+
 import { MindMapsPanel } from './mindmaps/components/MindMapsPanel';
 import { MindMapsView } from './mindmaps/components/MindMapsView';
 import { FileExplorer } from './workspace/components/FileExplorer';
@@ -15,7 +14,7 @@ import { LocalModelLoadDialog } from './components/LocalModelLoadDialog';
 import { LLMDebugDialog } from './components/LLMDebugDialog';
 import { initializeDebugSSE } from './store/useDebugStore';
 import { useThreads } from './chat/hooks/useThreads';
-import { useWorkflows } from './workflows/hooks/useWorkflows';
+
 import { useMindMaps } from './mindmaps/hooks/useMindMaps';
 import { useWorkspaceStore } from './workspace/hooks/useWorkspaceStore';
 import { useAppStore } from './store/useAppStore';
@@ -23,7 +22,7 @@ import { useAppStore } from './store/useAppStore';
 
 import { ConversationMessage } from './types';
 import { Source } from './types/mindMap';
-import { Menu, X, MessageSquare, Workflow, Network, Settings, Cpu, Bug } from 'lucide-react';
+import { Menu, X, MessageSquare, Network, Settings, Cpu, Bug } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 import { ConnectionMonitorDialog } from './components/shared/ConnectionMonitorDialog';
 import { useConnectionMonitor } from './hooks/useConnectionMonitor';
@@ -95,16 +94,7 @@ function App() {
     deleteMessage
   } = useThreads();
 
-  const {
-    workflows,
-    activeWorkflowId,
-    activeWorkflow,
-    isLoaded: workflowsLoaded,
-    createWorkflow,
-    deleteWorkflow,
-    renameWorkflow,
-    selectWorkflow
-  } = useWorkflows();
+
 
   const {
     mindMaps,
@@ -131,9 +121,7 @@ function App() {
     await createThread();
   };
 
-  const handleNewWorkflow = async () => {
-    await createWorkflow();
-  };
+
 
   const handleNewMindMap = async () => {
     await createMindMap();
@@ -312,51 +300,7 @@ function App() {
             </div>
           </div>
         )}
-        {activePanel === 'workflows' && (
-          <div className="flex flex-col h-full">
-            {/* Workflows Header */}
-            <div className="flex-shrink-0 px-6 border-b border-gray-700 flex items-center" style={{height: 'var(--header-height)'}}>
-              <div className="flex items-center justify-between w-full">
-                <div className="flex items-center gap-3">
-                  <Workflow size={24} className="text-blue-400" />
-                  <h1 className="text-xl font-semibold text-white">Workflows</h1>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <div className="flex items-center gap-2">
-                    <ModelSelector />
-                    <button
-                      onClick={() => setShowLocalModelDialog(true)}
-                      className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
-                      title="Manage Local Models"
-                    >
-                      <Cpu size={16} />
-                    </button>
-                    <button
-                      onClick={() => setShowLLMDebugDialog(true)}
-                      className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
-                      title="LLM Debug"
-                    >
-                      <Bug size={16} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            {/* Workflows content area */}
-            <div className="flex flex-1 min-h-0">
-              <WorkflowsPanel
-                workflows={workflows}
-                activeWorkflowId={activeWorkflowId || undefined}
-                onWorkflowSelect={selectWorkflow}
-                onWorkflowCreate={handleNewWorkflow}
-                onWorkflowRename={renameWorkflow}
-                onWorkflowDelete={deleteWorkflow}
-              />
-              <WorkflowsView activeWorkflow={activeWorkflow} />
-            </div>
-          </div>
-        )}
+
         {activePanel === 'mind-maps' && (
           <div className="flex flex-col h-full">
             {/* MindMaps Header */}
@@ -480,6 +424,7 @@ function App() {
       <ConnectionMonitorDialog
         isOpen={showConnectionDialog}
         onClose={() => setShowConnectionDialog(false)}
+        isConnected={isConnected}
       />
     </div>
   );

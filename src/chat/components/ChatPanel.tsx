@@ -12,6 +12,8 @@ import toast from 'react-hot-toast';
 import { useChat } from '../hooks/useChat';
 import { useAppStore } from '../../store/useAppStore';
 import { useModelsStore } from '../../store/useModelsStore';
+import { useTaskStore } from '../../store/useTaskStore';
+import { WorkflowProgress } from './WorkflowProgress';
 import { ConversationMessage, Thread, ImageAttachment, NotesAttachment } from '../../types';
 
 interface ChatPanelProps {
@@ -42,6 +44,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
   const [isAgentActive, setIsAgentActive] = useState(false);
   const { fontSize, workspaceRoot, defaultCustomRole } = useAppStore();
   const { getDefaultModel } = useModelsStore();
+  const { currentWorkflow, workflows } = useTaskStore();
   const currentModel = getDefaultModel();
   const isLocalModel = currentModel?.type === 'local';
   
@@ -50,7 +53,8 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
     threadId,
     messages: initialMessages,
     onMessagesUpdate,
-    onFirstMessage
+    onFirstMessage,
+    isAgentMode: isAgentActive
   });
 
 
@@ -121,6 +125,8 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Note: Workflow SSE is now connected globally in the TaskStore
 
   // Listen for mermaid render completion to scroll to bottom
   useEffect(() => {
@@ -503,10 +509,33 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
         ))}
         
         {isLoading && !messages.some(msg => msg.role === 'assistant' && msg.status === 'processing') && (
-          <div className="flex items-center space-x-2 text-gray-400">
-            <Loader2 size={16} className="animate-spin" />
-            <span className="text-sm">MindStrike is thinking...</span>
-          </div>
+          <>
+            {isAgentActive ? (
+              (() => {
+                // Show current workflow or most recent completed workflow (within last 10 seconds)
+                const workflowToShow = currentWorkflow || 
+                  workflows
+                    .filter(w => w.completedAt && Date.now() - w.completedAt.getTime() < 10000)
+                    .sort((a, b) => (b.completedAt?.getTime() || 0) - (a.completedAt?.getTime() || 0))[0];
+                
+                return workflowToShow ? (
+                  <WorkflowProgress workflowId={workflowToShow.id} className="mb-4" />
+                ) : (
+                  <div className="p-4 bg-gray-800 rounded-lg border border-gray-700 mb-4">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
+                      <span className="text-gray-300">Finalizing response...</span>
+                    </div>
+                  </div>
+                );
+              })()
+            ) : (
+              <div className="flex items-center space-x-2 text-gray-400">
+                <Loader2 size={16} className="animate-spin" />
+                <span className="text-sm">MindStrike is thinking...</span>
+              </div>
+            )}
+          </>
         )}
         
         <div ref={messagesEndRef} />
@@ -627,6 +656,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ threadId, m
                 : 'border-gray-600 hover:bg-gray-800 text-gray-400 hover:text-gray-200'
             }`}
             title="Agent Mode"
+            data-test-id="agent-mode-button"
           >
             <div className={`transition-all duration-300 ${isAgentActive ? 'scale-110' : 'scale-100'}`}>
               <Bot 

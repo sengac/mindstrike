@@ -85,24 +85,44 @@ function createDebugSSEConnection(): EventSource {
   const eventSource = new EventSource('/api/debug/stream');
   
   eventSource.onopen = () => {
-    
     useDebugStore.getState().setConnected(true);
   };
   
-  eventSource.onmessage = (event) => {
+  eventSource.onmessage = async (event) => {
     try {
       const data = JSON.parse(event.data);
 
-      if (data.type === 'debug-entry') {
+      // Helper function to decode base64 encoded values (UTF-8 compatible)
+      const decodeValue = async (value: any): Promise<any> => {
+        if (value && typeof value === 'object' && value._base64 === true) {
+          const binaryString = atob(value.data);
+          const bytes = Uint8Array.from(binaryString, c => c.charCodeAt(0));
+          return new TextDecoder('utf-8').decode(bytes);
+        }
+        if (value && typeof value === 'object' && value._large_content === true) {
+          try {
+            const response = await fetch(`/api/large-content/${value.contentId}`);
+            const responseData = await response.json();
+            return responseData.content || `[Large content not found: ${value.contentId}]`;
+          } catch (error) {
+            return `[Error fetching large content: ${value.contentId}]`;
+          }
+        }
+        return value;
+      };
+
+      if (await decodeValue(data.type) === 'debug-entry') {
+        const entryType = await decodeValue(data.entryType);
+        const title = await decodeValue(data.title);
         const { addEntry, isGenerating } = useDebugStore.getState();
 
         addEntry({
-          type: data.entryType,
-          title: data.title,
-          content: data.content,
+          type: entryType,
+          title: title,
+          content: await decodeValue(data.content),
           duration: data.duration,
-          model: data.model,
-          endpoint: data.endpoint,
+          model: await decodeValue(data.model),
+          endpoint: await decodeValue(data.endpoint),
           tokensPerSecond: data.tokensPerSecond,
           totalTokens: data.totalTokens,
         });
@@ -112,11 +132,11 @@ function createDebugSSEConnection(): EventSource {
           const { updateTokenStats } = useDebugStore.getState();
           updateTokenStats(data.tokensPerSecond, data.totalTokens);
         }
-      } else if (data.type === 'token-stats') {
+      } else if (await decodeValue(data.type) === 'token-stats') {
         // Handle real-time token statistics updates
         const { updateTokenStats } = useDebugStore.getState();
         updateTokenStats(data.tokensPerSecond || 0, data.totalTokens || 0);
-      } else if (data.type === 'generation-status') {
+      } else if (await decodeValue(data.type) === 'generation-status') {
         // Handle generation start/stop
         const { setGenerating } = useDebugStore.getState();
         setGenerating(data.generating || false);
@@ -160,13 +180,13 @@ export function initializeDebugSSE() {
   });
 }
 
-// Auto-initialize when store is first used
+// Auto-initialize when store is first accessed
 useDebugStore.subscribe(
-  (state) => state.entries,
+  (state) => state.isConnected,
   () => {
     if (!debugSSEInitialized) {
       initializeDebugSSE();
     }
   },
-  { fireImmediately: false }
+  { fireImmediately: true }
 );
