@@ -11,9 +11,9 @@ router.get('/stream/:workflowId', (req, res) => {
   const { workflowId } = req.params;
   const clientId = `task-${workflowId}-${Date.now()}`;
   const topic = `tasks-${workflowId}`;
-  
+
   logger.info('Task SSE client connected', { clientId, workflowId, topic });
-  
+
   try {
     sseManager.addClient(clientId, res, topic);
   } catch (error) {
@@ -29,7 +29,7 @@ export const broadcastTaskUpdate = (workflowId: string, data: any) => {
   const topic = `tasks-${workflowId}`;
   sseManager.broadcast(topic, {
     ...data,
-    timestamp: Date.now()
+    timestamp: Date.now(),
   });
 };
 

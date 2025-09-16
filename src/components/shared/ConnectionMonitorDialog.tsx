@@ -8,8 +8,15 @@ interface ConnectionMonitorDialogProps {
   isConnected: boolean;
 }
 
-export function ConnectionMonitorDialog({ isOpen, onClose, isConnected }: ConnectionMonitorDialogProps) {
-  const { shouldRender, isVisible, handleClose } = useDialogAnimation(isOpen, onClose);
+export function ConnectionMonitorDialog({
+  isOpen,
+  onClose,
+  isConnected,
+}: ConnectionMonitorDialogProps) {
+  const { shouldRender, isVisible, handleClose } = useDialogAnimation(
+    isOpen,
+    onClose
+  );
 
   // Auto-close when connection is restored
   useEffect(() => {
@@ -32,15 +39,16 @@ export function ConnectionMonitorDialog({ isOpen, onClose, isConnected }: Connec
         <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-yellow-500/20 flex items-center justify-center">
           <div className="w-6 h-6 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
         </div>
-        
+
         <h2 className="text-lg font-semibold text-white mb-2">
           Connection Lost
         </h2>
-        
+
         <p className="text-gray-300 text-sm mb-4">
-          Unable to connect to the server. Please check your connection and wait while we attempt to reconnect.
+          Unable to connect to the server. Please check your connection and wait
+          while we attempt to reconnect.
         </p>
-        
+
         <div className="flex items-center justify-center text-gray-400 text-xs">
           <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse mr-2"></div>
           Reconnecting...

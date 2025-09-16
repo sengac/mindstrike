@@ -17,9 +17,9 @@ export function useConnectionMonitor() {
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
       }
-      
+
       eventSourceRef.current = new EventSource('/api/health/stream');
-      
+
       eventSourceRef.current.onopen = () => {
         setIsConnected(true);
         if (reconnectTimeoutRef.current) {
@@ -27,11 +27,11 @@ export function useConnectionMonitor() {
           reconnectTimeoutRef.current = null;
         }
       };
-      
+
       eventSourceRef.current.onerror = () => {
         setIsConnected(false);
         eventSourceRef.current?.close();
-        
+
         // Keep trying to reconnect while offline
         if (!reconnectTimeoutRef.current) {
           const attemptReconnect = () => {
@@ -52,7 +52,7 @@ export function useConnectionMonitor() {
     const handleOnline = () => {
       connect();
     };
-    
+
     const handleOffline = () => {
       setIsConnected(false);
       eventSourceRef.current?.close();

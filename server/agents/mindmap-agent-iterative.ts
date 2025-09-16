@@ -10,7 +10,7 @@ const DEFAULT_MINDMAP_ROLE = `You are a specialized mindmap agent that uses iter
 const broadcastUpdate = (streamId: string, data: any) => {
   sseManager.broadcast(streamId, {
     ...data,
-    timestamp: Date.now()
+    timestamp: Date.now(),
   });
 };
 
@@ -67,7 +67,10 @@ export class MindmapAgentIterative extends BaseAgent {
   /**
    * Process message with abort signal support
    */
-  private async processMessageWithAbort(userMessage: string, signal: AbortSignal): Promise<any> {
+  private async processMessageWithAbort(
+    userMessage: string,
+    signal: AbortSignal
+  ): Promise<any> {
     // Check if already aborted
     if (signal.aborted) {
       throw new Error('Request was aborted');
@@ -81,10 +84,7 @@ export class MindmapAgentIterative extends BaseAgent {
     });
 
     // Race between the actual LLM call and the abort signal
-    return Promise.race([
-      this.processMessage(userMessage),
-      abortPromise
-    ]);
+    return Promise.race([this.processMessage(userMessage), abortPromise]);
   }
 
   constructor(config: AgentConfig) {
@@ -103,7 +103,7 @@ export class MindmapAgentIterative extends BaseAgent {
       '',
       'Your capabilities:',
       '- Create new nodes with text, notes, and sources',
-      '- Update existing node content', 
+      '- Update existing node content',
       '- Delete nodes when requested',
       '- Work with the full mindmap context provided',
       '- Use rich markdown in notes (headers, lists, code blocks, math, mermaid diagrams)',
@@ -111,7 +111,7 @@ export class MindmapAgentIterative extends BaseAgent {
       'CRITICAL - Response format:',
       'Return ONLY valid JSON starting with { and ending with }',
       'Use nodeId: [[GENERATE_NODE_ID]] for new nodes',
-      'Escape newlines in JSON strings as \\n'
+      'Escape newlines in JSON strings as \\n',
     ].join('\n');
 
     // Add mindmap context if available
@@ -126,25 +126,29 @@ export class MindmapAgentIterative extends BaseAgent {
   /**
    * Set the current mindmap context for the agent
    */
-  async setMindmapContext(mindMapId: string, selectedNodeId?: string): Promise<void> {
+  async setMindmapContext(
+    mindMapId: string,
+    selectedNodeId?: string
+  ): Promise<void> {
     try {
       const mindMapData = await this.loadMindmapData(mindMapId);
       if (!mindMapData) {
         throw new Error(`Mindmap with ID ${mindMapId} not found`);
       }
 
-      const selectedNode = selectedNodeId ? this.findNodeById(mindMapData.root, selectedNodeId) : undefined;
+      const selectedNode = selectedNodeId
+        ? this.findNodeById(mindMapData.root, selectedNodeId)
+        : undefined;
 
       this.currentMindmapContext = {
         mindMapId,
         mindMapData,
         selectedNodeId,
-        selectedNode
+        selectedNode,
       };
 
       // Update system prompt with new context
       this.systemPrompt = this.createSystemPrompt();
-      
     } catch (error) {
       logger.error('Failed to set mindmap context:', error);
       throw error;
@@ -154,19 +158,24 @@ export class MindmapAgentIterative extends BaseAgent {
   /**
    * Load mindmap data from storage
    */
-  private async loadMindmapData(mindMapId: string): Promise<MindMapData | null> {
+  private async loadMindmapData(
+    mindMapId: string
+  ): Promise<MindMapData | null> {
     try {
       const fs = await import('fs/promises');
-      const mindMapsPath = path.join(this.config.workspaceRoot, 'mindstrike-mindmaps.json');
-      
+      const mindMapsPath = path.join(
+        this.config.workspaceRoot,
+        'mindstrike-mindmaps.json'
+      );
+
       const data = await fs.readFile(mindMapsPath, 'utf-8');
       if (!data.trim()) {
         return null;
       }
-      
+
       const mindMaps = JSON.parse(data);
       const mindMap = mindMaps.find((m: any) => m.id === mindMapId);
-      
+
       return mindMap ? mindMap.mindmapData : null;
     } catch (error: any) {
       if (error.code === 'ENOENT') {
@@ -179,18 +188,21 @@ export class MindmapAgentIterative extends BaseAgent {
   /**
    * Find a node by ID in the mindmap tree
    */
-  private findNodeById(node: MindMapNode, nodeId: string): MindMapNode | undefined {
+  private findNodeById(
+    node: MindMapNode,
+    nodeId: string
+  ): MindMapNode | undefined {
     if (node.id === nodeId) {
       return node;
     }
-    
+
     if (node.children) {
       for (const child of node.children) {
         const found = this.findNodeById(child, nodeId);
         if (found) return found;
       }
     }
-    
+
     return undefined;
   }
 
@@ -204,23 +216,25 @@ export class MindmapAgentIterative extends BaseAgent {
 
     const { mindMapData, selectedNode } = this.currentMindmapContext;
     const mindmapStructure = this.serializeMindmapStructure(mindMapData.root);
-    
+
     const contextParts = [
-      "=== CURRENT MINDMAP CONTEXT ===",
+      '=== CURRENT MINDMAP CONTEXT ===',
       `Mindmap ID: ${this.currentMindmapContext.mindMapId}`,
       `Layout: ${mindMapData.root.layout}`,
-      "",
-      "MINDMAP STRUCTURE:",
-      mindmapStructure
+      '',
+      'MINDMAP STRUCTURE:',
+      mindmapStructure,
     ];
 
     if (selectedNode) {
       contextParts.push(
-        "",
-        "=== SELECTED NODE ===",
+        '',
+        '=== SELECTED NODE ===',
         `Selected Node ID: ${selectedNode.id}`,
         `Selected Node Text: "${selectedNode.text}"`,
-        selectedNode.notes ? `Selected Node Notes: "${selectedNode.notes.substring(0, 200)}..."` : "Selected Node Notes: None",
+        selectedNode.notes
+          ? `Selected Node Notes: "${selectedNode.notes.substring(0, 200)}..."`
+          : 'Selected Node Notes: None',
         `Selected Node Children: ${selectedNode.children ? selectedNode.children.length : 0}`
       );
     }
@@ -231,34 +245,47 @@ export class MindmapAgentIterative extends BaseAgent {
   /**
    * Serialize mindmap structure for context
    */
-  private serializeMindmapStructure(node: MindMapNode, level: number = 0): string {
+  private serializeMindmapStructure(
+    node: MindMapNode,
+    level: number = 0
+  ): string {
     const indent = '  '.repeat(level);
     let result = `${indent}- [${node.id}] "${node.text}"`;
-    
+
     if (node.notes) {
       result += `\n${indent}  Notes: "${node.notes.length > 100 ? node.notes.substring(0, 100) + '...' : node.notes}"`;
     }
-    
+
     if (node.sources && node.sources.length > 0) {
       result += `\n${indent}  Sources: ${node.sources.length} source(s)`;
     }
-    
+
     if (node.children && node.children.length > 0) {
-      result += '\n' + node.children.map(child => 
-        this.serializeMindmapStructure(child, level + 1)
-      ).join('\n');
+      result +=
+        '\n' +
+        node.children
+          .map(child => this.serializeMindmapStructure(child, level + 1))
+          .join('\n');
     }
-    
+
     return result;
   }
 
   /**
    * Process message using iterative reasoning workflow
    */
-  async processMessageIterative(userMessage: string, images?: any[], notes?: any[], onUpdate?: (message: any) => void, workflowId?: string, streamId?: string): Promise<any> {
-
+  async processMessageIterative(
+    userMessage: string,
+    images?: any[],
+    notes?: any[],
+    onUpdate?: (message: any) => void,
+    workflowId?: string,
+    streamId?: string
+  ): Promise<any> {
     // Generate workflow ID if not provided
-    const finalWorkflowId = workflowId || `iterative-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const finalWorkflowId =
+      workflowId ||
+      `iterative-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     if (!this.currentMindmapContext?.selectedNode) {
       throw new Error('No mindmap context or selected node available');
@@ -277,7 +304,7 @@ export class MindmapAgentIterative extends BaseAgent {
         isCancelled: false,
         abortController: new AbortController(),
         parentNodeId: this.currentMindmapContext.selectedNode.id,
-        parentTopic: this.currentMindmapContext.selectedNode.text
+        parentTopic: this.currentMindmapContext.selectedNode.text,
       };
 
       // Register workflow for cancellation
@@ -289,32 +316,36 @@ export class MindmapAgentIterative extends BaseAgent {
         workflowId: finalWorkflowId,
         originalRequest: userMessage,
         parentTopic: this.workflowState.parentTopic,
-        maxSteps: this.workflowState.maxSteps
+        maxSteps: this.workflowState.maxSteps,
       });
 
       // Main iterative reasoning loop
-      while (!this.workflowState.isComplete && this.workflowState.currentStep < this.workflowState.maxSteps && !this.workflowState.isCancelled) {
+      while (
+        !this.workflowState.isComplete &&
+        this.workflowState.currentStep < this.workflowState.maxSteps &&
+        !this.workflowState.isCancelled
+      ) {
         this.workflowState.currentStep++;
-        
+
         // Check for cancellation before executing step
         if (this.workflowState.isCancelled) {
           break;
         }
-        
+
         // Execute one reasoning step
         const stepResult = await this.executeReasoningStep();
-        
+
         // Record the step
         this.workflowState.reasoningHistory.push(stepResult);
-        
+
         // Add any changes to accumulated results
         if (stepResult.changes.length > 0) {
           this.workflowState.allChanges.push(...stepResult.changes);
         }
-        
+
         // Update completion status
         this.workflowState.isComplete = !stepResult.shouldContinue;
-        
+
         // Broadcast actual mindmap changes only
         if (streamId && stepResult.changes.length > 0) {
           stepResult.changes.forEach(change => {
@@ -325,7 +356,7 @@ export class MindmapAgentIterative extends BaseAgent {
               text: change.text,
               parentId: change.parentId,
               notes: change.notes,
-              sources: change.sources
+              sources: change.sources,
             };
             broadcastUpdate(streamId, changeEvent);
           });
@@ -342,8 +373,8 @@ export class MindmapAgentIterative extends BaseAgent {
               reasoning: stepResult.reasoning,
               changesCount: stepResult.changes.length,
               totalChanges: this.workflowState.allChanges.length,
-              isComplete: this.workflowState.isComplete
-            }
+              isComplete: this.workflowState.isComplete,
+            },
           });
         }
 
@@ -365,13 +396,13 @@ export class MindmapAgentIterative extends BaseAgent {
               step: step.step,
               decision: step.decision,
               reasoning: step.reasoning,
-              changesCount: step.changes.length
-            }))
-          }
+              changesCount: step.changes.length,
+            })),
+          },
         }),
         id: this.generateId(),
         role: 'assistant' as const,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
 
       // Broadcast workflow completion
@@ -380,7 +411,9 @@ export class MindmapAgentIterative extends BaseAgent {
         workflowId: finalWorkflowId,
         stepsCompleted: this.workflowState.currentStep,
         totalChanges: this.workflowState.allChanges.length,
-        finalReason: this.workflowState.isComplete ? 'Task completed' : 'Max steps reached'
+        finalReason: this.workflowState.isComplete
+          ? 'Task completed'
+          : 'Max steps reached',
       });
 
       // Send final completion update
@@ -390,29 +423,30 @@ export class MindmapAgentIterative extends BaseAgent {
           data: {
             stepsCompleted: this.workflowState.currentStep,
             totalChanges: this.workflowState.allChanges.length,
-            finalReason: this.workflowState.isComplete ? 'Task completed' : 'Max steps reached'
-          }
+            finalReason: this.workflowState.isComplete
+              ? 'Task completed'
+              : 'Max steps reached',
+          },
         });
       }
 
       // Clean up workflow from registry
       activeWorkflows.delete(finalWorkflowId);
-      
-      return finalResult;
 
+      return finalResult;
     } catch (error) {
       logger.error('Iterative reasoning workflow failed:', error);
-      
+
       // Clean up workflow from registry
       activeWorkflows.delete(finalWorkflowId);
-      
+
       // Broadcast workflow failure
       broadcastUpdate(finalWorkflowId, {
         type: 'iterative_workflow_failed',
         workflowId: finalWorkflowId,
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       });
-      
+
       throw error;
     }
   }
@@ -426,41 +460,47 @@ export class MindmapAgentIterative extends BaseAgent {
     }
 
     const step = this.workflowState.currentStep;
-    
+
     // Build context from previous steps
     const previousContext = this.buildPreviousContext();
-    
+
     // Create reasoning prompt
     const reasoningPrompt = this.createReasoningPrompt(previousContext);
 
     try {
       // Execute the reasoning with abort signal
-      const response = await this.processMessageWithAbort(reasoningPrompt, this.workflowState.abortController.signal);
-      
+      const response = await this.processMessageWithAbort(
+        reasoningPrompt,
+        this.workflowState.abortController.signal
+      );
+
       const cleanedResponse = this.cleanMindmapResponse(response.content);
       const result = JSON.parse(cleanedResponse);
-      
+
       // Extract reasoning information
       const reasoning = result.reasoning || {};
       const changes = result.changes || [];
-      const shouldContinue = !reasoning.isComplete && reasoning.decision !== 'completed';
-      
+      const shouldContinue =
+        !reasoning.isComplete && reasoning.decision !== 'completed';
+
       const stepResult: ReasoningStep = {
         step,
         request: this.workflowState.originalRequest,
         context: previousContext,
         decision: reasoning.decision || 'unknown',
         changes,
-        reasoning: reasoning.explanation || reasoning.nextAction || 'No reasoning provided',
+        reasoning:
+          reasoning.explanation ||
+          reasoning.nextAction ||
+          'No reasoning provided',
         shouldContinue,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
 
       return stepResult;
-
     } catch (error) {
       logger.error(`Reasoning step ${step} failed:`, error);
-      
+
       // Return a failed step that stops the workflow
       return {
         step,
@@ -470,7 +510,7 @@ export class MindmapAgentIterative extends BaseAgent {
         changes: [],
         reasoning: `Step failed: ${error instanceof Error ? error.message : String(error)}`,
         shouldContinue: false,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
     }
   }
@@ -479,26 +519,33 @@ export class MindmapAgentIterative extends BaseAgent {
    * Build context string from previous reasoning steps
    */
   private buildPreviousContext(): string {
-    if (!this.workflowState || this.workflowState.reasoningHistory.length === 0) {
+    if (
+      !this.workflowState ||
+      this.workflowState.reasoningHistory.length === 0
+    ) {
       return 'No previous context.';
     }
 
     const contextParts = ['PREVIOUS REASONING STEPS:'];
-    
-    this.workflowState.reasoningHistory.forEach((step, index) => {
+
+    this.workflowState.reasoningHistory.forEach((step, _index) => {
       contextParts.push(`Step ${step.step}: ${step.decision}`);
       if (step.changes.length > 0) {
-        step.changes.forEach((change, changeIndex) => {
+        step.changes.forEach((change, _changeIndex) => {
           if (change.action === 'create') {
-            contextParts.push(`  - Created: "${change.text}" (${change.notes?.length || 0} chars)`);
+            contextParts.push(
+              `  - Created: "${change.text}" (${change.notes?.length || 0} chars)`
+            );
           }
         });
       }
       contextParts.push(`  - Reasoning: ${step.reasoning}`);
     });
 
-    contextParts.push(`\nTotal nodes created so far: ${this.workflowState.allChanges.length}`);
-    
+    contextParts.push(
+      `\nTotal nodes created so far: ${this.workflowState.allChanges.length}`
+    );
+
     return contextParts.join('\n');
   }
 
@@ -566,16 +613,16 @@ CRITICAL:
     // Remove any text before the first { and after the last }
     const start = content.indexOf('{');
     const end = content.lastIndexOf('}');
-    
+
     if (start === -1 || end === -1) {
       throw new Error('No valid JSON found in response');
     }
-    
+
     const jsonContent = content.substring(start, end + 1);
-    
+
     // Replace placeholder IDs with actual IDs
     const processedContent = this.replacePlaceholderIds(jsonContent);
-    
+
     return processedContent;
   }
 
@@ -586,7 +633,7 @@ CRITICAL:
     let result = content;
     const timestamp = Date.now();
     let counter = 0;
-    
+
     // Replace node ID placeholders
     const nodeIdRegex = /\[\[GENERATE_NODE_ID\]\]/g;
     const nodeMatches = content.match(nodeIdRegex);
@@ -596,10 +643,10 @@ CRITICAL:
         return newId;
       });
     }
-    
+
     // Reset counter for source IDs
     counter = 0;
-    
+
     // Replace source ID placeholders
     const sourceIdRegex = /\[\[GENERATE_SOURCE_ID\]\]/g;
     const sourceMatches = content.match(sourceIdRegex);
@@ -609,7 +656,7 @@ CRITICAL:
         return newId;
       });
     }
-    
+
     return result;
   }
 

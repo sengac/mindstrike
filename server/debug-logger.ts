@@ -18,24 +18,37 @@ class ServerDebugLogger {
       sseManager.broadcast('debug', {
         type: 'debug-entry',
         timestamp: Date.now(),
-        ...entry
+        ...entry,
       });
     } catch (error) {
       logger.error('Failed to broadcast debug entry:', error);
     }
   }
 
-  logRequest(title: string, content: string, model?: string, endpoint?: string) {
+  logRequest(
+    title: string,
+    content: string,
+    model?: string,
+    endpoint?: string
+  ) {
     this.broadcastDebugEntry({
       entryType: 'request',
       title,
       content,
       model,
-      endpoint
+      endpoint,
     });
   }
 
-  logResponse(title: string, content: string, duration?: number, model?: string, endpoint?: string, tokensPerSecond?: number, totalTokens?: number) {
+  logResponse(
+    title: string,
+    content: string,
+    duration?: number,
+    model?: string,
+    endpoint?: string,
+    tokensPerSecond?: number,
+    totalTokens?: number
+  ) {
     this.broadcastDebugEntry({
       entryType: 'response',
       title,
@@ -44,7 +57,7 @@ class ServerDebugLogger {
       model,
       endpoint,
       tokensPerSecond,
-      totalTokens
+      totalTokens,
     });
   }
 
@@ -54,7 +67,7 @@ class ServerDebugLogger {
       title,
       content,
       model,
-      endpoint
+      endpoint,
     });
   }
 }

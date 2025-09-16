@@ -1,6 +1,17 @@
-import { BaseAgent, AgentConfig, ConversationMessage, ImageAttachment, NotesAttachment } from './base-agent.js';
-import { BaseMessage, HumanMessage, AIMessage, SystemMessage } from '@langchain/core/messages';
-import { StateGraph, MessagesAnnotation, Annotation, START, END } from '@langchain/langgraph';
+import {
+  BaseAgent,
+  AgentConfig,
+  ConversationMessage,
+  ImageAttachment,
+  NotesAttachment,
+} from './base-agent.js';
+import {
+  BaseMessage,
+  HumanMessage,
+  AIMessage,
+  SystemMessage,
+} from '@langchain/core/messages';
+import { StateGraph, Annotation, START, END } from '@langchain/langgraph';
 import { logger } from '../logger.js';
 import { sseManager } from '../sse-manager.js';
 import { serverDebugLogger } from '../debug-logger.js';
@@ -60,25 +71,30 @@ export class WorkflowAgent extends BaseAgent {
     super(config, agentId);
     this.workflowGraph = this.createWorkflowGraph();
   }
-  
+
   setChatTopic(chatTopic: string) {
     this.chatTopic = chatTopic;
   }
-  
-  private broadcastWorkflowEvent(event: any) {    
+
+  private broadcastWorkflowEvent(event: any) {
     // Always broadcast to the workflow topic
     sseManager.broadcast('workflow', event);
-    
+
     // Also broadcast to the chat topic if available
     if (this.chatTopic) {
       sseManager.broadcast(this.chatTopic, event);
     }
   }
-  
+
   // Override processMessage to use workflow instead of AgentExecutor
-  async processMessage(userMessage: string, images?: ImageAttachment[], notes?: NotesAttachment[], onUpdate?: (message: ConversationMessage) => void): Promise<ConversationMessage> {
+  async processMessage(
+    userMessage: string,
+    images?: ImageAttachment[],
+    notes?: NotesAttachment[],
+    onUpdate?: (message: ConversationMessage) => void
+  ): Promise<ConversationMessage> {
     const workflowId = this.generateId();
-    try {      
+    try {
       // Create initial state
       const initialState: WorkflowStateType = {
         messages: [new HumanMessage(userMessage)],
@@ -88,72 +104,82 @@ export class WorkflowAgent extends BaseAgent {
         taskResults: {},
         workflowId,
         iteration: 0,
-        maxIterations: 10
+        maxIterations: 10,
       };
-      
+
       // Run the workflow
       const result = await this.workflowGraph.invoke(initialState);
-      
+
       // Add user message to store
-      const userMsgId = this.store.getState().addMessage({
+      this.store.getState().addMessage({
         role: 'user',
         content: userMessage,
         status: 'completed',
         images: images || [],
-        notes: notes || []
+        notes: notes || [],
       });
 
       // Add assistant message to store
-      const content = result.messages[result.messages.length - 1]?.content || 'Workflow completed';
+      const content =
+        result.messages[result.messages.length - 1]?.content ||
+        'Workflow completed';
       const assistantMsgId = this.store.getState().addMessage({
         role: 'assistant',
         content: content.toString(),
         status: 'completed',
-        model: this.config.llmConfig.displayName || this.config.llmConfig.model
+        model: this.config.llmConfig.displayName || this.config.llmConfig.model,
       });
 
       // Get the message from store and convert to ConversationMessage
-      const assistantMessage = this.store.getState().messages.find(m => m.id === assistantMsgId);
+      const assistantMessage = this.store
+        .getState()
+        .messages.find(m => m.id === assistantMsgId);
       if (!assistantMessage) {
         throw new Error('Failed to retrieve assistant message');
       }
 
-      const conversationMessage = this.convertToConversationMessage(assistantMessage);
-      
+      const conversationMessage =
+        this.convertToConversationMessage(assistantMessage);
+
       if (onUpdate) {
         onUpdate(conversationMessage);
       }
-      
+
       return conversationMessage;
     } catch (error: any) {
-      logger.error(`[WorkflowAgent] Error in workflow: ${error.message}`, { error });
-      
+      logger.error(`[WorkflowAgent] Error in workflow: ${error.message}`, {
+        error,
+      });
+
       // Broadcast workflow failure
       this.broadcastWorkflowEvent({
         type: 'workflow_failed',
         workflowId,
-        error: error.message
+        error: error.message,
       });
-      
+
       // Add error message to store
       const errorMsgId = this.store.getState().addMessage({
         role: 'assistant',
         content: `I encountered an error while processing your request: ${error.message}`,
         status: 'cancelled',
-        model: this.config.llmConfig.displayName || this.config.llmConfig.model
+        model: this.config.llmConfig.displayName || this.config.llmConfig.model,
       });
 
-      const errorMessage = this.store.getState().messages.find(m => m.id === errorMsgId);
+      const errorMessage = this.store
+        .getState()
+        .messages.find(m => m.id === errorMsgId);
       if (!errorMessage) {
         throw error;
       }
 
-      const conversationMessage = this.convertToConversationMessage(errorMessage);
-      
+      const conversationMessage =
+        this.convertToConversationMessage(errorMessage);
+
       if (onUpdate) {
         onUpdate(conversationMessage);
       }
-      
+
       return conversationMessage;
     }
   }
@@ -219,47 +245,52 @@ export class WorkflowAgent extends BaseAgent {
 
   private createWorkflowGraph() {
     const workflow = new StateGraph(WorkflowState)
-      .addNode("analyze", this.reasoningNode.bind(this))
-      .addNode("design", this.planningNode.bind(this))
-      .addNode("execute", this.actionNode.bind(this))
-      .addNode("review", this.observationNode.bind(this))
-      .addNode("summarize", this.finalizationNode.bind(this))
-      .addEdge(START, "analyze")
-      .addEdge("analyze", "design")
-      .addEdge("design", "execute")
-      .addEdge("execute", "review")
-      .addConditionalEdges("review", this.shouldContinue.bind(this), {
-        continue: "execute",
-        finalize: "summarize"
+      .addNode('analyze', this.reasoningNode.bind(this))
+      .addNode('design', this.planningNode.bind(this))
+      .addNode('execute', this.actionNode.bind(this))
+      .addNode('review', this.observationNode.bind(this))
+      .addNode('summarize', this.finalizationNode.bind(this))
+      .addEdge(START, 'analyze')
+      .addEdge('analyze', 'design')
+      .addEdge('design', 'execute')
+      .addEdge('execute', 'review')
+      .addConditionalEdges('review', this.shouldContinue.bind(this), {
+        continue: 'execute',
+        finalize: 'summarize',
       })
-      .addEdge("summarize", END);
+      .addEdge('summarize', END);
 
     return workflow.compile();
   }
 
-  private shouldContinue(state: WorkflowStateType): "continue" | "finalize" {
+  private shouldContinue(state: WorkflowStateType): 'continue' | 'finalize' {
     // Continue if there are more tasks and we haven't exceeded max iterations
     // Note: iteration is the index of the NEXT task to execute
-    if (state.iteration < state.plan.length && state.iteration < state.maxIterations) {
-      return "continue";
+    if (
+      state.iteration < state.plan.length &&
+      state.iteration < state.maxIterations
+    ) {
+      return 'continue';
     }
-    return "finalize";
+    return 'finalize';
   }
 
-  private async reasoningNode(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {    
+  private async reasoningNode(
+    state: WorkflowStateType
+  ): Promise<Partial<WorkflowStateType>> {
     // Broadcast workflow start (only on first reasoning phase)
     if (state.iteration === 0) {
-      const lastUserMessage = state.messages
-        .filter(msg => msg instanceof HumanMessage)
-        .pop()?.content || '';
-      
+      const lastUserMessage =
+        state.messages.filter(msg => msg instanceof HumanMessage).pop()
+          ?.content || '';
+
       this.broadcastWorkflowEvent({
         type: 'workflow_started',
         workflowId: state.workflowId,
-        originalQuery: lastUserMessage
+        originalQuery: lastUserMessage,
       });
     }
-    
+
     // Broadcast reasoning start
     this.broadcastWorkflowEvent({
       type: 'task_progress',
@@ -268,13 +299,13 @@ export class WorkflowAgent extends BaseAgent {
         id: 'reasoning',
         description: 'Analyzing request and determining approach',
         status: 'in-progress',
-        priority: 'high'
-      }
+        priority: 'high',
+      },
     });
 
-    const lastUserMessage = state.messages
-      .filter(msg => msg instanceof HumanMessage)
-      .pop()?.content || '';
+    const lastUserMessage =
+      state.messages.filter(msg => msg instanceof HumanMessage).pop()
+        ?.content || '';
 
     const reasoningPrompt = `
     **REASONING PHASE**
@@ -297,10 +328,11 @@ export class WorkflowAgent extends BaseAgent {
       JSON.stringify({
         messages: messages.map(msg => ({
           role: msg._getType(),
-          content: typeof msg.content === 'string' ? msg.content : '[Complex Content]'
+          content:
+            typeof msg.content === 'string' ? msg.content : '[Complex Content]',
         })),
         model: this.config.llmConfig.model,
-        phase: 'reasoning'
+        phase: 'reasoning',
       })
     );
 
@@ -312,12 +344,12 @@ export class WorkflowAgent extends BaseAgent {
       JSON.stringify({
         content: reasoningResponse.content.toString(),
         model: this.config.llmConfig.model,
-        phase: 'reasoning'
+        phase: 'reasoning',
       })
     );
 
     const reasoning = reasoningResponse.content.toString();
-    
+
     // Broadcast reasoning completion
     this.broadcastWorkflowEvent({
       type: 'task_completed',
@@ -326,14 +358,16 @@ export class WorkflowAgent extends BaseAgent {
         id: 'reasoning',
         description: 'Analyzed request and determined approach',
         status: 'completed',
-        priority: 'high'
-      }
+        priority: 'high',
+      },
     });
 
     return { reasoning };
   }
 
-  private async planningNode(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
+  private async planningNode(
+    state: WorkflowStateType
+  ): Promise<Partial<WorkflowStateType>> {
     // Broadcast planning start
     this.broadcastWorkflowEvent({
       type: 'task_progress',
@@ -342,8 +376,8 @@ export class WorkflowAgent extends BaseAgent {
         id: 'planning',
         description: 'Creating detailed execution plan',
         status: 'in-progress',
-        priority: 'high'
-      }
+        priority: 'high',
+      },
     });
 
     const planningPrompt = `
@@ -377,10 +411,11 @@ export class WorkflowAgent extends BaseAgent {
       JSON.stringify({
         messages: planningMessages.map(msg => ({
           role: msg._getType(),
-          content: typeof msg.content === 'string' ? msg.content : '[Complex Content]'
+          content:
+            typeof msg.content === 'string' ? msg.content : '[Complex Content]',
         })),
         model: this.config.llmConfig.model,
-        phase: 'planning'
+        phase: 'planning',
       })
     );
 
@@ -392,12 +427,12 @@ export class WorkflowAgent extends BaseAgent {
       JSON.stringify({
         content: planningResponse.content.toString(),
         model: this.config.llmConfig.model,
-        phase: 'planning'
+        phase: 'planning',
       })
     );
 
     const planText = planningResponse.content.toString();
-    
+
     // Parse JSON array of tasks
     let plan: string[] = [];
     try {
@@ -412,12 +447,17 @@ export class WorkflowAgent extends BaseAgent {
         throw new Error('No JSON array found in response');
       }
     } catch (error: any) {
-      logger.warn(`[WorkflowAgent] Failed to parse JSON plan: ${error.message}`);
+      logger.warn(
+        `[WorkflowAgent] Failed to parse JSON plan: ${error.message}`
+      );
       // Simple fallback: split by newlines and filter non-empty lines
       plan = planText
         .split('\n')
         .map(line => line.trim())
-        .filter(line => line.length > 0 && !line.startsWith('#') && !line.startsWith('*'));
+        .filter(
+          line =>
+            line.length > 0 && !line.startsWith('#') && !line.startsWith('*')
+        );
     }
 
     // Broadcast tasks planned
@@ -428,8 +468,8 @@ export class WorkflowAgent extends BaseAgent {
         id: `task-${index + 1}`,
         description: task.split('\n')[0], // First line as description
         status: 'todo',
-        priority: 'medium'
-      }))
+        priority: 'medium',
+      })),
     });
 
     // Broadcast planning completion
@@ -440,22 +480,26 @@ export class WorkflowAgent extends BaseAgent {
         id: 'planning',
         description: 'Created detailed execution plan',
         status: 'completed',
-        priority: 'high'
-      }
+        priority: 'high',
+      },
     });
 
     return { plan };
   }
 
-  private async actionNode(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
+  private async actionNode(
+    state: WorkflowStateType
+  ): Promise<Partial<WorkflowStateType>> {
     const currentTaskIndex = state.iteration;
     const currentTask = state.plan[currentTaskIndex];
-    
+
     if (!currentTask) {
-      logger.warn(`[WorkflowAgent] No task found at iteration ${currentTaskIndex}, plan: ${JSON.stringify(state.plan)}`);
+      logger.warn(
+        `[WorkflowAgent] No task found at iteration ${currentTaskIndex}, plan: ${JSON.stringify(state.plan)}`
+      );
       return { iteration: currentTaskIndex + 1 }; // Still increment to avoid infinite loop
     }
-    
+
     // Broadcast task start
     this.broadcastWorkflowEvent({
       type: 'task_progress',
@@ -464,8 +508,8 @@ export class WorkflowAgent extends BaseAgent {
         id: `task-${currentTaskIndex + 1}`,
         description: currentTask.split('\n')[0],
         status: 'in-progress',
-        priority: 'medium'
-      }
+        priority: 'medium',
+      },
     });
 
     const actionPrompt = `
@@ -491,7 +535,7 @@ export class WorkflowAgent extends BaseAgent {
     if (this.agentExecutor) {
       try {
         const result = await this.agentExecutor.invoke({
-          input: actionPrompt
+          input: actionPrompt,
         });
         actionResult = result.output || 'Task completed';
       } catch (toolError: any) {
@@ -499,7 +543,7 @@ export class WorkflowAgent extends BaseAgent {
       }
     } else {
       const response = await this.chatModel.invoke([
-        new HumanMessage(actionPrompt)
+        new HumanMessage(actionPrompt),
       ]);
       actionResult = response.content.toString();
     }
@@ -510,8 +554,8 @@ export class WorkflowAgent extends BaseAgent {
       [taskKey]: {
         description: currentTask,
         result: actionResult,
-        timestamp: new Date().toISOString()
-      }
+        timestamp: new Date().toISOString(),
+      },
     };
 
     // Broadcast task completion
@@ -522,23 +566,26 @@ export class WorkflowAgent extends BaseAgent {
         id: taskKey,
         description: currentTask.split('\n')[0],
         status: 'completed',
-        priority: 'medium'
-      }
+        priority: 'medium',
+      },
     });
 
     return {
       currentTask,
       taskResults,
-      iteration: currentTaskIndex + 1
+      iteration: currentTaskIndex + 1,
     };
   }
 
-  private async observationNode(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {
+  private async observationNode(
+    state: WorkflowStateType
+  ): Promise<Partial<WorkflowStateType>> {
     // Get the most recently completed task (iteration was just incremented in actionNode)
     const lastCompletedTaskIndex = state.iteration - 1;
     const lastCompletedTaskKey = `task-${lastCompletedTaskIndex + 1}`;
-    const taskResult = state.taskResults[lastCompletedTaskKey] || 'No results available';
-    
+    const taskResult =
+      state.taskResults[lastCompletedTaskKey] || 'No results available';
+
     const observationPrompt = `
     **OBSERVATION PHASE**
     
@@ -557,20 +604,25 @@ export class WorkflowAgent extends BaseAgent {
     `;
 
     // Log the request for debugging
-    const observationMessages = [new SystemMessage(this.systemPrompt), new HumanMessage(observationPrompt)];
+    const observationMessages = [
+      new SystemMessage(this.systemPrompt),
+      new HumanMessage(observationPrompt),
+    ];
     serverDebugLogger.logRequest(
       `[WorkflowAgent] Observation LLM Request: ${this.config.llmConfig.model}`,
       JSON.stringify({
         messages: observationMessages.map(msg => ({
           role: msg._getType(),
-          content: typeof msg.content === 'string' ? msg.content : '[Complex Content]'
+          content:
+            typeof msg.content === 'string' ? msg.content : '[Complex Content]',
         })),
         model: this.config.llmConfig.model,
-        phase: 'observation'
+        phase: 'observation',
       })
     );
 
-    const observationResponse = await this.chatModel.invoke(observationMessages);
+    const observationResponse =
+      await this.chatModel.invoke(observationMessages);
 
     // Log the response for debugging
     serverDebugLogger.logResponse(
@@ -578,18 +630,16 @@ export class WorkflowAgent extends BaseAgent {
       JSON.stringify({
         content: observationResponse.content.toString(),
         model: this.config.llmConfig.model,
-        phase: 'observation'
+        phase: 'observation',
       })
     );
-
-    const observation = observationResponse.content.toString();
 
     return {};
   }
 
-
-
-  private async finalizationNode(state: WorkflowStateType): Promise<Partial<WorkflowStateType>> {    
+  private async finalizationNode(
+    state: WorkflowStateType
+  ): Promise<Partial<WorkflowStateType>> {
     // Broadcast finalization start
     this.broadcastWorkflowEvent({
       type: 'task_progress',
@@ -598,8 +648,8 @@ export class WorkflowAgent extends BaseAgent {
         id: 'finalization',
         description: 'Generating comprehensive summary and recommendations',
         status: 'in-progress',
-        priority: 'high'
-      }
+        priority: 'high',
+      },
     });
 
     const finalizationPrompt = `
@@ -615,20 +665,25 @@ export class WorkflowAgent extends BaseAgent {
     `;
 
     // Log the request for debugging
-    const finalizationMessages = [new SystemMessage(this.systemPrompt), new HumanMessage(finalizationPrompt)];
+    const finalizationMessages = [
+      new SystemMessage(this.systemPrompt),
+      new HumanMessage(finalizationPrompt),
+    ];
     serverDebugLogger.logRequest(
       `[WorkflowAgent] Finalization LLM Request: ${this.config.llmConfig.model}`,
       JSON.stringify({
         messages: finalizationMessages.map(msg => ({
           role: msg._getType(),
-          content: typeof msg.content === 'string' ? msg.content : '[Complex Content]'
+          content:
+            typeof msg.content === 'string' ? msg.content : '[Complex Content]',
         })),
         model: this.config.llmConfig.model,
-        phase: 'finalization'
+        phase: 'finalization',
       })
     );
 
-    const finalizationResponse = await this.chatModel.invoke(finalizationMessages);
+    const finalizationResponse =
+      await this.chatModel.invoke(finalizationMessages);
 
     // Log the response for debugging
     serverDebugLogger.logResponse(
@@ -636,12 +691,12 @@ export class WorkflowAgent extends BaseAgent {
       JSON.stringify({
         content: finalizationResponse.content.toString(),
         model: this.config.llmConfig.model,
-        phase: 'finalization'
+        phase: 'finalization',
       })
     );
 
     const summary = finalizationResponse.content.toString();
-    
+
     // Broadcast finalization completion
     this.broadcastWorkflowEvent({
       type: 'task_completed',
@@ -651,19 +706,19 @@ export class WorkflowAgent extends BaseAgent {
         description: 'Generating comprehensive summary and recommendations',
         status: 'completed',
         priority: 'high',
-        result: 'Summary and recommendations generated successfully'
-      }
+        result: 'Summary and recommendations generated successfully',
+      },
     });
-    
+
     // Broadcast workflow completion
     this.broadcastWorkflowEvent({
       type: 'workflow_completed',
       workflowId: state.workflowId,
-      totalChanges: Object.keys(state.taskResults).length
+      totalChanges: Object.keys(state.taskResults).length,
     });
-    
+
     return {
-      messages: [new AIMessage(summary)]
+      messages: [new AIMessage(summary)],
     };
   }
 }

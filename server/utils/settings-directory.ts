@@ -7,7 +7,7 @@ import path from 'path';
  */
 export function getMindstrikeDirectory(): string {
   const platform = os.platform();
-  
+
   if (platform === 'win32') {
     // Windows: Use %APPDATA%/mindstrike
     const appData = process.env.APPDATA;
@@ -47,7 +47,7 @@ export function getHomeDirectory(): string {
   if (process.env.HOMEDRIVE && process.env.HOMEPATH) {
     return path.join(process.env.HOMEDRIVE, process.env.HOMEPATH); // Windows fallback
   }
-  
+
   // Use Node.js os module as fallback
   return os.homedir();
 }

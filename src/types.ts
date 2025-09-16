@@ -4,7 +4,7 @@ export interface ConversationMessage {
   content: string;
   timestamp: Date;
   toolCalls?: ToolCall[];
-  toolResults?: Array<{ name: string; result: any }>;
+  toolResults?: Array<{ name: string; result: unknown }>;
   status?: 'processing' | 'completed' | 'cancelled';
   model?: string; // LLM model used for assistant messages
   images?: ImageAttachment[]; // Image attachments for user messages
@@ -33,7 +33,7 @@ export interface NotesAttachment {
 export interface ToolCall {
   id: string;
   name: string;
-  parameters: Record<string, any>;
+  parameters: Record<string, unknown>;
 }
 
 export interface Thread {

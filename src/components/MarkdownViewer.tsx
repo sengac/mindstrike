@@ -15,54 +15,54 @@ interface MarkdownViewerProps {
 
 // Common language mappings for syntax highlighting
 const languageMap: Record<string, string> = {
-  'sh': 'bash',
-  'shell': 'bash',
-  'console': 'bash',
-  'js': 'javascript',
-  'ts': 'typescript',
-  'py': 'python',
-  'rb': 'ruby',
-  'yml': 'yaml',
-  'json': 'json',
-  'md': 'markdown',
-  'html': 'markup',
-  'xml': 'markup',
-  'css': 'css',
-  'scss': 'scss',
-  'sass': 'sass',
-  'less': 'less',
-  'sql': 'sql',
-  'c': 'c',
-  'cpp': 'cpp',
-  'cxx': 'cpp',
+  sh: 'bash',
+  shell: 'bash',
+  console: 'bash',
+  js: 'javascript',
+  ts: 'typescript',
+  py: 'python',
+  rb: 'ruby',
+  yml: 'yaml',
+  json: 'json',
+  md: 'markdown',
+  html: 'markup',
+  xml: 'markup',
+  css: 'css',
+  scss: 'scss',
+  sass: 'sass',
+  less: 'less',
+  sql: 'sql',
+  c: 'c',
+  cpp: 'cpp',
+  cxx: 'cpp',
   'c++': 'cpp',
-  'cs': 'csharp',
-  'java': 'java',
-  'php': 'php',
-  'go': 'go',
-  'rust': 'rust',
-  'swift': 'swift',
-  'kotlin': 'kotlin',
-  'scala': 'scala',
-  'r': 'r',
-  'matlab': 'matlab',
-  'lua': 'lua',
-  'perl': 'perl',
-  'powershell': 'powershell',
-  'dockerfile': 'docker',
-  'makefile': 'makefile',
-  'ini': 'ini',
-  'toml': 'toml',
-  'graphql': 'graphql',
-  'diff': 'diff',
-  'patch': 'diff'
+  cs: 'csharp',
+  java: 'java',
+  php: 'php',
+  go: 'go',
+  rust: 'rust',
+  swift: 'swift',
+  kotlin: 'kotlin',
+  scala: 'scala',
+  r: 'r',
+  matlab: 'matlab',
+  lua: 'lua',
+  perl: 'perl',
+  powershell: 'powershell',
+  dockerfile: 'docker',
+  makefile: 'makefile',
+  ini: 'ini',
+  toml: 'toml',
+  graphql: 'graphql',
+  diff: 'diff',
+  patch: 'diff',
 };
 
 const getSupportedLanguage = (language?: string): string => {
   if (!language) return 'text';
-  
+
   const lowerLang = language.toLowerCase();
-  
+
   // Return mapped language or original if it exists in common languages
   return languageMap[lowerLang] || language || 'text';
 };
@@ -77,7 +77,9 @@ export function MarkdownViewer({ content }: MarkdownViewerProps) {
     if (mermaidRef.current) {
       renderMermaidDiagramsDelayed(mermaidRef.current, false, () => {
         // Dispatch custom event when mermaid rendering completes
-        mermaidRef.current?.dispatchEvent(new CustomEvent('mermaidRenderComplete', { bubbles: true }));
+        mermaidRef.current?.dispatchEvent(
+          new CustomEvent('mermaidRenderComplete', { bubbles: true })
+        );
       });
     }
   }, [content]);
@@ -117,7 +119,7 @@ export function MarkdownViewer({ content }: MarkdownViewerProps) {
 
       const svgData = new XMLSerializer().serializeToString(svgElement);
       const svgBlob = new Blob([svgData], { type: 'image/svg+xml' });
-      
+
       const url = URL.createObjectURL(svgBlob);
       const link = document.createElement('a');
       link.href = url;
@@ -135,8 +137,15 @@ export function MarkdownViewer({ content }: MarkdownViewerProps) {
     if (language === 'mermaid') {
       const diagramId = `mermaid-${Date.now()}-${Math.random()}`;
       return (
-        <div key={`${diagramId}-${code.substring(0, 20)}`} className="my-4 relative group">
-          <div id={diagramId} className="mermaid bg-gray-800 p-4 rounded border border-gray-700" data-mermaid-code={code}>
+        <div
+          key={`${diagramId}-${code.substring(0, 20)}`}
+          className="my-4 relative group"
+        >
+          <div
+            id={diagramId}
+            className="mermaid bg-gray-800 p-4 rounded border border-gray-700"
+            data-mermaid-code={code}
+          >
             {code}
           </div>
           <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10 flex space-x-1">
@@ -198,38 +207,44 @@ export function MarkdownViewer({ content }: MarkdownViewerProps) {
   const processLatexInContent = (content: string): React.ReactNode => {
     const hasBlockLatex = /\$\$([^$]+)\$\$/.test(content);
     const hasInlineLatex = /\$([^$\n]+)\$/.test(content);
-    
+
     if (!hasBlockLatex && !hasInlineLatex) {
       const html = String(marked.parse(content));
       const sanitizedHtml = DOMPurify.sanitize(html);
       return <div dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />;
     }
-    
+
     const latexExpressions: Array<{ latex: string; isBlock: boolean }> = [];
     let processedContent = content;
-    
+
     // First replace block LaTeX
-    processedContent = processedContent.replace(/\$\$([^$]+)\$\$/g, (_, latex) => {
-      const index = latexExpressions.length;
-      latexExpressions.push({ latex: latex.trim(), isBlock: true });
-      return `LATEXPLACEHOLDER${index}ENDLATEX`;
-    });
-    
+    processedContent = processedContent.replace(
+      /\$\$([^$]+)\$\$/g,
+      (_, latex) => {
+        const index = latexExpressions.length;
+        latexExpressions.push({ latex: latex.trim(), isBlock: true });
+        return `LATEXPLACEHOLDER${index}ENDLATEX`;
+      }
+    );
+
     // Then replace inline LaTeX
-    processedContent = processedContent.replace(/\$([^$\n]+)\$/g, (_, latex) => {
-      const index = latexExpressions.length;
-      latexExpressions.push({ latex: latex.trim(), isBlock: false });
-      return `LATEXPLACEHOLDER${index}ENDLATEX`;
-    });
-    
+    processedContent = processedContent.replace(
+      /\$([^$\n]+)\$/g,
+      (_, latex) => {
+        const index = latexExpressions.length;
+        latexExpressions.push({ latex: latex.trim(), isBlock: false });
+        return `LATEXPLACEHOLDER${index}ENDLATEX`;
+      }
+    );
+
     // Process markdown
     const html = String(marked.parse(processedContent));
     let sanitizedHtml = DOMPurify.sanitize(html);
-    
+
     // Create a component that will replace placeholders with LaTeX
     const LatexProcessor = ({ html }: { html: string }) => {
       let processedHtml = html;
-      
+
       latexExpressions.forEach((latexInfo, index) => {
         const placeholder = `LATEXPLACEHOLDER${index}ENDLATEX`;
         if (processedHtml.includes(placeholder)) {
@@ -237,24 +252,30 @@ export function MarkdownViewer({ content }: MarkdownViewerProps) {
             const latexHtml = katex.renderToString(latexInfo.latex, {
               throwOnError: false,
               displayMode: latexInfo.isBlock,
-              strict: false
+              strict: false,
             });
-            
+
             if (latexInfo.isBlock) {
-              processedHtml = processedHtml.replace(placeholder, `<div class="my-4 text-center">${latexHtml}</div>`);
+              processedHtml = processedHtml.replace(
+                placeholder,
+                `<div class="my-4 text-center">${latexHtml}</div>`
+              );
             } else {
               processedHtml = processedHtml.replace(placeholder, latexHtml);
             }
-          } catch (error) {
+          } catch {
             const fallback = `$${latexInfo.isBlock ? '$' : ''}${latexInfo.latex}${latexInfo.isBlock ? '$' : ''}$`;
-            processedHtml = processedHtml.replace(placeholder, `<span class="text-red-400 bg-red-900/20 px-1 rounded">${fallback}</span>`);
+            processedHtml = processedHtml.replace(
+              placeholder,
+              `<span class="text-red-400 bg-red-900/20 px-1 rounded">${fallback}</span>`
+            );
           }
         }
       });
-      
+
       return <div dangerouslySetInnerHTML={{ __html: processedHtml }} />;
     };
-    
+
     return <LatexProcessor html={sanitizedHtml} />;
   };
 
@@ -262,18 +283,18 @@ export function MarkdownViewer({ content }: MarkdownViewerProps) {
     // Check for code blocks
     const codeBlockRegex = /```(\w+)?\n([\s\S]*?)\n```/g;
     const hasCodeBlocks = codeBlockRegex.test(content);
-    
+
     if (hasCodeBlocks) {
       const parts: JSX.Element[] = [];
       let lastIndex = 0;
-      
+
       const allBlocks: Array<{
         type: 'code';
         match: RegExpExecArray;
         language?: string;
         content: string;
       }> = [];
-      
+
       // Find code blocks
       const codeRegex = /```(\w+)?\n([\s\S]*?)\n```/g;
       let codeMatch;
@@ -282,51 +303,57 @@ export function MarkdownViewer({ content }: MarkdownViewerProps) {
           type: 'code',
           match: codeMatch,
           language: codeMatch[1],
-          content: codeMatch[2]
+          content: codeMatch[2],
         });
       }
-      
+
       // Sort blocks by position
       allBlocks.sort((a, b) => a.match.index - b.match.index);
-      
+
       let blockId = 0;
-      
+
       for (const block of allBlocks) {
         // Add content before this block
         if (block.match.index > lastIndex) {
           const beforeContent = content.slice(lastIndex, block.match.index);
           if (beforeContent.trim()) {
             parts.push(
-              <div key={`before-${blockId}`} className="prose prose-invert prose-sm max-w-full overflow-hidden">
+              <div
+                key={`before-${blockId}`}
+                className="prose prose-invert prose-sm max-w-full overflow-hidden"
+              >
                 {processLatexInContent(beforeContent)}
               </div>
             );
           }
         }
-        
+
         // Add the block
         parts.push(
           <div key={`code-${blockId}`}>
             {renderCodeBlock(block.content, block.language)}
           </div>
         );
-        
+
         lastIndex = block.match.index + block.match[0].length;
         blockId++;
       }
-      
+
       // Add remaining content after last block
       if (lastIndex < content.length) {
         const afterContent = content.slice(lastIndex);
         if (afterContent.trim()) {
           parts.push(
-            <div key="after" className="prose prose-invert prose-sm max-w-full overflow-hidden">
+            <div
+              key="after"
+              className="prose prose-invert prose-sm max-w-full overflow-hidden"
+            >
               {processLatexInContent(afterContent)}
             </div>
           );
         }
       }
-      
+
       return <div ref={mermaidRef}>{parts}</div>;
     } else {
       return (
@@ -339,32 +366,34 @@ export function MarkdownViewer({ content }: MarkdownViewerProps) {
 
   return (
     <>
-      <MermaidModal 
+      <MermaidModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         mermaidCode={modalMermaidCode}
       />
-      <div 
-        className="prose prose-invert max-w-none p-6 bg-gray-900 text-gray-100 h-full overflow-auto"
-        style={{
-          // Custom CSS for better markdown styling in dark mode
-          '--tw-prose-body': '#f3f4f6',
-          '--tw-prose-headings': '#ffffff',
-          '--tw-prose-lead': '#d1d5db',
-          '--tw-prose-links': '#60a5fa',
-          '--tw-prose-bold': '#ffffff',
-          '--tw-prose-counters': '#9ca3af',
-          '--tw-prose-bullets': '#9ca3af',
-          '--tw-prose-hr': '#374151',
-          '--tw-prose-quotes': '#d1d5db',
-          '--tw-prose-quote-borders': '#374151',
-          '--tw-prose-captions': '#9ca3af',
-          '--tw-prose-code': '#f3f4f6',
-          '--tw-prose-pre-code': '#f3f4f6',
-          '--tw-prose-pre-bg': '#1f2937',
-          '--tw-prose-th-borders': '#374151',
-          '--tw-prose-td-borders': '#374151',
-        } as React.CSSProperties}
+      <div
+        className="prose prose-invert max-w-none p-6 bg-gray-800 text-dark-text-primary h-full overflow-auto"
+        style={
+          {
+            // Custom CSS for better markdown styling in dark mode
+            '--tw-prose-body': '#f3f4f6',
+            '--tw-prose-headings': '#ffffff',
+            '--tw-prose-lead': '#d1d5db',
+            '--tw-prose-links': '#60a5fa',
+            '--tw-prose-bold': '#ffffff',
+            '--tw-prose-counters': '#a3a3a3',
+            '--tw-prose-bullets': '#a3a3a3',
+            '--tw-prose-hr': '#404040',
+            '--tw-prose-quotes': '#d1d5db',
+            '--tw-prose-quote-borders': '#404040',
+            '--tw-prose-captions': '#a3a3a3',
+            '--tw-prose-code': '#f3f4f6',
+            '--tw-prose-pre-code': '#f3f4f6',
+            '--tw-prose-pre-bg': '#262626',
+            '--tw-prose-th-borders': '#404040',
+            '--tw-prose-td-borders': '#404040',
+          } as React.CSSProperties
+        }
       >
         {renderContent(content)}
       </div>

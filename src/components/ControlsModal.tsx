@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Edit2, Check, RotateCcw } from 'lucide-react';
 import { BaseDialog } from './shared/BaseDialog';
 import { useDialogAnimation } from '../hooks/useDialogAnimation';
@@ -24,62 +24,71 @@ const DEFAULT_KEY_BINDINGS: KeyBinding[] = [
     action: 'Add Child Node',
     description: 'Add a child node to the selected node',
     defaultKey: 'Tab',
-    currentKey: 'Tab'
+    currentKey: 'Tab',
   },
   {
     id: 'addSibling',
-    action: 'Add Sibling Node', 
+    action: 'Add Sibling Node',
     description: 'Add a sibling node to the selected node',
     defaultKey: 'Enter',
-    currentKey: 'Enter'
+    currentKey: 'Enter',
   },
   {
     id: 'deleteNode',
     action: 'Delete Node',
     description: 'Delete the selected node and its children',
     defaultKey: 'Delete/Backspace',
-    currentKey: 'Delete/Backspace'
+    currentKey: 'Delete/Backspace',
   },
   {
     id: 'undo',
     action: 'Undo',
     description: 'Undo the last action',
     defaultKey: 'Ctrl+Z',
-    currentKey: 'Ctrl+Z'
+    currentKey: 'Ctrl+Z',
   },
   {
     id: 'redo',
     action: 'Redo',
     description: 'Redo the last undone action',
     defaultKey: 'Ctrl+Shift+Z',
-    currentKey: 'Ctrl+Shift+Z'
+    currentKey: 'Ctrl+Shift+Z',
   },
   {
     id: 'redoAlt',
     action: 'Redo (Alt)',
     description: 'Alternative redo shortcut',
     defaultKey: 'Ctrl+Y',
-    currentKey: 'Ctrl+Y'
+    currentKey: 'Ctrl+Y',
   },
   {
     id: 'openInference',
     action: 'Open Node Panel',
     description: 'Open Node Panel for the selected node',
     defaultKey: '.',
-    currentKey: '.'
+    currentKey: '.',
   },
   {
     id: 'openGenerative',
     action: 'Open Generative Panel',
     description: 'Open the generative AI panel for the selected node',
     defaultKey: '/',
-    currentKey: '/'
-  }
+    currentKey: '/',
+  },
 ];
 
-export function ControlsModal({ isOpen, onClose, onKeyBindingsChange, initialKeyBindings }: ControlsModalProps) {
-  const { shouldRender, isVisible, handleClose } = useDialogAnimation(isOpen, onClose);
-  const [keyBindings, setKeyBindings] = useState<KeyBinding[]>(DEFAULT_KEY_BINDINGS);
+export function ControlsModal({
+  isOpen,
+  onClose,
+  onKeyBindingsChange,
+  initialKeyBindings,
+}: ControlsModalProps) {
+  const { shouldRender, isVisible, handleClose } = useDialogAnimation(
+    isOpen,
+    onClose
+  );
+  const [keyBindings, setKeyBindings] =
+    useState<KeyBinding[]>(DEFAULT_KEY_BINDINGS);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [capturedKey, setCapturedKey] = useState<string>('');
   const [isCapturing, setIsCapturing] = useState(false);
@@ -87,31 +96,37 @@ export function ControlsModal({ isOpen, onClose, onKeyBindingsChange, initialKey
   // Initialize key bindings from props
   useEffect(() => {
     if (initialKeyBindings) {
-      setKeyBindings(prev => prev.map(binding => {
-        // Handle reverse mapping for Delete/Backspace - if we find Delete or Backspace mapped to deleteNode, show as Delete/Backspace
-        let currentKey = binding.defaultKey;
-        
-        if (binding.id === 'deleteNode') {
-          // Check if either Delete or Backspace is mapped to deleteNode
-          const hasDelete = Object.entries(initialKeyBindings).some(([key, action]) => 
-            (key === 'Delete' || key === 'Backspace') && action === 'deleteNode'
-          );
-          if (hasDelete) {
-            currentKey = 'Delete/Backspace';
+      setKeyBindings(prev =>
+        prev.map(binding => {
+          // Handle reverse mapping for Delete/Backspace - if we find Delete or Backspace mapped to deleteNode, show as Delete/Backspace
+          let currentKey = binding.defaultKey;
+
+          if (binding.id === 'deleteNode') {
+            // Check if either Delete or Backspace is mapped to deleteNode
+            const hasDelete = Object.entries(initialKeyBindings).some(
+              ([key, action]) =>
+                (key === 'Delete' || key === 'Backspace') &&
+                action === 'deleteNode'
+            );
+            if (hasDelete) {
+              currentKey = 'Delete/Backspace';
+            }
+          } else {
+            // For other actions, find the key that maps to this action
+            const mappedKey = Object.entries(initialKeyBindings).find(
+              ([_key, action]) => action === binding.id
+            )?.[0];
+            if (mappedKey) {
+              currentKey = mappedKey;
+            }
           }
-        } else {
-          // For other actions, find the key that maps to this action
-          const mappedKey = Object.entries(initialKeyBindings).find(([key, action]) => action === binding.id)?.[0];
-          if (mappedKey) {
-            currentKey = mappedKey;
-          }
-        }
-        
-        return {
-          ...binding,
-          currentKey
-        };
-      }));
+
+          return {
+            ...binding,
+            currentKey,
+          };
+        })
+      );
     }
   }, [initialKeyBindings]);
 
@@ -121,12 +136,12 @@ export function ControlsModal({ isOpen, onClose, onKeyBindingsChange, initialKey
 
     const handleKeyDown = (e: KeyboardEvent) => {
       e.preventDefault();
-      
+
       const modifiers = [];
       if (e.ctrlKey || e.metaKey) modifiers.push('Ctrl');
       if (e.shiftKey) modifiers.push('Shift');
       if (e.altKey) modifiers.push('Alt');
-      
+
       let key = e.key;
       if (key === ' ') key = 'Space';
       if (key === 'Escape') {
@@ -135,13 +150,14 @@ export function ControlsModal({ isOpen, onClose, onKeyBindingsChange, initialKey
         setCapturedKey('');
         return;
       }
-      
+
       // Normalize Delete and Backspace to be displayed as one option
       if (key === 'Delete' || key === 'Backspace') {
         key = 'Delete/Backspace';
       }
-      
-      const keyString = modifiers.length > 0 ? `${modifiers.join('+')}+${key}` : key;
+
+      const keyString =
+        modifiers.length > 0 ? `${modifiers.join('+')}+${key}` : key;
       setCapturedKey(keyString);
     };
 
@@ -158,19 +174,24 @@ export function ControlsModal({ isOpen, onClose, onKeyBindingsChange, initialKey
   const saveBinding = () => {
     if (editingId && capturedKey) {
       const newBindings = keyBindings.map(binding =>
-        binding.id === editingId ? { ...binding, currentKey: capturedKey } : binding
+        binding.id === editingId
+          ? { ...binding, currentKey: capturedKey }
+          : binding
       );
       setKeyBindings(newBindings);
-      
+
       // Convert to object format for parent
-      const bindingsObject = newBindings.reduce((acc, binding) => {
-        acc[binding.id] = binding.currentKey;
-        return acc;
-      }, {} as Record<string, string>);
-      
+      const bindingsObject = newBindings.reduce(
+        (acc, binding) => {
+          acc[binding.id] = binding.currentKey;
+          return acc;
+        },
+        {} as Record<string, string>
+      );
+
       onKeyBindingsChange(bindingsObject);
     }
-    
+
     setEditingId(null);
     setIsCapturing(false);
     setCapturedKey('');
@@ -183,12 +204,15 @@ export function ControlsModal({ isOpen, onClose, onKeyBindingsChange, initialKey
         b.id === id ? { ...b, currentKey: binding.defaultKey } : b
       );
       setKeyBindings(newBindings);
-      
-      const bindingsObject = newBindings.reduce((acc, binding) => {
-        acc[binding.id] = binding.currentKey;
-        return acc;
-      }, {} as Record<string, string>);
-      
+
+      const bindingsObject = newBindings.reduce(
+        (acc, binding) => {
+          acc[binding.id] = binding.currentKey;
+          return acc;
+        },
+        {} as Record<string, string>
+      );
+
       onKeyBindingsChange(bindingsObject);
     }
   };
@@ -196,23 +220,26 @@ export function ControlsModal({ isOpen, onClose, onKeyBindingsChange, initialKey
   const resetAllBindings = () => {
     const resetBindings = DEFAULT_KEY_BINDINGS.map(binding => ({
       ...binding,
-      currentKey: binding.defaultKey
+      currentKey: binding.defaultKey,
     }));
     setKeyBindings(resetBindings);
-    
-    const bindingsObject = resetBindings.reduce((acc, binding) => {
-      acc[binding.id] = binding.currentKey;
-      return acc;
-    }, {} as Record<string, string>);
-    
+
+    const bindingsObject = resetBindings.reduce(
+      (acc, binding) => {
+        acc[binding.id] = binding.currentKey;
+        return acc;
+      },
+      {} as Record<string, string>
+    );
+
     onKeyBindingsChange(bindingsObject);
   };
 
   if (!shouldRender) return null;
 
   return (
-    <BaseDialog 
-      isOpen={shouldRender} 
+    <BaseDialog
+      isOpen={shouldRender}
       onClose={handleClose}
       isVisible={isVisible}
       maxWidth="max-w-2xl"
@@ -220,7 +247,9 @@ export function ControlsModal({ isOpen, onClose, onKeyBindingsChange, initialKey
     >
       <div className="p-6">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-white">Controls & Keyboard Shortcuts</h2>
+          <h2 className="text-xl font-bold text-white">
+            Controls & Keyboard Shortcuts
+          </h2>
           <button
             onClick={handleClose}
             className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded"
@@ -232,7 +261,8 @@ export function ControlsModal({ isOpen, onClose, onKeyBindingsChange, initialKey
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-gray-300">
-              Click the edit button to customize keyboard shortcuts. Press Escape to cancel editing.
+              Click the edit button to customize keyboard shortcuts. Press
+              Escape to cancel editing.
             </p>
             <button
               onClick={resetAllBindings}
@@ -244,25 +274,26 @@ export function ControlsModal({ isOpen, onClose, onKeyBindingsChange, initialKey
           </div>
 
           <div className="space-y-3">
-            {keyBindings.map((binding) => (
+            {keyBindings.map(binding => (
               <div
                 key={binding.id}
                 className="flex items-center justify-between p-3 bg-gray-750 border border-gray-700 rounded"
               >
                 <div className="flex-1">
                   <div className="text-white font-medium">{binding.action}</div>
-                  <div className="text-gray-400 text-sm">{binding.description}</div>
+                  <div className="text-gray-400 text-sm">
+                    {binding.description}
+                  </div>
                 </div>
-                
+
                 <div className="flex items-center gap-3">
                   <div className="text-right">
                     <div className="text-gray-300">
                       {editingId === binding.id ? (
                         <span className="text-blue-400">
-                          {isCapturing 
-                            ? (capturedKey || 'Press a key...') 
-                            : 'Click to capture'
-                          }
+                          {isCapturing
+                            ? capturedKey || 'Press a key...'
+                            : 'Click to capture'}
                         </span>
                       ) : (
                         <code className="bg-gray-700 px-2 py-1 rounded text-sm">
@@ -276,7 +307,7 @@ export function ControlsModal({ isOpen, onClose, onKeyBindingsChange, initialKey
                       </div>
                     )}
                   </div>
-                  
+
                   <div className="flex items-center gap-1">
                     {editingId === binding.id ? (
                       <>
@@ -328,7 +359,9 @@ export function ControlsModal({ isOpen, onClose, onKeyBindingsChange, initialKey
         </div>
 
         <div className="mt-6 pt-4 border-t border-gray-700">
-          <h3 className="text-lg font-semibold text-white mb-3">Additional Actions</h3>
+          <h3 className="text-lg font-semibold text-white mb-3">
+            Additional Actions
+          </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
             <div className="text-gray-300">
               <strong>Click crown icon:</strong> Make node root

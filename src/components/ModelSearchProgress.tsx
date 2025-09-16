@@ -1,5 +1,14 @@
-import React, { useEffect } from 'react';
-import { AlertCircle, CheckCircle, Loader2, Search, X, Download, Database, FileCheck } from 'lucide-react';
+import { useEffect } from 'react';
+import {
+  AlertCircle,
+  CheckCircle,
+  Loader2,
+  Search,
+  X,
+  Download,
+  Database,
+  FileCheck,
+} from 'lucide-react';
 import { useModelScanStore } from '../store/useModelScanStore';
 
 interface ModelSearchProgressProps {
@@ -9,24 +18,23 @@ interface ModelSearchProgressProps {
   onClose?: () => void;
 }
 
-export function ModelSearchProgress({ 
-  isVisible, 
-  isSearching, 
-  isScanningModels, 
-  onClose 
+export function ModelSearchProgress({
+  isVisible,
+  isSearching: _isSearching,
+  isScanningModels,
+  onClose,
 }: ModelSearchProgressProps) {
-  const {
-    isScanning,
-    canCancel,
-    progress,
-    startScan,
-    cancelScan,
-    resetScan
-  } = useModelScanStore();
+  const { isScanning, canCancel, progress, startScan, cancelScan, resetScan } =
+    useModelScanStore();
 
   // Auto-start scan when component becomes visible for model scanning
   useEffect(() => {
-    if (isVisible && isScanningModels && !isScanning && progress.stage === 'idle') {
+    if (
+      isVisible &&
+      isScanningModels &&
+      !isScanning &&
+      progress.stage === 'idle'
+    ) {
       startScan().catch(console.error);
     }
   }, [isVisible, isScanningModels, isScanning, progress.stage, startScan]);
@@ -105,7 +113,11 @@ export function ModelSearchProgress({
   };
 
   const handleClose = () => {
-    if (progress.stage === 'completed' || progress.stage === 'error' || progress.stage === 'cancelled') {
+    if (
+      progress.stage === 'completed' ||
+      progress.stage === 'error' ||
+      progress.stage === 'cancelled'
+    ) {
       resetScan();
       onClose?.();
     }
@@ -129,7 +141,9 @@ export function ModelSearchProgress({
               Cancel
             </button>
           )}
-          {(progress.stage === 'completed' || progress.stage === 'error' || progress.stage === 'cancelled') && (
+          {(progress.stage === 'completed' ||
+            progress.stage === 'error' ||
+            progress.stage === 'cancelled') && (
             <button
               onClick={handleClose}
               className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-gray-200 transition-colors"
@@ -144,11 +158,12 @@ export function ModelSearchProgress({
       {/* Progress Message */}
       <div className="mb-3">
         <p className="text-gray-300 text-sm">{progress.message}</p>
-        {progress.currentItem && !progress.message.includes(progress.currentItem) && (
-          <p className="text-gray-400 text-xs mt-1">
-            Current: {progress.currentItem}
-          </p>
-        )}
+        {progress.currentItem &&
+          !progress.message.includes(progress.currentItem) && (
+            <p className="text-gray-400 text-xs mt-1">
+              Current: {progress.currentItem}
+            </p>
+          )}
       </div>
 
       {/* Progress Bar */}
@@ -171,7 +186,9 @@ export function ModelSearchProgress({
       {progress.totalItems && (
         <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
           <span>Items processed</span>
-          <span>{progress.completedItems || 0} / {progress.totalItems}</span>
+          <span>
+            {progress.completedItems || 0} / {progress.totalItems}
+          </span>
         </div>
       )}
 
@@ -187,7 +204,8 @@ export function ModelSearchProgress({
       {progress.stage === 'completed' && (
         <div className="mt-3 p-3 bg-green-900/20 border border-green-600/30 rounded">
           <p className="text-green-300 text-sm">
-            ✓ {progress.operationType === 'scan' ? 'Scan' : 'Search'} completed successfully!
+            ✓ {progress.operationType === 'scan' ? 'Scan' : 'Search'} completed
+            successfully!
             {progress.totalItems && ` Found ${progress.totalItems} models.`}
           </p>
         </div>
@@ -196,7 +214,8 @@ export function ModelSearchProgress({
       {progress.stage === 'cancelled' && (
         <div className="mt-3 p-3 bg-gray-900/20 border border-gray-600/30 rounded">
           <p className="text-gray-300 text-sm">
-            {progress.operationType === 'scan' ? 'Scan' : 'Search'} was cancelled by user.
+            {progress.operationType === 'scan' ? 'Scan' : 'Search'} was
+            cancelled by user.
           </p>
         </div>
       )}

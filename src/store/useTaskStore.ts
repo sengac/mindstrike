@@ -1,6 +1,12 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { decodeSseData } from '../utils/sseDecoder';
+import {
+  decodeSseEventData,
+  isSseWorkflowStartedData,
+  isSseTasksPlannedData,
+  isSseTaskProgressData,
+  isSseTaskCompletedData,
+} from '../utils/sseDecoder';
 
 export interface Task {
   id: string;
@@ -10,8 +16,8 @@ export interface Task {
   status: 'todo' | 'in-progress' | 'completed' | 'failed';
   nodeId?: string;
   parentId?: string;
-  details?: any;
-  result?: any;
+  details?: unknown;
+  result?: unknown;
   error?: string;
   createdAt: Date;
   completedAt?: Date;
@@ -32,319 +38,347 @@ export interface TaskWorkflow {
 interface TaskState {
   // Current active workflow
   currentWorkflow: TaskWorkflow | null;
-  
+
   // All workflows (for history/debugging)
   workflows: TaskWorkflow[];
-  
+
   // Global task queue (for potential future use)
   globalQueue: Task[];
-  
+
   // SSE Connection
   workflowEventSource: EventSource | null;
-  
+
   // UI State
   isVisible: boolean;
   isLoading: boolean;
   error: string | null;
-  
+
   // Actions
-  startWorkflow: (id: string, originalQuery: string, contextId?: string) => void;
+  startWorkflow: (
+    id: string,
+    originalQuery: string,
+    contextId?: string
+  ) => void;
   setWorkflowTasks: (workflowId: string, tasks: Task[]) => void;
-  updateTaskStatus: (workflowId: string, taskId: string, status: Task['status'], result?: any, error?: string) => void;
+  updateTaskStatus: (
+    workflowId: string,
+    taskId: string,
+    status: Task['status'],
+    result?: unknown,
+    error?: string
+  ) => void;
   setCurrentTaskIndex: (workflowId: string, index: number) => void;
   completeWorkflow: (workflowId: string, totalChanges: number) => void;
   failWorkflow: (workflowId: string, error: string) => void;
   clearCurrentWorkflow: () => void;
-  
+
   // Global queue actions
   addToGlobalQueue: (task: Task) => void;
   removeFromGlobalQueue: (taskId: string) => void;
   clearGlobalQueue: () => void;
-  
+
   // UI actions
   setVisible: (visible: boolean) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
-  
+
   // SSE actions
   connectWorkflowSSE: () => void;
   disconnectWorkflowSSE: () => void;
-  
+
   // Utilities
-  getWorkflowProgress: (workflowId: string) => { completed: number; total: number; percentage: number };
+  getWorkflowProgress: (workflowId: string) => {
+    completed: number;
+    total: number;
+    percentage: number;
+  };
   getActiveTask: () => Task | null;
 }
 
 export const useTaskStore = create<TaskState>()(
-  subscribeWithSelector(
-    (set, get) => ({
-        // Initial state
-        currentWorkflow: null,
-        workflows: [],
-        globalQueue: [],
-        workflowEventSource: null,
-        isVisible: false,
-        isLoading: false,
+  subscribeWithSelector((set, get) => ({
+    // Initial state
+    currentWorkflow: null,
+    workflows: [],
+    globalQueue: [],
+    workflowEventSource: null,
+    isVisible: false,
+    isLoading: false,
+    error: null,
+
+    // Actions
+    startWorkflow: (id: string, originalQuery: string, contextId?: string) => {
+      const workflow: TaskWorkflow = {
+        id,
+        originalQuery,
+        tasks: [],
+        currentTaskIndex: 0,
+        status: 'planning',
+        createdAt: new Date(),
+        totalChanges: 0,
+        contextId,
+      };
+
+      set(state => ({
+        currentWorkflow: workflow,
+        workflows: [...state.workflows, workflow],
+        isVisible: true,
         error: null,
-        
-        // Actions
-        startWorkflow: (id: string, originalQuery: string, contextId?: string) => {
-          const workflow: TaskWorkflow = {
-            id,
-            originalQuery,
-            tasks: [],
-            currentTaskIndex: 0,
-            status: 'planning',
-            createdAt: new Date(),
-            totalChanges: 0,
-            contextId
-          };
-          
-          set((state) => ({
-            currentWorkflow: workflow,
-            workflows: [...state.workflows, workflow],
-            isVisible: true,
-            error: null
-          }));
-        },
-        
-        setWorkflowTasks: (workflowId: string, tasks: Task[]) => {
-          set((state) => {
-            const updatedWorkflows = state.workflows.map(workflow => 
-              workflow.id === workflowId 
-                ? { ...workflow, tasks, status: 'executing' as const }
-                : workflow
-            );
-            
-            const currentWorkflow = state.currentWorkflow?.id === workflowId
-              ? { ...state.currentWorkflow, tasks, status: 'executing' as const }
-              : state.currentWorkflow;
-            
+      }));
+    },
+
+    setWorkflowTasks: (workflowId: string, tasks: Task[]) => {
+      set(state => {
+        const updatedWorkflows = state.workflows.map(workflow =>
+          workflow.id === workflowId
+            ? { ...workflow, tasks, status: 'executing' as const }
+            : workflow
+        );
+
+        const currentWorkflow =
+          state.currentWorkflow?.id === workflowId
+            ? { ...state.currentWorkflow, tasks, status: 'executing' as const }
+            : state.currentWorkflow;
+
+        return {
+          workflows: updatedWorkflows,
+          currentWorkflow,
+        };
+      });
+    },
+
+    updateTaskStatus: (
+      workflowId: string,
+      taskId: string,
+      status: Task['status'],
+      result?: unknown,
+      error?: string
+    ) => {
+      set(state => {
+        const updateTask = (task: Task): Task => {
+          if (task.id === taskId) {
             return {
-              workflows: updatedWorkflows,
-              currentWorkflow
-            };
-          });
-        },
-        
-        updateTaskStatus: (workflowId: string, taskId: string, status: Task['status'], result?: any, error?: string) => {
-          set((state) => {
-            const updateTask = (task: Task): Task => {
-              if (task.id === taskId) {
-                return {
-                  ...task,
-                  status,
-                  result,
-                  error,
-                  completedAt: status === 'completed' || status === 'failed' ? new Date() : task.completedAt
-                };
-              }
-              return task;
-            };
-            
-            const updatedWorkflows = state.workflows.map(workflow => {
-              if (workflow.id === workflowId) {
-                return {
-                  ...workflow,
-                  tasks: workflow.tasks.map(updateTask)
-                };
-              }
-              return workflow;
-            });
-            
-            const currentWorkflow = state.currentWorkflow?.id === workflowId
-              ? {
-                  ...state.currentWorkflow,
-                  tasks: state.currentWorkflow.tasks.map(updateTask)
-                }
-              : state.currentWorkflow;
-            
-            return {
-              workflows: updatedWorkflows,
-              currentWorkflow
-            };
-          });
-        },
-        
-        setCurrentTaskIndex: (workflowId: string, index: number) => {
-          set((state) => {
-            const updatedWorkflows = state.workflows.map(workflow => 
-              workflow.id === workflowId 
-                ? { ...workflow, currentTaskIndex: index }
-                : workflow
-            );
-            
-            const currentWorkflow = state.currentWorkflow?.id === workflowId
-              ? { ...state.currentWorkflow, currentTaskIndex: index }
-              : state.currentWorkflow;
-            
-            return {
-              workflows: updatedWorkflows,
-              currentWorkflow
-            };
-          });
-        },
-        
-        completeWorkflow: (workflowId: string, totalChanges: number) => {
-          set((state) => {
-            let updatedWorkflows = [...state.workflows];
-            let currentWorkflow = state.currentWorkflow;
-            
-            // If completing the current workflow, move it to workflows array and clear current
-            if (state.currentWorkflow?.id === workflowId) {
-              const completedWorkflow = {
-                ...state.currentWorkflow,
-                status: 'completed' as const,
-                completedAt: new Date(),
-                totalChanges
-              };
-              
-              // Add to workflows array if not already there
-              if (!updatedWorkflows.some(w => w.id === workflowId)) {
-                updatedWorkflows.push(completedWorkflow);
-              } else {
-                // Update existing workflow in array
-                updatedWorkflows = updatedWorkflows.map(workflow => 
-                  workflow.id === workflowId ? completedWorkflow : workflow
-                );
-              }
-              
-              // Clear current workflow
-              currentWorkflow = null;
-            } else {
-              // Update workflow in workflows array
-              updatedWorkflows = updatedWorkflows.map(workflow => 
-                workflow.id === workflowId 
-                  ? { 
-                      ...workflow, 
-                      status: 'completed' as const, 
-                      completedAt: new Date(),
-                      totalChanges
-                    }
-                  : workflow
-              );
-            }
-            
-            return {
-              workflows: updatedWorkflows,
-              currentWorkflow,
-              isLoading: false
-            };
-          });
-        },
-        
-        failWorkflow: (workflowId: string, error: string) => {
-          set((state) => {
-            let updatedWorkflows = [...state.workflows];
-            let currentWorkflow = state.currentWorkflow;
-            
-            // If failing the current workflow, move it to workflows array and clear current
-            if (state.currentWorkflow?.id === workflowId) {
-              const failedWorkflow = {
-                ...state.currentWorkflow,
-                status: 'failed' as const,
-                completedAt: new Date()
-              };
-              
-              // Add to workflows array if not already there
-              if (!updatedWorkflows.some(w => w.id === workflowId)) {
-                updatedWorkflows.push(failedWorkflow);
-              } else {
-                // Update existing workflow in array
-                updatedWorkflows = updatedWorkflows.map(workflow => 
-                  workflow.id === workflowId ? failedWorkflow : workflow
-                );
-              }
-              
-              // Clear current workflow
-              currentWorkflow = null;
-            } else {
-              // Update workflow in workflows array
-              updatedWorkflows = updatedWorkflows.map(workflow => 
-                workflow.id === workflowId 
-                  ? { 
-                      ...workflow, 
-                      status: 'failed' as const, 
-                      completedAt: new Date()
-                    }
-                  : workflow
-              );
-            }
-            
-            return {
-              workflows: updatedWorkflows,
-              currentWorkflow,
+              ...task,
+              status,
+              result,
               error,
-              isLoading: false
+              completedAt:
+                status === 'completed' || status === 'failed'
+                  ? new Date()
+                  : task.completedAt,
             };
-          });
-        },
-        
-        clearCurrentWorkflow: () => {
-          set({ 
-            currentWorkflow: null, 
-            isVisible: false, 
-            error: null,
-            isLoading: false 
-          });
-        },
-        
-        // Global queue actions
-        addToGlobalQueue: (task: Task) => {
-          set((state) => ({
-            globalQueue: [...state.globalQueue, task]
-          }));
-        },
-        
-        removeFromGlobalQueue: (taskId: string) => {
-          set((state) => ({
-            globalQueue: state.globalQueue.filter(task => task.id !== taskId)
-          }));
-        },
-        
-        clearGlobalQueue: () => {
-          set({ globalQueue: [] });
-        },
-        
-        // UI actions
-        setVisible: (isVisible: boolean) => set({ isVisible }),
-        setLoading: (isLoading: boolean) => set({ isLoading }),
-        setError: (error: string | null) => set({ error }),
-        
-        // SSE actions (deprecated - now handled globally)
-        connectWorkflowSSE: () => {
-          // No-op - SSE is now connected globally
-        },
-        
-        disconnectWorkflowSSE: () => {
-          // No-op - SSE connection is maintained globally
-        },
-        
-        // Utilities
-        getWorkflowProgress: (workflowId: string) => {
-          const state = get();
-          const workflow = state.workflows.find(w => w.id === workflowId) || state.currentWorkflow;
-          
-          if (!workflow) {
-            return { completed: 0, total: 0, percentage: 0 };
           }
-          
-          const completed = workflow.tasks.filter(t => t.status === 'completed').length;
-          const total = workflow.tasks.length;
-          const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
-          
-          return { completed, total, percentage };
-        },
-        
-        getActiveTask: () => {
-          const state = get();
-          if (!state.currentWorkflow) return null;
-          
-          const currentTask = state.currentWorkflow.tasks[state.currentWorkflow.currentTaskIndex];
-          return currentTask || null;
+          return task;
+        };
+
+        const updatedWorkflows = state.workflows.map(workflow => {
+          if (workflow.id === workflowId) {
+            return {
+              ...workflow,
+              tasks: workflow.tasks.map(updateTask),
+            };
+          }
+          return workflow;
+        });
+
+        const currentWorkflow =
+          state.currentWorkflow?.id === workflowId
+            ? {
+                ...state.currentWorkflow,
+                tasks: state.currentWorkflow.tasks.map(updateTask),
+              }
+            : state.currentWorkflow;
+
+        return {
+          workflows: updatedWorkflows,
+          currentWorkflow,
+        };
+      });
+    },
+
+    setCurrentTaskIndex: (workflowId: string, index: number) => {
+      set(state => {
+        const updatedWorkflows = state.workflows.map(workflow =>
+          workflow.id === workflowId
+            ? { ...workflow, currentTaskIndex: index }
+            : workflow
+        );
+
+        const currentWorkflow =
+          state.currentWorkflow?.id === workflowId
+            ? { ...state.currentWorkflow, currentTaskIndex: index }
+            : state.currentWorkflow;
+
+        return {
+          workflows: updatedWorkflows,
+          currentWorkflow,
+        };
+      });
+    },
+
+    completeWorkflow: (workflowId: string, totalChanges: number) => {
+      set(state => {
+        let updatedWorkflows = [...state.workflows];
+        let currentWorkflow = state.currentWorkflow;
+
+        // If completing the current workflow, move it to workflows array and clear current
+        if (state.currentWorkflow?.id === workflowId) {
+          const completedWorkflow = {
+            ...state.currentWorkflow,
+            status: 'completed' as const,
+            completedAt: new Date(),
+            totalChanges,
+          };
+
+          // Add to workflows array if not already there
+          if (!updatedWorkflows.some(w => w.id === workflowId)) {
+            updatedWorkflows.push(completedWorkflow);
+          } else {
+            // Update existing workflow in array
+            updatedWorkflows = updatedWorkflows.map(workflow =>
+              workflow.id === workflowId ? completedWorkflow : workflow
+            );
+          }
+
+          // Clear current workflow
+          currentWorkflow = null;
+        } else {
+          // Update workflow in workflows array
+          updatedWorkflows = updatedWorkflows.map(workflow =>
+            workflow.id === workflowId
+              ? {
+                  ...workflow,
+                  status: 'completed' as const,
+                  completedAt: new Date(),
+                  totalChanges,
+                }
+              : workflow
+          );
         }
-      })
-  )
+
+        return {
+          workflows: updatedWorkflows,
+          currentWorkflow,
+          isLoading: false,
+        };
+      });
+    },
+
+    failWorkflow: (workflowId: string, error: string) => {
+      set(state => {
+        let updatedWorkflows = [...state.workflows];
+        let currentWorkflow = state.currentWorkflow;
+
+        // If failing the current workflow, move it to workflows array and clear current
+        if (state.currentWorkflow?.id === workflowId) {
+          const failedWorkflow = {
+            ...state.currentWorkflow,
+            status: 'failed' as const,
+            completedAt: new Date(),
+          };
+
+          // Add to workflows array if not already there
+          if (!updatedWorkflows.some(w => w.id === workflowId)) {
+            updatedWorkflows.push(failedWorkflow);
+          } else {
+            // Update existing workflow in array
+            updatedWorkflows = updatedWorkflows.map(workflow =>
+              workflow.id === workflowId ? failedWorkflow : workflow
+            );
+          }
+
+          // Clear current workflow
+          currentWorkflow = null;
+        } else {
+          // Update workflow in workflows array
+          updatedWorkflows = updatedWorkflows.map(workflow =>
+            workflow.id === workflowId
+              ? {
+                  ...workflow,
+                  status: 'failed' as const,
+                  completedAt: new Date(),
+                }
+              : workflow
+          );
+        }
+
+        return {
+          workflows: updatedWorkflows,
+          currentWorkflow,
+          error,
+          isLoading: false,
+        };
+      });
+    },
+
+    clearCurrentWorkflow: () => {
+      set({
+        currentWorkflow: null,
+        isVisible: false,
+        error: null,
+        isLoading: false,
+      });
+    },
+
+    // Global queue actions
+    addToGlobalQueue: (task: Task) => {
+      set(state => ({
+        globalQueue: [...state.globalQueue, task],
+      }));
+    },
+
+    removeFromGlobalQueue: (taskId: string) => {
+      set(state => ({
+        globalQueue: state.globalQueue.filter(task => task.id !== taskId),
+      }));
+    },
+
+    clearGlobalQueue: () => {
+      set({ globalQueue: [] });
+    },
+
+    // UI actions
+    setVisible: (isVisible: boolean) => set({ isVisible }),
+    setLoading: (isLoading: boolean) => set({ isLoading }),
+    setError: (error: string | null) => set({ error }),
+
+    // SSE actions (deprecated - now handled globally)
+    connectWorkflowSSE: () => {
+      // No-op - SSE is now connected globally
+    },
+
+    disconnectWorkflowSSE: () => {
+      // No-op - SSE connection is maintained globally
+    },
+
+    // Utilities
+    getWorkflowProgress: (workflowId: string) => {
+      const state = get();
+      const workflow =
+        state.workflows.find(w => w.id === workflowId) || state.currentWorkflow;
+
+      if (!workflow) {
+        return { completed: 0, total: 0, percentage: 0 };
+      }
+
+      const completed = workflow.tasks.filter(
+        t => t.status === 'completed'
+      ).length;
+      const total = workflow.tasks.length;
+      const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+      return { completed, total, percentage };
+    },
+
+    getActiveTask: () => {
+      const state = get();
+      if (!state.currentWorkflow) return null;
+
+      const currentTask =
+        state.currentWorkflow.tasks[state.currentWorkflow.currentTaskIndex];
+      return currentTask || null;
+    },
+  }))
 );
 
 // Global SSE listener that runs immediately when the module loads
@@ -353,71 +387,105 @@ let currentEventSource: EventSource | null = null;
 
 function createWorkflowSSEConnection(): EventSource {
   const eventSource = new EventSource('/api/tasks/stream/workflow-general');
-  
-  eventSource.onmessage = async (event) => {
+
+  eventSource.onmessage = async event => {
     try {
       const rawData = JSON.parse(event.data);
-      
+
       // Decode base64 fields if needed
-      const data = await decodeSseData(rawData);
-      
+      const data = await decodeSseEventData(rawData);
+
       switch (data.type) {
         case 'workflow_started':
-          useTaskStore.getState().startWorkflow(data.workflowId, data.originalQuery, data.contextId);
+          if (isSseWorkflowStartedData(data)) {
+            useTaskStore
+              .getState()
+              .startWorkflow(
+                data.workflowId,
+                data.originalQuery || '',
+                data.contextId
+              );
+          }
           break;
-          
+
         case 'tasks_planned':
-          if (data.tasks && Array.isArray(data.tasks)) {
+          if (isSseTasksPlannedData(data)) {
             const tasks: Task[] = data.tasks.map((task: any) => ({
               id: task.id,
-              type: 'analyze',
+              type: 'analyze' as const,
               description: task.description,
-              priority: task.priority || 'medium',
-              status: task.status || 'todo',
-              createdAt: new Date()
+              priority:
+                (task.priority as 'high' | 'medium' | 'low') || 'medium',
+              status:
+                (task.status as
+                  | 'todo'
+                  | 'in-progress'
+                  | 'completed'
+                  | 'failed') || 'todo',
+              createdAt: new Date(),
             }));
-            useTaskStore.getState().setWorkflowTasks(data.workflowId, tasks);
+            useTaskStore
+              .getState()
+              .setWorkflowTasks(data.workflowId || '', tasks);
           }
           break;
-          
+
         case 'task_progress':
-          if (data.task) {
-            useTaskStore.getState().updateTaskStatus(
-              data.workflowId, 
-              data.task.id, 
-              data.task.status,
-              data.task.result,
-              data.task.error
-            );
+          if (isSseTaskProgressData(data)) {
+            useTaskStore
+              .getState()
+              .updateTaskStatus(
+                data.workflowId || '',
+                data.task.id,
+                data.task.status as
+                  | 'todo'
+                  | 'in-progress'
+                  | 'completed'
+                  | 'failed',
+                data.task.result,
+                data.task.error
+              );
           }
           break;
-          
+
         case 'task_completed':
-          if (data.task) {
-            useTaskStore.getState().updateTaskStatus(
-              data.workflowId, 
-              data.task.id, 
-              'completed',
-              data.task.result,
-              data.task.error
-            );
+          if (isSseTaskCompletedData(data)) {
+            useTaskStore
+              .getState()
+              .updateTaskStatus(
+                data.workflowId || '',
+                data.task.id,
+                'completed',
+                data.task.result,
+                data.task.error
+              );
           }
           break;
-          
+
         case 'workflow_completed':
-          useTaskStore.getState().completeWorkflow(data.workflowId, data.totalChanges || 0);
+          useTaskStore
+            .getState()
+            .completeWorkflow(
+              data.workflowId || '',
+              typeof data.totalChanges === 'number' ? data.totalChanges : 0
+            );
           break;
-          
+
         case 'workflow_failed':
-          useTaskStore.getState().failWorkflow(data.workflowId, data.error || 'Unknown error');
+          useTaskStore
+            .getState()
+            .failWorkflow(
+              data.workflowId || '',
+              typeof data.error === 'string' ? data.error : 'Unknown error'
+            );
           break;
       }
     } catch (error) {
       console.error('Error parsing workflow SSE message:', error);
     }
   };
-  
-  eventSource.onerror = (error) => {
+
+  eventSource.onerror = _error => {
     if (eventSource.readyState === EventSource.CLOSED) {
       // Auto-reconnect after 3 seconds
       setTimeout(() => {
@@ -427,7 +495,7 @@ function createWorkflowSSEConnection(): EventSource {
       }, 3000);
     }
   };
-  
+
   return eventSource;
 }
 

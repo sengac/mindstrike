@@ -1,4 +1,13 @@
-import { Settings, Power, AlertCircle, CheckCircle, Edit, Save, X, Terminal } from 'lucide-react';
+import {
+  Settings,
+  Power,
+  AlertCircle,
+  CheckCircle,
+  Edit,
+  Save,
+  X,
+  Terminal,
+} from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { CodeEditor } from './CodeEditor';
 
@@ -17,16 +26,12 @@ interface MCPTool {
   serverId: string;
 }
 
-
-
 interface MCPStatus {
   connectedServers: number;
   totalServers: number;
   totalTools: number;
   servers: string[];
 }
-
-
 
 export function AgentsPanel() {
   const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
@@ -47,7 +52,7 @@ export function AgentsPanel() {
       const [serversRes, toolsRes, statusRes] = await Promise.all([
         fetch('/api/mcp/servers'),
         fetch('/api/mcp/tools'),
-        fetch('/api/mcp/status')
+        fetch('/api/mcp/status'),
       ]);
 
       if (serversRes.ok) {
@@ -76,7 +81,7 @@ export function AgentsPanel() {
       const response = await fetch(`/api/mcp/servers/${serverId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled })
+        body: JSON.stringify({ enabled }),
       });
 
       if (response.ok) {
@@ -106,7 +111,7 @@ export function AgentsPanel() {
       const response = await fetch('/api/mcp/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ config: configContent })
+        body: JSON.stringify({ config: configContent }),
       });
 
       if (response.ok) {
@@ -125,9 +130,12 @@ export function AgentsPanel() {
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-gray-900 overflow-hidden">
+    <div className="flex-1 flex flex-col bg-dark-bg overflow-hidden">
       {/* Header */}
-      <div className="px-6 border-b border-gray-700 flex items-center justify-between" style={{height: 'var(--header-height)'}}>
+      <div
+        className="px-6 border-b border-gray-700 flex items-center justify-between"
+        style={{ height: 'var(--header-height)' }}
+      >
         <div className="flex items-center gap-3">
           <Settings size={24} className="text-green-400" />
           <h1 className="text-xl font-semibold text-white">MCP Agents</h1>
@@ -136,11 +144,15 @@ export function AgentsPanel() {
           <div className="flex items-center gap-4 text-sm">
             <div className="flex items-center gap-2">
               <CheckCircle size={16} className="text-green-400" />
-              <span className="text-gray-300">{mcpStatus.connectedServers}/{mcpStatus.totalServers} servers</span>
+              <span className="text-gray-300">
+                {mcpStatus.connectedServers}/{mcpStatus.totalServers} servers
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <Settings size={16} className="text-green-400" />
-              <span className="text-gray-300">{mcpStatus.totalTools} tools</span>
+              <span className="text-gray-300">
+                {mcpStatus.totalTools} tools
+              </span>
             </div>
           </div>
         )}
@@ -156,14 +168,14 @@ export function AgentsPanel() {
               <h2 className="text-lg font-semibold text-white">MCP Servers</h2>
             </div>
             <div className="flex items-center gap-2">
-              <button 
+              <button
                 onClick={() => (window as any).openDebugDialog?.('mcp')}
                 className="flex items-center gap-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg transition-colors"
               >
                 <Terminal size={16} />
                 View Logs
               </button>
-              <button 
+              <button
                 onClick={loadConfigContent}
                 className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
               >
@@ -172,38 +184,52 @@ export function AgentsPanel() {
               </button>
             </div>
           </div>
-          
+
           {loading ? (
             <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
-              <div className="text-center text-gray-400">Loading MCP servers...</div>
+              <div className="text-center text-gray-400">
+                Loading MCP servers...
+              </div>
             </div>
           ) : mcpServers.length === 0 ? (
             <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
               <div className="text-center">
                 <Settings size={32} className="text-gray-600 mx-auto mb-3" />
                 <p className="text-gray-400 mb-2">No MCP servers configured</p>
-                <p className="text-sm text-gray-500">Add MCP servers to extend functionality with external tools</p>
+                <p className="text-sm text-gray-500">
+                  Add MCP servers to extend functionality with external tools
+                </p>
               </div>
             </div>
           ) : (
             <div className="space-y-3">
-              {mcpServers.map((server) => {
+              {mcpServers.map(server => {
                 const isConnected = mcpStatus?.servers.includes(server.id);
-                const serverTools = mcpTools.filter(tool => tool.serverId === server.id);
-                
+                const serverTools = mcpTools.filter(
+                  tool => tool.serverId === server.id
+                );
+
                 return (
-                  <div key={server.id} className="bg-gray-800 rounded-lg border border-gray-700 p-4">
+                  <div
+                    key={server.id}
+                    className="bg-gray-800 rounded-lg border border-gray-700 p-4"
+                  >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center">
                           <Settings size={16} className="text-green-400" />
                         </div>
                         <div>
-                          <h3 className="font-medium text-white">{server.name}</h3>
-                          <p className="text-sm text-gray-400">{server.description || server.command}</p>
+                          <h3 className="font-medium text-white">
+                            {server.name}
+                          </h3>
+                          <p className="text-sm text-gray-400">
+                            {server.description || server.command}
+                          </p>
                           {serverTools.length > 0 && (
                             <p className="text-xs text-gray-500 mt-1">
-                              {serverTools.length} tool{serverTools.length !== 1 ? 's' : ''} available
+                              {serverTools.length} tool
+                              {serverTools.length !== 1 ? 's' : ''} available
                             </p>
                           )}
                         </div>
@@ -220,7 +246,9 @@ export function AgentsPanel() {
                           </span>
                         </div>
                         <button
-                          onClick={() => toggleMCPServer(server.id, !server.enabled)}
+                          onClick={() =>
+                            toggleMCPServer(server.id, !server.enabled)
+                          }
                           className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors ${
                             server.enabled
                               ? 'bg-green-600 hover:bg-green-700 text-white'
@@ -232,15 +260,22 @@ export function AgentsPanel() {
                         </button>
                       </div>
                     </div>
-                    
+
                     {/* Server Tools */}
                     {serverTools.length > 0 && (
                       <div className="mt-3 pt-3 border-t border-gray-700">
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                          {serverTools.map((tool) => (
-                            <div key={tool.name} className="bg-gray-700/50 rounded px-3 py-2">
-                              <div className="font-medium text-sm text-white">{tool.name}</div>
-                              <div className="text-xs text-gray-400 line-clamp-2">{tool.description}</div>
+                          {serverTools.map(tool => (
+                            <div
+                              key={tool.name}
+                              className="bg-gray-700/50 rounded px-3 py-2"
+                            >
+                              <div className="font-medium text-sm text-white">
+                                {tool.name}
+                              </div>
+                              <div className="text-xs text-gray-400 line-clamp-2">
+                                {tool.description}
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -252,8 +287,6 @@ export function AgentsPanel() {
             </div>
           )}
         </div>
-
-
       </div>
 
       {/* MCP Config Editor Modal */}
@@ -264,7 +297,9 @@ export function AgentsPanel() {
             <div className="flex items-center justify-between p-4 border-b border-gray-700">
               <div className="flex items-center gap-3">
                 <Settings size={20} className="text-green-400" />
-                <h2 className="text-lg font-semibold text-white">MCP Configuration Editor</h2>
+                <h2 className="text-lg font-semibold text-white">
+                  MCP Configuration Editor
+                </h2>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -289,7 +324,8 @@ export function AgentsPanel() {
             <div className="flex-1 p-4 overflow-hidden">
               <div className="mb-3">
                 <p className="text-sm text-gray-400">
-                  Edit the MCP server configuration. This JSON file defines which MCP servers to connect to and their settings.
+                  Edit the MCP server configuration. This JSON file defines
+                  which MCP servers to connect to and their settings.
                 </p>
               </div>
               <div className="h-96">

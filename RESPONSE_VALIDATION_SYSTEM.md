@@ -20,7 +20,7 @@ flowchart TD
     J -->|No| L{Max Retries?}
     L -->|No| G
     L -->|Yes| M[Show Error & Fallback]
-    
+
     N[User Notification Service] --> O[Inform User of Issues]
     G --> N
     H --> N
@@ -31,11 +31,13 @@ flowchart TD
 ## Components
 
 ### 1. Response Scanner (`ResponseScanner`)
+
 - Scans response content for renderable elements
 - Identifies Mermaid diagrams, LaTeX expressions, code blocks
 - Returns structured data about each renderable item
 
 ### 2. Off-Screen Validator (`OffScreenValidator`)
+
 - Creates hidden DOM elements to test rendering
 - Validates Mermaid diagrams using the actual mermaid library
 - Validates LaTeX using KaTeX
@@ -43,18 +45,21 @@ flowchart TD
 - Returns validation results with specific error messages
 
 ### 3. Debug LLM Service (`DebugLLMService`)
+
 - Separate LLM connection specifically for fixing errors
 - Generates targeted prompts for different content types
 - Extracts fixed content from LLM responses
 - Handles retry logic and timeout management
 
 ### 4. Validation Orchestrator (`ResponseValidationOrchestrator`)
+
 - Main coordinator that ties all components together
 - Manages the complete validation and correction workflow
 - Provides progress updates to the UI
 - Implements recursive retry logic with exponential backoff
 
 ### 5. User Notification System (`ValidationStatusNotification`)
+
 - Real-time progress updates during validation
 - User controls for enabling/disabling validation
 - Error reporting and status display
@@ -63,6 +68,7 @@ flowchart TD
 ## Integration Points
 
 ### Chat Flow Integration
+
 The system is integrated into the chat flow at the message processing level:
 
 1. **Message Reception**: When an assistant message is received via SSE
@@ -72,6 +78,7 @@ The system is integrated into the chat flow at the message processing level:
 5. **Fallback Handling**: If correction fails, original content is shown with error indicators
 
 ### Configuration
+
 ```typescript
 // Enable/disable validation globally
 ResponseValidationOrchestrator.setEnabled(true);
@@ -80,14 +87,15 @@ ResponseValidationOrchestrator.setEnabled(true);
 ResponseValidationOrchestrator.configure({
   maxRetryAttempts: 3,
   timeoutMs: 30000,
-  skipValidationForTypes: ['image'] // Optional content types to skip
+  skipValidationForTypes: ['image'], // Optional content types to skip
 });
 ```
 
 ### Progress Monitoring
+
 ```typescript
 // Subscribe to validation progress
-const unsubscribe = ResponseValidationOrchestrator.onProgress((progress) => {
+const unsubscribe = ResponseValidationOrchestrator.onProgress(progress => {
   console.log(`Validation stage: ${progress.stage}`);
   console.log(`Progress: ${progress.completedItems}/${progress.totalItems}`);
 });
@@ -96,16 +104,19 @@ const unsubscribe = ResponseValidationOrchestrator.onProgress((progress) => {
 ## Supported Content Types
 
 ### Mermaid Diagrams
+
 - Full syntax validation using the mermaid library
 - Error detection for invalid node names, missing connections, syntax errors
 - Automatic correction of common issues like missing quotes, invalid characters
 
 ### LaTeX Expressions
+
 - Both inline (`$...$`) and block (`$$...$$`) expressions
 - Validation using KaTeX renderer
 - Error correction for unmatched braces, invalid commands, syntax errors
 
 ### Code Blocks
+
 - Basic syntax validation for various languages
 - JSON parsing validation
 - Language-specific error detection
@@ -114,6 +125,7 @@ const unsubscribe = ResponseValidationOrchestrator.onProgress((progress) => {
 ## API Endpoints
 
 ### `/api/debug-fix`
+
 Server endpoint for LLM-based error correction:
 
 ```typescript
@@ -130,6 +142,7 @@ POST /api/debug-fix
 ```
 
 Response:
+
 ```typescript
 {
   "success": true,
@@ -142,25 +155,30 @@ Response:
 ## User Experience
 
 ### Real-time Feedback
+
 - Progress notifications appear in the bottom-right corner
 - Shows current validation stage and progress
 - Provides controls to enable/disable validation
 - Auto-dismisses on successful completion
 
 ### Error Handling
+
 - Graceful fallback to original content if correction fails
 - Detailed error messages for debugging
 - User can choose to disable validation if desired
 - Retry attempts are clearly communicated
 
 ### Performance Considerations
+
 - Off-screen validation runs in hidden DOM elements
 - Parallel processing of multiple renderable items
 - Configurable timeouts prevent hanging
 - Cleanup of temporary DOM elements
 
 ## Configuration Storage
+
 User preferences for validation are stored in localStorage:
+
 - `responseValidationEnabled`: boolean flag for global enable/disable
 
 ## Testing
@@ -173,12 +191,13 @@ To test the system:
 4. Verify the corrected content renders properly
 
 Example broken Mermaid:
-```
+
+````
 ```mermaid
 graph TD
   A --> B
   C -> D  // Wrong arrow syntax
-```
+````
 
 The system should automatically correct this to use proper `-->` syntax.
 

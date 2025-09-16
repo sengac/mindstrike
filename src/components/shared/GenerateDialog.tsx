@@ -19,32 +19,37 @@ export function GenerateDialog({
   onClose,
   input = '',
   onInputChange,
-  onGenerate
+  onGenerate,
 }: GenerateDialogProps) {
   const [dots, setDots] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const wasGeneratingRef = useRef(false);
-  
-  const { shouldRender, isVisible, handleClose } = useDialogAnimation(isOpen, onClose);
-  
+
+  const { shouldRender, isVisible, handleClose } = useDialogAnimation(
+    isOpen,
+    onClose
+  );
+
   // Store state
-  const { 
-    isGenerating, 
-    generationError, 
-    generationSummary, 
+  const {
+    isGenerating,
+    generationError,
+    generationSummary,
     generationProgress,
-    cancelIterativeGeneration
+    cancelIterativeGeneration,
   } = useMindMapGeneration();
-  
+
   // Token performance metrics
-  const currentTokensPerSecond = useDebugStore(state => state.currentTokensPerSecond);
+  const currentTokensPerSecond = useDebugStore(
+    state => state.currentTokensPerSecond
+  );
   const currentTotalTokens = useDebugStore(state => state.currentTotalTokens);
 
   // Animate dots
   useEffect(() => {
     if (!isVisible || !isGenerating) return;
     const interval = setInterval(() => {
-      setDots(prev => prev === '...' ? '' : prev + '.');
+      setDots(prev => (prev === '...' ? '' : prev + '.'));
     }, 500);
     return () => clearInterval(interval);
   }, [isVisible, isGenerating]);
@@ -64,14 +69,20 @@ export function GenerateDialog({
     } else if (wasGeneratingRef.current && isVisible) {
       wasGeneratingRef.current = false;
       handleClose();
-      
+
       if (generationError) {
         toast.error(generationError);
       } else if (generationSummary) {
         toast.success(generationSummary);
       }
     }
-  }, [isGenerating, isVisible, handleClose, generationSummary, generationError]);
+  }, [
+    isGenerating,
+    isVisible,
+    handleClose,
+    generationSummary,
+    generationError,
+  ]);
 
   if (!shouldRender) return null;
 
@@ -90,14 +101,19 @@ export function GenerateDialog({
             <Brain className="w-6 h-6 text-purple-400" />
             <h2 className="text-xl font-semibold text-white">Generate Ideas</h2>
           </div>
-          
-          <form onSubmit={(e) => { e.preventDefault(); onGenerate?.(); }}>
+
+          <form
+            onSubmit={e => {
+              e.preventDefault();
+              onGenerate?.();
+            }}
+          >
             <div className="mb-6">
               <input
                 ref={inputRef}
                 value={input}
-                onChange={(e) => onInputChange?.(e.target.value)}
-                onKeyDown={(e) => e.key === 'Escape' && handleClose()}
+                onChange={e => onInputChange?.(e.target.value)}
+                onKeyDown={e => e.key === 'Escape' && handleClose()}
                 placeholder="What ideas would you like to explore?"
                 className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
                 disabled={isGenerating}
@@ -106,7 +122,7 @@ export function GenerateDialog({
                 Press Enter to generate • Esc to close
               </p>
             </div>
-            
+
             <div className="flex gap-3">
               <button
                 type="button"
@@ -177,18 +193,20 @@ export function GenerateDialog({
                 </span>
               )}
             </div>
-            
+
             {/* Original Query */}
             {input && (
               <div className="mb-4 p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-2 h-2 bg-blue-400 rounded-full" />
-                  <span className="text-xs font-medium text-blue-300">Your Request</span>
+                  <span className="text-xs font-medium text-blue-300">
+                    Your Request
+                  </span>
                 </div>
                 <p className="text-sm text-blue-100 italic">"{input}"</p>
               </div>
             )}
-            
+
             {/* Scrolling reasoning steps */}
             <div className="max-h-48 overflow-y-auto space-y-3 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
               {generationProgress ? (
@@ -207,13 +225,23 @@ export function GenerateDialog({
                           </span>
                         )}
                         <div className="flex gap-1 ml-auto">
-                          <div className="w-1 h-1 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                          <div className="w-1 h-1 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                          <div className="w-1 h-1 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                          <div
+                            className="w-1 h-1 bg-purple-400 rounded-full animate-bounce"
+                            style={{ animationDelay: '0ms' }}
+                          />
+                          <div
+                            className="w-1 h-1 bg-purple-400 rounded-full animate-bounce"
+                            style={{ animationDelay: '150ms' }}
+                          />
+                          <div
+                            className="w-1 h-1 bg-purple-400 rounded-full animate-bounce"
+                            style={{ animationDelay: '300ms' }}
+                          />
                         </div>
                       </div>
                       <p className="text-sm text-gray-200 leading-relaxed">
-                        {generationProgress.reasoning || 'Analyzing and planning next steps...'}
+                        {generationProgress.reasoning ||
+                          'Analyzing and planning next steps...'}
                       </p>
                     </div>
                   </div>
@@ -221,29 +249,43 @@ export function GenerateDialog({
                   {/* Previous completed steps (simulated for demo) */}
                   {generationProgress.currentStep > 1 && (
                     <div className="space-y-2">
-                      {Array.from({ length: Math.min(generationProgress.currentStep - 1, 3) }, (_, i) => {
-                        const stepNum = generationProgress.currentStep - 1 - i;
-                        return (
-                          <div key={stepNum} className="flex items-start gap-3 p-3 bg-gray-700/50 rounded-lg opacity-70">
-                            <div className="w-2 h-2 bg-green-400 rounded-full mt-2" />
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-xs font-medium text-gray-400">
-                                  Step {stepNum}
-                                </span>
-                                <span className="text-xs px-2 py-0.5 bg-gray-600 text-gray-300 rounded">
-                                  completed
-                                </span>
+                      {Array.from(
+                        {
+                          length: Math.min(
+                            generationProgress.currentStep - 1,
+                            3
+                          ),
+                        },
+                        (_, i) => {
+                          const stepNum =
+                            generationProgress.currentStep - 1 - i;
+                          return (
+                            <div
+                              key={stepNum}
+                              className="flex items-start gap-3 p-3 bg-gray-700/50 rounded-lg opacity-70"
+                            >
+                              <div className="w-2 h-2 bg-green-400 rounded-full mt-2" />
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-xs font-medium text-gray-400">
+                                    Step {stepNum}
+                                  </span>
+                                  <span className="text-xs px-2 py-0.5 bg-gray-600 text-gray-300 rounded">
+                                    completed
+                                  </span>
+                                </div>
+                                <p className="text-sm text-gray-400 leading-relaxed">
+                                  {stepNum === 1
+                                    ? 'Initial analysis of the topic and context'
+                                    : stepNum === 2
+                                      ? 'Generated conceptual framework and key themes'
+                                      : 'Refined ideas and structured content'}
+                                </p>
                               </div>
-                              <p className="text-sm text-gray-400 leading-relaxed">
-                                {stepNum === 1 ? 'Initial analysis of the topic and context' : 
-                                 stepNum === 2 ? 'Generated conceptual framework and key themes' :
-                                 'Refined ideas and structured content'}
-                              </p>
                             </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        }
+                      )}
                     </div>
                   )}
                 </div>
@@ -253,11 +295,22 @@ export function GenerateDialog({
                   <div className="w-2 h-2 bg-blue-400 rounded-full mt-2 animate-pulse" />
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-medium text-blue-300">Initializing</span>
+                      <span className="text-xs font-medium text-blue-300">
+                        Initializing
+                      </span>
                       <div className="flex gap-1 ml-auto">
-                        <div className="w-1 h-1 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                        <div className="w-1 h-1 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                        <div className="w-1 h-1 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                        <div
+                          className="w-1 h-1 bg-blue-400 rounded-full animate-bounce"
+                          style={{ animationDelay: '0ms' }}
+                        />
+                        <div
+                          className="w-1 h-1 bg-blue-400 rounded-full animate-bounce"
+                          style={{ animationDelay: '150ms' }}
+                        />
+                        <div
+                          className="w-1 h-1 bg-blue-400 rounded-full animate-bounce"
+                          style={{ animationDelay: '300ms' }}
+                        />
                       </div>
                     </div>
                     <p className="text-sm text-gray-200 leading-relaxed">

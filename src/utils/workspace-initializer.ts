@@ -17,24 +17,26 @@ export async function initializeWorkspace() {
     try {
       const { useAppStore } = await import('../store/useAppStore');
       const { initializeModelsSSE } = await import('../store/useModelsStore');
-      const { initializeLocalModelsStore } = await import('../store/useLocalModelsStore');
-      
+      const { initializeLocalModelsStore } = await import(
+        '../store/useLocalModelsStore'
+      );
+
       // Initialize the global stores
       initializeModelsSSE();
       initializeLocalModelsStore();
-      
+
       const { workspaceRoot } = useAppStore.getState();
-      
+
       if (workspaceRoot) {
         // Restore saved workspace
         const response = await fetch('/api/workspace/root', {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ path: workspaceRoot })
+          body: JSON.stringify({ path: workspaceRoot }),
         });
-        
+
         if (!response.ok) {
           console.error('Failed to restore workspace:', await response.text());
         }
@@ -43,19 +45,22 @@ export async function initializeWorkspace() {
         const response = await fetch('/api/workspace/root', {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ path: '.' })
+          body: JSON.stringify({ path: '.' }),
         });
-        
+
         if (response.ok) {
           const data = await response.json();
           useAppStore.getState().setWorkspaceRoot(data.workspaceRoot);
         } else {
-          console.error('Failed to set initial workspace:', await response.text());
+          console.error(
+            'Failed to set initial workspace:',
+            await response.text()
+          );
         }
       }
-      
+
       isInitialized = true;
     } catch (error) {
       console.error('Failed to initialize workspace:', error);
@@ -64,6 +69,6 @@ export async function initializeWorkspace() {
       throw error;
     }
   })();
-  
+
   return initializationPromise;
 }

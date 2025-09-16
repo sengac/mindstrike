@@ -5,6 +5,7 @@
 When building Electron desktop applications that use Model Context Protocol (MCP) servers, a common issue arises: **`npx` is not available in the bundled Electron environment**. This means that while `npx @modelcontextprotocol/server-filesystem` works perfectly during development, it fails when the app is packaged and distributed to users.
 
 The error typically looks like:
+
 ```
 Failed to connect: spawn npx ENOENT
 ```
@@ -30,6 +31,7 @@ We created a `CommandResolver` utility class that handles command detection and 
 #### Fallback Search Paths:
 
 **macOS**:
+
 ```
 /usr/local/bin/node (Homebrew)
 /opt/homebrew/bin/node (Apple Silicon Homebrew)
@@ -38,6 +40,7 @@ We created a `CommandResolver` utility class that handles command detection and 
 ```
 
 **Windows**:
+
 ```
 C:\Program Files\nodejs\node.exe
 C:\Program Files (x86)\nodejs\node.exe
@@ -46,6 +49,7 @@ C:\Program Files (x86)\nodejs\node.exe
 ```
 
 **Linux**:
+
 ```
 /usr/local/bin/node
 /usr/bin/node
@@ -58,6 +62,7 @@ C:\Program Files (x86)\nodejs\node.exe
 Popular MCP servers are bundled as direct dependencies in the application:
 
 **Currently Bundled**:
+
 - `@modelcontextprotocol/server-filesystem` - File system operations
 - `@modelcontextprotocol/server-github` - GitHub API integration
 
@@ -82,6 +87,7 @@ The `MCPManager` class has been enhanced to:
 When dependencies are missing, the system provides:
 
 #### Installation Instructions
+
 ```javascript
 {
   title: 'Node.js Required',
@@ -95,6 +101,7 @@ When dependencies are missing, the system provides:
 ```
 
 #### Real-time Notifications
+
 The frontend receives SSE events when commands are missing and can display appropriate guidance to users.
 
 ### 5. Diagnostic API Endpoints
@@ -134,21 +141,25 @@ User config: npx @modelcontextprotocol/server-filesystem /workspace
 ## Benefits of This Approach
 
 ### 1. **Seamless User Experience**
+
 - Works out of the box when Node.js is installed
 - Falls back to bundled servers when external tools aren't available
 - Clear guidance when dependencies are missing
 
 ### 2. **Developer-Friendly**
+
 - No changes needed to existing MCP configurations
 - Works identically in development and production
 - Comprehensive debugging information available
 
 ### 3. **Robust and Reliable**
+
 - Multiple fallback layers ensure maximum compatibility
 - Platform-specific optimizations for Windows, macOS, and Linux
 - Caching prevents performance issues
 
 ### 4. **Future-Proof**
+
 - Easy to add new bundled MCP servers
 - Extensible command resolution system
 - Clear upgrade path as MCP ecosystem evolves
@@ -156,6 +167,7 @@ User config: npx @modelcontextprotocol/server-filesystem /workspace
 ## Configuration Examples
 
 ### Basic Filesystem Server
+
 ```json
 {
   "mcpServers": {
@@ -169,11 +181,12 @@ User config: npx @modelcontextprotocol/server-filesystem /workspace
 ```
 
 ### GitHub Integration
+
 ```json
 {
   "mcpServers": {
     "github": {
-      "command": "npx", 
+      "command": "npx",
       "args": ["@modelcontextprotocol/server-github"],
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "your-token-here"
@@ -185,6 +198,7 @@ User config: npx @modelcontextprotocol/server-filesystem /workspace
 ```
 
 ### Custom External Server
+
 ```json
 {
   "mcpServers": {
@@ -200,16 +214,19 @@ User config: npx @modelcontextprotocol/server-filesystem /workspace
 ## Comparison with Other Solutions
 
 ### AnythingLLM Approach
+
 - **Strategy**: Requires users to manually install all dependencies
 - **Pros**: Simple implementation, delegates responsibility to users
 - **Cons**: Poor user experience, requires technical knowledge
 
 ### Our MindStrike Approach
+
 - **Strategy**: Multi-layered fallbacks with bundled servers
 - **Pros**: Works out of the box, graceful degradation, clear guidance
 - **Cons**: Larger bundle size, more complex implementation
 
 ### Claude Desktop Approach
+
 - **Strategy**: Unknown (proprietary), but likely similar to ours
 - **Pros**: Seamless user experience
 - **Cons**: No visibility into implementation
@@ -217,21 +234,25 @@ User config: npx @modelcontextprotocol/server-filesystem /workspace
 ## Future Enhancements
 
 ### 1. **Automatic Server Installation**
+
 - Download and install popular MCP servers on demand
 - Package manager integration (npm, pip, etc.)
 - Sandboxed execution environments
 
 ### 2. **Enhanced Bundling**
+
 - Dynamic server discovery and bundling
 - Selective bundling based on user preferences
 - Compressed server distributions
 
 ### 3. **Cloud Fallbacks**
+
 - Remote MCP server execution
 - Hybrid local/cloud configurations
 - Load balancing and failover
 
 ### 4. **Advanced Diagnostics**
+
 - Performance monitoring for MCP servers
 - Health checks and automatic recovery
 - Usage analytics and optimization suggestions
@@ -239,6 +260,7 @@ User config: npx @modelcontextprotocol/server-filesystem /workspace
 ## Debugging and Troubleshooting
 
 ### Checking Command Resolution
+
 ```bash
 # View cached command resolutions
 curl http://localhost:3001/api/mcp/diagnostics
@@ -250,19 +272,24 @@ curl -X POST http://localhost:3001/api/mcp/refresh-cache
 ### Common Issues and Solutions
 
 **Issue**: "spawn npx ENOENT"
+
 - **Solution**: Bundled server will be used automatically
 - **Check**: Verify Node.js is installed if you need external servers
 
 **Issue**: "Command 'python' not available"
+
 - **Solution**: Install Python and ensure it's in PATH
 - **Alternative**: Use Node.js-based servers instead
 
 **Issue**: "Permission denied accessing bundled server"
+
 - **Solution**: Check file permissions in node_modules
 - **Workaround**: Reinstall npm packages
 
 ### Diagnostic Information
+
 The `/api/mcp/diagnostics` endpoint provides:
+
 - List of bundled servers and their availability
 - Cached command resolutions
 - System information (platform, Node.js version, npm version)
@@ -271,16 +298,19 @@ The `/api/mcp/diagnostics` endpoint provides:
 ## Security Considerations
 
 ### Bundled Servers
+
 - All bundled servers are verified before inclusion
 - Regular updates to address security vulnerabilities
 - Sandboxed execution prevents system access beyond intended scope
 
 ### External Commands
+
 - Command resolution respects system PATH and permissions
 - No automatic installation of external dependencies
 - User confirmation required for sensitive operations
 
 ### Environment Variables
+
 - Secure handling of API keys and tokens
 - Environment variable validation and sanitization
 - No logging of sensitive information

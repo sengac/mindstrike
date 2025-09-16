@@ -18,7 +18,6 @@ export function TabbedEditor({ content, language, onSave }: TabbedEditorProps) {
         onChange={() => {}} // MarkdownEditor handles its own state
         showTabs={true}
         defaultMode="preview"
-        autoSave={false}
         onSave={onSave}
         className="h-full"
       />

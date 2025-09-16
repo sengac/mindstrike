@@ -21,7 +21,7 @@ export interface DebugResponse {
 export class DebugLLMService {
   private static readonly MAX_RETRIES = 3;
   private static readonly DEBUG_ENDPOINT = '/api/debug-fix';
-  
+
   /**
    * Request a fix for broken renderable content
    */
@@ -33,18 +33,18 @@ export class DebugLLMService {
     if (retryCount >= this.MAX_RETRIES) {
       return {
         success: false,
-        error: `Max retry attempts (${this.MAX_RETRIES}) exceeded`
+        error: `Max retry attempts (${this.MAX_RETRIES}) exceeded`,
       };
     }
-    
+
     const debugRequest: DebugRequest = {
       originalContent: item.content,
       errorType: item.type,
       errorMessage: validationError,
       contentType: item.type,
-      language: item.language
+      language: item.language,
     };
-    
+
     try {
       const response = await fetch(this.DEBUG_ENDPOINT, {
         method: 'POST',
@@ -53,25 +53,27 @@ export class DebugLLMService {
         },
         body: JSON.stringify({
           request: debugRequest,
-          retryCount
-        })
+          retryCount,
+        }),
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        throw new Error(
+          errorData.error || `HTTP error! status: ${response.status}`
+        );
       }
-      
+
       const result = await response.json();
       return result;
     } catch (error) {
       return {
         success: false,
-        error: `Debug LLM request failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+        error: `Debug LLM request failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
       };
     }
   }
-  
+
   /**
    * Generate a comprehensive fix prompt for the LLM
    */
@@ -92,7 +94,9 @@ Your response should contain ONLY the corrected content within a code block of t
     // Add content-specific guidance
     switch (request.contentType) {
       case 'mermaid':
-        return basePrompt + `
+        return (
+          basePrompt +
+          `
 
 Common Mermaid issues to check:
 - Syntax errors in node definitions
@@ -104,10 +108,13 @@ Common Mermaid issues to check:
 Respond with only the corrected Mermaid diagram:
 \`\`\`mermaid
 [corrected diagram here]
-\`\`\``;
+\`\`\``
+        );
 
       case 'latex':
-        return basePrompt + `
+        return (
+          basePrompt +
+          `
 
 Common LaTeX issues to check:
 - Unmatched braces or brackets
@@ -119,10 +126,13 @@ Common LaTeX issues to check:
 Respond with only the corrected LaTeX:
 \`\`\`latex
 [corrected LaTeX here]
-\`\`\``;
+\`\`\``
+        );
 
       case 'code':
-        return basePrompt + `
+        return (
+          basePrompt +
+          `
 
 Common ${request.language || 'code'} issues to check:
 - Syntax errors
@@ -134,7 +144,8 @@ Common ${request.language || 'code'} issues to check:
 Respond with only the corrected code:
 \`\`\`${request.language || 'text'}
 [corrected code here]
-\`\`\``;
+\`\`\``
+        );
 
       default:
         return basePrompt;

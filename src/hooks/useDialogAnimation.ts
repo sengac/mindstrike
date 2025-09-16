@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 
-export function useDialogAnimation(isOpen: boolean, onClose: () => void, duration = 250) {
+export function useDialogAnimation(
+  isOpen: boolean,
+  onClose: () => void,
+  duration = 250
+) {
   const [isVisible, setIsVisible] = useState(false);
   const [shouldRender, setShouldRender] = useState(false);
 
@@ -25,6 +29,6 @@ export function useDialogAnimation(isOpen: boolean, onClose: () => void, duratio
   return {
     shouldRender,
     isVisible,
-    handleClose
+    handleClose,
   };
 }

@@ -1,5 +1,15 @@
 import { useCallback, useState, useEffect, useRef } from 'react';
-import { Network, Undo2, Redo2, RotateCcw, ArrowRight, ArrowLeft, ArrowDown, ArrowUp, Settings } from 'lucide-react';
+import {
+  Network,
+  Undo2,
+  Redo2,
+  RotateCcw,
+  ArrowRight,
+  ArrowLeft,
+  ArrowDown,
+  ArrowUp,
+  Settings,
+} from 'lucide-react';
 import { MindMap as MindMapType } from '../hooks/useMindMaps';
 import { MindMap } from './MindMap';
 import { ControlsModal } from '../../components/ControlsModal';
@@ -9,12 +19,10 @@ import { Source } from '../types/mindMap';
 import { MindMapData } from '../../utils/mindMapData';
 
 // Import the new store hooks
-import { 
-  useMindMapHistory, 
+import {
   useMindMapSelection,
-  useMindMapLayout,
   useMindMapActions,
-  useMindMapStore
+  useMindMapStore,
 } from '../../store/useMindMapStore';
 
 interface MindMapsViewProps {
@@ -22,29 +30,35 @@ interface MindMapsViewProps {
   loadMindMaps: (preserveActiveId?: boolean) => Promise<void>;
   // Props for external node updates
   pendingNodeUpdate?: {
-    nodeId: string
-    chatId?: string | null
-    notes?: string | null
-    sources?: Source[]
-    timestamp: number
-  }
+    nodeId: string;
+    chatId?: string | null;
+    notes?: string | null;
+    sources?: Source[];
+    timestamp: number;
+  };
 }
 
-export function MindMapsView({ activeMindMap, loadMindMaps, pendingNodeUpdate }: MindMapsViewProps) {
+export function MindMapsView({
+  activeMindMap,
+  loadMindMaps,
+  pendingNodeUpdate,
+}: MindMapsViewProps) {
   const [mindMapData, setMindMapData] = useState<MindMapData | undefined>();
   const [loadedMindMapId, setLoadedMindMapId] = useState<string | null>(null);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [showControlsModal, setShowControlsModal] = useState(false);
   const loadingRef = useRef<string | null>(null);
-  
+
   // Get key bindings from store
-  const mindMapKeyBindings = useAppStore((state) => state.mindMapKeyBindings);
-  const setMindMapKeyBindings = useAppStore((state) => state.setMindMapKeyBindings);
+  const mindMapKeyBindings = useAppStore(state => state.mindMapKeyBindings);
+  const setMindMapKeyBindings = useAppStore(
+    state => state.setMindMapKeyBindings
+  );
 
   // Get state from MindMap store
   const { selectedNodeId } = useMindMapSelection();
   const { setNodeColors, clearNodeColors } = useMindMapActions();
-  
+
   // Get store state for checking initialization
   const isInitialized = useMindMapStore(state => state.isInitialized);
   const currentMindMapId = useMindMapStore(state => state.mindMapId);
@@ -60,22 +74,25 @@ export function MindMapsView({ activeMindMap, loadMindMaps, pendingNodeUpdate }:
     }
   }, [activeMindMap?.id]);
 
-  const handleKeyBindingsChange = useCallback((newBindings: Record<string, string>) => {
-    // Transform the bindings to expand Delete/Backspace into separate entries
-    const expandedBindings: Record<string, string> = {};
-    
-    Object.entries(newBindings).forEach(([actionId, key]) => {
-      if (key === 'Delete/Backspace') {
-        // Map both Delete and Backspace to the same action
-        expandedBindings['Delete'] = actionId;
-        expandedBindings['Backspace'] = actionId;
-      } else {
-        expandedBindings[key] = actionId;
-      }
-    });
-    
-    setMindMapKeyBindings(expandedBindings);
-  }, [setMindMapKeyBindings]);
+  const handleKeyBindingsChange = useCallback(
+    (newBindings: Record<string, string>) => {
+      // Transform the bindings to expand Delete/Backspace into separate entries
+      const expandedBindings: Record<string, string> = {};
+
+      Object.entries(newBindings).forEach(([actionId, key]) => {
+        if (key === 'Delete/Backspace') {
+          // Map both Delete and Backspace to the same action
+          expandedBindings['Delete'] = actionId;
+          expandedBindings['Backspace'] = actionId;
+        } else {
+          expandedBindings[key] = actionId;
+        }
+      });
+
+      setMindMapKeyBindings(expandedBindings);
+    },
+    [setMindMapKeyBindings]
+  );
 
   const loadMindMapData = async (mindMapId: string) => {
     try {
@@ -101,33 +118,43 @@ export function MindMapsView({ activeMindMap, loadMindMaps, pendingNodeUpdate }:
   };
 
   // Save function - immediate save without debouncing
-  const saveMindMapData = useCallback(async (data: MindMapData) => {
-    if (!activeMindMap?.id) {
-      console.warn('No active MindMap ID for saving mindmap');
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/mindmaps/${activeMindMap.id}/mindmap`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      });
-      
-      if (response.ok) {
-        // Reload mindmaps to refresh the updated timestamp, preserving active mindmap
-        loadMindMaps(true);
-      } else {
-        console.error('Failed to save mindmap:', response.status, response.statusText);
-        const errorText = await response.text();
-        console.error('Error response body:', errorText);
+  const saveMindMapData = useCallback(
+    async (data: MindMapData) => {
+      if (!activeMindMap?.id) {
+        console.warn('No active MindMap ID for saving mindmap');
+        return;
       }
-    } catch (error) {
-      console.error('Failed to save mindmap data:', error);
-    }
-  }, [activeMindMap?.id, loadMindMaps]);
+
+      try {
+        const response = await fetch(
+          `/api/mindmaps/${activeMindMap.id}/mindmap`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data),
+          }
+        );
+
+        if (response.ok) {
+          // Reload mindmaps to refresh the updated timestamp, preserving active mindmap
+          loadMindMaps(true);
+        } else {
+          console.error(
+            'Failed to save mindmap:',
+            response.status,
+            response.statusText
+          );
+          const errorText = await response.text();
+          console.error('Error response body:', errorText);
+        }
+      } catch (error) {
+        console.error('Failed to save mindmap data:', error);
+      }
+    },
+    [activeMindMap?.id, loadMindMaps]
+  );
 
   // Store the mindmap controls
   const [mindMapControls, setMindMapControls] = useState<any>(null);
@@ -151,22 +178,34 @@ export function MindMapsView({ activeMindMap, loadMindMaps, pendingNodeUpdate }:
     }
   }, [mindMapControls]);
 
-  const handleChangeLayout = useCallback(async (newLayout: 'LR' | 'RL' | 'TB' | 'BT') => {
-    if (mindMapControls?.changeLayout) {
-      mindMapControls.changeLayout(newLayout);
-    }
-  }, [mindMapControls]);
+  const handleChangeLayout = useCallback(
+    async (newLayout: 'LR' | 'RL' | 'TB' | 'BT') => {
+      if (mindMapControls?.changeLayout) {
+        mindMapControls.changeLayout(newLayout);
+      }
+    },
+    [mindMapControls]
+  );
 
-  const handleSetNodeColors = useCallback((nodeId: string, colors: { backgroundClass: string; foregroundClass: string }) => {
-    setNodeColors(nodeId, colors);
-  }, [setNodeColors]);
+  const handleSetNodeColors = useCallback(
+    (
+      nodeId: string,
+      colors: { backgroundClass: string; foregroundClass: string }
+    ) => {
+      setNodeColors(nodeId, colors);
+    },
+    [setNodeColors]
+  );
 
-  const handleClearNodeColors = useCallback((nodeId: string) => {
-    clearNodeColors(nodeId);
-  }, [clearNodeColors]);
+  const handleClearNodeColors = useCallback(
+    (nodeId: string) => {
+      clearNodeColors(nodeId);
+    },
+    [clearNodeColors]
+  );
 
   return (
-    <div className="flex-1 flex flex-col bg-gray-900">
+    <div className="flex-1 flex flex-col bg-dark-bg">
       {activeMindMap ? (
         <div className="flex flex-col h-full">
           <div className="pt-2 pr-4">
@@ -176,10 +215,10 @@ export function MindMapsView({ activeMindMap, loadMindMaps, pendingNodeUpdate }:
                   <p className="text-gray-400">{activeMindMap.description}</p>
                 )}
                 <div className="text-xs text-gray-500 mt-2 pl-4">
-                  Built with {' '}
-                  <a 
-                    href="https://reactflow.dev" 
-                    target="_blank" 
+                  Built with{' '}
+                  <a
+                    href="https://reactflow.dev"
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="text-gray-500 hover:text-gray-300 underline"
                   >
@@ -187,7 +226,7 @@ export function MindMapsView({ activeMindMap, loadMindMaps, pendingNodeUpdate }:
                   </a>
                 </div>
               </div>
-              
+
               {/* MindMap Controls - only show when store is initialized */}
               {isInitialized && currentMindMapId === activeMindMap.id && (
                 <div className="flex items-center gap-4" data-mindmap-controls>
@@ -223,12 +262,12 @@ export function MindMapsView({ activeMindMap, loadMindMaps, pendingNodeUpdate }:
                     >
                       <Settings size={14} />
                     </button>
-                    
+
                     {/* Color Palette */}
                     {selectedNodeId && (
                       <ColorPalette
                         selectedNodeId={selectedNodeId}
-                        onColorChange={(colors) => {
+                        onColorChange={colors => {
                           if (selectedNodeId) {
                             handleSetNodeColors(selectedNodeId, colors);
                           }
@@ -241,7 +280,7 @@ export function MindMapsView({ activeMindMap, loadMindMaps, pendingNodeUpdate }:
                       />
                     )}
                   </div>
-                  
+
                   {/* Layout Direction Controls */}
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-400">Layout:</span>
@@ -249,7 +288,9 @@ export function MindMapsView({ activeMindMap, loadMindMaps, pendingNodeUpdate }:
                       <button
                         onClick={() => handleChangeLayout('LR')}
                         className={`p-1.5 border border-gray-600 rounded hover:bg-gray-600 text-gray-300 ${
-                          mindMapControls?.currentLayout === 'LR' ? 'bg-blue-600 border-blue-500' : 'bg-gray-700'
+                          mindMapControls?.currentLayout === 'LR'
+                            ? 'bg-blue-600 border-blue-500'
+                            : 'bg-gray-700'
                         }`}
                         title="Left to Right"
                       >
@@ -258,7 +299,9 @@ export function MindMapsView({ activeMindMap, loadMindMaps, pendingNodeUpdate }:
                       <button
                         onClick={() => handleChangeLayout('RL')}
                         className={`p-1.5 border border-gray-600 rounded hover:bg-gray-600 text-gray-300 ${
-                          mindMapControls?.currentLayout === 'RL' ? 'bg-blue-600 border-blue-500' : 'bg-gray-700'
+                          mindMapControls?.currentLayout === 'RL'
+                            ? 'bg-blue-600 border-blue-500'
+                            : 'bg-gray-700'
                         }`}
                         title="Right to Left"
                       >
@@ -267,7 +310,9 @@ export function MindMapsView({ activeMindMap, loadMindMaps, pendingNodeUpdate }:
                       <button
                         onClick={() => handleChangeLayout('TB')}
                         className={`p-1.5 border border-gray-600 rounded hover:bg-gray-600 text-gray-300 ${
-                          mindMapControls?.currentLayout === 'TB' ? 'bg-blue-600 border-blue-500' : 'bg-gray-700'
+                          mindMapControls?.currentLayout === 'TB'
+                            ? 'bg-blue-600 border-blue-500'
+                            : 'bg-gray-700'
                         }`}
                         title="Top to Bottom"
                       >
@@ -276,7 +321,9 @@ export function MindMapsView({ activeMindMap, loadMindMaps, pendingNodeUpdate }:
                       <button
                         onClick={() => handleChangeLayout('BT')}
                         className={`p-1.5 border border-gray-600 rounded hover:bg-gray-600 text-gray-300 ${
-                          mindMapControls?.currentLayout === 'BT' ? 'bg-blue-600 border-blue-500' : 'bg-gray-700'
+                          mindMapControls?.currentLayout === 'BT'
+                            ? 'bg-blue-600 border-blue-500'
+                            : 'bg-gray-700'
                         }`}
                         title="Bottom to Top"
                       >
@@ -288,7 +335,7 @@ export function MindMapsView({ activeMindMap, loadMindMaps, pendingNodeUpdate }:
               )}
             </div>
           </div>
-          
+
           <div className="flex-1">
             {isDataLoaded && loadedMindMapId === activeMindMap.id ? (
               <MindMap
@@ -312,11 +359,13 @@ export function MindMapsView({ activeMindMap, loadMindMaps, pendingNodeUpdate }:
           <div className="text-center">
             <Network size={48} className="mx-auto mb-4 opacity-50" />
             <p className="text-lg">Select a MindMap to get started</p>
-            <p className="text-sm mt-2">Choose from the list on the left or create a new MindMap</p>
+            <p className="text-sm mt-2">
+              Choose from the list on the left or create a new MindMap
+            </p>
           </div>
         </div>
       )}
-      
+
       {/* Controls Modal */}
       <ControlsModal
         isOpen={showControlsModal}

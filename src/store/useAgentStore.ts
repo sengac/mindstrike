@@ -46,35 +46,53 @@ export interface AgentState {
     model: string;
     displayName?: string;
     apiKey?: string;
-    type?: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'perplexity' | 'google' | 'local';
+    type?:
+      | 'ollama'
+      | 'vllm'
+      | 'openai-compatible'
+      | 'openai'
+      | 'anthropic'
+      | 'perplexity'
+      | 'google'
+      | 'local';
   };
   customRole?: string;
-  
+
   // Conversation State
   messages: StreamingMessage[];
   isStreaming: boolean;
   currentStreamingMessageId?: string;
-  
+
   // Streaming Control
   abortController?: AbortController;
-  
+
   // Actions
-  addMessage: (message: Omit<StreamingMessage, 'id' | 'timestamp'>) => string;
+  addMessage: (
+    message: Omit<StreamingMessage, 'id' | 'timestamp'>,
+    providedId?: string
+  ) => string;
   updateMessage: (id: string, updates: Partial<StreamingMessage>) => void;
   appendToMessage: (id: string, content: string) => void;
   deleteMessage: (id: string) => void;
   cancelStreaming: () => void;
   clearConversation: () => void;
-  setStreamingStatus: (messageId: string, status: StreamingMessage['status']) => void;
+  setStreamingStatus: (
+    messageId: string,
+    status: StreamingMessage['status']
+  ) => void;
   setAbortController: (controller: AbortController) => void;
-  
+
   // Configuration Updates
   updateLLMConfig: (config: AgentState['llmConfig']) => void;
   updateCustomRole: (role?: string) => void;
 }
 
 // Store factory for per-agent stores
-const createAgentStore = (agentId: string, agentType: string, workspaceRoot: string) => 
+const createAgentStore = (
+  agentId: string,
+  agentType: string,
+  workspaceRoot: string
+) =>
   create<AgentState>()(
     subscribeWithSelector((set, get) => ({
       // Initial state
@@ -89,67 +107,70 @@ const createAgentStore = (agentId: string, agentType: string, workspaceRoot: str
       isStreaming: false,
       currentStreamingMessageId: undefined,
       abortController: undefined,
-      
+
       // Actions
-      addMessage: (messageData) => {
-        const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      addMessage: (messageData, providedId) => {
+        const id =
+          providedId ||
+          `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         const message: StreamingMessage = {
           ...messageData,
           id,
           timestamp: new Date(),
         };
-        
-        set((state) => ({
+
+        set(state => ({
           messages: [...state.messages, message],
           ...(message.status === 'streaming' && {
             isStreaming: true,
             currentStreamingMessageId: id,
           }),
         }));
-        
+
         return id;
       },
-      
+
       updateMessage: (id, updates) => {
-        set((state) => ({
-          messages: state.messages.map((msg) =>
+        set(state => ({
+          messages: state.messages.map(msg =>
             msg.id === id ? { ...msg, ...updates } : msg
           ),
-          ...(updates.status !== 'streaming' && state.currentStreamingMessageId === id && {
-            isStreaming: false,
-            currentStreamingMessageId: undefined,
-          }),
+          ...(updates.status !== 'streaming' &&
+            state.currentStreamingMessageId === id && {
+              isStreaming: false,
+              currentStreamingMessageId: undefined,
+            }),
         }));
       },
-      
+
       appendToMessage: (id, content) => {
-        set((state) => ({
-          messages: state.messages.map((msg) =>
+        set(state => ({
+          messages: state.messages.map(msg =>
             msg.id === id ? { ...msg, content: msg.content + content } : msg
           ),
         }));
       },
-      
-      deleteMessage: (id) => {
-        set((state) => ({
-          messages: state.messages.filter((msg) => msg.id !== id),
+
+      deleteMessage: id => {
+        set(state => ({
+          messages: state.messages.filter(msg => msg.id !== id),
           ...(state.currentStreamingMessageId === id && {
             isStreaming: false,
             currentStreamingMessageId: undefined,
           }),
         }));
       },
-      
+
       cancelStreaming: () => {
         const { abortController, currentStreamingMessageId } = get();
-        
+
         if (abortController) {
           abortController.abort();
         }
-        
+
         if (currentStreamingMessageId) {
-          set((state) => ({
-            messages: state.messages.map((msg) =>
+          set(state => ({
+            messages: state.messages.map(msg =>
               msg.id === currentStreamingMessageId
                 ? { ...msg, status: 'cancelled' as const }
                 : msg
@@ -160,13 +181,13 @@ const createAgentStore = (agentId: string, agentType: string, workspaceRoot: str
           }));
         }
       },
-      
+
       clearConversation: () => {
         const { abortController } = get();
         if (abortController) {
           abortController.abort();
         }
-        
+
         set({
           messages: [],
           isStreaming: false,
@@ -174,29 +195,30 @@ const createAgentStore = (agentId: string, agentType: string, workspaceRoot: str
           abortController: undefined,
         });
       },
-      
+
       setStreamingStatus: (messageId, status) => {
-        set((state) => ({
-          messages: state.messages.map((msg) =>
+        set(state => ({
+          messages: state.messages.map(msg =>
             msg.id === messageId ? { ...msg, status } : msg
           ),
-          ...(status !== 'streaming' && state.currentStreamingMessageId === messageId && {
-            isStreaming: false,
-            currentStreamingMessageId: undefined,
-          }),
+          ...(status !== 'streaming' &&
+            state.currentStreamingMessageId === messageId && {
+              isStreaming: false,
+              currentStreamingMessageId: undefined,
+            }),
         }));
       },
-      
-      setAbortController: (controller) => {
+
+      setAbortController: controller => {
         set({ abortController: controller });
       },
-      
+
       // Configuration Updates
-      updateLLMConfig: (config) => {
+      updateLLMConfig: config => {
         set({ llmConfig: config });
       },
-      
-      updateCustomRole: (customRole) => {
+
+      updateCustomRole: customRole => {
         set({ customRole });
       },
     }))
@@ -205,17 +227,31 @@ const createAgentStore = (agentId: string, agentType: string, workspaceRoot: str
 // Global registry of agent stores
 const agentStores = new Map<string, ReturnType<typeof createAgentStore>>();
 
-export const useAgentStore = (agentId: string, agentType: string, workspaceRoot: string) => {
+export const useAgentStore = (
+  agentId: string,
+  agentType: string,
+  workspaceRoot: string
+) => {
   if (!agentStores.has(agentId)) {
-    agentStores.set(agentId, createAgentStore(agentId, agentType, workspaceRoot));
+    agentStores.set(
+      agentId,
+      createAgentStore(agentId, agentType, workspaceRoot)
+    );
   }
   return agentStores.get(agentId)!;
 };
 
 // Utility function to get store without React hook
-export const getAgentStore = (agentId: string, agentType: string, workspaceRoot: string) => {
+export const getAgentStore = (
+  agentId: string,
+  agentType: string,
+  workspaceRoot: string
+) => {
   if (!agentStores.has(agentId)) {
-    agentStores.set(agentId, createAgentStore(agentId, agentType, workspaceRoot));
+    agentStores.set(
+      agentId,
+      createAgentStore(agentId, agentType, workspaceRoot)
+    );
   }
   return agentStores.get(agentId)!;
 };

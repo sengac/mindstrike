@@ -1,69 +1,74 @@
-import { create } from 'zustand'
-import { subscribeWithSelector } from 'zustand/middleware'
-import { immer } from 'zustand/middleware/immer'
-import { useMemo } from 'react'
-import { Node, Edge } from 'reactflow'
-import { MindMapNodeData, Source } from '../types/mindMap'
-import { MindMapData, MindMapDataManager } from '../utils/mindMapData'
-import { MindMapLayoutManager } from '../utils/mindMapLayout'
-import { MindMapActionsManager } from '../utils/mindMapActions'
-import { decodeSseDataSync } from '../utils/sseDecoder'
+import { create } from 'zustand';
+import { subscribeWithSelector } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
+import { useMemo } from 'react';
+import { Node, Edge } from 'reactflow';
+import { MindMapNodeData, Source } from '../types/mindMap';
+import { MindMapData, MindMapDataManager } from '../utils/mindMapData';
+import { MindMapLayoutManager } from '../utils/mindMapLayout';
+import { MindMapActionsManager } from '../utils/mindMapActions';
+import {
+  decodeSseDataSync,
+  isSseObject,
+  isSseMindmapChangeData,
+  isSseMindmapCompleteData,
+} from '../utils/sseDecoder';
 
 interface HistoryState {
-  nodes: Node<MindMapNodeData>[]
-  edges: Edge[]
-  rootNodeId: string
-  layout: 'LR' | 'RL' | 'TB' | 'BT'
-  selectedNodeId: string | null
+  nodes: Node<MindMapNodeData>[];
+  edges: Edge[];
+  rootNodeId: string;
+  layout: 'LR' | 'RL' | 'TB' | 'BT';
+  selectedNodeId: string | null;
 }
 
 interface MindMapState {
   // Core state
-  mindMapId: string | null
-  nodes: Node<MindMapNodeData>[]
-  edges: Edge[]
-  rootNodeId: string
-  layout: 'LR' | 'RL' | 'TB' | 'BT'
+  mindMapId: string | null;
+  nodes: Node<MindMapNodeData>[];
+  edges: Edge[];
+  rootNodeId: string;
+  layout: 'LR' | 'RL' | 'TB' | 'BT';
 
   // UI state
-  selectedNodeId: string | null
-  isGenerating: boolean
-  generationError: string | null
-  generationSummary: string | null
+  selectedNodeId: string | null;
+  isGenerating: boolean;
+  generationError: string | null;
+  generationSummary: string | null;
 
   // Iterative generation state
   generationProgress: {
-    currentStep: number
-    maxSteps: number
-    reasoning: string | null
-    decision: string | null
-    isComplete: boolean
-  } | null
+    currentStep: number;
+    maxSteps: number;
+    reasoning: string | null;
+    decision: string | null;
+    isComplete: boolean;
+  } | null;
 
   // History state for undo/redo
-  history: HistoryState[]
-  historyIndex: number
-  maxHistorySize: number
+  history: HistoryState[];
+  historyIndex: number;
+  maxHistorySize: number;
 
   // Managers (singleton instances)
-  dataManager: MindMapDataManager
-  layoutManager: MindMapLayoutManager
-  actionsManager: MindMapActionsManager
+  dataManager: MindMapDataManager;
+  layoutManager: MindMapLayoutManager;
+  actionsManager: MindMapActionsManager;
 
   // Initialization
-  isInitialized: boolean
-  isInitializing: boolean
+  isInitialized: boolean;
+  isInitializing: boolean;
 
   // Save callback
-  saveCallback: ((data: MindMapData) => Promise<void>) | null
-  
+  saveCallback: ((data: MindMapData) => Promise<void>) | null;
+
   // SSE connection for task updates
-  taskEventSource: EventSource | null
-  currentWorkflowId: string | null
+  taskEventSource: EventSource | null;
+  currentWorkflowId: string | null;
 
   // Active generation tracking
-  currentGenerationEventSource: EventSource | null
-  currentGenerationWorkflowId: string | null
+  currentGenerationEventSource: EventSource | null;
+  currentGenerationWorkflowId: string | null;
 }
 
 interface MindMapActions {
@@ -72,79 +77,85 @@ interface MindMapActions {
     mindMapId: string,
     initialData?: MindMapData,
     saveCallback?: (data: MindMapData) => Promise<void>
-  ) => Promise<void>
+  ) => Promise<void>;
 
   // Node operations
-  addChildNode: (parentNodeId: string) => Promise<void>
-  addSiblingNode: (siblingNodeId: string) => Promise<void>
-  deleteNode: (nodeId: string) => Promise<void>
-  updateNodeLabel: (nodeId: string, label: string) => void
-  updateNodeLabelWithLayout: (nodeId: string, label: string) => Promise<void>
-  toggleNodeCollapse: (nodeId: string) => Promise<void>
+  addChildNode: (parentNodeId: string) => Promise<void>;
+  addSiblingNode: (siblingNodeId: string) => Promise<void>;
+  deleteNode: (nodeId: string) => Promise<void>;
+  updateNodeLabel: (nodeId: string, label: string) => void;
+  updateNodeLabelWithLayout: (nodeId: string, label: string) => Promise<void>;
+  toggleNodeCollapse: (nodeId: string) => Promise<void>;
   moveNode: (
     nodeId: string,
     newParentId: string,
     insertIndex?: number
-  ) => Promise<void>
+  ) => Promise<void>;
 
   // Node properties
-  updateNodeChatId: (nodeId: string, chatId: string | null) => void
-  updateNodeNotes: (nodeId: string, notes: string | null) => void
-  updateNodeSources: (nodeId: string, sources: Source[]) => void
+  updateNodeChatId: (nodeId: string, chatId: string | null) => void;
+  updateNodeNotes: (nodeId: string, notes: string | null) => void;
+  updateNodeSources: (nodeId: string, sources: Source[]) => void;
   setNodeColors: (
     nodeId: string,
     colors: { backgroundClass: string; foregroundClass: string }
-  ) => void
-  clearNodeColors: (nodeId: string) => void
+  ) => void;
+  clearNodeColors: (nodeId: string) => void;
 
   // Layout operations
-  changeLayout: (newLayout: 'LR' | 'RL' | 'TB' | 'BT') => Promise<void>
-  resetLayout: () => Promise<void>
+  changeLayout: (newLayout: 'LR' | 'RL' | 'TB' | 'BT') => Promise<void>;
+  resetLayout: () => Promise<void>;
 
   // History operations
-  undo: () => void
-  redo: () => void
-  canUndo: () => boolean
-  canRedo: () => boolean
-  saveToHistory: () => void
+  undo: () => void;
+  redo: () => void;
+  canUndo: () => boolean;
+  canRedo: () => boolean;
+  saveToHistory: () => void;
 
   // Selection
-  selectNode: (nodeId: string | null) => void
+  selectNode: (nodeId: string | null) => void;
 
   // Generation state
-  setGenerating: (isGenerating: boolean) => void
-  setGenerationError: (error: string | null) => void
-  setGenerationSummary: (summary: string | null) => void
-  setGenerationProgress: (progress: {
-    currentStep: number
-    maxSteps: number
-    reasoning: string | null
-    decision: string | null
-    isComplete: boolean
-  } | null) => void
+  setGenerating: (isGenerating: boolean) => void;
+  setGenerationError: (error: string | null) => void;
+  setGenerationSummary: (summary: string | null) => void;
+  setGenerationProgress: (
+    progress: {
+      currentStep: number;
+      maxSteps: number;
+      reasoning: string | null;
+      decision: string | null;
+      isComplete: boolean;
+    } | null
+  ) => void;
 
   // Iterative generation
-  startIterativeGeneration: (mindMapId: string, prompt: string, selectedNodeId: string) => Promise<void>
-  cancelIterativeGeneration: () => void
+  startIterativeGeneration: (
+    mindMapId: string,
+    prompt: string,
+    selectedNodeId: string
+  ) => Promise<void>;
+  cancelIterativeGeneration: () => void;
 
   // Bulk operations
-  applyMindmapChanges: (changes: any[]) => Promise<void>
+  applyMindmapChanges: (changes: any[]) => Promise<void>;
 
   // Task workflow SSE
-  connectToWorkflow: (workflowId: string) => void
-  disconnectFromWorkflow: () => void
+  connectToWorkflow: (workflowId: string) => void;
+  disconnectFromWorkflow: () => void;
 
   // Utilities
-  save: () => Promise<void>
-  reset: () => void
+  save: () => Promise<void>;
+  reset: () => void;
 }
 
-type MindMapStore = MindMapState & MindMapActions
+type MindMapStore = MindMapState & MindMapActions;
 
 // Create singleton manager instances
-const dataManager = new MindMapDataManager()
-const layoutManager = new MindMapLayoutManager()
-const actionsManager = new MindMapActionsManager(dataManager, layoutManager)
+const dataManager = new MindMapDataManager();
+const layoutManager = new MindMapLayoutManager();
+const actionsManager = new MindMapActionsManager(dataManager, layoutManager);
 
 export const useMindMapStore = create<MindMapStore>()(
   subscribeWithSelector(
@@ -176,22 +187,22 @@ export const useMindMapStore = create<MindMapStore>()(
 
       // Initialize mind map
       initializeMindMap: async (mindMapId, initialData, saveCallback) => {
-        const state = get()
+        const state = get();
 
         // Prevent multiple initializations of the same mindmap
         if (state.isInitializing) {
-          return
+          return;
         }
 
         // If switching to a different mindmap, always reinitialize
         // If same mindmap but with different data, also reinitialize
         const shouldReinitialize =
-          state.mindMapId !== mindMapId || !state.isInitialized
+          state.mindMapId !== mindMapId || !state.isInitialized;
 
         if (!shouldReinitialize) {
           // Just update the save callback if it's the same mindmap
-          set({ saveCallback })
-          return
+          set({ saveCallback });
+          return;
         }
 
         // Clear existing state when switching mindmaps
@@ -204,14 +215,14 @@ export const useMindMapStore = create<MindMapStore>()(
           edges: [],
           selectedNodeId: null,
           history: [],
-          historyIndex: 0
-        })
+          historyIndex: 0,
+        });
 
         try {
           const result = await dataManager.initializeData(
             mindMapId,
             initialData
-          )
+          );
 
           // Apply initial layout
           const layoutResult = await layoutManager.performCompleteLayout(
@@ -219,37 +230,37 @@ export const useMindMapStore = create<MindMapStore>()(
             result.edges,
             result.rootNodeId,
             result.layout
-          )
+          );
 
           set(state => {
-            state.nodes = layoutResult.nodes
-            state.edges = layoutResult.edges
-            state.rootNodeId = result.rootNodeId
-            state.layout = result.layout
+            state.nodes = layoutResult.nodes;
+            state.edges = layoutResult.edges;
+            state.rootNodeId = result.rootNodeId;
+            state.layout = result.layout;
             state.history = [
               {
                 nodes: layoutResult.nodes,
                 edges: layoutResult.edges,
                 rootNodeId: result.rootNodeId,
                 layout: result.layout,
-                selectedNodeId: null
-              }
-            ]
-            state.historyIndex = 0
-            state.isInitialized = true
-            state.isInitializing = false
-            state.selectedNodeId = null
-          })
+                selectedNodeId: null,
+              },
+            ];
+            state.historyIndex = 0;
+            state.isInitialized = true;
+            state.isInitializing = false;
+            state.selectedNodeId = null;
+          });
         } catch (error) {
-          console.error('Failed to initialize mind map:', error)
-          set({ isInitializing: false })
+          console.error('Failed to initialize mind map:', error);
+          set({ isInitializing: false });
         }
       },
 
       // Node operations
       addChildNode: async parentNodeId => {
-        const state = get()
-        if (!state.isInitialized) return
+        const state = get();
+        if (!state.isInitialized) return;
 
         try {
           const result = await actionsManager.addChildNode(
@@ -258,32 +269,32 @@ export const useMindMapStore = create<MindMapStore>()(
             state.rootNodeId,
             state.layout,
             parentNodeId
-          )
+          );
 
           // Update nodes with selection
           const nodesWithSelection = result.nodes.map(n => ({
             ...n,
-            selected: n.id === result.newNodeId
-          }))
+            selected: n.id === result.newNodeId,
+          }));
 
           set({
             nodes: nodesWithSelection,
             edges: result.edges,
-            selectedNodeId: result.newNodeId
-          })
+            selectedNodeId: result.newNodeId,
+          });
 
           // Save history and trigger save
-          const actions = get()
-          actions.saveToHistory()
-          actions.save()
+          const actions = get();
+          actions.saveToHistory();
+          actions.save();
         } catch (error) {
-          console.error('Failed to add child node:', error)
+          console.error('Failed to add child node:', error);
         }
       },
 
       addSiblingNode: async siblingNodeId => {
-        const state = get()
-        if (!state.isInitialized) return
+        const state = get();
+        if (!state.isInitialized) return;
 
         try {
           const result = await actionsManager.addSiblingNode(
@@ -292,62 +303,62 @@ export const useMindMapStore = create<MindMapStore>()(
             state.rootNodeId,
             state.layout,
             siblingNodeId
-          )
+          );
 
           // Update nodes with selection
           const nodesWithSelection = result.nodes.map(n => ({
             ...n,
-            selected: n.id === result.newNodeId
-          }))
+            selected: n.id === result.newNodeId,
+          }));
 
           set({
             nodes: nodesWithSelection,
             edges: result.edges,
-            selectedNodeId: result.newNodeId
-          })
+            selectedNodeId: result.newNodeId,
+          });
 
           // Save history and trigger save
-          const actions = get()
-          actions.saveToHistory()
-          actions.save()
+          const actions = get();
+          actions.saveToHistory();
+          actions.save();
         } catch (error) {
-          console.error('Failed to add sibling node:', error)
+          console.error('Failed to add sibling node:', error);
         }
       },
 
       deleteNode: async nodeId => {
-        const state = get()
-        if (!state.isInitialized) return
+        const state = get();
+        if (!state.isInitialized) return;
 
         try {
           // Find all nodes that will be deleted (including descendants)
-          const nodesToDelete = new Set([nodeId])
+          const nodesToDelete = new Set([nodeId]);
           const findDescendants = (currentNodeId: string) => {
             const children = state.nodes.filter(
               n => n.data.parentId === currentNodeId
-            )
+            );
             children.forEach(child => {
               if (!nodesToDelete.has(child.id)) {
-                nodesToDelete.add(child.id)
-                findDescendants(child.id)
+                nodesToDelete.add(child.id);
+                findDescendants(child.id);
               }
-            })
-          }
-          findDescendants(nodeId)
+            });
+          };
+          findDescendants(nodeId);
 
           // Find parent of deleted node
-          const nodeToDelete = state.nodes.find(n => n.id === nodeId)
-          const parentId = nodeToDelete?.data.parentId
+          const nodeToDelete = state.nodes.find(n => n.id === nodeId);
+          const parentId = nodeToDelete?.data.parentId;
 
           // Dispatch event to check and close inference panel
           window.dispatchEvent(
             new CustomEvent('mindmap-inference-check-and-close', {
               detail: {
                 deletedNodeIds: Array.from(nodesToDelete),
-                parentId: parentId
-              }
+                parentId: parentId,
+              },
             })
-          )
+          );
 
           const result = await actionsManager.deleteNode(
             state.nodes,
@@ -355,38 +366,38 @@ export const useMindMapStore = create<MindMapStore>()(
             state.rootNodeId,
             state.layout,
             nodeId
-          )
+          );
 
           set({
             nodes: result.nodes,
             edges: result.edges,
-            selectedNodeId: null
-          })
+            selectedNodeId: null,
+          });
 
           // Save history and trigger save
-          const actions = get()
-          actions.saveToHistory()
-          actions.save()
+          const actions = get();
+          actions.saveToHistory();
+          actions.save();
         } catch (error) {
-          console.error('Failed to delete node:', error)
+          console.error('Failed to delete node:', error);
         }
       },
 
       updateNodeLabel: (nodeId, label) => {
-        const state = get()
-        if (!state.isInitialized) return
+        const state = get();
+        if (!state.isInitialized) return;
 
         const updatedNodes = actionsManager.updateNodeLabel(
           state.nodes,
           nodeId,
           label
-        )
-        set({ nodes: updatedNodes })
+        );
+        set({ nodes: updatedNodes });
       },
 
       updateNodeLabelWithLayout: async (nodeId, label) => {
-        const state = get()
-        if (!state.isInitialized) return
+        const state = get();
+        if (!state.isInitialized) return;
 
         try {
           const result = await actionsManager.updateNodeLabelWithLayout(
@@ -396,25 +407,25 @@ export const useMindMapStore = create<MindMapStore>()(
             state.layout,
             nodeId,
             label
-          )
+          );
 
           set({
             nodes: result.nodes,
-            edges: result.edges
-          })
+            edges: result.edges,
+          });
 
           // Save history and trigger save
-          const actions = get()
-          actions.saveToHistory()
-          actions.save()
+          const actions = get();
+          actions.saveToHistory();
+          actions.save();
         } catch (error) {
-          console.error('Failed to update node label with layout:', error)
+          console.error('Failed to update node label with layout:', error);
         }
       },
 
       toggleNodeCollapse: async nodeId => {
-        const state = get()
-        if (!state.isInitialized) return
+        const state = get();
+        if (!state.isInitialized) return;
 
         try {
           const result = await actionsManager.toggleNodeCollapse(
@@ -423,25 +434,25 @@ export const useMindMapStore = create<MindMapStore>()(
             state.rootNodeId,
             state.layout,
             nodeId
-          )
+          );
 
           set({
             nodes: result.nodes,
-            edges: result.edges
-          })
+            edges: result.edges,
+          });
 
           // Save history and trigger save
-          const actions = get()
-          actions.saveToHistory()
-          actions.save()
+          const actions = get();
+          actions.saveToHistory();
+          actions.save();
         } catch (error) {
-          console.error('Failed to toggle node collapse:', error)
+          console.error('Failed to toggle node collapse:', error);
         }
       },
 
       moveNode: async (nodeId, newParentId, insertIndex) => {
-        const state = get()
-        if (!state.isInitialized) return
+        const state = get();
+        if (!state.isInitialized) return;
 
         try {
           const result = await actionsManager.moveNode(
@@ -452,136 +463,136 @@ export const useMindMapStore = create<MindMapStore>()(
             nodeId,
             newParentId,
             insertIndex
-          )
+          );
 
           set({
             nodes: result.nodes,
-            edges: result.edges
-          })
+            edges: result.edges,
+          });
 
           // Save history and trigger save
-          const actions = get()
-          actions.saveToHistory()
-          actions.save()
+          const actions = get();
+          actions.saveToHistory();
+          actions.save();
         } catch (error) {
-          console.error('Failed to move node:', error)
+          console.error('Failed to move node:', error);
         }
       },
 
       // Node properties
       updateNodeChatId: (nodeId, chatId) => {
-        const state = get()
-        if (!state.isInitialized) return
+        const state = get();
+        if (!state.isInitialized) return;
 
         const updatedNodes = actionsManager.updateNodeChatId(
           state.nodes,
           nodeId,
           chatId
-        )
-        set({ nodes: updatedNodes })
+        );
+        set({ nodes: updatedNodes });
 
         // Save history and trigger immediate save
-        const actions = get()
-        actions.saveToHistory()
-        actions.save()
+        const actions = get();
+        actions.saveToHistory();
+        actions.save();
       },
 
       updateNodeNotes: (nodeId, notes) => {
-        const state = get()
-        if (!state.isInitialized) return
+        const state = get();
+        if (!state.isInitialized) return;
 
         const updatedNodes = actionsManager.updateNodeNotes(
           state.nodes,
           nodeId,
           notes
-        )
-        set({ nodes: updatedNodes })
+        );
+        set({ nodes: updatedNodes });
 
         // Dispatch event to update node panel
         window.dispatchEvent(
           new CustomEvent('mindmap-node-notes-updated', {
-            detail: { nodeId, notes }
+            detail: { nodeId, notes },
           })
-        )
+        );
 
         // Save history and trigger immediate save
-        const actions = get()
-        actions.saveToHistory()
-        actions.save()
+        const actions = get();
+        actions.saveToHistory();
+        actions.save();
       },
 
       updateNodeSources: (nodeId, sources) => {
-        const state = get()
-        if (!state.isInitialized) return
+        const state = get();
+        if (!state.isInitialized) return;
 
         const updatedNodes = actionsManager.updateNodeSources(
           state.nodes,
           nodeId,
           sources
-        )
-        set({ nodes: updatedNodes })
+        );
+        set({ nodes: updatedNodes });
 
         // Dispatch event to update node panel
         window.dispatchEvent(
           new CustomEvent('mindmap-node-sources-updated', {
-            detail: { nodeId, sources }
+            detail: { nodeId, sources },
           })
-        )
+        );
 
         // Save history and trigger immediate save
-        const actions = get()
-        actions.saveToHistory()
-        actions.save()
+        const actions = get();
+        actions.saveToHistory();
+        actions.save();
       },
 
       setNodeColors: (nodeId, colors) => {
-        const state = get()
-        if (!state.isInitialized) return
+        const state = get();
+        if (!state.isInitialized) return;
 
         const updatedNodes = state.nodes.map(node =>
           node.id === nodeId
             ? {
                 ...node,
                 data: { ...node.data, customColors: colors },
-                style: { ...node.style }
+                style: { ...node.style },
               }
             : node
-        )
+        );
 
-        set({ nodes: updatedNodes })
+        set({ nodes: updatedNodes });
 
         // Save history and trigger immediate save
-        const actions = get()
-        actions.saveToHistory()
-        actions.save()
+        const actions = get();
+        actions.saveToHistory();
+        actions.save();
       },
 
       clearNodeColors: nodeId => {
-        const state = get()
-        if (!state.isInitialized) return
+        const state = get();
+        if (!state.isInitialized) return;
 
         const updatedNodes = state.nodes.map(node =>
           node.id === nodeId
             ? {
                 ...node,
                 data: { ...node.data, customColors: null },
-                style: { ...node.style }
+                style: { ...node.style },
               }
             : node
-        )
+        );
 
-        set({ nodes: updatedNodes })
+        set({ nodes: updatedNodes });
 
         // Save history and trigger immediate save
-        const actions = get()
-        actions.saveToHistory()
-        actions.save()
+        const actions = get();
+        actions.saveToHistory();
+        actions.save();
       },
 
       // Layout operations
       changeLayout: async newLayout => {
-        const state = get()
-        if (!state.isInitialized) return
+        const state = get();
+        if (!state.isInitialized) return;
 
         try {
           const result = await actionsManager.changeLayout(
@@ -589,26 +600,26 @@ export const useMindMapStore = create<MindMapStore>()(
             state.edges,
             state.rootNodeId,
             newLayout
-          )
+          );
 
           set({
             nodes: result.nodes,
             edges: result.edges,
-            layout: newLayout
-          })
+            layout: newLayout,
+          });
 
           // Save history and trigger save
-          const actions = get()
-          actions.saveToHistory()
-          actions.save()
+          const actions = get();
+          actions.saveToHistory();
+          actions.save();
         } catch (error) {
-          console.error('Failed to change layout:', error)
+          console.error('Failed to change layout:', error);
         }
       },
 
       resetLayout: async () => {
-        const state = get()
-        if (!state.isInitialized) return
+        const state = get();
+        if (!state.isInitialized) return;
 
         try {
           const result = await actionsManager.resetLayout(
@@ -616,66 +627,66 @@ export const useMindMapStore = create<MindMapStore>()(
             state.edges,
             state.rootNodeId,
             state.layout
-          )
+          );
 
           set({
             nodes: result.nodes,
-            edges: result.edges
-          })
+            edges: result.edges,
+          });
 
           // Save history and trigger save
-          const actions = get()
-          actions.saveToHistory()
-          actions.save()
+          const actions = get();
+          actions.saveToHistory();
+          actions.save();
         } catch (error) {
-          console.error('Failed to reset layout:', error)
+          console.error('Failed to reset layout:', error);
         }
       },
 
       // History operations
       undo: () => {
-        const state = get()
-        if (!state.isInitialized || !state.canUndo()) return
+        const state = get();
+        if (!state.isInitialized || !state.canUndo()) return;
 
         set(draft => {
-          draft.historyIndex -= 1
-          const previousState = draft.history[draft.historyIndex]
-          draft.nodes = previousState.nodes
-          draft.edges = previousState.edges
-          draft.rootNodeId = previousState.rootNodeId
-          draft.layout = previousState.layout
-          draft.selectedNodeId = previousState.selectedNodeId
-        })
+          draft.historyIndex -= 1;
+          const previousState = draft.history[draft.historyIndex];
+          draft.nodes = previousState.nodes;
+          draft.edges = previousState.edges;
+          draft.rootNodeId = previousState.rootNodeId;
+          draft.layout = previousState.layout;
+          draft.selectedNodeId = previousState.selectedNodeId;
+        });
       },
 
       redo: () => {
-        const state = get()
-        if (!state.isInitialized || !state.canRedo()) return
+        const state = get();
+        if (!state.isInitialized || !state.canRedo()) return;
 
         set(draft => {
-          draft.historyIndex += 1
-          const nextState = draft.history[draft.historyIndex]
-          draft.nodes = nextState.nodes
-          draft.edges = nextState.edges
-          draft.rootNodeId = nextState.rootNodeId
-          draft.layout = nextState.layout
-          draft.selectedNodeId = nextState.selectedNodeId
-        })
+          draft.historyIndex += 1;
+          const nextState = draft.history[draft.historyIndex];
+          draft.nodes = nextState.nodes;
+          draft.edges = nextState.edges;
+          draft.rootNodeId = nextState.rootNodeId;
+          draft.layout = nextState.layout;
+          draft.selectedNodeId = nextState.selectedNodeId;
+        });
       },
 
       canUndo: () => {
-        const state = get()
-        return state.historyIndex > 0
+        const state = get();
+        return state.historyIndex > 0;
       },
 
       canRedo: () => {
-        const state = get()
-        return state.historyIndex < state.history.length - 1
+        const state = get();
+        return state.historyIndex < state.history.length - 1;
       },
 
       saveToHistory: () => {
-        const state = get()
-        if (!state.isInitialized) return
+        const state = get();
+        if (!state.isInitialized) return;
 
         set(draft => {
           const newHistoryState: HistoryState = {
@@ -683,40 +694,40 @@ export const useMindMapStore = create<MindMapStore>()(
             edges: JSON.parse(JSON.stringify(state.edges)),
             rootNodeId: state.rootNodeId,
             layout: state.layout,
-            selectedNodeId: state.selectedNodeId
-          }
+            selectedNodeId: state.selectedNodeId,
+          };
 
           // Remove any future history if we're not at the end
           if (draft.historyIndex < draft.history.length - 1) {
-            draft.history = draft.history.slice(0, draft.historyIndex + 1)
+            draft.history = draft.history.slice(0, draft.historyIndex + 1);
           }
 
-          draft.history.push(newHistoryState)
+          draft.history.push(newHistoryState);
 
           // Limit history size
           if (draft.history.length > draft.maxHistorySize) {
-            draft.history.shift()
+            draft.history.shift();
           } else {
-            draft.historyIndex += 1
+            draft.historyIndex += 1;
           }
-        })
+        });
       },
 
       // Selection
       selectNode: nodeId => {
-        const state = get()
-        if (!state.isInitialized) return
+        const state = get();
+        if (!state.isInitialized) return;
 
         // Update nodes selection state
         const updatedNodes = state.nodes.map(n => ({
           ...n,
-          selected: n.id === nodeId
-        }))
+          selected: n.id === nodeId,
+        }));
 
         set({
           selectedNodeId: nodeId,
-          nodes: updatedNodes
-        })
+          nodes: updatedNodes,
+        });
       },
 
       // Generation state
@@ -727,88 +738,104 @@ export const useMindMapStore = create<MindMapStore>()(
 
       // Iterative generation
       startIterativeGeneration: async (mindMapId, prompt, selectedNodeId) => {
-        const state = get()
-        if (state.isGenerating) return
+        const state = get();
+        if (state.isGenerating) return;
 
-        set({ 
-          isGenerating: true, 
-          generationError: null, 
+        set({
+          isGenerating: true,
+          generationError: null,
           generationSummary: null,
           generationProgress: {
             currentStep: 0,
             maxSteps: 1,
             reasoning: 'Starting iterative reasoning...',
             decision: null,
-            isComplete: false
-          }
-        })
+            isComplete: false,
+          },
+        });
 
         try {
           // Use SSE streaming to get real backend progress
-          const streamResponse = await fetch(`/api/mindmaps/${mindMapId}/generate`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              prompt, 
-              selectedNodeId, 
-              useAgenticWorkflow: true,
-              stream: true
-            })
-          })
+          const streamResponse = await fetch(
+            `/api/mindmaps/${mindMapId}/generate`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                prompt,
+                selectedNodeId,
+                useAgenticWorkflow: true,
+                stream: true,
+              }),
+            }
+          );
 
           if (!streamResponse.ok) {
-            throw new Error('Failed to start streaming generation')
+            throw new Error('Failed to start streaming generation');
           }
 
-          const streamData = await streamResponse.json()
-          const streamId = streamData.streamId
+          const streamData = await streamResponse.json();
+          const streamId = streamData.streamId;
 
           if (!streamId) {
-            throw new Error('No stream ID received')
+            throw new Error('No stream ID received');
           }
 
           // Connect to SSE stream to get real progress updates
-          const eventSource = new EventSource(`/api/generate/stream/${streamId}`)
-          let finalResult = null
-          let currentStepNumber = 0
-
-
+          const eventSource = new EventSource(
+            `/api/generate/stream/${streamId}`
+          );
+          let finalResult = null;
+          let currentStepNumber = 0;
 
           // Track the current generation
           set({
             currentGenerationEventSource: eventSource,
-            currentGenerationWorkflowId: streamData.workflowId || streamId
-          })
+            currentGenerationWorkflowId: streamData.workflowId || streamId,
+          });
 
-          eventSource.onmessage = (event) => {
+          eventSource.onmessage = event => {
             try {
-              const rawData = JSON.parse(event.data)
-              const data = decodeSseDataSync(rawData)  // Decode base64 strings
+              const rawData = JSON.parse(event.data);
+              const decodedData = decodeSseDataSync(rawData); // Decode base64 strings
 
-              if (data.type === 'mindmap_change') {
+              if (
+                isSseObject(decodedData) &&
+                decodedData.type === 'mindmap_change' &&
+                isSseMindmapChangeData(decodedData)
+              ) {
                 // Real mindmap operation from backend
-                currentStepNumber++
-                
-                const actionText = data.action === 'create' ? 'Creating node' :
-                                 data.action === 'update' ? 'Updating node' :
-                                 data.action === 'delete' ? 'Deleting node' : 'Processing node'
+                currentStepNumber++;
+
+                const actionText =
+                  decodedData.action === 'create'
+                    ? 'Creating node'
+                    : decodedData.action === 'update'
+                      ? 'Updating node'
+                      : decodedData.action === 'delete'
+                        ? 'Deleting node'
+                        : 'Processing node';
 
                 set({
                   generationProgress: {
                     currentStep: currentStepNumber,
                     maxSteps: 5,
-                    reasoning: `${actionText}: "${data.text || 'Untitled'}"`,
-                    decision: data.action,
-                    isComplete: false
-                  }
-                })
+                    reasoning: `${actionText}: "${decodedData.text || 'Untitled'}"`,
+                    decision: decodedData.action,
+                    isComplete: false,
+                  },
+                });
 
                 // Apply the change immediately to the mindmap
-                get().applyMindmapChanges([data])
-              } else if (data.type === 'complete') {
+                get().applyMindmapChanges([decodedData]);
+              } else if (
+                isSseObject(decodedData) &&
+                decodedData.type === 'complete' &&
+                isSseMindmapCompleteData(decodedData)
+              ) {
                 // Store final result
-                finalResult = data.result
-                eventSource.close()
+                finalResult = decodedData.result;
+                eventSource.close();
 
                 // Update progress to show completion
                 set({
@@ -817,108 +844,112 @@ export const useMindMapStore = create<MindMapStore>()(
                     maxSteps: currentStepNumber || 1,
                     reasoning: `Completed ${currentStepNumber || 1} reasoning steps`,
                     decision: 'completed',
-                    isComplete: true
-                  }
-                })
+                    isComplete: true,
+                  },
+                });
 
                 // Process the final result - NO MINDMAP CHANGES HERE!
-                if (finalResult) {
-                  const changes = finalResult.changes || []
-                  
+                if (
+                  finalResult &&
+                  typeof finalResult === 'object' &&
+                  finalResult !== null
+                ) {
+                  const changes = (finalResult as any).changes || [];
+
                   // Just mark as complete - changes already applied via SSE events
                   set({
                     generationSummary: `Iterative reasoning completed! Created ${changes.length} node(s) through ${currentStepNumber || 1} reasoning steps.`,
                     isGenerating: false,
                     currentGenerationEventSource: null,
-                    currentGenerationWorkflowId: null
-                  })
+                    currentGenerationWorkflowId: null,
+                  });
                 } else {
                   set({
                     generationSummary: `Generation completed with ${currentStepNumber || 1} steps.`,
                     isGenerating: false,
                     currentGenerationEventSource: null,
-                    currentGenerationWorkflowId: null
-                  })
+                    currentGenerationWorkflowId: null,
+                  });
                 }
               }
             } catch (error) {
-              console.error('Failed to parse SSE data:', error)
+              console.error('Failed to parse SSE data:', error);
             }
-          }
+          };
 
-          eventSource.onerror = (error) => {
-            console.error('SSE error:', error)
-            eventSource.close()
+          eventSource.onerror = error => {
+            console.error('SSE error:', error);
+            eventSource.close();
             set({
               generationError: 'Connection error during generation',
               isGenerating: false,
               generationProgress: null,
               currentGenerationEventSource: null,
-              currentGenerationWorkflowId: null
-            })
-          }
+              currentGenerationWorkflowId: null,
+            });
+          };
 
           // Return a promise that resolves when generation is complete
           return new Promise((resolve, reject) => {
             const checkComplete = () => {
-              const state = get()
+              const state = get();
               if (!state.isGenerating) {
                 if (state.generationError) {
-                  reject(new Error(state.generationError))
+                  reject(new Error(state.generationError));
                 } else {
-                  resolve(undefined)
+                  resolve(undefined);
                 }
               } else {
-                setTimeout(checkComplete, 100)
+                setTimeout(checkComplete, 100);
               }
-            }
-            checkComplete()
-          })
-
+            };
+            checkComplete();
+          });
         } catch (error) {
-          console.error('❌ Generation failed:', error)
+          console.error('❌ Generation failed:', error);
           set({
-            generationError: error instanceof Error ? error.message : String(error),
+            generationError:
+              error instanceof Error ? error.message : String(error),
             isGenerating: false,
-            generationProgress: null
-          })
+            generationProgress: null,
+          });
         }
       },
 
       // Cancel iterative generation
       cancelIterativeGeneration: () => {
-        const state = get()
-        
+        const state = get();
+
         // Close EventSource connection
         if (state.currentGenerationEventSource) {
-          state.currentGenerationEventSource.close()
+          state.currentGenerationEventSource.close();
         }
-        
+
         // Tell server to cancel the workflow
         if (state.currentGenerationWorkflowId) {
           fetch(`/api/mindmaps/cancel/${state.currentGenerationWorkflowId}`, {
-            method: 'POST'
+            method: 'POST',
           }).catch(error => {
-            console.warn('Failed to cancel server-side generation:', error)
-          })
+            console.warn('Failed to cancel server-side generation:', error);
+          });
         }
-        
+
         // Reset generation state
         set({
           isGenerating: false,
           generationError: 'Generation cancelled by user',
           generationProgress: null,
           currentGenerationEventSource: null,
-          currentGenerationWorkflowId: null
-        })
+          currentGenerationWorkflowId: null,
+        });
       },
 
       // Bulk operations
       applyMindmapChanges: async changes => {
-        const state = get()
-        if (!state.isInitialized) return
+        const state = get();
+        if (!state.isInitialized) return;
 
-        let updatedNodes = [...state.nodes]
+        let updatedNodes = [...state.nodes];
 
         for (const change of changes) {
           try {
@@ -938,32 +969,32 @@ export const useMindMapStore = create<MindMapStore>()(
                       .substr(2, 9)}`,
                   name: source.name || source.title || 'Untitled Source',
                   directory: source.directory || source.description || '',
-                  type: source.type || 'reference'
+                  type: source.type || 'reference',
                 })),
                 level: 0,
                 hasChildren: false,
-                isCollapsed: false
-              }
+                isCollapsed: false,
+              };
 
               const newNode = {
                 id: change.nodeId,
                 type: 'mindMapNode',
                 position: { x: 0, y: 0 },
-                data: newNodeData
-              }
+                data: newNodeData,
+              };
 
-              updatedNodes.push(newNode)
+              updatedNodes.push(newNode);
             } else if (change.action === 'update') {
               // Update existing node
               const nodeIndex = updatedNodes.findIndex(
                 n => n.id === change.nodeId
-              )
+              );
               if (nodeIndex >= 0) {
-                const node = updatedNodes[nodeIndex]
-                const newData = { ...node.data }
+                const node = updatedNodes[nodeIndex];
+                const newData = { ...node.data };
 
-                if (change.text !== undefined) newData.label = change.text
-                if (change.notes !== undefined) newData.notes = change.notes
+                if (change.text !== undefined) newData.label = change.text;
+                if (change.notes !== undefined) newData.notes = change.notes;
                 if (change.sources !== undefined) {
                   newData.sources = change.sources.map((source: any) => ({
                     id:
@@ -973,65 +1004,65 @@ export const useMindMapStore = create<MindMapStore>()(
                         .substr(2, 9)}`,
                     name: source.name || source.title || 'Untitled Source',
                     directory: source.directory || source.description || '',
-                    type: source.type || 'reference'
-                  }))
+                    type: source.type || 'reference',
+                  }));
                 }
 
-                updatedNodes[nodeIndex] = { ...node, data: newData }
+                updatedNodes[nodeIndex] = { ...node, data: newData };
               }
             } else if (change.action === 'delete') {
               // Delete node and its children
               const deleteNodeAndChildren = (nodeId: string) => {
                 const children = updatedNodes.filter(
                   n => n.data.parentId === nodeId
-                )
-                children.forEach(child => deleteNodeAndChildren(child.id))
-                updatedNodes = updatedNodes.filter(n => n.id !== nodeId)
-              }
-              deleteNodeAndChildren(change.nodeId)
+                );
+                children.forEach(child => deleteNodeAndChildren(child.id));
+                updatedNodes = updatedNodes.filter(n => n.id !== nodeId);
+              };
+              deleteNodeAndChildren(change.nodeId);
             }
           } catch (error) {
-            console.error('Error applying change:', change, error)
+            console.error('Error applying change:', change, error);
           }
         }
 
         // Update hierarchy levels
         const updateLevels = (nodeId: string, level: number) => {
-          const nodeIndex = updatedNodes.findIndex(n => n.id === nodeId)
+          const nodeIndex = updatedNodes.findIndex(n => n.id === nodeId);
           if (nodeIndex !== -1) {
-            const node = updatedNodes[nodeIndex]
+            const node = updatedNodes[nodeIndex];
             updatedNodes[nodeIndex] = {
               ...node,
               data: {
                 ...node.data,
-                level: level
-              }
-            }
+                level: level,
+              },
+            };
             const children = updatedNodes.filter(
               n => n.data.parentId === nodeId
-            )
-            children.forEach(child => updateLevels(child.id, level + 1))
+            );
+            children.forEach(child => updateLevels(child.id, level + 1));
           }
-        }
-        updateLevels(state.rootNodeId, 0)
+        };
+        updateLevels(state.rootNodeId, 0);
 
         // Update hasChildren flags and ensure isCollapsed is defined
         updatedNodes.forEach((node, index) => {
           const hasChildren = updatedNodes.some(
             n => n.data.parentId === node.id
-          )
+          );
           const isCollapsed =
-            node.data.isCollapsed !== undefined ? node.data.isCollapsed : false
+            node.data.isCollapsed !== undefined ? node.data.isCollapsed : false;
 
           updatedNodes[index] = {
             ...node,
             data: {
               ...node.data,
               hasChildren,
-              isCollapsed
-            }
-          }
-        })
+              isCollapsed,
+            },
+          };
+        });
 
         // Apply layout
         const result = await actionsManager.resetLayout(
@@ -1039,59 +1070,59 @@ export const useMindMapStore = create<MindMapStore>()(
           dataManager.generateEdges(updatedNodes, state.layout),
           state.rootNodeId,
           state.layout
-        )
+        );
 
         // Update state
         set({
           nodes: result.nodes,
-          edges: result.edges
-        })
+          edges: result.edges,
+        });
 
         // Save to history and backend
-        const actions = get()
-        actions.saveToHistory()
-        actions.save()
+        const actions = get();
+        actions.saveToHistory();
+        actions.save();
 
         // Dispatch events to update node panel content
         changes.forEach(change => {
           if (change.action === 'update' || change.action === 'create') {
-            const updatedNode = result.nodes.find(n => n.id === change.nodeId)
+            const updatedNode = result.nodes.find(n => n.id === change.nodeId);
             if (updatedNode) {
               if (change.notes !== undefined) {
                 window.dispatchEvent(
                   new CustomEvent('mindmap-node-notes-updated', {
-                    detail: { nodeId: change.nodeId, notes: change.notes }
+                    detail: { nodeId: change.nodeId, notes: change.notes },
                   })
-                )
+                );
               }
 
               if (change.sources !== undefined) {
                 window.dispatchEvent(
                   new CustomEvent('mindmap-node-sources-updated', {
-                    detail: { nodeId: change.nodeId, sources: change.sources }
+                    detail: { nodeId: change.nodeId, sources: change.sources },
                   })
-                )
+                );
               }
             }
           }
-        })
+        });
       },
 
       // Utilities
       save: async () => {
-        const state = get()
+        const state = get();
         if (!state.isInitialized || !state.saveCallback || !state.rootNodeId)
-          return
+          return;
 
         try {
           const treeData = dataManager.convertNodesToTree(
             state.nodes,
             state.rootNodeId,
             state.layout
-          )
-          await state.saveCallback(treeData)
+          );
+          await state.saveCallback(treeData);
         } catch (error) {
-          console.error('Failed to save mind map:', error)
+          console.error('Failed to save mind map:', error);
         }
       },
 
@@ -1115,98 +1146,111 @@ export const useMindMapStore = create<MindMapStore>()(
           taskEventSource: null,
           currentWorkflowId: null,
           currentGenerationEventSource: null,
-          currentGenerationWorkflowId: null
-        })
+          currentGenerationWorkflowId: null,
+        });
       },
 
       // SSE connection for task updates
       connectToWorkflow: (workflowId: string) => {
-        const state = get()
-        
+        const state = get();
+
         // Disconnect any existing connection
         if (state.taskEventSource) {
-          state.taskEventSource.close()
+          state.taskEventSource.close();
         }
-        
+
         // Create new SSE connection
-        const eventSource = new EventSource(`/api/tasks/stream/${workflowId}`)
-        
-        eventSource.onmessage = (event) => {
+        const eventSource = new EventSource(`/api/tasks/stream/${workflowId}`);
+
+        eventSource.onmessage = event => {
           try {
-            const data = JSON.parse(event.data)
-            
+            const data = JSON.parse(event.data);
+
             if (data.type === 'task_completed' && data.result?.changes) {
               // Apply changes directly in the store
-              get().applyMindmapChanges(data.result.changes).catch(error => {
-                console.error('Failed to apply task changes from SSE:', error)
-              })
+              get()
+                .applyMindmapChanges(data.result.changes)
+                .catch(error => {
+                  console.error(
+                    'Failed to apply task changes from SSE:',
+                    error
+                  );
+                });
             }
           } catch (error) {
-            console.error('Error parsing SSE message:', error)
+            console.error('Error parsing SSE message:', error);
           }
-        }
-        
-        eventSource.onerror = (error) => {
-          console.error('Task SSE error:', error)
-        }
-        
+        };
+
+        eventSource.onerror = error => {
+          console.error('Task SSE error:', error);
+        };
+
         set({
           taskEventSource: eventSource,
-          currentWorkflowId: workflowId
-        })
+          currentWorkflowId: workflowId,
+        });
       },
 
       disconnectFromWorkflow: () => {
-        const state = get()
-        
+        const state = get();
+
         if (state.taskEventSource) {
-          state.taskEventSource.close()
+          state.taskEventSource.close();
         }
-        
+
         set({
           taskEventSource: null,
-          currentWorkflowId: null
-        })
-      }
+          currentWorkflowId: null,
+        });
+      },
     }))
   )
-)
+);
 
 // Selector hooks for reactive components
-export const useMindMapNodes = () => useMindMapStore(state => state.nodes)
-export const useMindMapEdges = () => useMindMapStore(state => state.edges)
-export const useMindMapLayout = () => useMindMapStore(state => state.layout)
+export const useMindMapNodes = () => useMindMapStore(state => state.nodes);
+export const useMindMapEdges = () => useMindMapStore(state => state.edges);
+export const useMindMapLayout = () => useMindMapStore(state => state.layout);
 export const useMindMapSelection = () => {
-  const selectedNodeId = useMindMapStore(state => state.selectedNodeId)
-  const selectNode = useMindMapStore(state => state.selectNode)
+  const selectedNodeId = useMindMapStore(state => state.selectedNodeId);
+  const selectNode = useMindMapStore(state => state.selectNode);
 
   return useMemo(
     () => ({ selectedNodeId, selectNode }),
     [selectedNodeId, selectNode]
-  )
-}
+  );
+};
 export const useMindMapHistory = () => {
-  const canUndo = useMindMapStore(state => state.canUndo())
-  const canRedo = useMindMapStore(state => state.canRedo())
-  const undo = useMindMapStore(state => state.undo)
-  const redo = useMindMapStore(state => state.redo)
+  const canUndo = useMindMapStore(state => state.canUndo());
+  const canRedo = useMindMapStore(state => state.canRedo());
+  const undo = useMindMapStore(state => state.undo);
+  const redo = useMindMapStore(state => state.redo);
 
   return useMemo(
     () => ({ canUndo, canRedo, undo, redo }),
     [canUndo, canRedo, undo, redo]
-  )
-}
+  );
+};
 export const useMindMapGeneration = () => {
-  const isGenerating = useMindMapStore(state => state.isGenerating)
-  const generationError = useMindMapStore(state => state.generationError)
-  const generationSummary = useMindMapStore(state => state.generationSummary)
-  const generationProgress = useMindMapStore(state => state.generationProgress)
-  const setGenerating = useMindMapStore(state => state.setGenerating)
-  const setGenerationError = useMindMapStore(state => state.setGenerationError)
-  const setGenerationSummary = useMindMapStore(state => state.setGenerationSummary)
-  const setGenerationProgress = useMindMapStore(state => state.setGenerationProgress)
-  const startIterativeGeneration = useMindMapStore(state => state.startIterativeGeneration)
-  const cancelIterativeGeneration = useMindMapStore(state => state.cancelIterativeGeneration)
+  const isGenerating = useMindMapStore(state => state.isGenerating);
+  const generationError = useMindMapStore(state => state.generationError);
+  const generationSummary = useMindMapStore(state => state.generationSummary);
+  const generationProgress = useMindMapStore(state => state.generationProgress);
+  const setGenerating = useMindMapStore(state => state.setGenerating);
+  const setGenerationError = useMindMapStore(state => state.setGenerationError);
+  const setGenerationSummary = useMindMapStore(
+    state => state.setGenerationSummary
+  );
+  const setGenerationProgress = useMindMapStore(
+    state => state.setGenerationProgress
+  );
+  const startIterativeGeneration = useMindMapStore(
+    state => state.startIterativeGeneration
+  );
+  const cancelIterativeGeneration = useMindMapStore(
+    state => state.cancelIterativeGeneration
+  );
 
   return useMemo(
     () => ({
@@ -1219,7 +1263,7 @@ export const useMindMapGeneration = () => {
       setGenerationSummary,
       setGenerationProgress,
       startIterativeGeneration,
-      cancelIterativeGeneration
+      cancelIterativeGeneration,
     }),
     [
       isGenerating,
@@ -1231,30 +1275,30 @@ export const useMindMapGeneration = () => {
       setGenerationSummary,
       setGenerationProgress,
       startIterativeGeneration,
-      cancelIterativeGeneration
+      cancelIterativeGeneration,
     ]
-  )
-}
+  );
+};
 export const useMindMapActions = () => {
-  const addChildNode = useMindMapStore(state => state.addChildNode)
-  const addSiblingNode = useMindMapStore(state => state.addSiblingNode)
-  const deleteNode = useMindMapStore(state => state.deleteNode)
-  const updateNodeLabel = useMindMapStore(state => state.updateNodeLabel)
+  const addChildNode = useMindMapStore(state => state.addChildNode);
+  const addSiblingNode = useMindMapStore(state => state.addSiblingNode);
+  const deleteNode = useMindMapStore(state => state.deleteNode);
+  const updateNodeLabel = useMindMapStore(state => state.updateNodeLabel);
   const updateNodeLabelWithLayout = useMindMapStore(
     state => state.updateNodeLabelWithLayout
-  )
-  const toggleNodeCollapse = useMindMapStore(state => state.toggleNodeCollapse)
-  const moveNode = useMindMapStore(state => state.moveNode)
-  const updateNodeChatId = useMindMapStore(state => state.updateNodeChatId)
-  const updateNodeNotes = useMindMapStore(state => state.updateNodeNotes)
-  const updateNodeSources = useMindMapStore(state => state.updateNodeSources)
-  const setNodeColors = useMindMapStore(state => state.setNodeColors)
-  const clearNodeColors = useMindMapStore(state => state.clearNodeColors)
-  const changeLayout = useMindMapStore(state => state.changeLayout)
-  const resetLayout = useMindMapStore(state => state.resetLayout)
+  );
+  const toggleNodeCollapse = useMindMapStore(state => state.toggleNodeCollapse);
+  const moveNode = useMindMapStore(state => state.moveNode);
+  const updateNodeChatId = useMindMapStore(state => state.updateNodeChatId);
+  const updateNodeNotes = useMindMapStore(state => state.updateNodeNotes);
+  const updateNodeSources = useMindMapStore(state => state.updateNodeSources);
+  const setNodeColors = useMindMapStore(state => state.setNodeColors);
+  const clearNodeColors = useMindMapStore(state => state.clearNodeColors);
+  const changeLayout = useMindMapStore(state => state.changeLayout);
+  const resetLayout = useMindMapStore(state => state.resetLayout);
   const applyMindmapChanges = useMindMapStore(
     state => state.applyMindmapChanges
-  )
+  );
 
   return useMemo(
     () => ({
@@ -1272,7 +1316,7 @@ export const useMindMapActions = () => {
       clearNodeColors,
       changeLayout,
       resetLayout,
-      applyMindmapChanges
+      applyMindmapChanges,
     }),
     [
       addChildNode,
@@ -1289,7 +1333,7 @@ export const useMindMapActions = () => {
       clearNodeColors,
       changeLayout,
       resetLayout,
-      applyMindmapChanges
+      applyMindmapChanges,
     ]
-  )
-}
+  );
+};

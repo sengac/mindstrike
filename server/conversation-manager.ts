@@ -16,7 +16,10 @@ export class ConversationManager {
   // Update workspace root
   updateWorkspaceRoot(newWorkspaceRoot: string): void {
     this.workspaceRoot = newWorkspaceRoot;
-    this.conversationsPath = path.join(newWorkspaceRoot, 'mindstrike-chats.json');
+    this.conversationsPath = path.join(
+      newWorkspaceRoot,
+      'mindstrike-chats.json'
+    );
     this.isLoaded = false; // Force reload on next access
     this.conversations.clear();
   }
@@ -27,7 +30,7 @@ export class ConversationManager {
     try {
       const data = await fs.readFile(this.conversationsPath, 'utf-8');
       const threads: Thread[] = JSON.parse(data);
-      
+
       this.conversations.clear();
       threads.forEach(thread => {
         this.conversations.set(thread.id, {
@@ -36,33 +39,45 @@ export class ConversationManager {
           updatedAt: new Date(thread.updatedAt),
           messages: thread.messages.map(msg => ({
             ...msg,
-            timestamp: new Date(msg.timestamp)
-          }))
+            timestamp: new Date(msg.timestamp),
+          })),
         });
       });
-    } catch (error) {
+    } catch {
       // File doesn't exist or is invalid - start with empty conversations
       this.conversations.clear();
     }
-    
+
     this.isLoaded = true;
   }
 
   async save(): Promise<void> {
     const threads = Array.from(this.conversations.values());
-    await fs.writeFile(this.conversationsPath, JSON.stringify(threads, null, 2));
+    await fs.writeFile(
+      this.conversationsPath,
+      JSON.stringify(threads, null, 2)
+    );
   }
 
   // Thread metadata operations
-  getThreadList(): Array<{id: string, name: string, createdAt: Date, updatedAt: Date, messageCount: number, customRole?: string}> {
-    return Array.from(this.conversations.values()).map(thread => ({
-      id: thread.id,
-      name: thread.name,
-      createdAt: thread.createdAt,
-      updatedAt: thread.updatedAt,
-      messageCount: thread.messages.length,
-      customRole: thread.customRole
-    })).sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+  getThreadList(): Array<{
+    id: string;
+    name: string;
+    createdAt: Date;
+    updatedAt: Date;
+    messageCount: number;
+    customRole?: string;
+  }> {
+    return Array.from(this.conversations.values())
+      .map(thread => ({
+        id: thread.id,
+        name: thread.name,
+        createdAt: thread.createdAt,
+        updatedAt: thread.updatedAt,
+        messageCount: thread.messages.length,
+        customRole: thread.customRole,
+      }))
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
   }
 
   getThread(threadId: string): Thread | null {
@@ -81,9 +96,9 @@ export class ConversationManager {
       name: name || `Conversation ${this.conversations.size + 1}`,
       messages: [],
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
     };
-    
+
     this.conversations.set(thread.id, thread);
     this.save(); // Auto-save on changes
     return thread;
@@ -133,25 +148,32 @@ export class ConversationManager {
   // Message operations - called during streaming
   addMessage(threadId: string, message: ConversationMessage): void {
     let thread = this.conversations.get(threadId);
-    
+
     // Create thread if it doesn't exist
     if (!thread) {
       thread = this.createThread();
     }
-    
+
     thread.messages.push(message);
     thread.updatedAt = new Date();
     this.save(); // Auto-save on changes
   }
 
-  updateMessage(threadId: string, messageId: string, updates: Partial<ConversationMessage>): boolean {
+  updateMessage(
+    threadId: string,
+    messageId: string,
+    updates: Partial<ConversationMessage>
+  ): boolean {
     const thread = this.conversations.get(threadId);
     if (!thread) return false;
 
     const messageIndex = thread.messages.findIndex(msg => msg.id === messageId);
     if (messageIndex === -1) return false;
 
-    thread.messages[messageIndex] = { ...thread.messages[messageIndex], ...updates };
+    thread.messages[messageIndex] = {
+      ...thread.messages[messageIndex],
+      ...updates,
+    };
     thread.updatedAt = new Date();
     this.save(); // Auto-save on changes
     return true;
@@ -163,7 +185,7 @@ export class ConversationManager {
 
     const initialLength = thread.messages.length;
     thread.messages = thread.messages.filter(msg => msg.id !== messageId);
-    
+
     if (thread.messages.length !== initialLength) {
       thread.updatedAt = new Date();
       this.save(); // Auto-save on changes
@@ -172,11 +194,61 @@ export class ConversationManager {
     return false;
   }
 
+  deleteMessageFromAllThreads(messageId: string): string[] {
+    const deletedMessageIds: string[] = [];
+
+    for (const thread of this.conversations.values()) {
+      const messageIndex = thread.messages.findIndex(
+        msg => msg.id === messageId
+      );
+      if (messageIndex === -1) continue;
+
+      const messageToDelete = thread.messages[messageIndex];
+      const messagesToRemove: Array<{ index: number; id: string }> = [
+        { index: messageIndex, id: messageToDelete.id },
+      ];
+
+      // If deleting a user message, also delete the following assistant response
+      if (
+        messageToDelete.role === 'user' &&
+        messageIndex + 1 < thread.messages.length
+      ) {
+        const nextMessage = thread.messages[messageIndex + 1];
+        if (nextMessage.role === 'assistant') {
+          messagesToRemove.push({
+            index: messageIndex + 1,
+            id: nextMessage.id,
+          });
+        }
+      }
+
+      // Collect the IDs of messages to be deleted
+      messagesToRemove.forEach(msg => {
+        if (!deletedMessageIds.includes(msg.id)) {
+          deletedMessageIds.push(msg.id);
+        }
+      });
+
+      // Remove messages in reverse order to maintain indices
+      for (let i = messagesToRemove.length - 1; i >= 0; i--) {
+        thread.messages.splice(messagesToRemove[i].index, 1);
+      }
+
+      if (messagesToRemove.length > 0) {
+        thread.updatedAt = new Date();
+      }
+    }
+
+    return deletedMessageIds;
+  }
+
   // Get the most recent thread (for auto-selection)
   getMostRecentThread(): Thread | null {
     const threads = Array.from(this.conversations.values());
     if (threads.length === 0) return null;
-    
-    return threads.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0];
+
+    return threads.sort(
+      (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()
+    )[0];
   }
 }

@@ -23,11 +23,12 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: true
+      webSecurity: true,
     },
     icon: path.join(__dirname, '../public/favicon.ico'),
-    titleBarStyle: 'default',
-    show: false
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
+    frame: process.platform !== 'win32',
+    show: false,
   });
 
   // Maximize window to fill the screen
@@ -45,9 +46,18 @@ function createWindow() {
     // mainWindow.webContents.openDevTools();
   }
 
-  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
-    console.error('Failed to load:', errorCode, errorDescription, 'URL:', validatedURL);
-  });
+  mainWindow.webContents.on(
+    'did-fail-load',
+    (event, errorCode, errorDescription, validatedURL) => {
+      console.error(
+        'Failed to load:',
+        errorCode,
+        errorDescription,
+        'URL:',
+        validatedURL
+      );
+    }
+  );
 
   // Open external links in default browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -58,7 +68,7 @@ function createWindow() {
   mainWindow.webContents.on('will-navigate', (event, navigationUrl) => {
     const parsedUrl = new URL(navigationUrl);
     const currentUrl = new URL(mainWindow.webContents.getURL());
-    
+
     // If navigating to a different origin, open in external browser
     if (parsedUrl.origin !== currentUrl.origin) {
       event.preventDefault();
@@ -79,19 +89,21 @@ async function startServer() {
 
   try {
     console.log('Starting embedded server...');
-    
+
     // Import the full server with all API routes
     const serverPath = path.join(__dirname, '../dist/server/server/index.js');
     const serverModule = await import(pathToFileURL(serverPath).href);
     const app = serverModule.default;
-    
+
     if (!app || typeof app.listen !== 'function') {
       throw new Error('Server module did not export a valid Express app');
     }
-    
+
     console.log('Starting full MindStrike server with all API routes');
     serverApp = app.listen(3001, () => {
-      console.log('MindStrike server running on port 3001 with full functionality');
+      console.log(
+        'MindStrike server running on port 3001 with full functionality'
+      );
     });
 
     return serverApp;
@@ -111,12 +123,14 @@ function stopServer() {
 app.whenReady().then(async () => {
   try {
     await startServer();
-    
-    // Give the server a moment to start, then create the window
-    setTimeout(() => {
-      createWindow();
-    }, isDevelopment ? 0 : 1000);
 
+    // Give the server a moment to start, then create the window
+    setTimeout(
+      () => {
+        createWindow();
+      },
+      isDevelopment ? 0 : 1000
+    );
   } catch (error) {
     console.error('Failed to start application:', error);
     app.quit();
@@ -153,7 +167,7 @@ An agentic AI knowledge assistant
 Copyright (c) 2025 MindStrike
 Licensed under the MIT License
 `,
-      buttons: ['OK']
+      buttons: ['OK'],
     });
   }
 }
@@ -163,28 +177,30 @@ function createMenu() {
   const isMac = process.platform === 'darwin';
 
   const template = [
-    ...(isMac ? [{
-      label: app.getName(),
-      submenu: [
-        { 
-          label: 'About MindStrike',
-          click: showAboutDialog
-        },
-        { type: 'separator' },
-        { role: 'services' },
-        { type: 'separator' },
-        { role: 'hide' },
-        { role: 'hideothers' },
-        { role: 'unhide' },
-        { type: 'separator' },
-        { role: 'quit' }
-      ]
-    }] : []),
+    ...(isMac
+      ? [
+          {
+            label: app.getName(),
+            submenu: [
+              {
+                label: 'About MindStrike',
+                click: showAboutDialog,
+              },
+              { type: 'separator' },
+              { role: 'services' },
+              { type: 'separator' },
+              { role: 'hide' },
+              { role: 'hideothers' },
+              { role: 'unhide' },
+              { type: 'separator' },
+              { role: 'quit' },
+            ],
+          },
+        ]
+      : []),
     {
       label: 'File',
-      submenu: [
-        isMac ? { role: 'close' } : { role: 'quit' }
-      ]
+      submenu: [isMac ? { role: 'close' } : { role: 'quit' }],
     },
     {
       label: 'Edit',
@@ -194,46 +210,51 @@ function createMenu() {
         { type: 'separator' },
         { role: 'cut' },
         { role: 'copy' },
-        { role: 'paste' }
-      ]
+        { role: 'paste' },
+      ],
     },
     {
       label: 'View',
       submenu: [
-        { role: 'reload' },
-        { role: 'forceReload' },
-        { role: 'toggleDevTools' },
+        { role: 'reload', enabled: false },
+        { role: 'forceReload', enabled: false },
+        { role: 'toggleDevTools', enabled: false },
         { type: 'separator' },
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
+        { role: 'resetZoom', enabled: false },
+        { role: 'zoomIn', enabled: false },
+        { role: 'zoomOut', enabled: false },
         { type: 'separator' },
-        { role: 'togglefullscreen' }
-      ]
+        { role: 'togglefullscreen', enabled: true },
+      ],
     },
     {
       label: 'Window',
-      submenu: [
-        { role: 'minimize' },
-        { role: 'close' }
-      ]
+      submenu: [{ role: 'minimize' }, { role: 'close' }],
     },
-    ...(!isMac ? [{
-      label: 'Help',
-      submenu: [
-        {
-          label: 'About MindStrike',
-          click: showAboutDialog
-        }
-      ]
-    }] : [])
+    ...(!isMac
+      ? [
+          {
+            label: 'Help',
+            submenu: [
+              {
+                label: 'About MindStrike',
+                click: showAboutDialog,
+              },
+            ],
+          },
+        ]
+      : []),
   ];
 
   const menu = Menu.buildFromTemplate(template);
   Menu.setApplicationMenu(menu);
 }
 
-// Hide menu bar
+// Show menu bar only on macOS
 app.whenReady().then(() => {
-  Menu.setApplicationMenu(null);
+  if (process.platform === 'darwin') {
+    createMenu();
+  } else {
+    Menu.setApplicationMenu(null);
+  }
 });

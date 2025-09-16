@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { decodeSseData } from '../utils/sseDecoder';
+import { decodeSseEventData, isSseMcpLogData } from '../utils/sseDecoder';
 
 export interface MCPLogEntry {
   id: string;
@@ -20,13 +20,13 @@ interface MCPLogsState {
 }
 
 export const useMCPLogsStore = create<MCPLogsState>()(
-  subscribeWithSelector((set, get) => ({
+  subscribeWithSelector((set, _get) => ({
     logs: [],
     isConnected: false,
 
-    addLog: (log) => {
-      set((state) => ({
-        logs: [log, ...state.logs.slice(0, 999)] // Keep max 1000 logs
+    addLog: log => {
+      set(state => ({
+        logs: [log, ...state.logs.slice(0, 999)], // Keep max 1000 logs
       }));
     },
 
@@ -34,7 +34,7 @@ export const useMCPLogsStore = create<MCPLogsState>()(
       set({ logs: [] });
     },
 
-    setConnected: (connected) => {
+    setConnected: connected => {
       set({ isConnected: connected });
     },
 
@@ -48,7 +48,7 @@ export const useMCPLogsStore = create<MCPLogsState>()(
       } catch (error) {
         console.error('Failed to fetch MCP logs:', error);
       }
-    }
+    },
   }))
 );
 
@@ -58,26 +58,26 @@ let currentMCPLogsEventSource: EventSource | null = null;
 
 function createMCPLogsSSEConnection(): EventSource {
   const eventSource = new EventSource('/api/mcp/logs/stream');
-  
+
   eventSource.onopen = () => {
     useMCPLogsStore.getState().setConnected(true);
   };
-  
-  eventSource.onmessage = async (event) => {
+
+  eventSource.onmessage = async event => {
     try {
       const data = JSON.parse(event.data);
 
       // Decode the entire data object using the shared SSE decoder
-      const decodedData = await decodeSseData(data);
+      const decodedData = await decodeSseEventData(data);
 
-      if (decodedData.type === 'mcp-log') {
+      if (decodedData.type === 'mcp-log' && isSseMcpLogData(decodedData)) {
         const { addLog } = useMCPLogsStore.getState();
         addLog({
           id: decodedData.id,
           timestamp: decodedData.timestamp,
           serverId: decodedData.serverId,
           level: decodedData.level,
-          message: decodedData.message
+          message: decodedData.message,
         });
       }
     } catch (error) {
@@ -85,10 +85,10 @@ function createMCPLogsSSEConnection(): EventSource {
     }
   };
 
-  eventSource.onerror = (error) => {
+  eventSource.onerror = error => {
     console.error('MCP logs SSE connection error:', error);
     useMCPLogsStore.getState().setConnected(false);
-    
+
     if (eventSource.readyState === EventSource.CLOSED) {
       setTimeout(() => {
         currentMCPLogsEventSource = createMCPLogsSSEConnection();
@@ -102,15 +102,15 @@ function createMCPLogsSSEConnection(): EventSource {
 export function initializeMCPLogsSSE() {
   if (mcpLogsSSEInitialized) return;
   mcpLogsSSEInitialized = true;
-  
+
   // Close any existing connection
   if (currentMCPLogsEventSource) {
     currentMCPLogsEventSource.close();
   }
-  
+
   // Create new connection
   currentMCPLogsEventSource = createMCPLogsSSEConnection();
-  
+
   // Cleanup on page unload
   window.addEventListener('beforeunload', () => {
     if (currentMCPLogsEventSource) {
@@ -121,7 +121,7 @@ export function initializeMCPLogsSSE() {
 
 // Auto-initialize when store is accessed
 useMCPLogsStore.subscribe(
-  (state) => state.isConnected,
+  state => state.isConnected,
   () => {
     if (!mcpLogsSSEInitialized) {
       initializeMCPLogsSSE();

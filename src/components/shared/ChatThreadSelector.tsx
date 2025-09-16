@@ -8,7 +8,11 @@ interface ChatThreadSelectorProps {
   onClose?: () => void;
 }
 
-export function ChatThreadSelector({ threads, onThreadSelect, onClose }: ChatThreadSelectorProps) {
+export function ChatThreadSelector({
+  threads,
+  onThreadSelect,
+  onClose,
+}: ChatThreadSelectorProps) {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -41,11 +45,13 @@ export function ChatThreadSelector({ threads, onThreadSelect, onClose }: ChatThr
           <div className="p-4 text-center text-gray-500">
             <MessageSquare size={24} className="mx-auto mb-2 opacity-50" />
             <p className="text-sm">No chat threads yet</p>
-            <p className="text-xs mt-1">Create a new conversation in the chat view first</p>
+            <p className="text-xs mt-1">
+              Create a new conversation in the chat view first
+            </p>
           </div>
         ) : (
           <div className="p-2 space-y-1">
-            {threads.map((thread) => (
+            {threads.map(thread => (
               <div
                 key={thread.id}
                 className={clsx(
@@ -64,9 +70,9 @@ export function ChatThreadSelector({ threads, onThreadSelect, onClose }: ChatThr
                       </h4>
                       {thread.customRole && (
                         <div title="Custom personality applied">
-                          <UserCheck 
-                            size={14} 
-                            className="text-purple-400 flex-shrink-0" 
+                          <UserCheck
+                            size={14}
+                            className="text-purple-400 flex-shrink-0"
                           />
                         </div>
                       )}
@@ -78,7 +84,8 @@ export function ChatThreadSelector({ threads, onThreadSelect, onClose }: ChatThr
                     )}
                     <div className="flex items-center justify-between mt-1">
                       <p className="text-xs text-gray-500">
-                        {thread.messages.length} message{thread.messages.length !== 1 ? 's' : ''}
+                        {thread.messages.length} message
+                        {thread.messages.length !== 1 ? 's' : ''}
                       </p>
                       <p className="text-xs text-gray-500">
                         {thread.updatedAt.toLocaleDateString()}

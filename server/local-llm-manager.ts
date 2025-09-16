@@ -1,9 +1,15 @@
-import { getLlama, LlamaModel, LlamaContext, LlamaChatSession, readGgufFileInfo } from 'node-llama-cpp';
+import {
+  getLlama,
+  LlamaModel,
+  LlamaContext,
+  LlamaChatSession,
+  readGgufFileInfo,
+} from 'node-llama-cpp';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { createHash } from 'crypto';
-import { execSync } from 'child_process';
+
 import { getLocalModelsDirectory } from './utils/settings-directory.js';
 import { modelFetcher, DynamicModelInfo } from './model-fetcher.js';
 import { logger } from './logger.js';
@@ -55,16 +61,28 @@ export interface ModelDownloadInfo {
   quantization?: string;
 }
 
-
-
 export class LocalLLMManager {
   private modelsDir: string;
-  private activeModels = new Map<string, { model: LlamaModel; context: LlamaContext; session: LlamaChatSession; runtimeInfo: ModelRuntimeInfo }>();
+  private activeModels = new Map<
+    string,
+    {
+      model: LlamaModel;
+      context: LlamaContext;
+      session: LlamaChatSession;
+      runtimeInfo: ModelRuntimeInfo;
+    }
+  >();
   private downloadingModels = new Set<string>();
   private downloadControllers = new Map<string, AbortController>();
-  private downloadProgress = new Map<string, { progress: number; speed: string }>();
+  private downloadProgress = new Map<
+    string,
+    { progress: number; speed: string }
+  >();
   private modelSettings = new Map<string, ModelLoadingSettings>();
-  private contextSizeCache = new Map<string, { contextSize: number; timestamp: number }>();
+  private contextSizeCache = new Map<
+    string,
+    { contextSize: number; timestamp: number }
+  >();
 
   // Clear cache to force recalculation (useful after fixing VRAM calculation bugs)
   clearContextSizeCache(): void {
@@ -75,7 +93,7 @@ export class LocalLLMManager {
     // Use a dedicated directory for local LLM models
     this.modelsDir = getLocalModelsDirectory();
     this.ensureModelsDirectory();
-    
+
     // Clear any stale cache on startup to ensure fresh calculations
     this.clearContextSizeCache();
   }
@@ -83,46 +101,52 @@ export class LocalLLMManager {
   /**
    * Calculate a safe context size based on available VRAM
    */
-  private async calculateSafeContextSize(modelSizeBytes: number, requestedContextSize: number, filename: string): Promise<number> {
+  private async calculateSafeContextSize(
+    modelSizeBytes: number,
+    requestedContextSize: number,
+    filename: string
+  ): Promise<number> {
     // Cache key based on model size and requested context
     const cacheKey = `${filename}-${modelSizeBytes}-${requestedContextSize}`;
     const cached = this.contextSizeCache.get(cacheKey);
-    
+
     // Use cache if less than 5 minutes old
     if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
       // Only log cache usage in debug mode to reduce spam
       // console.log(`Using cached context size: ${cached.contextSize} for ${filename}`);
       return cached.contextSize;
     }
-    
+
     try {
       const llama = await getLlama({ gpu: 'auto' });
       const vramState = await llama.getVramState();
-      
+
       // Get model metadata to use the proper VRAM calculation formulas
       // We need: hidden_size, num_hidden_layers, num_attention_heads, num_key_value_heads
       // For now, estimate these from model size (we'll improve this later with GGUF metadata)
-      const modelSizeGB = modelSizeBytes / (1024 * 1024 * 1024);
-      
+
       // Rough estimates for a 9B model based on typical architectures
       const estimatedConfig = {
-        hidden_size: 4096,           // typical for 9B models
-        num_hidden_layers: 48,       // you mentioned 48 layers
-        num_attention_heads: 32,     // typical ratio
-        num_key_value_heads: 8       // typical GQA ratio
+        hidden_size: 4096, // typical for 9B models
+        num_hidden_layers: 48, // you mentioned 48 layers
+        num_attention_heads: 32, // typical ratio
+        num_key_value_heads: 8, // typical GQA ratio
       };
-      
+
       // Use the actual VRAM calculation formulas from the HuggingFace calculator:
-      
+
       // 1. KV Cache calculation
       const kvCache = (context: number) => {
-        const n_gqa = estimatedConfig.num_attention_heads / estimatedConfig.num_key_value_heads;
+        const n_gqa =
+          estimatedConfig.num_attention_heads /
+          estimatedConfig.num_key_value_heads;
         const n_embd_gqa = estimatedConfig.hidden_size / n_gqa;
-        const n_elements = n_embd_gqa * (estimatedConfig.num_hidden_layers * context);
+        const n_elements =
+          n_embd_gqa * (estimatedConfig.num_hidden_layers * context);
         const size = 2 * n_elements;
         return size * (16 / 8); // 16-bit cache
       };
-      
+
       // 2. Input Buffer calculation
       const inputBuffer = (context: number, bsz = 512) => {
         const inp_tokens = bsz;
@@ -131,43 +155,53 @@ export class LocalLLMManager {
         const inp_KQ_mask = context * bsz;
         const inp_K_shift = context;
         const inp_sum = bsz;
-        return inp_tokens + inp_embd + inp_pos + inp_KQ_mask + inp_K_shift + inp_sum;
+        return (
+          inp_tokens + inp_embd + inp_pos + inp_KQ_mask + inp_K_shift + inp_sum
+        );
       };
-      
+
       // 3. Compute Buffer calculation
       const computeBuffer = (context: number) => {
-        return (context / 1024 * 2 + 0.75) * estimatedConfig.num_attention_heads * 1024 * 1024;
+        return (
+          ((context / 1024) * 2 + 0.75) *
+          estimatedConfig.num_attention_heads *
+          1024 *
+          1024
+        );
       };
-      
+
       // Total context memory needed
       const contextMemoryBytes = (context: number) => {
         return kvCache(context) + inputBuffer(context) + computeBuffer(context);
       };
-      
+
       // Use actual free VRAM instead of estimating model usage
       // Since we don't know exactly how much VRAM the model will use,
       // be conservative and reserve 80% of free VRAM for context
       const availableVramBytes = vramState.free * 0.8;
-      
+
       // Calculate context memory for requested size
       const requestedContextMemory = contextMemoryBytes(requestedContextSize);
-      
+
       // If it fits in available VRAM, use it
       if (requestedContextMemory <= availableVramBytes) {
         // Cache the result
-        this.contextSizeCache.set(cacheKey, { contextSize: requestedContextSize, timestamp: Date.now() });
+        this.contextSizeCache.set(cacheKey, {
+          contextSize: requestedContextSize,
+          timestamp: Date.now(),
+        });
         return requestedContextSize;
       }
-      
+
       // Binary search for the largest context that fits
       let low = 512;
       let high = requestedContextSize;
       let bestSize = 512;
-      
+
       while (low <= high) {
         const mid = Math.floor((low + high) / 2);
         const midMemory = contextMemoryBytes(mid);
-        
+
         if (midMemory <= availableVramBytes) {
           bestSize = mid;
           low = mid + 1;
@@ -175,29 +209,34 @@ export class LocalLLMManager {
           high = mid - 1;
         }
       }
-      
+
       // Cache the result
-      this.contextSizeCache.set(cacheKey, { contextSize: bestSize, timestamp: Date.now() });
+      this.contextSizeCache.set(cacheKey, {
+        contextSize: bestSize,
+        timestamp: Date.now(),
+      });
       return bestSize;
-      
     } catch (error) {
-      console.error(`Error calculating safe context size: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      
+      console.error(
+        `Error calculating safe context size: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+
       // Don't use a fallback - this hides the real problem
       // Instead, throw the error so we can see what's actually failing
-      throw new Error(`Cannot determine safe context size: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(
+        `Cannot determine safe context size: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   }
 
-  private calculateOptimalBatchSize(contextSize: number, modelSizeBytes: number): number {
+  private calculateOptimalBatchSize(
+    contextSize: number,
+    _modelSizeBytes: number
+  ): number {
     // Based on KV cache memory formula: 2 * contextSize * n_layers * n_heads * d_head * precision_bytes * batchSize
     // For a typical 9B model: ~48 layers, 32 heads, 128 d_head, 2 bytes (FP16)
     // Per-token KV cache = 2 * 48 * 32 * 128 * 2 = ~786KB per token
-    
-    const modelSizeGB = modelSizeBytes / (1024 * 1024 * 1024);
-    const kvCachePerTokenBytes = 2 * 48 * 32 * 128 * 2; // ~786KB per token
-    const kvCacheForContextMB = (contextSize * kvCachePerTokenBytes) / (1024 * 1024);
-    
+
     // Conservative approach: limit batch to ensure total KV cache doesn't exceed context memory
     // Rule of thumb: batch size should be small enough that KV cache scales gracefully
     if (contextSize <= 2048) {
@@ -218,8 +257,6 @@ export class LocalLLMManager {
     }
   }
 
-
-
   /**
    * Get all locally available models
    */
@@ -236,17 +273,19 @@ export class LocalLLMManager {
     for (const filename of ggufFiles) {
       const fullPath = path.join(this.modelsDir, filename);
       const stats = fs.statSync(fullPath);
-      
+
       // Generate a unique ID for this model
       const id = createHash('md5').update(fullPath).digest('hex');
-      
+
       // Try to extract model info from filename
       const modelInfo = this.parseModelFilename(filename);
-      
+
       // Try to get remote model info from cache if available
       const remoteModels = await modelFetcher.getAvailableModels();
-      const matchingRemoteModel = remoteModels.find(rm => rm.filename === filename);
-      
+      const matchingRemoteModel = remoteModels.find(
+        rm => rm.filename === filename
+      );
+
       // Try to read GGUF metadata for layer count and context length
       let layerCount: number | undefined;
       let maxContextLength: number | undefined;
@@ -275,20 +314,21 @@ export class LocalLLMManager {
             }
           }
         }
-      } catch (error) {
+      } catch {
         // Silently fail - metadata is optional
       }
-      
+
       // Get user settings for this model
       const userSettings = this.getModelSettings(id);
-      
+
       // Always calculate safe context size based on available VRAM
-      const requestedContextSize = userSettings.contextSize || 
-                                   maxContextLength || 
-                                   matchingRemoteModel?.contextLength || 
-                                   modelInfo.contextLength ||
-                                   4096;
-      
+      const requestedContextSize =
+        userSettings.contextSize ||
+        maxContextLength ||
+        matchingRemoteModel?.contextLength ||
+        modelInfo.contextLength ||
+        4096;
+
       const actualContextLength = await this.calculateSafeContextSize(
         stats.size,
         requestedContextSize,
@@ -298,23 +338,28 @@ export class LocalLLMManager {
       // Update user settings with the calculated safe context size
       const updatedSettings = {
         ...userSettings,
-        contextSize: actualContextLength
+        contextSize: actualContextLength,
       };
 
       models.push({
         id,
-        name: matchingRemoteModel?.name || modelInfo.name || filename.replace('.gguf', ''),
+        name:
+          matchingRemoteModel?.name ||
+          modelInfo.name ||
+          filename.replace('.gguf', ''),
         filename,
         path: fullPath,
         size: stats.size,
         downloaded: true,
         downloading: false,
         contextLength: actualContextLength,
-        parameterCount: matchingRemoteModel?.parameterCount || modelInfo.parameterCount,
-        quantization: matchingRemoteModel?.quantization || modelInfo.quantization,
+        parameterCount:
+          matchingRemoteModel?.parameterCount || modelInfo.parameterCount,
+        quantization:
+          matchingRemoteModel?.quantization || modelInfo.quantization,
         layerCount,
         maxContextLength,
-        loadingSettings: updatedSettings
+        loadingSettings: updatedSettings,
       });
     }
 
@@ -324,7 +369,9 @@ export class LocalLLMManager {
   /**
    * Get available models for download (dynamic from Hugging Face)
    */
-  async getAvailableModels(): Promise<(ModelDownloadInfo | DynamicModelInfo)[]> {
+  async getAvailableModels(): Promise<
+    (ModelDownloadInfo | DynamicModelInfo)[]
+  > {
     try {
       // Get dynamic models from Hugging Face
       const dynamicModels = await modelFetcher.getAvailableModels();
@@ -338,10 +385,12 @@ export class LocalLLMManager {
   /**
    * Search for models by query
    */
-  async searchModels(query: string): Promise<(ModelDownloadInfo | DynamicModelInfo)[]> {
+  async searchModels(
+    query: string
+  ): Promise<(ModelDownloadInfo | DynamicModelInfo)[]> {
     try {
       const dynamicModels = await modelFetcher.searchModels(query);
-      
+
       // For search results, don't include static models - just return the search results
       return dynamicModels;
     } catch (error) {
@@ -359,7 +408,7 @@ export class LocalLLMManager {
   ): Promise<string> {
     const filename = modelInfo.filename;
     const outputPath = path.join(this.modelsDir, filename);
-    
+
     // Check if already exists
     if (fs.existsSync(outputPath)) {
       throw new Error('Model already exists');
@@ -371,40 +420,42 @@ export class LocalLLMManager {
     }
 
     this.downloadingModels.add(filename);
-    
+
     // Create abort controller for this download
     const abortController = new AbortController();
     this.downloadControllers.set(filename, abortController);
 
     try {
       console.log(`Starting download of ${modelInfo.name}...`);
-      
+
       // Get Hugging Face token if available
       const headers: Record<string, string> = {
-        'User-Agent': 'mindstrike-local-llm/1.0'
+        'User-Agent': 'mindstrike-local-llm/1.0',
       };
-      
+
       try {
         const { modelFetcher } = await import('./model-fetcher.js');
         if (modelFetcher.hasHuggingFaceToken()) {
           // Note: We don't expose the actual token, just check if it exists
           const fs = await import('fs/promises');
           const path = await import('path');
-          const { getMindstrikeDirectory } = await import('./utils/settings-directory.js');
-          
+          const { getMindstrikeDirectory } = await import(
+            './utils/settings-directory.js'
+          );
+
           const tokenFile = path.join(getMindstrikeDirectory(), 'hf-token');
           const token = await fs.readFile(tokenFile, 'utf-8');
           headers['Authorization'] = `Bearer ${token.trim()}`;
         }
-      } catch (error) {
+      } catch {
         logger.debug('No Hugging Face token available for download');
       }
-      
+
       const response = await fetch(modelInfo.url, {
         signal: abortController.signal,
-        headers
+        headers,
       });
-      
+
       if (!response.ok) {
         if (response.status === 401) {
           throw new Error('UNAUTHORIZED_HF_TOKEN_REQUIRED');
@@ -417,10 +468,10 @@ export class LocalLLMManager {
 
       const contentLength = response.headers.get('Content-Length');
       const totalSize = contentLength ? parseInt(contentLength, 10) : 0;
-      
+
       const fileStream = fs.createWriteStream(outputPath);
       const reader = response.body?.getReader();
-      
+
       if (!reader) {
         throw new Error('No response body');
       }
@@ -434,35 +485,39 @@ export class LocalLLMManager {
           fileStream.destroy();
           throw new Error('Download cancelled');
         }
-        
+
         const { done, value } = await reader.read();
-        
+
         if (done) break;
-        
+
         fileStream.write(value);
         downloadedBytes += value.length;
-        
+
         const now = Date.now();
         const timeDiff = now - lastUpdate;
-        
-        if (totalSize > 0 && timeDiff >= 1000) { // Update every second
+
+        if (totalSize > 0 && timeDiff >= 1000) {
+          // Update every second
           const progress = (downloadedBytes / totalSize) * 100;
           const bytesDiff = downloadedBytes - lastBytes;
           const speed = this.formatSpeed(bytesDiff / (timeDiff / 1000));
-          
-          this.downloadProgress.set(filename, { progress: Math.round(progress), speed });
-          
+
+          this.downloadProgress.set(filename, {
+            progress: Math.round(progress),
+            speed,
+          });
+
           if (onProgress) {
             onProgress(Math.round(progress), speed);
           }
-          
+
           lastUpdate = now;
           lastBytes = downloadedBytes;
         }
       }
 
       fileStream.end();
-      
+
       // Final progress update
       if (totalSize > 0) {
         this.downloadProgress.set(filename, { progress: 100, speed: '0 B/s' });
@@ -470,22 +525,21 @@ export class LocalLLMManager {
           onProgress(100, '0 B/s');
         }
       }
-      
+
       console.log(`Successfully downloaded ${modelInfo.name} to ${outputPath}`);
       return outputPath;
-      
     } catch (error) {
       // Clean up partial download
       if (fs.existsSync(outputPath)) {
         fs.unlinkSync(outputPath);
       }
-      
+
       if (error instanceof Error && error.message === 'Download cancelled') {
         console.log(`Download cancelled: ${filename}`);
       } else {
         console.error(`Download failed: ${filename}`, error);
       }
-      
+
       throw error;
     } finally {
       this.downloadingModels.delete(filename);
@@ -500,7 +554,7 @@ export class LocalLLMManager {
   async deleteModel(modelId: string): Promise<void> {
     const models = await this.getLocalModels();
     const model = models.find(m => m.id === modelId);
-    
+
     if (!model) {
       throw new Error('Model not found');
     }
@@ -544,55 +598,61 @@ export class LocalLLMManager {
     // Try to find by ID first
     let modelInfo: any = null;
     const models = await this.getLocalModels();
-    
+
     modelInfo = models.find(m => m.id === modelIdOrName);
-    
+
     // If not found by ID, try by name
     if (!modelInfo) {
-      modelInfo = models.find(m => m.name === modelIdOrName || m.filename === modelIdOrName);
+      modelInfo = models.find(
+        m => m.name === modelIdOrName || m.filename === modelIdOrName
+      );
     }
-    
+
     if (!modelInfo) {
       throw new Error('Model not found');
     }
 
     // Use the actual model ID for storage
     const modelId = modelInfo.id;
-    
+
     if (this.activeModels.has(modelId)) {
       return; // Already loaded
     }
 
     // Unload all other models first to free up memory
     // This ensures only one local model is loaded at a time
-    const otherModelIds = Array.from(this.activeModels.keys()).filter(id => id !== modelId);
+    const otherModelIds = Array.from(this.activeModels.keys()).filter(
+      id => id !== modelId
+    );
     for (const otherModelId of otherModelIds) {
       console.log(`Unloading previous model: ${otherModelId}`);
       await this.unloadModel(otherModelId);
     }
 
     console.log(`Loading model: ${modelInfo.name}`);
-    console.log(`Model file size: ${(modelInfo.size / (1024 * 1024)).toFixed(2)} MB`);
-    
+    console.log(
+      `Model file size: ${(modelInfo.size / (1024 * 1024)).toFixed(2)} MB`
+    );
+
     const startTime = Date.now();
-    
+
     // Get user settings for this model
     const settings = this.getModelSettings(modelId);
-    
+
     // Configure llama for async/non-blocking operation
     const llama = await getLlama({
       // Enable GPU acceleration if available
       gpu: 'auto',
     });
-    
+
     console.log(`Available GPU: ${llama.gpu}`);
     if (modelInfo.layerCount) {
       console.log(`Model has ${modelInfo.layerCount} layers`);
     }
-    
+
     // Determine GPU layers to use
     let gpuLayers = -1; // Default: use all layers
-    
+
     if (settings.gpuLayers !== undefined) {
       // Use user-specified setting
       gpuLayers = settings.gpuLayers;
@@ -600,14 +660,22 @@ export class LocalLLMManager {
     } else {
       // Auto-detect based on model size
       const modelSizeMB = modelInfo.size / (1024 * 1024);
-      if (modelSizeMB > 8000) { // Models larger than 8GB
+      if (modelSizeMB > 8000) {
+        // Models larger than 8GB
         gpuLayers = 32; // Use only 32 layers on GPU
-        console.log(`Large model detected (${modelSizeMB.toFixed(0)}MB), using ${gpuLayers} GPU layers for better performance`);
-      } else if (modelSizeMB > 4000) { // Models larger than 4GB
+        console.log(
+          `Large model detected (${modelSizeMB.toFixed(0)}MB), using ${gpuLayers} GPU layers for better performance`
+        );
+      } else if (modelSizeMB > 4000) {
+        // Models larger than 4GB
         gpuLayers = 40; // Use 40 layers on GPU
-        console.log(`Medium model detected (${modelSizeMB.toFixed(0)}MB), using ${gpuLayers} GPU layers`);
+        console.log(
+          `Medium model detected (${modelSizeMB.toFixed(0)}MB), using ${gpuLayers} GPU layers`
+        );
       } else {
-        console.log(`Small model detected (${modelSizeMB.toFixed(0)}MB), using all GPU layers (-1)`);
+        console.log(
+          `Small model detected (${modelSizeMB.toFixed(0)}MB), using all GPU layers (-1)`
+        );
       }
     }
 
@@ -624,18 +692,26 @@ export class LocalLLMManager {
       contextSize,
       modelInfo.filename
     );
-    
+
     // Update settings if we had to reduce the context size
     if (safeContextSize !== contextSize) {
-      console.log(`Updating context size from ${contextSize} to ${safeContextSize}`);
-      this.setModelSettings(modelId, { ...settings, contextSize: safeContextSize });
+      console.log(
+        `Updating context size from ${contextSize} to ${safeContextSize}`
+      );
+      this.setModelSettings(modelId, {
+        ...settings,
+        contextSize: safeContextSize,
+      });
     }
-    
+
     contextSize = safeContextSize;
-    
+
     // Calculate appropriate batch size based on context and available memory
-    const batchSize = settings.batchSize || this.calculateOptimalBatchSize(contextSize, modelInfo.size);
-    const threads = settings.threads || Math.max(1, Math.floor(os.cpus().length / 2));
+    const batchSize =
+      settings.batchSize ||
+      this.calculateOptimalBatchSize(contextSize, modelInfo.size);
+    const threads =
+      settings.threads || Math.max(1, Math.floor(os.cpus().length / 2));
     const context = await model.createContext({
       contextSize: contextSize,
       // Configure for better async performance
@@ -648,19 +724,20 @@ export class LocalLLMManager {
     });
 
     const loadingTime = Date.now() - startTime;
-    
+
     // Create runtime info
     const runtimeInfo: ModelRuntimeInfo = {
       actualGpuLayers: gpuLayers,
       gpuType: llama.gpu || 'none',
       loadingTime: loadingTime,
-      // TODO: Add memory usage detection if available
     };
 
     this.activeModels.set(modelId, { model, context, session, runtimeInfo });
-    
+
     console.log(`Model loaded successfully: ${modelInfo.name}`);
-    console.log(`Loading took ${loadingTime}ms with ${gpuLayers === -1 ? 'all' : gpuLayers} GPU layers`);
+    console.log(
+      `Loading took ${loadingTime}ms with ${gpuLayers === -1 ? 'all' : gpuLayers} GPU layers`
+    );
   }
 
   /**
@@ -682,7 +759,9 @@ export class LocalLLMManager {
    */
   private async findModelIdByName(modelName: string): Promise<string | null> {
     const models = await this.getLocalModels();
-    const model = models.find(m => m.name === modelName || m.filename === modelName);
+    const model = models.find(
+      m => m.name === modelName || m.filename === modelName
+    );
     return model ? model.id : null;
   }
 
@@ -701,7 +780,7 @@ export class LocalLLMManager {
 
     // First try to use it as an ID
     let activeModel = this.activeModels.get(modelIdOrName);
-    
+
     // If not found, try to find by name
     if (!activeModel) {
       const modelId = await this.findModelIdByName(modelIdOrName);
@@ -709,9 +788,12 @@ export class LocalLLMManager {
         activeModel = this.activeModels.get(modelId);
       }
     }
-    
+
     if (!activeModel) {
-      logger.error('Model not loaded', { modelIdOrName, activeModelKeys: Array.from(this.activeModels.keys()) });
+      logger.error('Model not loaded', {
+        modelIdOrName,
+        activeModelKeys: Array.from(this.activeModels.keys()),
+      });
       throw new Error('Model not loaded. Please load the model first.');
     }
 
@@ -719,11 +801,11 @@ export class LocalLLMManager {
 
     // Use proper chat session with message history
     const { session } = activeModel;
-    
+
     // Process messages in order to build conversation context
     let systemMessage = '';
     let lastUserMessage = '';
-    
+
     for (const message of messages) {
       if (message.role === 'system') {
         systemMessage = message.content;
@@ -735,7 +817,7 @@ export class LocalLLMManager {
         continue;
       }
     }
-    
+
     if (!lastUserMessage) {
       logger.error('No user message found in messages', { messages });
       throw new Error('No user message found');
@@ -743,8 +825,8 @@ export class LocalLLMManager {
 
     // For LlamaChatSession, combine system and user message without chat formatting
     // The session.prompt() method handles chat formatting internally
-    const finalPrompt = systemMessage 
-      ? `${systemMessage}\n\n${lastUserMessage}` 
+    const finalPrompt = systemMessage
+      ? `${systemMessage}\n\n${lastUserMessage}`
       : lastUserMessage;
 
     // Removed verbose logging
@@ -757,10 +839,11 @@ export class LocalLLMManager {
       // Enable async processing with yielding to prevent blocking
       onToken: async () => {
         // Yield control to event loop periodically during generation
-        if (Math.random() < 0.1) { // 10% chance to yield control
+        if (Math.random() < 0.1) {
+          // 10% chance to yield control
           await new Promise(resolve => setImmediate(resolve));
         }
-      }
+      },
     });
 
     // Removed verbose logging
@@ -781,7 +864,7 @@ export class LocalLLMManager {
   ): AsyncGenerator<string> {
     // First try to use it as an ID
     let activeModel = this.activeModels.get(modelIdOrName);
-    
+
     // If not found, try to find by name
     if (!activeModel) {
       const modelId = await this.findModelIdByName(modelIdOrName);
@@ -789,18 +872,18 @@ export class LocalLLMManager {
         activeModel = this.activeModels.get(modelId);
       }
     }
-    
+
     if (!activeModel) {
       throw new Error('Model not loaded. Please load the model first.');
     }
 
     // Use proper chat session with message history
     const { session } = activeModel;
-    
+
     // Process messages to build conversation context (same as non-streaming method)
     let systemMessage = '';
     let lastUserMessage = '';
-    
+
     for (const message of messages) {
       if (message.role === 'system') {
         systemMessage = message.content;
@@ -812,14 +895,14 @@ export class LocalLLMManager {
         continue;
       }
     }
-    
+
     if (!lastUserMessage) {
       throw new Error('No user message found');
     }
 
     // For LlamaChatSession, combine system and user message (same as non-streaming method)
-    const finalPrompt = systemMessage 
-      ? `${systemMessage}\n\n${lastUserMessage}` 
+    const finalPrompt = systemMessage
+      ? `${systemMessage}\n\n${lastUserMessage}`
       : lastUserMessage;
 
     // Generate streaming response with async yielding to prevent blocking
@@ -830,25 +913,23 @@ export class LocalLLMManager {
       onToken: async () => {
         // Yield control to event loop during generation
         await new Promise(resolve => setImmediate(resolve));
-      }
+      },
     });
-    
+
     // Simulate streaming by yielding characters/words with small delays
     const words = response.split(' ');
-    let currentText = '';
-    
+
     for (let i = 0; i < words.length; i++) {
       const word = words[i];
-      currentText += (i === 0 ? '' : ' ') + word;
-      
+
       // Yield word by word for more realistic streaming
       yield (i === 0 ? '' : ' ') + word;
-      
+
       // Add a small delay to simulate real streaming and yield control (only if not the last word)
       if (i < words.length - 1) {
         await new Promise(resolve => setTimeout(resolve, 50)); // 50ms delay between words
       }
-      
+
       // Yield control to event loop every few words to prevent blocking
       if (i % 3 === 0) {
         await new Promise(resolve => setImmediate(resolve));
@@ -865,10 +946,10 @@ export class LocalLLMManager {
   }> {
     const models = await this.getLocalModels();
     const info = models.find(m => m.id === modelId);
-    
+
     return {
       loaded: this.activeModels.has(modelId),
-      info
+      info,
     };
   }
 
@@ -882,7 +963,7 @@ export class LocalLLMManager {
     quantization?: string;
   } {
     const lower = filename.toLowerCase();
-    
+
     let name = filename.replace('.gguf', '');
     let contextLength: number | undefined;
     let parameterCount: string | undefined;
@@ -900,9 +981,9 @@ export class LocalLLMManager {
       /(IQ\d+_[A-Z]+_?[A-Z]*)/i,
       /(Q\d+)/i,
       /(IQ\d+)/i,
-      /(f16|f32|fp16|fp32)/i
+      /(f16|f32|fp16|fp32)/i,
     ];
-    
+
     for (const pattern of quantPatterns) {
       const match = filename.match(pattern);
       if (match) {
@@ -910,7 +991,7 @@ export class LocalLLMManager {
         break;
       }
     }
-    
+
     // Default quantization for GGUF files if none detected
     if (!quantization && lower.includes('.gguf')) {
       quantization = 'F16';
@@ -926,7 +1007,7 @@ export class LocalLLMManager {
       name,
       contextLength,
       parameterCount,
-      quantization
+      quantization,
     };
   }
 
@@ -945,14 +1026,18 @@ export class LocalLLMManager {
   /**
    * Get download progress for a model
    */
-  getDownloadProgress(filename: string): { isDownloading: boolean; progress: number; speed?: string } {
+  getDownloadProgress(filename: string): {
+    isDownloading: boolean;
+    progress: number;
+    speed?: string;
+  } {
     const isDownloading = this.downloadingModels.has(filename);
     const progressInfo = this.downloadProgress.get(filename);
-    
+
     return {
       isDownloading,
       progress: progressInfo?.progress || 0,
-      speed: progressInfo?.speed
+      speed: progressInfo?.speed,
     };
   }
 
@@ -971,6 +1056,4 @@ export class LocalLLMManager {
 
     return `${speed.toFixed(1)} ${units[unitIndex]}`;
   }
-
-
 }

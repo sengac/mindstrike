@@ -6,17 +6,15 @@
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-
   color-scheme: dark;
-  color: rgba(255, 255, 255, 0.87);
+  color: #ccc;
   background-color: #1e1e1e;
-
   font-synthesis: none;
-  text-rendering: optimizeLegibility;
+  text-rendering: optimizelegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
-  
+  text-size-adjust: 100%;
+
   --header-height: 64px;
 }
 
@@ -27,17 +25,17 @@ body {
 
 /* Simplified Generative Button with Shimmer Background */
 .generative-button {
-  background: rgb(37, 99, 235) !important;
+  background: rgb(37 99 235) !important;
   border: none !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 15%) !important;
   position: relative !important;
   overflow: hidden !important;
   transition: all 0.3s ease !important;
 }
 
 .generative-button:hover {
-  background: rgb(29, 78, 216) !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  background: rgb(29 78 216) !important;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 15%) !important;
 }
 
 .generative-button::before {
@@ -47,7 +45,12 @@ body {
   left: -100% !important;
   width: 100% !important;
   height: 100% !important;
-  background: linear-gradient(135deg, transparent 25%, rgba(255, 255, 255, 0.5) 50%, transparent 75%) !important;
+  background: linear-gradient(
+    135deg,
+    transparent 25%,
+    rgb(255 255 255 / 50%) 50%,
+    transparent 75%
+  ) !important;
   z-index: 1 !important;
 }
 
@@ -61,12 +64,11 @@ body {
   z-index: 2 !important;
 }
 
-
-
 @keyframes generative-shine {
   0% {
     background-position: -200% 0;
   }
+
   100% {
     background-position: 200% 0;
   }
@@ -76,6 +78,7 @@ body {
   0% {
     transform: translateX(-100%);
   }
+
   100% {
     transform: translateX(200%);
   }
@@ -86,12 +89,30 @@ body {
     transform: scale(1);
     opacity: 1;
   }
+
   50% {
     transform: scale(1.1);
     opacity: 0.8;
   }
+
   100% {
     transform: scale(1);
     opacity: 1;
   }
+}
+
+/* Custom draggable regions for Electron */
+[data-test-id='custom-draggable-region'] {
+  -webkit-app-region: drag;
+}
+
+/* Ensure interactive elements within draggable regions remain clickable */
+[data-test-id='custom-draggable-region'] button,
+[data-test-id='custom-draggable-region'] input,
+[data-test-id='custom-draggable-region'] select,
+[data-test-id='custom-draggable-region'] textarea,
+[data-test-id='custom-draggable-region'] a,
+[data-test-id='custom-draggable-region'] [role='button'],
+[data-test-id='custom-draggable-region'] [tabindex='0'] {
+  -webkit-app-region: no-drag;
 }

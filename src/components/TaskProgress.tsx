@@ -1,12 +1,15 @@
 import React, { useEffect } from 'react';
-import { useTaskStore, connectToTaskUpdates } from '../store/useTaskStore';
+import { useTaskStore } from '../store/useTaskStore';
 
 interface TaskProgressProps {
   workflowId?: string;
   className?: string;
 }
 
-export const TaskProgress: React.FC<TaskProgressProps> = ({ workflowId, className = '' }) => {
+export const TaskProgress: React.FC<TaskProgressProps> = ({
+  workflowId,
+  className = '',
+}) => {
   const {
     currentWorkflow,
     isVisible,
@@ -14,14 +17,13 @@ export const TaskProgress: React.FC<TaskProgressProps> = ({ workflowId, classNam
     error,
     getWorkflowProgress,
     getActiveTask,
-    clearCurrentWorkflow
+    clearCurrentWorkflow,
   } = useTaskStore();
 
   // Connect to SSE updates when workflow starts
   useEffect(() => {
     if (workflowId && currentWorkflow?.id === workflowId) {
-      const eventSource = connectToTaskUpdates(workflowId);
-      return () => eventSource.close();
+      // Connection is handled by the store automatically
     }
   }, [workflowId, currentWorkflow?.id]);
 
@@ -77,15 +79,25 @@ export const TaskProgress: React.FC<TaskProgressProps> = ({ workflowId, classNam
             </span>
           </div>
         </div>
-        
+
         {/* Close button */}
         <button
           onClick={clearCurrentWorkflow}
           className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1"
           title="Close"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 18L18 6M6 6l12 12"
+            />
           </svg>
         </button>
       </div>
@@ -93,7 +105,9 @@ export const TaskProgress: React.FC<TaskProgressProps> = ({ workflowId, classNam
       {/* Progress Bar */}
       <div className="mb-4">
         <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
-          <span>Progress: {progress.completed}/{progress.total} tasks</span>
+          <span>
+            Progress: {progress.completed}/{progress.total} tasks
+          </span>
           <span>{progress.percentage}%</span>
         </div>
         <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
@@ -146,10 +160,10 @@ export const TaskProgress: React.FC<TaskProgressProps> = ({ workflowId, classNam
               task.status === 'in-progress'
                 ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700'
                 : task.status === 'completed'
-                ? 'bg-green-50 dark:bg-green-900/30'
-                : task.status === 'failed'
-                ? 'bg-red-50 dark:bg-red-900/30'
-                : 'bg-gray-50 dark:bg-gray-800'
+                  ? 'bg-green-50 dark:bg-green-900/30'
+                  : task.status === 'failed'
+                    ? 'bg-red-50 dark:bg-red-900/30'
+                    : 'bg-gray-50 dark:bg-gray-800'
             }`}
           >
             {/* Status Icon */}
@@ -163,7 +177,9 @@ export const TaskProgress: React.FC<TaskProgressProps> = ({ workflowId, classNam
                 <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                   {task.type}
                 </span>
-                <span className={`text-xs font-medium uppercase tracking-wide ${getPriorityColor(task.priority)}`}>
+                <span
+                  className={`text-xs font-medium uppercase tracking-wide ${getPriorityColor(task.priority)}`}
+                >
                   {task.priority}
                 </span>
               </div>
@@ -191,9 +207,7 @@ export const TaskProgress: React.FC<TaskProgressProps> = ({ workflowId, classNam
           <h4 className="text-sm font-medium text-red-800 dark:text-red-200 mb-1">
             Workflow Error:
           </h4>
-          <p className="text-sm text-red-700 dark:text-red-300">
-            {error}
-          </p>
+          <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
         </div>
       )}
 
@@ -207,7 +221,8 @@ export const TaskProgress: React.FC<TaskProgressProps> = ({ workflowId, classNam
             </h4>
           </div>
           <p className="text-sm text-green-700 dark:text-green-300">
-            {progress.completed} tasks completed • {currentWorkflow.totalChanges} changes made
+            {progress.completed} tasks completed •{' '}
+            {currentWorkflow.totalChanges} changes made
           </p>
           {currentWorkflow.completedAt && (
             <p className="text-xs text-green-600 dark:text-green-400 mt-1">

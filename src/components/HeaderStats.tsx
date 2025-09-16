@@ -1,12 +1,11 @@
-import React from 'react';
 import { BarChart3 } from 'lucide-react';
 import { ConversationMessage } from '../types';
 import { useModelsStore } from '../store/useModelsStore';
-import { 
-  calculateConversationTokens, 
-  calculateConversationSize, 
+import {
+  calculateConversationTokens,
+  calculateConversationSize,
   formatBytes,
-  calculateContextUsage 
+  calculateContextUsage,
 } from '../utils/conversationTokens';
 import { formatTokenCount } from '../utils/tokenUtils';
 
@@ -20,7 +19,7 @@ export function HeaderStats({ messages }: HeaderStatsProps) {
   const conversationSize = calculateConversationSize(messages);
   const maxTokens = defaultModel?.contextLength || 0;
   const usagePercentage = calculateContextUsage(tokenCount, maxTokens);
-  
+
   // Don't show if no messages
   if (messages.length === 0) return null;
 
@@ -34,31 +33,31 @@ export function HeaderStats({ messages }: HeaderStatsProps) {
     <div className="flex items-center gap-3 text-xs text-gray-400">
       <div className="flex items-center gap-1">
         <BarChart3 size={14} className="text-gray-500" />
-        <span 
-          className="font-mono" 
+        <span
+          className="font-mono"
           title="Token count - approximate number of text tokens in this conversation"
         >
           {formatTokenCount(tokenCount)}
         </span>
         <span>•</span>
-        <span 
+        <span
           className="font-mono"
           title="Conversation size - total data size of messages, tool calls, and results"
         >
           {formatBytes(conversationSize)}
         </span>
       </div>
-      
+
       {defaultModel && maxTokens > 0 && (
         <div className="flex items-center gap-2">
           <span className="text-gray-500">Context:</span>
-          <div 
+          <div
             className="flex items-center gap-1"
             title={`Context usage - ${usagePercentage}% of ${formatTokenCount(maxTokens)} token context window used`}
           >
             <span className="font-mono">{usagePercentage}%</span>
             <div className="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-              <div 
+              <div
                 className={`h-full transition-all duration-300 ${getUsageColor(usagePercentage)}`}
                 style={{ width: `${Math.min(usagePercentage, 100)}%` }}
               />

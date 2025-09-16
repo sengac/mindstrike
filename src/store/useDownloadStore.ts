@@ -17,19 +17,19 @@ interface DownloadStore {
   removeDownload: (filename: string) => void;
 }
 
-export const useDownloadStore = create<DownloadStore>((set) => ({
+export const useDownloadStore = create<DownloadStore>(set => ({
   downloads: new Map(),
-  
+
   addDownload: (filename: string, progress: DownloadProgress) => {
-    set((state) => {
+    set(state => {
       const newDownloads = new Map(state.downloads);
       newDownloads.set(filename, progress);
       return { downloads: newDownloads };
     });
   },
-  
+
   removeDownload: (filename: string) => {
-    set((state) => {
+    set(state => {
       const newDownloads = new Map(state.downloads);
       newDownloads.delete(filename);
       return { downloads: newDownloads };
@@ -41,19 +41,21 @@ const connections = new Map<string, EventSource>();
 
 export function startDownloadTracking(filename: string) {
   if (connections.has(filename)) return;
-  
-  const eventSource = new EventSource(`/api/local-llm/download-progress-stream/${filename}`);
+
+  const eventSource = new EventSource(
+    `/api/local-llm/download-progress-stream/${filename}`
+  );
   connections.set(filename, eventSource);
-  
-  eventSource.onmessage = (event) => {
+
+  eventSource.onmessage = event => {
     const data = JSON.parse(event.data);
     useDownloadStore.getState().addDownload(filename, data);
-    
+
     if (data.completed) {
       toast.success('Download completed successfully');
       eventSource.close();
       connections.delete(filename);
-      
+
       // Give server time to process the new model file before triggering rescan
       setTimeout(() => {
         modelEvents.emit('local-model-downloaded');
@@ -73,11 +75,14 @@ export function startDownloadTracking(filename: string) {
       connections.delete(filename);
       // Don't auto-remove downloads with 401/403 errors so the error persists in UI
       if (data.errorType !== '401' && data.errorType !== '403') {
-        setTimeout(() => useDownloadStore.getState().removeDownload(filename), 1000);
+        setTimeout(
+          () => useDownloadStore.getState().removeDownload(filename),
+          1000
+        );
       }
     }
   };
-  
+
   eventSource.onerror = () => {
     eventSource.close();
     connections.delete(filename);

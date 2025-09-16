@@ -23,9 +23,12 @@ export function MultiChoiceDialog({
   title,
   message,
   choices,
-  icon
+  icon,
 }: MultiChoiceDialogProps) {
-  const { shouldRender, isVisible, handleClose } = useDialogAnimation(isOpen, onClose);
+  const { shouldRender, isVisible, handleClose } = useDialogAnimation(
+    isOpen,
+    onClose
+  );
 
   if (!shouldRender) return null;
 
@@ -42,29 +45,29 @@ export function MultiChoiceDialog({
   };
 
   return (
-    <BaseDialog isOpen={shouldRender} onClose={handleClose} isVisible={isVisible}>
+    <BaseDialog
+      isOpen={shouldRender}
+      onClose={handleClose}
+      isVisible={isVisible}
+    >
       <div className="p-6">
         {icon && (
           <div className="flex items-center space-x-3 mb-4">
             <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-              <div className="text-blue-600">
-                {icon}
-              </div>
+              <div className="text-blue-600">{icon}</div>
             </div>
             <div>
               <h3 className="text-lg font-medium text-white">{title}</h3>
             </div>
           </div>
         )}
-        
+
         {!icon && (
           <h3 className="text-lg font-semibold text-white mb-3">{title}</h3>
         )}
-        
-        <p className="text-gray-300 mb-6">
-          {message}
-        </p>
-        
+
+        <p className="text-gray-300 mb-6">{message}</p>
+
         <div className="flex justify-end space-x-3">
           {choices.map((choice, index) => (
             <button

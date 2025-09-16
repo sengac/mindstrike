@@ -73,12 +73,12 @@ router.post('/open-models-directory', async (req, res) => {
   try {
     const modelsDir = getLocalModelsDirectory();
     const platform = os.platform();
-    
+
     // Ensure the directory exists before trying to open it
     if (!fs.existsSync(modelsDir)) {
       fs.mkdirSync(modelsDir, { recursive: true });
     }
-    
+
     let command: string;
     if (platform === 'win32') {
       command = `explorer "${modelsDir}"`;
@@ -88,11 +88,13 @@ router.post('/open-models-directory', async (req, res) => {
       // Linux and other Unix-like systems
       command = `xdg-open "${modelsDir}"`;
     }
-    
-    exec(command, (error) => {
+
+    exec(command, error => {
       if (error) {
         console.error('Error opening models directory:', error);
-        return res.status(500).json({ error: 'Failed to open models directory' });
+        return res
+          .status(500)
+          .json({ error: 'Failed to open models directory' });
       }
       res.json({ success: true, directory: modelsDir });
     });
@@ -129,8 +131,11 @@ router.post('/hf-token', async (req, res) => {
 
     const { modelFetcher } = await import('../model-fetcher.js');
     await modelFetcher.setHuggingFaceToken(token);
-    
-    res.json({ success: true, message: 'Hugging Face token saved. Rechecking gated models...' });
+
+    res.json({
+      success: true,
+      message: 'Hugging Face token saved. Rechecking gated models...',
+    });
   } catch (error) {
     console.error('Error setting Hugging Face token:', error);
     res.status(500).json({ error: 'Failed to save Hugging Face token' });
@@ -144,7 +149,7 @@ router.delete('/hf-token', async (req, res) => {
   try {
     const { modelFetcher } = await import('../model-fetcher.js');
     await modelFetcher.removeHuggingFaceToken();
-    
+
     res.json({ success: true, message: 'Hugging Face token removed' });
   } catch (error) {
     console.error('Error removing Hugging Face token:', error);
@@ -159,11 +164,13 @@ router.get('/hf-token', async (req, res) => {
   try {
     const fs = await import('fs/promises');
     const path = await import('path');
-    const { getMindstrikeDirectory } = await import('../utils/settings-directory.js');
-    
+    const { getMindstrikeDirectory } = await import(
+      '../utils/settings-directory.js'
+    );
+
     const tokenFile = path.join(getMindstrikeDirectory(), 'hf-token');
     const token = await fs.readFile(tokenFile, 'utf-8');
-    
+
     res.json({ token: token.trim() });
   } catch (error) {
     console.error('Error reading Hugging Face token:', error);
@@ -178,7 +185,7 @@ router.get('/hf-token/status', async (req, res) => {
   try {
     const { modelFetcher } = await import('../model-fetcher.js');
     const hasToken = modelFetcher.hasHuggingFaceToken();
-    
+
     res.json({ hasToken });
   } catch (error) {
     console.error('Error checking Hugging Face token status:', error);
@@ -191,29 +198,32 @@ router.get('/hf-token/status', async (req, res) => {
  */
 router.get('/update-models-stream', async (req: any, res: any) => {
   try {
-    const { sseManager } = await import('../sse-manager.js');
     const { modelFetcher } = await import('../model-fetcher.js');
-    
+
     const clientId = `model-update-${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
+
     // Set up SSE
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
+      Connection: 'keep-alive',
       'Access-Control-Allow-Origin': '*',
     });
 
     // Send initial connection event
-    res.write('data: {"type": "connected", "message": "Connected to model update stream"}\n\n');
+    res.write(
+      'data: {"type": "connected", "message": "Connected to model update stream"}\n\n'
+    );
     if (res.flush) res.flush();
 
     // Progress callback that sends updates via SSE
     const progressCallback = (progress: any) => {
-      res.write(`data: ${JSON.stringify({
-        type: 'progress',
-        ...progress
-      })}\n\n`);
+      res.write(
+        `data: ${JSON.stringify({
+          type: 'progress',
+          ...progress,
+        })}\n\n`
+      );
       if (res.flush) res.flush();
     };
 
@@ -225,29 +235,32 @@ router.get('/update-models-stream', async (req: any, res: any) => {
     // Start the model update process
     try {
       // Force refresh with progress
-      const models = await modelFetcher.getAvailableModelsWithProgress(progressCallback);
-      
+      const models =
+        await modelFetcher.getAvailableModelsWithProgress(progressCallback);
+
       // Update the local LLM manager's cache
       const updatedModels = await llmManager.getAvailableModels();
-      
+
       // Send final success event
-      res.write(`data: ${JSON.stringify({
-        type: 'completed',
-        message: `✅ Model update completed! Found ${models.length} models.`,
-        models: updatedModels
-      })}\n\n`);
-      
+      res.write(
+        `data: ${JSON.stringify({
+          type: 'completed',
+          message: `✅ Model update completed! Found ${models.length} models.`,
+          models: updatedModels,
+        })}\n\n`
+      );
     } catch (error) {
       // Send error event
-      res.write(`data: ${JSON.stringify({
-        type: 'error',
-        message: `❌ Failed to update models: ${error instanceof Error ? error.message : 'Unknown error'}`
-      })}\n\n`);
+      res.write(
+        `data: ${JSON.stringify({
+          type: 'error',
+          message: `❌ Failed to update models: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        })}\n\n`
+      );
     }
 
     // Close the connection
     res.end();
-    
   } catch (error) {
     console.error('Error setting up model update stream:', error);
     res.status(500).json({ error: 'Failed to start model update stream' });
@@ -260,7 +273,7 @@ router.get('/update-models-stream', async (req: any, res: any) => {
 router.post('/update-models', async (req, res) => {
   try {
     const { modelFetcher } = await import('../model-fetcher.js');
-    
+
     // Force refresh
     const models = await modelFetcher.refreshAvailableModels();
     res.json({ success: true, models, count: models.length });
@@ -276,25 +289,35 @@ router.post('/update-models', async (req, res) => {
 router.post('/search-models', async (req, res) => {
   try {
     const { query, searchType = 'all' } = req.body;
-    
+
     if (!query || typeof query !== 'string') {
-      return res.status(400).json({ error: 'Query parameter is required and must be a string' });
+      return res
+        .status(400)
+        .json({ error: 'Query parameter is required and must be a string' });
     }
 
     const { modelFetcher } = await import('../model-fetcher.js');
     const models = await modelFetcher.searchModels(query, searchType);
-    res.json({ success: true, models, count: models.length, query, searchType });
+    res.json({
+      success: true,
+      models,
+      count: models.length,
+      query,
+      searchType,
+    });
   } catch (error) {
     console.error('Error searching models:', error);
-    
+
     // Handle specific timeout errors
     if (error instanceof Error && error.message.includes('504')) {
-      res.status(504).json({ 
-        error: 'Search request timed out. HuggingFace API is currently slow. Please try again with a more specific search term.' 
+      res.status(504).json({
+        error:
+          'Search request timed out. HuggingFace API is currently slow. Please try again with a more specific search term.',
       });
     } else if (error instanceof Error && error.message.includes('502')) {
-      res.status(502).json({ 
-        error: 'HuggingFace API is temporarily unavailable. Please try again later.' 
+      res.status(502).json({
+        error:
+          'HuggingFace API is temporarily unavailable. Please try again later.',
       });
     } else {
       res.status(500).json({ error: 'Failed to search models' });
@@ -308,9 +331,11 @@ router.post('/search-models', async (req, res) => {
 router.post('/clear-search-cache', async (req, res) => {
   try {
     const { query } = req.body;
-    
+
     if (!query || typeof query !== 'string') {
-      return res.status(400).json({ error: 'Query parameter is required and must be a string' });
+      return res
+        .status(400)
+        .json({ error: 'Query parameter is required and must be a string' });
     }
 
     const { modelFetcher } = await import('../model-fetcher.js');
@@ -326,10 +351,21 @@ router.post('/clear-search-cache', async (req, res) => {
  * Download a model
  */
 router.post('/download', async (req, res) => {
-  const { modelUrl, modelName, filename, size, description, contextLength, parameterCount, quantization } = req.body;
-  
+  const {
+    modelUrl,
+    modelName,
+    filename,
+    size,
+    description,
+    contextLength,
+    parameterCount,
+    quantization,
+  } = req.body;
+
   if (!modelUrl || !filename) {
-    return res.status(400).json({ error: 'Model URL and filename are required' });
+    return res
+      .status(400)
+      .json({ error: 'Model URL and filename are required' });
   }
 
   try {
@@ -341,91 +377,106 @@ router.post('/download', async (req, res) => {
       description,
       contextLength,
       parameterCount,
-      quantization
+      quantization,
     };
 
     // Start download in background
-    llmManager.downloadModel(modelInfo, (progress, speed) => {
-      // Notify all SSE connections for this filename
-      const connections = sseConnections.get(filename);
-      if (connections) {
-        const data = JSON.stringify({ progress, speed, isDownloading: true });
-        connections.forEach(res => {
-          try {
-            res.write(`data: ${data}\n\n`);
-          } catch (error) {
-            // Connection closed, remove it
-            connections.delete(res);
-          }
-        });
-      }
-    }).then(() => {
-      // Download completed
-      const connections = sseConnections.get(filename);
-      if (connections) {
-        const data = JSON.stringify({ progress: 100, speed: '0 B/s', isDownloading: false, completed: true });
-        connections.forEach(res => {
-          try {
-            res.write(`data: ${data}\n\n`);
-            res.end();
-          } catch (error) {
-            // Connection already closed
-          }
-        });
-        sseConnections.delete(filename);
-      }
-      console.log(`Download completed: ${filename}`);
-      
-      // Give server time to process the new model file before broadcasting update
-      setTimeout(() => {
-        sseManager.broadcast('model-updates', {
-          type: 'models-updated',
-          timestamp: Date.now()
-        });
-      }, 2000);
-    }).catch((error) => {
-      // Download failed or cancelled
-      const connections = sseConnections.get(filename);
-      if (connections) {
-        const isCancelled = error.message === 'Download cancelled';
-        let errorDetails: any = {
-          progress: 0, 
-          speed: '0 B/s', 
-          isDownloading: false, 
-          error: error.message,
-          cancelled: isCancelled
-        };
-
-        // Add specific handling for HF errors
-        if (error.message === 'UNAUTHORIZED_HF_TOKEN_REQUIRED') {
-          errorDetails.errorType = '401';
-          errorDetails.errorMessage = 'Hugging Face token required. Please add your token in settings.';
-        } else if (error.message === 'FORBIDDEN_MODEL_ACCESS_REQUIRED') {
-          errorDetails.errorType = '403';
-          errorDetails.errorMessage = 'Model access required. Request access on Hugging Face.';
-          // Extract model ID from URL for HF link
-          const modelId = modelUrl.replace('https://huggingface.co/', '').split('/resolve/')[0];
-          errorDetails.huggingFaceUrl = `https://huggingface.co/${modelId}`;
+    llmManager
+      .downloadModel(modelInfo, (progress, speed) => {
+        // Notify all SSE connections for this filename
+        const connections = sseConnections.get(filename);
+        if (connections) {
+          const data = JSON.stringify({ progress, speed, isDownloading: true });
+          connections.forEach(res => {
+            try {
+              res.write(`data: ${data}\n\n`);
+            } catch {
+              // Connection closed, remove it
+              connections.delete(res);
+            }
+          });
         }
+      })
+      .then(() => {
+        // Download completed
+        const connections = sseConnections.get(filename);
+        if (connections) {
+          const data = JSON.stringify({
+            progress: 100,
+            speed: '0 B/s',
+            isDownloading: false,
+            completed: true,
+          });
+          connections.forEach(res => {
+            try {
+              res.write(`data: ${data}\n\n`);
+              res.end();
+            } catch {
+              // Connection already closed
+            }
+          });
+          sseConnections.delete(filename);
+        }
+        console.log(`Download completed: ${filename}`);
 
-        const data = JSON.stringify(errorDetails);
-        connections.forEach(res => {
-          try {
-            res.write(`data: ${data}\n\n`);
-            res.end();
-          } catch (error) {
-            // Connection already closed
+        // Give server time to process the new model file before broadcasting update
+        setTimeout(() => {
+          sseManager.broadcast('model-updates', {
+            type: 'models-updated',
+            timestamp: Date.now(),
+          });
+        }, 2000);
+      })
+      .catch(error => {
+        // Download failed or cancelled
+        const connections = sseConnections.get(filename);
+        if (connections) {
+          const isCancelled = error.message === 'Download cancelled';
+          let errorDetails: any = {
+            progress: 0,
+            speed: '0 B/s',
+            isDownloading: false,
+            error: error.message,
+            cancelled: isCancelled,
+          };
+
+          // Add specific handling for HF errors
+          if (error.message === 'UNAUTHORIZED_HF_TOKEN_REQUIRED') {
+            errorDetails.errorType = '401';
+            errorDetails.errorMessage =
+              'Hugging Face token required. Please add your token in settings.';
+          } else if (error.message === 'FORBIDDEN_MODEL_ACCESS_REQUIRED') {
+            errorDetails.errorType = '403';
+            errorDetails.errorMessage =
+              'Model access required. Request access on Hugging Face.';
+            // Extract model ID from URL for HF link
+            const modelId = modelUrl
+              .replace('https://huggingface.co/', '')
+              .split('/resolve/')[0];
+            errorDetails.huggingFaceUrl = `https://huggingface.co/${modelId}`;
           }
-        });
-        sseConnections.delete(filename);
-      }
-      console.error(`Download failed: ${filename}`, error);
-    });
+
+          const data = JSON.stringify(errorDetails);
+          connections.forEach(res => {
+            try {
+              res.write(`data: ${data}\n\n`);
+              res.end();
+            } catch {
+              // Connection already closed
+            }
+          });
+          sseConnections.delete(filename);
+        }
+        console.error(`Download failed: ${filename}`, error);
+      });
 
     res.json({ message: 'Download started', filename });
   } catch (error) {
     console.error('Error starting download:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to start download' });
+    res.status(500).json({
+      error:
+        error instanceof Error ? error.message : 'Failed to start download',
+    });
   }
 });
 
@@ -435,12 +486,12 @@ router.post('/download', async (req, res) => {
 router.get('/download-progress/:filename', (req, res) => {
   const { filename } = req.params;
   const progressInfo = llmManager.getDownloadProgress(filename);
-  
+
   res.json({
     progress: progressInfo.progress,
     isDownloading: progressInfo.isDownloading,
     speed: progressInfo.speed,
-    completed: !progressInfo.isDownloading && progressInfo.progress === 0
+    completed: !progressInfo.isDownloading && progressInfo.progress === 0,
   });
 });
 
@@ -449,28 +500,28 @@ router.get('/download-progress/:filename', (req, res) => {
  */
 router.get('/download-progress-stream/:filename', (req, res) => {
   const { filename } = req.params;
-  
+
   // Set SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('Access-Control-Allow-Origin', '*');
-  
+
   // Add this connection to the set for this filename
   if (!sseConnections.has(filename)) {
     sseConnections.set(filename, new Set());
   }
   sseConnections.get(filename)!.add(res);
-  
+
   // Send initial status
   const progressInfo = llmManager.getDownloadProgress(filename);
   const initialData = JSON.stringify({
     progress: progressInfo.progress,
     speed: progressInfo.speed || '0 B/s',
-    isDownloading: progressInfo.isDownloading
+    isDownloading: progressInfo.isDownloading,
   });
   res.write(`data: ${initialData}\n\n`);
-  
+
   // Handle client disconnect
   req.on('close', () => {
     const connections = sseConnections.get(filename);
@@ -488,7 +539,7 @@ router.get('/download-progress-stream/:filename', (req, res) => {
  */
 router.post('/download/:filename/cancel', (req, res) => {
   const { filename } = req.params;
-  
+
   try {
     const cancelled = llmManager.cancelDownload(filename);
     if (cancelled) {
@@ -507,22 +558,24 @@ router.post('/download/:filename/cancel', (req, res) => {
  */
 router.delete('/models/:modelId', async (req, res) => {
   const { modelId } = req.params;
-  
+
   try {
     await llmManager.deleteModel(modelId);
-    
+
     // Give server time to process the model deletion before broadcasting update
     setTimeout(() => {
       sseManager.broadcast('model-updates', {
         type: 'models-updated',
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
     }, 2000);
-    
+
     res.json({ message: 'Model deleted successfully' });
   } catch (error) {
     console.error('Error deleting model:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to delete model' });
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Failed to delete model',
+    });
   }
 });
 
@@ -531,20 +584,22 @@ router.delete('/models/:modelId', async (req, res) => {
  */
 router.post('/models/:modelId/load', async (req, res) => {
   const { modelId } = req.params;
-  
+
   try {
     await llmManager.loadModel(modelId);
-    
+
     // Broadcast model updates to connected clients
     sseManager.broadcast('model-updates', {
       type: 'models-updated',
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
-    
+
     res.json({ message: 'Model loaded successfully' });
   } catch (error) {
     console.error('Error loading model:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to load model' });
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Failed to load model',
+    });
   }
 });
 
@@ -553,20 +608,22 @@ router.post('/models/:modelId/load', async (req, res) => {
  */
 router.post('/models/:modelId/unload', async (req, res) => {
   const { modelId } = req.params;
-  
+
   try {
     await llmManager.unloadModel(modelId);
-    
+
     // Broadcast model updates to connected clients
     sseManager.broadcast('model-updates', {
       type: 'models-updated',
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
-    
+
     res.json({ message: 'Model unloaded successfully' });
   } catch (error) {
     console.error('Error unloading model:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to unload model' });
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Failed to unload model',
+    });
   }
 });
 
@@ -575,14 +632,17 @@ router.post('/models/:modelId/unload', async (req, res) => {
  */
 router.get('/models/:modelId/status', async (req, res) => {
   const { modelId } = req.params;
-  
+
   try {
     const status = await llmManager.getModelStatus(modelId);
     const runtimeInfo = llmManager.getModelRuntimeInfo(modelId);
     res.json({ ...status, runtimeInfo });
   } catch (error) {
     console.error('Error getting model status:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to get model status' });
+    res.status(500).json({
+      error:
+        error instanceof Error ? error.message : 'Failed to get model status',
+    });
   }
 });
 
@@ -592,13 +652,18 @@ router.get('/models/:modelId/status', async (req, res) => {
 router.put('/models/:modelId/settings', async (req, res) => {
   const { modelId } = req.params;
   const settings = req.body;
-  
+
   try {
     llmManager.setModelSettings(modelId, settings);
     res.json({ message: 'Model settings updated successfully' });
   } catch (error) {
     console.error('Error updating model settings:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to update model settings' });
+    res.status(500).json({
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Failed to update model settings',
+    });
   }
 });
 
@@ -607,13 +672,16 @@ router.put('/models/:modelId/settings', async (req, res) => {
  */
 router.get('/models/:modelId/settings', async (req, res) => {
   const { modelId } = req.params;
-  
+
   try {
     const settings = llmManager.getModelSettings(modelId);
     res.json(settings);
   } catch (error) {
     console.error('Error getting model settings:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to get model settings' });
+    res.status(500).json({
+      error:
+        error instanceof Error ? error.message : 'Failed to get model settings',
+    });
   }
 });
 
@@ -623,7 +691,7 @@ router.get('/models/:modelId/settings', async (req, res) => {
 router.post('/models/:modelId/generate', async (req, res) => {
   const { modelId } = req.params;
   const { messages, temperature, maxTokens } = req.body;
-  
+
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'Messages array is required' });
   }
@@ -631,13 +699,16 @@ router.post('/models/:modelId/generate', async (req, res) => {
   try {
     const response = await llmManager.generateResponse(modelId, messages, {
       temperature,
-      maxTokens
+      maxTokens,
     });
-    
+
     res.json({ response });
   } catch (error) {
     console.error('Error generating response:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to generate response' });
+    res.status(500).json({
+      error:
+        error instanceof Error ? error.message : 'Failed to generate response',
+    });
   }
 });
 
@@ -647,7 +718,7 @@ router.post('/models/:modelId/generate', async (req, res) => {
 router.post('/models/:modelId/generate-stream', async (req, res) => {
   const { modelId } = req.params;
   const { messages, temperature, maxTokens } = req.body;
-  
+
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'Messages array is required' });
   }
@@ -659,7 +730,7 @@ router.post('/models/:modelId/generate-stream', async (req, res) => {
 
     const generator = llmManager.generateStreamResponse(modelId, messages, {
       temperature,
-      maxTokens
+      maxTokens,
     });
 
     for await (const chunk of generator) {
@@ -670,10 +741,13 @@ router.post('/models/:modelId/generate-stream', async (req, res) => {
     res.end();
   } catch (error) {
     console.error('Error generating streaming response:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to generate streaming response' });
+    res.status(500).json({
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Failed to generate streaming response',
+    });
   }
 });
-
-
 
 export default router;

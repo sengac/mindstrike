@@ -3,7 +3,10 @@ interface MindStrikeIconProps {
   size?: number;
 }
 
-export function MindStrikeIcon({ className = "", size = 24 }: MindStrikeIconProps) {
+export function MindStrikeIcon({
+  className = '',
+  size = 24,
+}: MindStrikeIconProps) {
   return (
     <svg
       width={size}

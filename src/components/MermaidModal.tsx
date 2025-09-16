@@ -11,10 +11,17 @@ interface MermaidModalProps {
   mermaidCode: string;
 }
 
-export function MermaidModal({ isOpen, onClose, mermaidCode }: MermaidModalProps) {
+export function MermaidModal({
+  isOpen,
+  onClose,
+  mermaidCode,
+}: MermaidModalProps) {
   const [modalId, setModalId] = useState('');
   const [isRendering, setIsRendering] = useState(true);
-  const { shouldRender, isVisible, handleClose } = useDialogAnimation(isOpen, onClose);
+  const { shouldRender, isVisible, handleClose } = useDialogAnimation(
+    isOpen,
+    onClose
+  );
 
   useEffect(() => {
     if (isOpen && mermaidCode) {
@@ -27,10 +34,10 @@ export function MermaidModal({ isOpen, onClose, mermaidCode }: MermaidModalProps
         try {
           // Initialize mermaid with our config
           mermaid.initialize(MERMAID_CONFIG);
-          
+
           // Wait for DOM to be ready
           await new Promise(resolve => setTimeout(resolve, 100));
-          
+
           const element = document.getElementById(id);
           if (!element) {
             setIsRendering(false);
@@ -46,10 +53,10 @@ export function MermaidModal({ isOpen, onClose, mermaidCode }: MermaidModalProps
 
           // Set the code as text content
           element.textContent = cleanCode;
-          
+
           // Render with mermaid
           await mermaid.run({
-            nodes: [element as HTMLElement]
+            nodes: [element as HTMLElement],
           });
 
           // Scale the SVG to fit the container
@@ -83,7 +90,7 @@ export function MermaidModal({ isOpen, onClose, mermaidCode }: MermaidModalProps
       // Get SVG string
       const svgData = new XMLSerializer().serializeToString(svgElement);
       const svgBlob = new Blob([svgData], { type: 'image/svg+xml' });
-      
+
       // Create download link
       const url = URL.createObjectURL(svgBlob);
       const link = document.createElement('a');
@@ -121,22 +128,23 @@ export function MermaidModal({ isOpen, onClose, mermaidCode }: MermaidModalProps
   return createPortal(
     <div className="fixed inset-0 z-[9999] bg-black bg-opacity-75 backdrop-blur-sm flex items-center justify-center">
       {/* Backdrop */}
-      <div 
-        className="absolute inset-0"
-        onClick={handleClose}
-      />
-      
+      <div className="absolute inset-0" onClick={handleClose} />
+
       {/* Modal */}
-      <div className={`
+      <div
+        className={`
         relative bg-gray-900 w-[100vw] h-[100vh] flex flex-col
         transition-all duration-200 ease-out
         ${isVisible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}
-      `}>
+      `}
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
           <div className="flex items-center space-x-2">
             <Maximize2 size={16} className="text-blue-400" />
-            <h2 className="text-lg font-semibold text-white">Full Screen Diagram</h2>
+            <h2 className="text-lg font-semibold text-white">
+              Full Screen Diagram
+            </h2>
           </div>
           <div className="flex items-center space-x-2">
             <button
@@ -156,7 +164,7 @@ export function MermaidModal({ isOpen, onClose, mermaidCode }: MermaidModalProps
             </button>
           </div>
         </div>
-        
+
         {/* Content */}
         <div className="flex-1 overflow-hidden flex flex-col">
           <div className="bg-gray-900 flex-1 overflow-hidden relative flex items-center justify-center">
@@ -168,16 +176,16 @@ export function MermaidModal({ isOpen, onClose, mermaidCode }: MermaidModalProps
                 </div>
               </div>
             )}
-            <div 
+            <div
               id={modalId}
               className="mermaid"
-              style={{ 
+              style={{
                 opacity: isRendering ? 0 : 1,
                 width: '100%',
                 height: '100%',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
               }}
             >
               {/* Content will be set by the rendering effect */}

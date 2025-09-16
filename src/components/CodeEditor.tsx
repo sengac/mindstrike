@@ -11,7 +11,14 @@ interface CodeEditorProps {
   noBorder?: boolean;
 }
 
-export function CodeEditor({ value, language = 'typescript', onChange, readOnly = false, height = '400px', noBorder = false }: CodeEditorProps) {
+export function CodeEditor({
+  value,
+  language = 'typescript',
+  onChange,
+  readOnly = false,
+  height = '400px',
+  noBorder = false,
+}: CodeEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const subscriptionRef = useRef<monaco.IDisposable | null>(null);
@@ -79,10 +86,12 @@ export function CodeEditor({ value, language = 'typescript', onChange, readOnly 
 
     // Create new subscription if onChange exists and not readonly
     if (onChange && !readOnly) {
-      subscriptionRef.current = editorRef.current.onDidChangeModelContent(() => {
-        const newValue = editorRef.current?.getValue() || '';
-        onChange(newValue);
-      });
+      subscriptionRef.current = editorRef.current.onDidChangeModelContent(
+        () => {
+          const newValue = editorRef.current?.getValue() || '';
+          onChange(newValue);
+        }
+      );
     }
   }, [onChange, readOnly]);
 
@@ -94,10 +103,14 @@ export function CodeEditor({ value, language = 'typescript', onChange, readOnly 
   }, [fontSize]);
 
   return (
-    <div 
-      ref={containerRef} 
-      style={{ height }} 
-      className={noBorder ? "overflow-hidden" : "border border-gray-600 rounded-lg overflow-hidden"}
+    <div
+      ref={containerRef}
+      style={{ height }}
+      className={
+        noBorder
+          ? 'overflow-hidden'
+          : 'border border-gray-600 rounded-lg overflow-hidden'
+      }
     />
   );
 }

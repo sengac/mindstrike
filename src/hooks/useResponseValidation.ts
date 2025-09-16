@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ConversationMessage } from '../types';
-import { 
-  ResponseValidationOrchestrator, 
-  ValidationProgress
+import {
+  ResponseValidationOrchestrator,
+  ValidationProgress,
 } from '../services/responseValidationOrchestrator';
 
 export interface UseResponseValidationReturn {
@@ -20,21 +20,22 @@ export interface UseResponseValidationReturn {
 
 export function useResponseValidation(): UseResponseValidationReturn {
   const [isValidating, setIsValidating] = useState(false);
-  const [validationProgress, setValidationProgress] = useState<ValidationProgress | null>(null);
+  const [validationProgress, setValidationProgress] =
+    useState<ValidationProgress | null>(null);
   const [validationEnabled, setValidationEnabledState] = useState(true);
   const [showNotification, setShowNotification] = useState(false);
 
   // Subscribe to validation progress
   useEffect(() => {
-    const unsubscribe = ResponseValidationOrchestrator.onProgress((progress) => {
+    const unsubscribe = ResponseValidationOrchestrator.onProgress(progress => {
       setValidationProgress(progress);
-      
+
       // Show notification when validation starts
       if (progress.stage === 'scanning' || progress.stage === 'validating') {
         setIsValidating(true);
         setShowNotification(true);
       }
-      
+
       // Hide validation state when completed or failed
       if (progress.stage === 'completed' || progress.stage === 'failed') {
         setIsValidating(false);
@@ -51,10 +52,13 @@ export function useResponseValidation(): UseResponseValidationReturn {
 
   const setValidationEnabled = useCallback((enabled: boolean) => {
     setValidationEnabledState(enabled);
-    
+
     // Store preference in localStorage
     try {
-      localStorage.setItem('responseValidationEnabled', JSON.stringify(enabled));
+      localStorage.setItem(
+        'responseValidationEnabled',
+        JSON.stringify(enabled)
+      );
     } catch (error) {
       console.warn('Failed to save validation preference:', error);
     }
@@ -73,29 +77,35 @@ export function useResponseValidation(): UseResponseValidationReturn {
     }
   }, []);
 
-  const validateMessage = useCallback(async (message: ConversationMessage): Promise<{
-    message: ConversationMessage;
-    hasChanges: boolean;
-  }> => {
-    if (!validationEnabled) {
-      return { message, hasChanges: false };
-    }
+  const validateMessage = useCallback(
+    async (
+      message: ConversationMessage
+    ): Promise<{
+      message: ConversationMessage;
+      hasChanges: boolean;
+    }> => {
+      if (!validationEnabled) {
+        return { message, hasChanges: false };
+      }
 
-    if (message.role !== 'assistant') {
-      return { message, hasChanges: false };
-    }
+      if (message.role !== 'assistant') {
+        return { message, hasChanges: false };
+      }
 
-    try {
-      const result = await ResponseValidationOrchestrator.validateAndFixMessage(message);
-      return {
-        message: result.message,
-        hasChanges: result.hasChanges
-      };
-    } catch (error) {
-      console.error('Message validation failed:', error);
-      return { message, hasChanges: false };
-    }
-  }, [validationEnabled]);
+      try {
+        const result =
+          await ResponseValidationOrchestrator.validateAndFixMessage(message);
+        return {
+          message: result.message,
+          hasChanges: result.hasChanges,
+        };
+      } catch (error) {
+        console.error('Message validation failed:', error);
+        return { message, hasChanges: false };
+      }
+    },
+    [validationEnabled]
+  );
 
   const dismissNotification = useCallback(() => {
     setShowNotification(false);
@@ -115,6 +125,6 @@ export function useResponseValidation(): UseResponseValidationReturn {
     setValidationEnabled,
     validateMessage,
     dismissNotification,
-    showNotification
+    showNotification,
   };
 }

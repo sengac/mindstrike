@@ -53,22 +53,25 @@ interface LocalModelsState {
   isLoading: boolean;
   loadingModelId: string | null;
   error: string | null;
-  
+
   // Actions
   setLocalModels: (models: LocalModelInfo[]) => void;
   setModelStatuses: (statuses: Map<string, ModelStatus>) => void;
   setIsLoading: (loading: boolean) => void;
   setLoadingModelId: (modelId: string | null) => void;
   setError: (error: string | null) => void;
-  
+
   // Business logic actions
   fetchModelsAndStatuses: () => Promise<void>;
   loadModel: (modelId: string, isAutoLoad?: boolean) => Promise<void>;
   unloadModel: (modelId: string) => Promise<void>;
   deleteModel: (modelId: string) => Promise<void>;
   refreshModelStatus: (modelId: string) => Promise<void>;
-  updateModelSettings: (modelId: string, settings: ModelLoadingSettings) => Promise<void>;
-  
+  updateModelSettings: (
+    modelId: string,
+    settings: ModelLoadingSettings
+  ) => Promise<void>;
+
   // Utility functions
   formatFileSize: (bytes: number) => string;
   getModelStatus: (modelId: string) => ModelStatus | undefined;
@@ -86,22 +89,22 @@ export const useLocalModelsStore = create<LocalModelsState>()(
     error: null,
 
     // Basic setters
-    setLocalModels: (models) => set({ localModels: models }),
-    setModelStatuses: (statuses) => set({ modelStatuses: statuses }),
-    setIsLoading: (loading) => set({ isLoading: loading }),
-    setLoadingModelId: (modelId) => set({ loadingModelId: modelId }),
-    setError: (error) => set({ error }),
+    setLocalModels: models => set({ localModels: models }),
+    setModelStatuses: statuses => set({ modelStatuses: statuses }),
+    setIsLoading: loading => set({ isLoading: loading }),
+    setLoadingModelId: modelId => set({ loadingModelId: modelId }),
+    setError: error => set({ error }),
 
     // Main fetch function
     fetchModelsAndStatuses: async () => {
       try {
         set({ isLoading: true, error: null });
-        
+
         // Load local models
         const modelsResponse = await fetch('/api/local-llm/models');
         if (modelsResponse.ok) {
           const models = await modelsResponse.json();
-          
+
           // Merge server-calculated settings with user settings from localStorage
           const appStore = useAppStore.getState();
           const modelsWithSettings = models.map((model: LocalModelInfo) => {
@@ -109,30 +112,35 @@ export const useLocalModelsStore = create<LocalModelsState>()(
             return {
               ...model,
               loadingSettings: {
-                ...savedSettings,      // User settings as base
-                ...model.loadingSettings  // Server calculated settings take priority
-              }
+                ...savedSettings, // User settings as base
+                ...model.loadingSettings, // Server calculated settings take priority
+              },
             };
           });
-          
+
           set({ localModels: modelsWithSettings });
-          
+
           // Cleanup localStorage - remove settings for models that no longer exist
           const existingModelIds = models.map((m: LocalModelInfo) => m.id);
           appStore.cleanupModelSettings(existingModelIds);
-          
+
           // Load status for each model
           const statuses = new Map<string, ModelStatus>();
           await Promise.all(
             models.map(async (model: LocalModelInfo) => {
               try {
-                const statusResponse = await fetch(`/api/local-llm/models/${model.id}/status`);
+                const statusResponse = await fetch(
+                  `/api/local-llm/models/${model.id}/status`
+                );
                 if (statusResponse.ok) {
                   const status = await statusResponse.json();
                   statuses.set(model.id, status);
                 }
               } catch (error) {
-                console.error(`Error loading status for model ${model.id}:`, error);
+                console.error(
+                  `Error loading status for model ${model.id}:`,
+                  error
+                );
               }
             })
           );
@@ -140,10 +148,11 @@ export const useLocalModelsStore = create<LocalModelsState>()(
         }
       } catch (error) {
         console.error('Error loading local LLM data:', error);
-        const errorMessage = error instanceof TypeError && error.message.includes('NetworkError')
-          ? 'Server not running.'
-          : 'Failed to load local LLM data';
-        
+        const errorMessage =
+          error instanceof TypeError && error.message.includes('NetworkError')
+            ? 'Server not running.'
+            : 'Failed to load local LLM data';
+
         set({ error: errorMessage });
         toast.error(errorMessage, { duration: 5000 });
       } finally {
@@ -157,24 +166,26 @@ export const useLocalModelsStore = create<LocalModelsState>()(
         try {
           toast('Insufficient memory detected. Unloading other models...', {
             duration: 4000,
-            icon: 'ℹ️'
+            icon: 'ℹ️',
           });
-          
+
           const { modelStatuses } = get();
-          
+
           // Get all loaded models except the target
           const loadedModelIds = Array.from(modelStatuses.entries())
             .filter(([id, status]) => status.loaded && id !== targetModelId)
             .map(([id]) => id);
-          
+
           if (loadedModelIds.length === 0) {
-            toast.error('No other models to unload. Please try a smaller model.');
+            toast.error(
+              'No other models to unload. Please try a smaller model.'
+            );
             return;
           }
-          
+
           // Unload all other models
           await Promise.all(
-            loadedModelIds.map(async (modelId) => {
+            loadedModelIds.map(async modelId => {
               try {
                 await fetch(`/api/local-llm/models/${modelId}/unload`, {
                   method: 'POST',
@@ -184,29 +195,28 @@ export const useLocalModelsStore = create<LocalModelsState>()(
               }
             })
           );
-          
+
           // Refresh states
           await get().fetchModelsAndStatuses();
-          
+
           toast('Retrying model loading...', {
             duration: 3000,
-            icon: 'ℹ️'
+            icon: 'ℹ️',
           });
-          
+
           // Retry after a brief delay
           setTimeout(() => {
             get().loadModel(targetModelId, true);
           }, 1000);
-          
         } catch (error) {
           console.error('Error during memory issue retry:', error);
           toast.error('Failed to free up memory and retry');
         }
       };
-      
+
       try {
         set({ loadingModelId: modelId });
-        
+
         const response = await fetch(`/api/local-llm/models/${modelId}/load`, {
           method: 'POST',
         });
@@ -215,29 +225,29 @@ export const useLocalModelsStore = create<LocalModelsState>()(
           if (!isAutoLoad) {
             toast.success('Model loaded successfully');
           }
-          
+
           // Refresh model status
           await get().fetchModelsAndStatuses();
-          
+
           // Emit event to trigger global model rescan since local model state changed
           modelEvents.emit('models-changed');
         } else {
           const error = await response.json();
-          
+
           // Handle memory issues with auto-retry
           if (isAutoLoad && error.error?.toLowerCase().includes('memory')) {
             await handleMemoryIssueRetry(modelId);
             return;
           }
-          
-          const message = isAutoLoad 
+
+          const message = isAutoLoad
             ? `Failed to start model: ${error.error || 'Unknown error'}`
             : error.error || 'Failed to load model';
           toast.error(message);
         }
       } catch (error) {
         console.error('Error loading model:', error);
-        const message = isAutoLoad 
+        const message = isAutoLoad
           ? 'Failed to start model due to connection error'
           : 'Failed to load model';
         toast.error(message);
@@ -249,16 +259,19 @@ export const useLocalModelsStore = create<LocalModelsState>()(
     // Unload model
     unloadModel: async (modelId: string) => {
       try {
-        const response = await fetch(`/api/local-llm/models/${modelId}/unload`, {
-          method: 'POST',
-        });
+        const response = await fetch(
+          `/api/local-llm/models/${modelId}/unload`,
+          {
+            method: 'POST',
+          }
+        );
 
         if (response.ok) {
           toast.success('Model unloaded successfully');
-          
+
           // Refresh model status
           await get().fetchModelsAndStatuses();
-          
+
           // Emit event to trigger global model rescan since local model state changed
           modelEvents.emit('models-changed');
         } else {
@@ -281,10 +294,10 @@ export const useLocalModelsStore = create<LocalModelsState>()(
         if (response.ok) {
           // Remove settings from localStorage
           useAppStore.getState().removeModelSettings(modelId);
-          
+
           toast.success('Model deleted successfully');
           await get().fetchModelsAndStatuses(); // Reload data
-          
+
           // Emit event to trigger global model rescan
           modelEvents.emit('models-changed');
         } else {
@@ -300,7 +313,9 @@ export const useLocalModelsStore = create<LocalModelsState>()(
     // Refresh single model status
     refreshModelStatus: async (modelId: string) => {
       try {
-        const statusResponse = await fetch(`/api/local-llm/models/${modelId}/status`);
+        const statusResponse = await fetch(
+          `/api/local-llm/models/${modelId}/status`
+        );
         if (statusResponse.ok) {
           const status = await statusResponse.json();
           const { modelStatuses } = get();
@@ -314,29 +329,38 @@ export const useLocalModelsStore = create<LocalModelsState>()(
     },
 
     // Update model loading settings
-    updateModelSettings: async (modelId: string, settings: ModelLoadingSettings) => {
+    updateModelSettings: async (
+      modelId: string,
+      settings: ModelLoadingSettings
+    ) => {
       try {
         // Save to localStorage via useAppStore
         useAppStore.getState().setModelSettings(modelId, settings);
-        
-        const response = await fetch(`/api/local-llm/models/${modelId}/settings`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(settings),
-        });
+
+        const response = await fetch(
+          `/api/local-llm/models/${modelId}/settings`,
+          {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(settings),
+          }
+        );
 
         if (response.ok) {
           // Update local model info with new settings
           const { localModels } = get();
-          const updatedModels = localModels.map(model => 
-            model.id === modelId 
-              ? { ...model, loadingSettings: { ...model.loadingSettings, ...settings } }
+          const updatedModels = localModels.map(model =>
+            model.id === modelId
+              ? {
+                  ...model,
+                  loadingSettings: { ...model.loadingSettings, ...settings },
+                }
               : model
           );
           set({ localModels: updatedModels });
-          
+
           toast.success('Model settings updated successfully');
         } else {
           const error = await response.json();
@@ -385,7 +409,8 @@ export function initializeLocalModelsStore() {
 
   // Listen for model download completion to refresh the downloaded models list
   const handleModelDownloaded = () => {
-    const { isLoading, fetchModelsAndStatuses } = useLocalModelsStore.getState();
+    const { isLoading, fetchModelsAndStatuses } =
+      useLocalModelsStore.getState();
     if (!isLoading) {
       fetchModelsAndStatuses().catch(console.error);
     }
@@ -406,7 +431,7 @@ export function initializeLocalModelsStore() {
 
 // Auto-initialize when store is first used
 useLocalModelsStore.subscribe(
-  (state) => state.localModels,
+  state => state.localModels,
   () => {
     if (!localModelsInitialized) {
       initializeLocalModelsStore();

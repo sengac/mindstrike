@@ -7,7 +7,7 @@
  */
 export function stripThinkTags(content: string): string {
   if (!content) return content;
-  
+
   // Remove <think>content</think> patterns, including multiline content
   return content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
 }

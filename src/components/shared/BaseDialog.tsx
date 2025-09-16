@@ -22,7 +22,7 @@ export function BaseDialog({
   closeOnOverlayClick = true,
   maxWidth = 'max-w-md',
   fullScreen = false,
-  isVisible = true
+  isVisible = true,
 }: BaseDialogProps) {
   const handleOverlayClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget && closeOnOverlayClick) {
@@ -33,29 +33,27 @@ export function BaseDialog({
   if (!isOpen) return null;
 
   return createPortal(
-    <div 
+    <div
       className={`
         fixed inset-0 z-[9999] 
         ${fullScreen ? '' : 'bg-black flex items-center justify-center'}
         ${fullScreen ? '' : 'transition-opacity duration-250 ease-out'}
-        ${fullScreen ? '' : (isVisible ? 'bg-opacity-50' : 'bg-opacity-0')}
+        ${fullScreen ? '' : isVisible ? 'bg-opacity-50' : 'bg-opacity-0'}
         ${overlayClassName}
       `}
       onClick={fullScreen ? undefined : handleOverlayClick}
     >
-      <div 
+      <div
         role="dialog"
         aria-modal="true"
         className={`
-          ${fullScreen 
-            ? 'w-full h-full' 
-            : `bg-gray-800 border border-gray-600 rounded-lg ${maxWidth} w-full mx-4`
+          ${
+            fullScreen
+              ? 'w-full h-full'
+              : `bg-dark-surface border border-dark-border rounded-lg ${maxWidth} w-full mx-4`
           }
           transition-all duration-250 ease-out
-          ${isVisible 
-            ? 'scale-100 opacity-100' 
-            : 'scale-75 opacity-0'
-          }
+          ${isVisible ? 'scale-100 opacity-100' : 'scale-75 opacity-0'}
           ${className}
         `}
       >

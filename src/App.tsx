@@ -15,25 +15,27 @@ import { LLMDebugDialog } from './components/LLMDebugDialog';
 import { initializeDebugSSE } from './store/useDebugStore';
 import { initializeMCPLogsSSE, useMCPLogsStore } from './store/useMCPLogsStore';
 import { useThreadsRefactored } from './chat/hooks/useThreadsRefactored';
-import { useChatMessagesStore } from './store/useChatMessagesStore';
+import {
+  useChatMessagesStore,
+  initializeMessageEventsSSE,
+} from './store/useChatMessagesStore';
 
 import { useMindMaps } from './mindmaps/hooks/useMindMaps';
-import { useWorkspaceStore } from './workspace/hooks/useWorkspaceStore';
 import { useAppStore } from './store/useAppStore';
 
-
-import { ConversationMessage } from './types';
 import { Source } from './types/mindMap';
-import { Menu, X, MessageSquare, Network, Settings, Cpu, FileText } from 'lucide-react';
+import { Menu, X, MessageSquare, Network, Cpu, FileText } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 import { ConnectionMonitorDialog } from './components/shared/ConnectionMonitorDialog';
 import { useConnectionMonitor } from './hooks/useConnectionMonitor';
 
 function App() {
-  const [workspaceRestored, setWorkspaceRestored] = useState(false);
+  const [, setWorkspaceRestored] = useState(false);
   const [showLocalModelDialog, setShowLocalModelDialog] = useState(false);
   const [showLLMDebugDialog, setShowLLMDebugDialog] = useState(false);
-  const [debugDialogInitialTab, setDebugDialogInitialTab] = useState<'debug' | 'tasks' | 'mcp'>('debug');
+  const [debugDialogInitialTab, setDebugDialogInitialTab] = useState<
+    'debug' | 'tasks' | 'mcp'
+  >('debug');
   const [showConnectionDialog, setShowConnectionDialog] = useState(false);
   const { isConnected } = useConnectionMonitor();
 
@@ -44,8 +46,10 @@ function App() {
   };
 
   // Make it available globally
-  (window as any).openDebugDialog = openDebugDialog;
-  
+  (
+    window as typeof window & { openDebugDialog?: typeof openDebugDialog }
+  ).openDebugDialog = openDebugDialog;
+
   // Manage connection dialog state
   useEffect(() => {
     if (!isConnected && !showConnectionDialog) {
@@ -54,39 +58,41 @@ function App() {
     // Don't auto-close here - let the dialog handle its own close animation
   }, [isConnected, showConnectionDialog]);
 
-  const [pendingNodeUpdate, setPendingNodeUpdate] = useState<{
-    nodeId: string
-    chatId?: string | null
-    notes?: string | null
-    sources?: Source[]
-    timestamp: number
-  } | undefined>(undefined);
-  
-  const { 
-    sidebarOpen, 
-    setSidebarOpen, 
-    activePanel, 
-    setActivePanel, 
-    workspaceRoot, 
+  const [pendingNodeUpdate, setPendingNodeUpdate] = useState<
+    | {
+        nodeId: string;
+        chatId?: string | null;
+        notes?: string | null;
+        sources?: Source[];
+        timestamp: number;
+      }
+    | undefined
+  >(undefined);
 
-  } = useAppStore();
+  const { sidebarOpen, setSidebarOpen, activePanel, setActivePanel } =
+    useAppStore();
   const chatPanelRef = useRef<ChatPanelRef>(null);
   const currentMessages = useChatMessagesStore(state => state.messages);
-  
+
   // LLM config is now managed server-side through ModelSelector
-  
+
   // Initialize workspace once globally
   useEffect(() => {
     const initializeApp = async () => {
       try {
-        const { initializeWorkspace } = await import('./utils/workspace-initializer');
+        const { initializeWorkspace } = await import(
+          './utils/workspace-initializer'
+        );
         await initializeWorkspace();
-        
+
         // Initialize debug SSE for real-time logging
         initializeDebugSSE();
-        
+
         // Initialize MCP logs SSE for real-time MCP server logging
         initializeMCPLogsSSE();
+
+        // Initialize message events SSE for real-time message updates
+        initializeMessageEventsSSE();
         // Fetch any existing MCP logs
         useMCPLogsStore.getState().fetchLogs();
       } catch (error) {
@@ -96,32 +102,30 @@ function App() {
     };
     initializeApp();
   }, []); // No dependencies - runs once on mount
-  
+
   const {
     threads,
     activeThreadId,
-    activeThread,
+
     isLoaded,
     loadThreads,
     createThread,
     deleteThread,
     renameThread,
     updateThreadRole,
-    selectThread
+    selectThread,
   } = useThreadsRefactored();
-
-
 
   const {
     mindMaps,
     activeMindMapId,
     activeMindMap,
-    isLoaded: mindMapsLoaded,
+    isLoaded: _mindMapsLoaded,
     loadMindMaps,
     createMindMap,
     deleteMindMap,
     renameMindMap,
-    selectMindMap
+    selectMindMap,
   } = useMindMaps();
 
   // Create a default thread if none exist (only after data is loaded)
@@ -131,92 +135,101 @@ function App() {
     }
   }, [isLoaded, threads.length, activePanel, createThread]);
 
-
-
   const handleNewThread = async () => {
     await createThread();
   };
-
-
 
   const handleNewMindMap = async () => {
     await createMindMap();
   };
 
-  const handleFirstMessage = () => {
-    // Title generation now happens automatically server-side
-  };
-
-  const handleMessagesUpdate = async (messages: any[]) => {
-    // Messages are now automatically persisted server-side during streaming
-    // No client-side persistence needed
-  };
-
   const handleDeleteMessage = async (messageId: string) => {
-    // TODO: Implement server-side message deletion if needed
-    console.log('Delete message not yet implemented in refactored architecture:', messageId);
+    try {
+      const response = await fetch(`/api/message/${messageId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete message');
+      }
+    } catch (error) {
+      console.error('Error deleting message:', error);
+    }
   };
 
   // Helper functions for node updates using the new props-based approach
-  const updateNodeChatId = useCallback((nodeId: string, chatId: string | null) => {
-    setPendingNodeUpdate({
-      nodeId,
-      chatId,
-      timestamp: Date.now()
-    });
-  }, []);
+  const updateNodeChatId = useCallback(
+    (nodeId: string, chatId: string | null) => {
+      setPendingNodeUpdate({
+        nodeId,
+        chatId,
+        timestamp: Date.now(),
+      });
+    },
+    []
+  );
 
-  const updateNodeNotes = useCallback(async (nodeId: string, notes: string | null) => {
-    setPendingNodeUpdate({
-      nodeId,
-      notes,
-      timestamp: Date.now()
-    });
-    
-    // Wait for the save to complete
-    return new Promise<void>((resolve) => {
-      const timeout = setTimeout(resolve, 1000); // Max 1 second timeout
-      
-      const checkSave = () => {
-        // Check if the update was processed by checking if pendingNodeUpdate is cleared
-        if (!pendingNodeUpdate || 
-            pendingNodeUpdate.nodeId !== nodeId || 
-            pendingNodeUpdate.notes !== notes) {
-          clearTimeout(timeout);
-          resolve();
-        } else {
-          setTimeout(checkSave, 50);
-        }
-      };
-      checkSave();
-    });
-  }, [pendingNodeUpdate]);
+  const updateNodeNotes = useCallback(
+    async (nodeId: string, notes: string | null) => {
+      setPendingNodeUpdate({
+        nodeId,
+        notes,
+        timestamp: Date.now(),
+      });
 
-  const updateNodeSources = useCallback(async (nodeId: string, sources: Source[]) => {
-    setPendingNodeUpdate({
-      nodeId,
-      sources,
-      timestamp: Date.now()
-    });
-    
-    // Wait for the save to complete
-    return new Promise<void>((resolve) => {
-      const timeout = setTimeout(resolve, 1000); // Max 1 second timeout
-      
-      const checkSave = () => {
-        // Check if the update was processed by checking if pendingNodeUpdate is cleared
-        if (!pendingNodeUpdate || 
-            pendingNodeUpdate.nodeId !== nodeId || 
-            pendingNodeUpdate.sources !== sources) {
-          clearTimeout(timeout);
-          resolve();
-        } else {
-          setTimeout(checkSave, 50);
-        }
-      };
-      checkSave();
-    });
-  }, [pendingNodeUpdate]);
+      // Wait for the save to complete
+      return new Promise<void>(resolve => {
+        const timeout = setTimeout(resolve, 1000); // Max 1 second timeout
+
+        const checkSave = () => {
+          // Check if the update was processed by checking if pendingNodeUpdate is cleared
+          if (
+            !pendingNodeUpdate ||
+            pendingNodeUpdate.nodeId !== nodeId ||
+            pendingNodeUpdate.notes !== notes
+          ) {
+            clearTimeout(timeout);
+            resolve();
+          } else {
+            setTimeout(checkSave, 50);
+          }
+        };
+        checkSave();
+      });
+    },
+    [pendingNodeUpdate]
+  );
+
+  const updateNodeSources = useCallback(
+    async (nodeId: string, sources: Source[]) => {
+      setPendingNodeUpdate({
+        nodeId,
+        sources,
+        timestamp: Date.now(),
+      });
+
+      // Wait for the save to complete
+      return new Promise<void>(resolve => {
+        const timeout = setTimeout(resolve, 1000); // Max 1 second timeout
+
+        const checkSave = () => {
+          // Check if the update was processed by checking if pendingNodeUpdate is cleared
+          if (
+            !pendingNodeUpdate ||
+            pendingNodeUpdate.nodeId !== nodeId ||
+            pendingNodeUpdate.sources !== sources
+          ) {
+            clearTimeout(timeout);
+            resolve();
+          } else {
+            setTimeout(checkSave, 50);
+          }
+        };
+        checkSave();
+      });
+    },
+    [pendingNodeUpdate]
+  );
 
   // Clear pending node update after a short delay to ensure it's been processed
   useEffect(() => {
@@ -228,14 +241,8 @@ function App() {
     }
   }, [pendingNodeUpdate]);
 
-
-
-
-
-  // Model selection is now handled internally by ModelSelector
-
   return (
-    <div className="flex h-screen bg-gray-900 text-gray-100">
+    <div className="flex h-screen bg-dark-bg text-dark-text-primary">
       {/* Mobile menu button */}
       <button
         className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-gray-800 rounded-md"
@@ -245,13 +252,12 @@ function App() {
       </button>
 
       {/* Sidebar */}
-      <div className={`${
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      } transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static fixed inset-y-0 left-0 z-40`}>
-        <Sidebar 
-          activePanel={activePanel}
-          onPanelChange={setActivePanel}
-        />
+      <div
+        className={`${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static fixed inset-y-0 left-0 z-40`}
+      >
+        <Sidebar activePanel={activePanel} onPanelChange={setActivePanel} />
       </div>
 
       {/* Main content */}
@@ -259,17 +265,19 @@ function App() {
         {activePanel === 'chat' && (
           <div className="flex flex-col h-full">
             {/* Chat Header spanning across threads and messages */}
-            <div className="flex-shrink-0 px-6 border-b border-gray-700 flex items-center" style={{height: 'var(--header-height)'}}>
+            <div
+              className="flex-shrink-0 px-6 border-b border-gray-700 flex items-center"
+              style={{ height: 'var(--header-height)' }}
+              data-test-id="custom-draggable-region"
+            >
               <div className="flex items-center justify-between w-full">
                 <div className="flex items-center gap-3">
                   <MessageSquare size={24} className="text-blue-400" />
                   <h1 className="text-xl font-semibold text-white">Chat</h1>
                 </div>
                 <div className="flex items-center space-x-4">
-                <HeaderStats 
-                messages={currentMessages}
-                />
-                <div className="flex items-center gap-2">
+                  <HeaderStats messages={currentMessages} />
+                  <div className="flex items-center gap-2">
                     <ModelSelector />
                     <button
                       onClick={() => setShowLocalModelDialog(true)}
@@ -289,7 +297,7 @@ function App() {
                 </div>
               </div>
             </div>
-            
+
             {/* Chat content area */}
             <div className="flex flex-1 min-h-0">
               <ThreadsPanel
@@ -303,7 +311,6 @@ function App() {
               <ChatPanel
                 ref={chatPanelRef}
                 threadId={activeThreadId || undefined}
-                onFirstMessage={handleFirstMessage}
                 onDeleteMessage={handleDeleteMessage}
                 onRoleUpdate={updateThreadRole}
                 onNavigateToWorkspaces={() => setActivePanel('files')}
@@ -315,7 +322,11 @@ function App() {
         {activePanel === 'mind-maps' && (
           <div className="flex flex-col h-full">
             {/* MindMaps Header */}
-            <div className="flex-shrink-0 px-6 border-b border-gray-700 flex items-center" style={{height: 'var(--header-height)'}}>
+            <div
+              className="flex-shrink-0 px-6 border-b border-gray-700 flex items-center"
+              style={{ height: 'var(--header-height)' }}
+              data-test-id="custom-draggable-region"
+            >
               <div className="flex items-center justify-between w-full">
                 <div className="flex items-center gap-3">
                   <Network size={24} className="text-blue-400" />
@@ -342,7 +353,7 @@ function App() {
                 </div>
               </div>
             </div>
-            
+
             {/* MindMaps content area */}
             <div className="flex flex-1 min-h-0">
               <MindMapsPanel
@@ -368,10 +379,10 @@ function App() {
                   }
                   setActivePanel('chat');
                 }}
-                onDeleteMessage={(threadId: string, messageId: string) => {
+                onDeleteMessage={(_threadId: string, _messageId: string) => {
                   // TODO: Implement delete message functionality
                 }}
-                onMessagesUpdate={(threadId: string, messages) => {
+                onMessagesUpdate={(_threadId: string, _messages) => {
                   // TODO: Implement update messages functionality
                 }}
                 onFirstMessage={() => {}}
@@ -379,7 +390,7 @@ function App() {
                 onNodeNotesUpdate={updateNodeNotes}
                 onNodeSourcesUpdate={updateNodeSources}
               />
-              <MindMapsView 
+              <MindMapsView
                 activeMindMap={activeMindMap}
                 loadMindMaps={loadMindMaps}
                 pendingNodeUpdate={pendingNodeUpdate}
@@ -387,19 +398,21 @@ function App() {
             </div>
           </div>
         )}
-        {activePanel === 'files' && <FileExplorer onDirectoryChange={loadThreads} />}
+        {activePanel === 'files' && (
+          <FileExplorer onDirectoryChange={loadThreads} />
+        )}
         {activePanel === 'agents' && <AgentsPanel />}
         {activePanel === 'settings' && <SettingsPanel />}
       </div>
 
       {/* Overlay for mobile */}
       {sidebarOpen && (
-        <div 
+        <div
           className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-30"
           onClick={() => setSidebarOpen(false)}
         />
       )}
-      <Toaster 
+      <Toaster
         position="bottom-center"
         toastOptions={{
           duration: 3000,

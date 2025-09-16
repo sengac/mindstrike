@@ -3,7 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import fs from 'fs/promises';
 import { existsSync, statSync } from 'fs';
-import os from 'os';
+
 import { fileURLToPath } from 'url';
 // NOTE: .js extensions are required for ES modules in Node.js/Electron
 // Without them, we get ERR_MODULE_NOT_FOUND errors in the packaged app
@@ -16,6 +16,7 @@ import { mcpManager } from './mcp-manager.js';
 import { getHomeDirectory } from './utils/settings-directory.js';
 import { sseManager } from './sse-manager.js';
 import { getLocalLLMManager } from './local-llm-singleton.js';
+import { LocalModelInfo } from './local-llm-manager.js';
 import localLlmRoutes from './routes/local-llm.js';
 import modelScanRoutes from './routes/model-scan.js';
 import { MindmapAgentIterative } from './agents/mindmap-agent-iterative.js';
@@ -30,8 +31,6 @@ const PORT = process.env.PORT || 3001;
 
 // Increase max listeners for development
 process.setMaxListeners(200);
-
-
 
 // Middleware
 app.use(cors());
@@ -58,8 +57,17 @@ let currentLlmConfig = {
   model: '',
   displayName: undefined as string | undefined,
   apiKey: undefined as string | undefined,
-  type: undefined as 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'perplexity' | 'google' | 'local' | undefined,
-  contextLength: undefined as number | undefined
+  type: undefined as
+    | 'ollama'
+    | 'vllm'
+    | 'openai-compatible'
+    | 'openai'
+    | 'anthropic'
+    | 'perplexity'
+    | 'google'
+    | 'local'
+    | undefined,
+  contextLength: undefined as number | undefined,
 };
 
 // Store custom roles per thread
@@ -71,7 +79,7 @@ const conversationManager = new ConversationManager(workspaceRoot);
 const getAgentConfig = (threadId?: string): AgentConfig => ({
   workspaceRoot,
   llmConfig: currentLlmConfig,
-  customRole: threadId ? threadRoles.get(threadId) : undefined
+  customRole: threadId ? threadRoles.get(threadId) : undefined,
 });
 
 // Thread-aware agent pool
@@ -100,7 +108,7 @@ class AgentPool {
     this.workflowAgents.clear();
   }
 
-  updateAllAgentsLLMConfig(newLlmConfig: any): void {
+  updateAllAgentsLLMConfig(newLlmConfig: AgentConfig['llmConfig']): void {
     for (const agent of this.agents.values()) {
       agent.updateLLMConfig(newLlmConfig);
     }
@@ -119,7 +127,10 @@ class AgentPool {
 
   private getOrCreateWorkflowAgent(threadId: string): WorkflowAgent {
     if (!this.workflowAgents.has(threadId)) {
-      this.workflowAgents.set(threadId, new WorkflowAgent(getAgentConfig(threadId), threadId));
+      this.workflowAgents.set(
+        threadId,
+        new WorkflowAgent(getAgentConfig(threadId), threadId)
+      );
     }
     return this.workflowAgents.get(threadId)!;
   }
@@ -128,18 +139,18 @@ class AgentPool {
     try {
       // Update global workspace root
       workspaceRoot = newWorkspaceRoot;
-      
+
       // Update MCP manager workspace root
       mcpManager.setWorkspaceRoot(newWorkspaceRoot);
-      
+
       for (const agent of this.agents.values()) {
-        if (agent && (agent as any).config) {
-          (agent as any).config.workspaceRoot = newWorkspaceRoot;
+        if (agent) {
+          agent.updateWorkspaceRoot(newWorkspaceRoot);
         }
       }
       for (const workflowAgent of this.workflowAgents.values()) {
-        if (workflowAgent && (workflowAgent as any).config) {
-          (workflowAgent as any).config.workspaceRoot = newWorkspaceRoot;
+        if (workflowAgent) {
+          workflowAgent.updateWorkspaceRoot(newWorkspaceRoot);
         }
       }
     } catch (error) {
@@ -151,14 +162,14 @@ class AgentPool {
     try {
       // Refresh tools for all regular agents
       for (const agent of this.agents.values()) {
-        if (agent && typeof (agent as any).refreshTools === 'function') {
-          await (agent as any).refreshTools();
+        if (agent) {
+          await agent.refreshTools();
         }
       }
-      // Refresh tools for all workflow agents  
+      // Refresh tools for all workflow agents
       for (const workflowAgent of this.workflowAgents.values()) {
-        if (workflowAgent && typeof (workflowAgent as any).refreshTools === 'function') {
-          await (workflowAgent as any).refreshTools();
+        if (workflowAgent) {
+          await workflowAgent.refreshTools();
         }
       }
       logger.info('[AgentPool] Refreshed tools for all agents');
@@ -201,7 +212,7 @@ async function initializeLLMConfig() {
 async function initializeLLMServices() {
   try {
     await initializeLLMConfig();
-    
+
     // Initialize model fetcher
     try {
       const { modelFetcher } = await import('./model-fetcher.js');
@@ -210,7 +221,7 @@ async function initializeLLMServices() {
     } catch (error) {
       logger.warn('Failed to initialize model fetcher:', error);
     }
-    
+
     await llmScanner.scanAvailableServices();
     await refreshModelList();
     logger.info('LLM services initialized');
@@ -223,9 +234,9 @@ async function initializeLLMServices() {
 async function refreshModelList() {
   try {
     const detectedServices = llmScanner.getAvailableServices();
-    
+
     // Get local models directly from the manager
-    let localModels: any[] = [];
+    let localModels: LocalModelInfo[] = [];
     try {
       const localLlmManager = getLocalLLMManager();
       localModels = await localLlmManager.getLocalModels();
@@ -234,7 +245,7 @@ async function refreshModelList() {
     }
 
     await llmConfigManager.refreshModels(detectedServices, localModels);
-    
+
     // Load default model into currentLlmConfig if available and not already set
     if (!currentLlmConfig.model || currentLlmConfig.model.trim() === '') {
       try {
@@ -246,41 +257,45 @@ async function refreshModelList() {
           currentLlmConfig.apiKey = defaultModel.apiKey;
           currentLlmConfig.type = defaultModel.type;
           currentLlmConfig.contextLength = defaultModel.contextLength;
-          
+
           // Update existing agents with new LLM config
           agentPool.updateAllAgentsLLMConfig(currentLlmConfig);
-          
-          logger.info(`Auto-loaded default model: ${defaultModel.displayName} (${defaultModel.model})`);
+
+          logger.info(
+            `Auto-loaded default model: ${defaultModel.displayName} (${defaultModel.model})`
+          );
         } else {
           // If no default model is set, try to auto-select the first available model
           const models = await llmConfigManager.getModels();
           const firstAvailableModel = models.find(m => m.available);
-          
+
           if (firstAvailableModel) {
             await llmConfigManager.setDefaultModel(firstAvailableModel.id);
-            
+
             currentLlmConfig.baseURL = firstAvailableModel.baseURL;
             currentLlmConfig.model = firstAvailableModel.model;
             currentLlmConfig.displayName = firstAvailableModel.displayName;
             currentLlmConfig.apiKey = firstAvailableModel.apiKey;
             currentLlmConfig.type = firstAvailableModel.type;
             currentLlmConfig.contextLength = firstAvailableModel.contextLength;
-            
+
             // Update existing agents with new LLM config
             agentPool.updateAllAgentsLLMConfig(currentLlmConfig);
-            
-            logger.info(`Auto-selected first available model: ${firstAvailableModel.displayName} (${firstAvailableModel.model})`);
+
+            logger.info(
+              `Auto-selected first available model: ${firstAvailableModel.displayName} (${firstAvailableModel.model})`
+            );
           }
         }
       } catch (error) {
         logger.debug('No default model available:', error);
       }
     }
-    
+
     // Broadcast model updates to connected clients
     sseManager.broadcast('model-updates', {
       type: 'models-updated',
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   } catch (error) {
     logger.error('Error refreshing model list:', error);
@@ -296,13 +311,13 @@ conversationManager.load().catch(error => {
 
 // API Routes
 // Health stream endpoint for connection monitoring
-app.get('/api/health/stream', (req, res) => {
+app.get('/api/health/stream', (req: Request, res: Response) => {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
+    Connection: 'keep-alive',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Cache-Control'
+    'Access-Control-Allow-Headers': 'Cache-Control',
   });
 
   // Send initial ping
@@ -326,7 +341,7 @@ app.get('/api/health/stream', (req, res) => {
 // Legacy LLM configuration endpoints removed - now handled by server-side model management
 
 // Get all available models from server-side configuration
-app.get('/api/llm/models', async (req, res) => {
+app.get('/api/llm/models', async (req: Request, res: Response) => {
   try {
     const models = await llmConfigManager.getModels();
     res.json(models);
@@ -337,7 +352,7 @@ app.get('/api/llm/models', async (req, res) => {
 });
 
 // Get current default model
-app.get('/api/llm/default-model', async (req, res) => {
+app.get('/api/llm/default-model', async (req: Request, res: Response) => {
   try {
     const defaultModel = await llmConfigManager.getDefaultModel();
     res.json(defaultModel);
@@ -348,7 +363,7 @@ app.get('/api/llm/default-model', async (req, res) => {
 });
 
 // Set default model
-app.post('/api/llm/default-model', async (req: any, res: any) => {
+app.post('/api/llm/default-model', async (req: Request, res: Response) => {
   try {
     const { modelId } = req.body;
     if (!modelId) {
@@ -356,7 +371,7 @@ app.post('/api/llm/default-model', async (req: any, res: any) => {
     }
 
     await llmConfigManager.setDefaultModel(modelId);
-    
+
     // Update current LLM config for immediate use
     const defaultModel = await llmConfigManager.getDefaultModel();
     if (defaultModel) {
@@ -366,7 +381,7 @@ app.post('/api/llm/default-model', async (req: any, res: any) => {
       currentLlmConfig.apiKey = defaultModel.apiKey;
       currentLlmConfig.type = defaultModel.type;
       currentLlmConfig.contextLength = defaultModel.contextLength;
-      
+
       // Update existing agents with new LLM config
       agentPool.updateAllAgentsLLMConfig(currentLlmConfig);
     }
@@ -380,19 +395,25 @@ app.post('/api/llm/default-model', async (req: any, res: any) => {
 
 // Legacy endpoint removed - models now managed server-side
 
-app.post('/api/llm/rescan', async (req, res) => {
+app.post('/api/llm/rescan', async (req: Request, res: Response) => {
   try {
     const services = await llmScanner.rescanServices();
-    
+
     // Get existing custom services
     const existingServices = await llmConfigManager.getCustomServices();
     const existingBaseURLs = new Set(existingServices.map(s => s.baseURL));
-    const availableBaseURLs = new Set(services.filter(s => s.available && s.models.length > 0).map(s => s.baseURL));
-    
+    const availableBaseURLs = new Set(
+      services
+        .filter(s => s.available && s.models.length > 0)
+        .map(s => s.baseURL)
+    );
+
     // Auto-add discovered local services as custom services
-    const availableServices = services.filter(s => s.available && s.models.length > 0);
+    const availableServices = services.filter(
+      s => s.available && s.models.length > 0
+    );
     const addedServices = [];
-    
+
     for (const service of availableServices) {
       if (!existingBaseURLs.has(service.baseURL)) {
         try {
@@ -400,7 +421,7 @@ app.post('/api/llm/rescan', async (req, res) => {
             name: service.name,
             baseURL: service.baseURL,
             type: service.type,
-            enabled: true
+            enabled: true,
           });
           addedServices.push(newService);
           logger.info(`Auto-added local service: ${service.name}`);
@@ -409,28 +430,35 @@ app.post('/api/llm/rescan', async (req, res) => {
         }
       }
     }
-    
+
     // Remove existing custom services that are no longer available (only local services)
     const removedServices = [];
     const localServiceTypes = ['ollama', 'vllm', 'openai-compatible'];
-    
+
     for (const existingService of existingServices) {
       // Only remove local services that were likely auto-added
-      if (localServiceTypes.includes(existingService.type) && 
-          existingService.baseURL.includes('localhost') &&
-          !availableBaseURLs.has(existingService.baseURL)) {
+      if (
+        localServiceTypes.includes(existingService.type) &&
+        existingService.baseURL.includes('localhost') &&
+        !availableBaseURLs.has(existingService.baseURL)
+      ) {
         try {
           await llmConfigManager.removeCustomService(existingService.id);
           removedServices.push(existingService);
-          logger.info(`Auto-removed unavailable local service: ${existingService.name}`);
+          logger.info(
+            `Auto-removed unavailable local service: ${existingService.name}`
+          );
         } catch (error) {
-          logger.warn(`Failed to auto-remove service ${existingService.name}:`, error);
+          logger.warn(
+            `Failed to auto-remove service ${existingService.name}:`,
+            error
+          );
         }
       }
     }
-    
+
     // Get local models directly from the manager
-    let localModels: any[] = [];
+    let localModels: LocalModelInfo[] = [];
     try {
       const localLlmManager = getLocalLLMManager();
       localModels = await localLlmManager.getLocalModels();
@@ -440,17 +468,17 @@ app.post('/api/llm/rescan', async (req, res) => {
 
     // Refresh the unified model list with fresh scanned services
     await llmConfigManager.refreshModels(services, localModels);
-    
+
     // Broadcast model updates to connected clients
     sseManager.broadcast('model-updates', {
       type: 'models-updated',
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
-    
-    res.json({ 
+
+    res.json({
       scannedServices: services,
       addedServices: addedServices.length > 0 ? addedServices : undefined,
-      removedServices: removedServices.length > 0 ? removedServices : undefined
+      removedServices: removedServices.length > 0 ? removedServices : undefined,
     });
   } catch (error) {
     logger.error('Error rescanning LLM services:', error);
@@ -459,7 +487,7 @@ app.post('/api/llm/rescan', async (req, res) => {
 });
 
 // Custom LLM Services Management
-app.get('/api/llm/custom-services', async (req, res) => {
+app.get('/api/llm/custom-services', async (req: Request, res: Response) => {
   try {
     const customServices = await llmConfigManager.getCustomServices();
     res.json(customServices);
@@ -469,12 +497,14 @@ app.get('/api/llm/custom-services', async (req, res) => {
   }
 });
 
-app.post('/api/llm/custom-services', async (req: any, res: any) => {
+app.post('/api/llm/custom-services', async (req: Request, res: Response) => {
   try {
     const { name, baseURL, type, apiKey, enabled } = req.body;
-    
+
     if (!name || !baseURL || !type) {
-      return res.status(400).json({ error: 'name, baseURL, and type are required' });
+      return res
+        .status(400)
+        .json({ error: 'name, baseURL, and type are required' });
     }
 
     const newService = await llmConfigManager.addCustomService({
@@ -482,7 +512,7 @@ app.post('/api/llm/custom-services', async (req: any, res: any) => {
       baseURL,
       type,
       apiKey,
-      enabled: enabled !== false // Default to true
+      enabled: enabled !== false, // Default to true
     });
 
     await refreshModelList(); // Refresh model list after adding service
@@ -493,12 +523,15 @@ app.post('/api/llm/custom-services', async (req: any, res: any) => {
   }
 });
 
-app.put('/api/llm/custom-services/:id', async (req: any, res: any) => {
+app.put('/api/llm/custom-services/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const updates = req.body;
 
-    const updatedService = await llmConfigManager.updateCustomService(id, updates);
+    const updatedService = await llmConfigManager.updateCustomService(
+      id,
+      updates
+    );
     await refreshModelList(); // Refresh model list after updating service
     res.json(updatedService);
   } catch (error) {
@@ -507,23 +540,26 @@ app.put('/api/llm/custom-services/:id', async (req: any, res: any) => {
   }
 });
 
-app.delete('/api/llm/custom-services/:id', async (req: any, res: any) => {
-  try {
-    const { id } = req.params;
-    await llmConfigManager.removeCustomService(id);
-    await refreshModelList(); // Refresh model list after removing service
-    res.json({ success: true });
-  } catch (error) {
-    logger.error('Error removing custom LLM service:', error);
-    res.status(500).json({ error: 'Failed to remove custom LLM service' });
+app.delete(
+  '/api/llm/custom-services/:id',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      await llmConfigManager.removeCustomService(id);
+      await refreshModelList(); // Refresh model list after removing service
+      res.json({ success: true });
+    } catch (error) {
+      logger.error('Error removing custom LLM service:', error);
+      res.status(500).json({ error: 'Failed to remove custom LLM service' });
+    }
   }
-});
+);
 
 // Test a custom LLM service
-app.post('/api/llm/test-service', async (req: any, res: any) => {
+app.post('/api/llm/test-service', async (req: Request, res: Response) => {
   try {
     const { baseURL, type, apiKey } = req.body;
-    
+
     if (!baseURL || !type) {
       return res.status(400).json({ error: 'baseURL and type are required' });
     }
@@ -544,28 +580,34 @@ app.post('/api/llm/test-service', async (req: any, res: any) => {
         return res.json(['sonar-pro', 'sonar', 'sonar-deep-research']);
       case 'google':
         // Return known Google models
-        return res.json(['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-pro']);
+        return res.json([
+          'gemini-1.5-pro',
+          'gemini-1.5-flash',
+          'gemini-2.5-pro',
+          'gemini-2.5-flash',
+          'gemini-pro',
+        ]);
       default:
         return res.status(400).json({ error: `Unknown service type: ${type}` });
     }
 
     const headers: Record<string, string> = {
-      'Accept': 'application/json',
+      Accept: 'application/json',
     };
-    
+
     if (apiKey && (type === 'openai' || type === 'openai-compatible')) {
       headers['Authorization'] = `Bearer ${apiKey}`;
     }
-    
+
     if (apiKey && type === 'anthropic') {
       headers['x-api-key'] = apiKey;
       headers['anthropic-version'] = '2023-06-01';
     }
-    
+
     if (apiKey && type === 'perplexity') {
       headers['Authorization'] = `Bearer ${apiKey}`;
     }
-    
+
     if (apiKey && type === 'google') {
       headers['Authorization'] = `Bearer ${apiKey}`;
     }
@@ -576,33 +618,65 @@ app.post('/api/llm/test-service', async (req: any, res: any) => {
     try {
       const response = await fetch(`${baseURL}${endpoint}`, {
         headers,
-        signal: controller.signal
+        signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        return res.json({ 
-          success: false, 
-          error: `HTTP ${response.status}: ${response.statusText}` 
+        return res.json({
+          success: false,
+          error: `HTTP ${response.status}: ${response.statusText}`,
         });
       }
 
       const data = await response.json();
-      
+
       let models: string[] = [];
+      interface ModelResponse {
+        id?: string;
+        name?: string;
+        model?: string;
+      }
+
+      interface OllamaResponse {
+        models?: ModelResponse[];
+      }
+
+      interface OpenAIResponse {
+        data?: ModelResponse[];
+      }
+
       if (type === 'ollama') {
-        models = data?.models?.map((m: any) => m.name || m.model || '').filter(Boolean) || [];
+        const ollamaData = data as OllamaResponse;
+        models =
+          ollamaData?.models
+            ?.map((m: ModelResponse) => m.name || m.model || '')
+            .filter(Boolean) || [];
       } else if (type === 'anthropic') {
-        models = data?.data?.map((m: any) => m.id || m.name || '').filter(Boolean) || [];
+        const anthropicData = data as OpenAIResponse;
+        models =
+          anthropicData?.data
+            ?.map((m: ModelResponse) => m.id || m.name || '')
+            .filter(Boolean) || [];
       } else if (type === 'perplexity') {
         // This shouldn't be reached since we return early for perplexity, but just in case
         models = ['sonar-pro', 'sonar', 'sonar-deep-research'];
       } else if (type === 'google') {
         // This shouldn't be reached since we return early for google, but just in case
-        models = ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-pro'];
+        models = [
+          'gemini-1.5-pro',
+          'gemini-1.5-flash',
+          'gemini-2.5-pro',
+          'gemini-2.5-flash',
+          'gemini-pro',
+        ];
       } else {
-        models = data?.data?.map((m: any) => m.id || m.model || '').filter(Boolean) || [];
+        const openaiData = data as OpenAIResponse;
+        models =
+          openaiData?.data
+            ?.map((m: ModelResponse) => m.id || m.model || '')
+            .filter(Boolean) || [];
       }
 
       res.json({ success: true, models });
@@ -611,9 +685,9 @@ app.post('/api/llm/test-service', async (req: any, res: any) => {
       if (error instanceof Error && error.name === 'AbortError') {
         res.json({ success: false, error: 'Request timeout' });
       } else {
-        res.json({ 
-          success: false, 
-          error: error instanceof Error ? error.message : 'Connection failed' 
+        res.json({
+          success: false,
+          error: error instanceof Error ? error.message : 'Connection failed',
         });
       }
     }
@@ -624,22 +698,22 @@ app.post('/api/llm/test-service', async (req: any, res: any) => {
 });
 
 // Server-Sent Events endpoint for real-time model updates
-app.get('/api/llm/model-updates', (req, res) => {
+app.get('/api/llm/model-updates', (req: Request, res: Response) => {
   const clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   sseManager.addClient(clientId, res, 'model-updates');
 });
 
 // Server-Sent Events endpoint for debug logging
-app.get('/api/debug/stream', (req, res) => {
+app.get('/api/debug/stream', (req: Request, res: Response) => {
   const clientId = `debug_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   sseManager.addClient(clientId, res, 'debug');
 });
 
 // Endpoint to fetch large content by ID
-app.get('/api/large-content/:contentId', (req, res) => {
+app.get('/api/large-content/:contentId', (req: Request, res: Response) => {
   const { contentId } = req.params;
   const content = sseManager.getLargeContent(contentId);
-  
+
   if (content) {
     res.json({ content });
   } else {
@@ -659,13 +733,13 @@ app.get('/api/generate/stream/:streamId', (req: Request, res: Response) => {
 app.get('/api/tasks/stream/workflow-general', (req: Request, res: Response) => {
   const clientId = `workflow-${Date.now()}`;
   sseManager.addClient(clientId, res, 'workflow');
-  
+
   // Send a test event after connection
   setTimeout(() => {
     sseManager.broadcast('workflow', {
       type: 'test',
       message: 'SSE connection working',
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }, 1000);
 });
@@ -677,35 +751,37 @@ app.get('/api/tasks/stream/:workflowId', (req: Request, res: Response) => {
   sseManager.addClient(clientId, res, topic);
 });
 
-app.get('/api/conversation/:threadId', (req, res) => {
+app.get('/api/conversation/:threadId', (req: Request, res: Response) => {
   const { threadId } = req.params;
   if (!threadId) {
     return res.status(400).json({ error: 'Thread ID is required' });
   }
-  
+
   // Temporarily set the thread to get its conversation
   const previousThreadId = agentPool['currentThreadId'];
   agentPool.setCurrentThread(threadId);
   const conversation = agentPool.getCurrentAgent().getConversation();
-  
+
   // Restore the previous thread
   agentPool.setCurrentThread(previousThreadId);
-  
+
   res.json(conversation);
 });
 
-
-
-app.post('/api/message', async (req: any, res: any) => {
+app.post('/api/message', async (req: Request, res: Response) => {
   try {
-    const { message, threadId, images, notes, isAgentMode } = req.body;
+    const { message, messageId, threadId, images, notes, isAgentMode } =
+      req.body;
     if (!message && (!images || images.length === 0)) {
       return res.status(400).json({ error: 'Message or images are required' });
     }
 
     // Check if LLM model is configured
     if (!currentLlmConfig.model || currentLlmConfig.model.trim() === '') {
-      return res.status(400).json({ error: 'No LLM model configured. Please select a model from the available options.' });
+      return res.status(400).json({
+        error:
+          'No LLM model configured. Please select a model from the available options.',
+      });
     }
 
     // Set current thread if provided
@@ -713,28 +789,40 @@ app.post('/api/message', async (req: any, res: any) => {
       agentPool.setCurrentThread(threadId);
     }
 
-    const agent = isAgentMode 
+    const agent = isAgentMode
       ? agentPool.getWorkflowAgent(threadId || 'default')
       : agentPool.getCurrentAgent();
-    const response = await agent.processMessage(message, images, notes);
+    const response = await agent.processMessage(
+      message,
+      images,
+      notes,
+      undefined,
+      messageId
+    );
     res.json(response);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error processing message:', error);
-    res.status(500).json({ error: error.message });
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
 // SSE endpoint for real-time message processing
-app.post('/api/message/stream', async (req: any, res: any) => {
+app.post('/api/message/stream', async (req: Request, res: Response) => {
   try {
-    const { message, threadId, images, notes, isAgentMode } = req.body;
+    const { message, messageId, threadId, images, notes, isAgentMode } =
+      req.body;
     if (!message && (!images || images.length === 0)) {
       return res.status(400).json({ error: 'Message or images are required' });
     }
 
     // Check if LLM model is configured
     if (!currentLlmConfig.model || currentLlmConfig.model.trim() === '') {
-      return res.status(400).json({ error: 'No LLM model configured. Please select a model from the available options.' });
+      return res.status(400).json({
+        error:
+          'No LLM model configured. Please select a model from the available options.',
+      });
     }
 
     // Set current thread if provided
@@ -750,59 +838,81 @@ app.post('/api/message/stream', async (req: any, res: any) => {
     sseManager.addClient(clientId, res, topic);
 
     // Process message with real-time streaming using thread-specific agent or workflow agent
-    const agent = isAgentMode 
+    const agent = isAgentMode
       ? agentPool.getWorkflowAgent(threadId || 'default')
       : agentPool.getCurrentAgent();
-    
+
     // Set chat topic for workflow agent so it can broadcast to both workflow and chat topics
     if (isAgentMode && agent && 'setChatTopic' in agent) {
-      (agent as any).setChatTopic(topic);
+      (agent as WorkflowAgent).setChatTopic(topic);
     }
-    
+
     // Persist the user message
     await conversationManager.load();
     const userMessage = {
-      id: `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id:
+        messageId ||
+        `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       role: 'user' as const,
       content: message,
       timestamp: new Date(),
       images: images || [],
-      notes: notes || []
+      notes: notes || [],
     };
     conversationManager.addMessage(threadId || 'default', userMessage);
-    
+
     // Create a custom streaming callback that sends character-by-character updates
-    let assistantMessage: any = null;
+    let assistantMessage: {
+      id: string;
+      content: string;
+      timestamp: Date;
+      status?: 'completed' | 'cancelled' | 'processing';
+      model?: string;
+      toolCalls?: any[];
+      toolResults?: any[];
+      images?: any[];
+      notes?: any[];
+    } | null = null;
     let lastContentLength = 0;
-    
-    const streamingCallback = async (updatedMessage: any) => {
+
+    const streamingCallback = async (updatedMessage: {
+      id: string;
+      content: string;
+      timestamp: Date;
+      status?: 'completed' | 'cancelled' | 'processing';
+      model?: string;
+      toolCalls?: any[];
+      toolResults?: any[];
+      images?: any[];
+      notes?: any[];
+    }) => {
       // For the first update, create the assistant message
       if (!assistantMessage) {
         assistantMessage = updatedMessage;
-        
+
         // Persist the new assistant message
         await conversationManager.load();
         conversationManager.addMessage(threadId || 'default', {
           id: updatedMessage.id,
           role: 'assistant',
           content: updatedMessage.content,
-          timestamp: new Date(updatedMessage.timestamp),
+          timestamp: updatedMessage.timestamp,
           status: updatedMessage.status,
           model: updatedMessage.model,
           toolCalls: updatedMessage.toolCalls,
           toolResults: updatedMessage.toolResults,
           images: updatedMessage.images || [],
-          notes: updatedMessage.notes || []
+          notes: updatedMessage.notes || [],
         });
-        
+
         sseManager.broadcast(topic, {
           type: 'message-update',
-          message: updatedMessage
+          message: updatedMessage,
         });
         lastContentLength = updatedMessage.content.length;
         return;
       }
-      
+
       // Check if content has grown (new characters added)
       if (updatedMessage.content.length > lastContentLength) {
         const newContent = updatedMessage.content.slice(lastContentLength);
@@ -810,35 +920,45 @@ app.post('/api/message/stream', async (req: any, res: any) => {
           // Send the new content as a chunk
           sseManager.broadcast(topic, {
             type: 'content-chunk',
-            chunk: newContent
+            chunk: newContent,
           });
           lastContentLength = updatedMessage.content.length;
         }
       }
-      
+
       // Always send the full message update for status changes
       assistantMessage = updatedMessage;
-      
+
       // Update the persisted message
       await conversationManager.load();
-      conversationManager.updateMessage(threadId || 'default', updatedMessage.id, {
-        content: updatedMessage.content,
-        status: updatedMessage.status,
-        model: updatedMessage.model,
-        toolCalls: updatedMessage.toolCalls,
-        toolResults: updatedMessage.toolResults,
-        timestamp: new Date(updatedMessage.timestamp)
-      });
-      
+      conversationManager.updateMessage(
+        threadId || 'default',
+        updatedMessage.id,
+        {
+          content: updatedMessage.content,
+          status: updatedMessage.status,
+          model: updatedMessage.model,
+          toolCalls: updatedMessage.toolCalls,
+          toolResults: updatedMessage.toolResults,
+          timestamp: updatedMessage.timestamp,
+        }
+      );
+
       sseManager.broadcast(topic, {
         type: 'message-update',
-        message: updatedMessage
+        message: updatedMessage,
       });
     };
-    
+
     try {
       // Use the legacy processMessage method with streaming callback
-      const response = await agent.processMessage(message, images, notes, streamingCallback);
+      const response = await agent.processMessage(
+        message,
+        images,
+        notes,
+        streamingCallback,
+        messageId
+      );
 
       // Persist the final completed message
       await conversationManager.load();
@@ -848,117 +968,134 @@ app.post('/api/message/stream', async (req: any, res: any) => {
         model: response.model,
         toolCalls: response.toolCalls,
         toolResults: response.toolResults,
-        timestamp: new Date(response.timestamp)
+        timestamp: response.timestamp,
       });
-      
+
       // Send final completion event
       sseManager.broadcast(topic, {
         type: 'completed',
-        message: response
+        message: response,
       });
-      
+
       // Close the response stream to signal completion to the client
       setTimeout(() => {
         res.end();
         sseManager.removeClient(clientId);
       }, 100); // Small delay to ensure the completion event is sent
-      
-    } catch (processingError: any) {
+    } catch (processingError: unknown) {
       console.error('Error processing message:', processingError);
-      
+
       // Check if this is a local model not loaded error
-      if (processingError.message === 'LOCAL_MODEL_NOT_LOADED') {
+      if (
+        processingError instanceof Error &&
+        processingError.message === 'LOCAL_MODEL_NOT_LOADED'
+      ) {
         sseManager.broadcast(topic, {
           type: 'local-model-not-loaded',
-          error: processingError.originalMessage || 'Model not loaded. Please load the model first.',
-          modelId: processingError.modelId
+          error:
+            (processingError as any).originalMessage ||
+            'Model not loaded. Please load the model first.',
+          modelId: (processingError as any).modelId,
         });
       } else {
+        const errorMessage =
+          processingError instanceof Error
+            ? processingError.message
+            : 'Unknown error';
         sseManager.broadcast(topic, {
           type: 'error',
-          error: processingError.message
+          error: errorMessage,
         });
       }
-      
+
       // Close the response stream on error too
       setTimeout(() => {
         res.end();
         sseManager.removeClient(clientId);
       }, 100);
     }
-
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error setting up message stream:', error);
-    res.status(500).json({ error: error.message });
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-app.post('/api/conversation/:threadId/clear', (req, res) => {
+app.post('/api/conversation/:threadId/clear', (req: Request, res: Response) => {
   const { threadId } = req.params;
   if (!threadId) {
     return res.status(400).json({ error: 'Thread ID is required' });
   }
-  
+
   // Temporarily set the thread to clear its conversation
   const previousThreadId = agentPool['currentThreadId'];
   agentPool.setCurrentThread(threadId);
   agentPool.getCurrentAgent().clearConversation();
-  
+
   // Restore the previous thread
   agentPool.setCurrentThread(previousThreadId);
-  
+
   res.json({ success: true });
 });
 
 // Debug LLM endpoint for fixing rendering errors
-app.post('/api/debug-fix', async (req: any, res: any) => {
+app.post('/api/debug-fix', async (req: Request, res: Response) => {
   try {
     const { request, retryCount = 0 } = req.body;
-    
+
     if (!request) {
       return res.status(400).json({ error: 'Debug request is required' });
     }
-    
-    const { originalContent, errorMessage, contentType, language } = request;
-    
+
+    const { contentType, language } = request;
+
     // Generate fix prompt
     const fixPrompt = generateDebugFixPrompt(request);
-    
+
     // Create a simple agent instance for debugging
     const agent = agentPool.getCurrentAgent();
-    
+
     // Send request to LLM with debugging context
     const result = await agent.processMessage(fixPrompt);
-    
+
     // Extract the fixed content from the response
-    const fixedContent = extractFixedContent(result.content, contentType, language);
-    
+    const fixedContent = extractFixedContent(
+      result.content,
+      contentType,
+      language
+    );
+
     if (fixedContent) {
       res.json({
         success: true,
         fixedContent,
         explanation: 'Content has been automatically corrected',
-        retryCount
+        retryCount,
       });
     } else {
       res.json({
         success: false,
         error: 'Failed to extract valid fixed content from LLM response',
-        retryCount
+        retryCount,
       });
     }
-    
   } catch (error) {
     logger.error('Debug fix request failed:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error',
-      retryCount: req.body.retryCount || 0
+      retryCount: req.body.retryCount || 0,
     });
   }
 });
 
-function generateDebugFixPrompt(request: any): string {
+function generateDebugFixPrompt(request: {
+  contentType: string;
+  language?: string;
+  errorMessage: string;
+  originalContent: string;
+}): string {
   const basePrompt = `You are a debugging assistant helping to fix rendering errors in content. A piece of ${request.contentType} content failed to render with the following error:
 
 ERROR: ${request.errorMessage}
@@ -974,7 +1111,9 @@ Your response should contain ONLY the corrected content within a code block of t
 
   switch (request.contentType) {
     case 'mermaid':
-      return basePrompt + `
+      return (
+        basePrompt +
+        `
 
 Common Mermaid issues to check:
 - Syntax errors in node definitions
@@ -986,10 +1125,13 @@ Common Mermaid issues to check:
 Respond with only the corrected Mermaid diagram:
 \`\`\`mermaid
 [corrected diagram here]
-\`\`\``;
+\`\`\``
+      );
 
     case 'latex':
-      return basePrompt + `
+      return (
+        basePrompt +
+        `
 
 Common LaTeX issues to check:
 - Unmatched braces or brackets
@@ -1001,10 +1143,13 @@ Common LaTeX issues to check:
 Respond with only the corrected LaTeX:
 \`\`\`latex
 [corrected LaTeX here]
-\`\`\``;
+\`\`\``
+      );
 
     case 'code':
-      return basePrompt + `
+      return (
+        basePrompt +
+        `
 
 Common ${request.language || 'code'} issues to check:
 - Syntax errors
@@ -1016,33 +1161,41 @@ Common ${request.language || 'code'} issues to check:
 Respond with only the corrected code:
 \`\`\`${request.language || 'text'}
 [corrected code here]
-\`\`\``;
+\`\`\``
+      );
 
     default:
       return basePrompt;
   }
 }
 
-function extractFixedContent(llmResponse: string, contentType: string, language?: string): string | null {
-  const codeBlockRegex = new RegExp(`\`\`\`${language || contentType}\\n([\\s\\S]*?)\\n\`\`\``, 'i');
+function extractFixedContent(
+  llmResponse: string,
+  contentType: string,
+  language?: string
+): string | null {
+  const codeBlockRegex = new RegExp(
+    `\`\`\`${language || contentType}\\n([\\s\\S]*?)\\n\`\`\``,
+    'i'
+  );
   const match = llmResponse.match(codeBlockRegex);
-  
+
   if (match && match[1]) {
     return match[1].trim();
   }
-  
+
   // Fallback: try to extract any code block
   const anyCodeBlockRegex = /```[\w]*\n([\s\S]*?)\n```/;
   const fallbackMatch = llmResponse.match(anyCodeBlockRegex);
-  
+
   if (fallbackMatch && fallbackMatch[1]) {
     return fallbackMatch[1].trim();
   }
-  
+
   return null;
 }
 
-app.post('/api/load-thread/:threadId', async (req: any, res: any) => {
+app.post('/api/load-thread/:threadId', async (req: Request, res: Response) => {
   try {
     const { threadId } = req.params;
     if (!threadId) {
@@ -1054,19 +1207,21 @@ app.post('/api/load-thread/:threadId', async (req: any, res: any) => {
 
     const fs = await import('fs/promises');
     const conversationsPath = path.join(workspaceRoot, 'mindstrike-chats.json');
-    
+
     try {
       const data = await fs.readFile(conversationsPath, 'utf-8');
       const conversations = JSON.parse(data);
-      const thread = conversations.find((t: any) => t.id === threadId);
-      
+      const thread = conversations.find(
+        (t: { id: string }) => t.id === threadId
+      );
+
       if (!thread) {
         return res.status(404).json({ error: 'Thread not found' });
       }
-      
+
       // Load the thread's messages into the thread-specific agent's conversation context
       agentPool.getCurrentAgent().loadConversation(thread.messages);
-      
+
       // Set the custom role if it exists in the thread
       if (thread.customRole) {
         threadRoles.set(threadId, thread.customRole);
@@ -1076,19 +1231,20 @@ app.post('/api/load-thread/:threadId', async (req: any, res: any) => {
         agentPool.getCurrentAgent().updateRole(undefined);
       }
       res.json({ success: true });
-      
-    } catch (error) {
+    } catch {
       // File doesn't exist or thread not found
       agentPool.getCurrentAgent().clearConversation();
       res.json({ success: true });
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error loading thread into agent:', error);
-    res.status(500).json({ error: error.message });
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-app.post('/api/message/cancel', (req: any, res: any) => {
+app.post('/api/message/cancel', (req: Request, res: Response) => {
   const { messageId, threadId } = req.body;
   if (!messageId) {
     return res.status(400).json({ error: 'Message ID is required' });
@@ -1107,57 +1263,87 @@ app.post('/api/message/cancel', (req: any, res: any) => {
   }
 });
 
-app.delete('/api/message/:messageId', (req: any, res: any) => {
+app.delete('/api/message/:messageId', async (req: Request, res: Response) => {
   const { messageId } = req.params;
   if (!messageId) {
     return res.status(400).json({ error: 'Message ID is required' });
   }
 
-  const deleted = agentPool.getCurrentAgent().deleteMessage(messageId);
-  if (deleted) {
-    res.json({ success: true });
-  } else {
-    res.status(404).json({ error: 'Message not found' });
+  try {
+    await conversationManager.load();
+    const deletedMessageIds =
+      conversationManager.deleteMessageFromAllThreads(messageId);
+    if (deletedMessageIds.length > 0) {
+      await conversationManager.save();
+
+      // Broadcast update to all clients with ALL deleted message IDs
+      sseManager.broadcast('message-events', {
+        type: 'messages-deleted',
+        messageIds: deletedMessageIds,
+      });
+
+      res.json({ success: true, deletedMessageIds });
+    } else {
+      res.status(404).json({ error: 'Message not found' });
+    }
+  } catch (error: unknown) {
+    console.error('Error deleting message:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
+// Message events SSE endpoint
+app.get('/api/message/events', (req: Request, res: Response) => {
+  const clientId = `message-events-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  sseManager.addClient(clientId, res, 'message-events');
+});
+
 // New Thread-based API
-app.get('/api/threads', async (req, res) => {
+app.get('/api/threads', async (req: Request, res: Response) => {
   try {
     await conversationManager.load();
     const threads = conversationManager.getThreadList();
     res.json(threads);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error loading threads:', error);
-    res.status(500).json({ error: error.message });
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-app.get('/api/threads/:threadId/messages', async (req, res) => {
-  try {
-    const { threadId } = req.params;
-    await conversationManager.load();
-    const messages = conversationManager.getThreadMessages(threadId);
-    res.json(messages);
-  } catch (error: any) {
-    console.error('Error loading thread messages:', error);
-    res.status(500).json({ error: error.message });
+app.get(
+  '/api/threads/:threadId/messages',
+  async (req: Request, res: Response) => {
+    try {
+      const { threadId } = req.params;
+      await conversationManager.load();
+      const messages = conversationManager.getThreadMessages(threadId);
+      res.json(messages);
+    } catch (error: unknown) {
+      console.error('Error loading thread messages:', error);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: errorMessage });
+    }
   }
-});
+);
 
-app.post('/api/threads', async (req, res) => {
+app.post('/api/threads', async (req: Request, res: Response) => {
   try {
     const { name } = req.body;
     await conversationManager.load();
     const thread = conversationManager.createThread(name);
     res.json(thread);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error creating thread:', error);
-    res.status(500).json({ error: error.message });
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-app.delete('/api/threads/:threadId', async (req, res) => {
+app.delete('/api/threads/:threadId', async (req: Request, res: Response) => {
   try {
     const { threadId } = req.params;
     await conversationManager.load();
@@ -1167,18 +1353,20 @@ app.delete('/api/threads/:threadId', async (req, res) => {
     } else {
       res.status(404).json({ error: 'Thread not found' });
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error deleting thread:', error);
-    res.status(500).json({ error: error.message });
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-app.put('/api/threads/:threadId', async (req, res) => {
+app.put('/api/threads/:threadId', async (req: Request, res: Response) => {
   try {
     const { threadId } = req.params;
     const { name, customRole } = req.body;
     await conversationManager.load();
-    
+
     if (name !== undefined) {
       conversationManager.renameThread(threadId, name);
     }
@@ -1186,124 +1374,141 @@ app.put('/api/threads/:threadId', async (req, res) => {
       conversationManager.updateThreadRole(threadId, customRole);
       threadRoles.set(threadId, customRole);
     }
-    
+
     res.json({ success: true });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error updating thread:', error);
-    res.status(500).json({ error: error.message });
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-app.post('/api/threads/:threadId/clear', async (req, res) => {
-  try {
-    const { threadId } = req.params;
-    await conversationManager.load();
-    const cleared = conversationManager.clearThread(threadId);
-    if (cleared) {
-      res.json({ success: true });
-    } else {
-      res.status(404).json({ error: 'Thread not found' });
+app.post(
+  '/api/threads/:threadId/clear',
+  async (req: Request, res: Response) => {
+    try {
+      const { threadId } = req.params;
+      await conversationManager.load();
+      const cleared = conversationManager.clearThread(threadId);
+      if (cleared) {
+        res.json({ success: true });
+      } else {
+        res.status(404).json({ error: 'Thread not found' });
+      }
+    } catch (error: unknown) {
+      console.error('Error clearing thread:', error);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: errorMessage });
     }
-  } catch (error: any) {
-    console.error('Error clearing thread:', error);
-    res.status(500).json({ error: error.message });
   }
-});
+);
 
 // Legacy API compatibility - redirect to new endpoints
-app.get('/api/conversations', async (req, res) => {
+app.get('/api/conversations', async (req: Request, res: Response) => {
   try {
     await conversationManager.load();
     const threadList = conversationManager.getThreadList();
     // Convert to old format for backward compatibility
     const conversations = threadList.map(thread => ({
       ...conversationManager.getThread(thread.id),
-      messageCount: thread.messageCount
+      messageCount: thread.messageCount,
     }));
     res.json(conversations);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error loading conversations (legacy):', error);
-    res.status(500).json({ error: error.message });
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-app.post('/api/conversations', async (req, res) => {
+app.post('/api/conversations', async (req: Request, res: Response) => {
   // Legacy endpoint - deprecated
-  res.status(410).json({ error: 'This endpoint is deprecated. Use /api/threads endpoints instead.' });
+  res.status(410).json({
+    error: 'This endpoint is deprecated. Use /api/threads endpoints instead.',
+  });
 });
 
 // Workflows API
-app.get('/api/workflows', async (req, res) => {
+app.get('/api/workflows', async (req: Request, res: Response) => {
   try {
     const fs = await import('fs/promises');
     const workflowsPath = path.join(workspaceRoot, 'mindstrike-workflows.json');
-    
+
     try {
       const data = await fs.readFile(workflowsPath, 'utf-8');
       const workflows = JSON.parse(data);
       res.json(workflows);
-    } catch (error) {
+    } catch {
       // File doesn't exist or is invalid, return empty array
       res.json([]);
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error loading workflows:', error);
-    res.status(500).json({ error: error.message });
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-app.post('/api/workflows', async (req, res) => {
+app.post('/api/workflows', async (req: Request, res: Response) => {
   try {
     const fs = await import('fs/promises');
     const workflows = req.body;
     const workflowsPath = path.join(workspaceRoot, 'mindstrike-workflows.json');
-    
+
     await fs.writeFile(workflowsPath, JSON.stringify(workflows, null, 2));
     res.json({ success: true });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error saving workflows:', error);
-    res.status(500).json({ error: error.message });
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
 // MindMaps API
-app.get('/api/mindmaps', async (req, res) => {
+app.get('/api/mindmaps', async (req: Request, res: Response) => {
   try {
     const fs = await import('fs/promises');
     const mindMapsPath = path.join(workspaceRoot, 'mindstrike-mindmaps.json');
-    
+
     try {
       const data = await fs.readFile(mindMapsPath, 'utf-8');
       const mindMaps = JSON.parse(data);
       res.json(mindMaps);
-    } catch (error) {
+    } catch {
       // File doesn't exist or is invalid, return empty array
       res.json([]);
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error loading mindmaps:', error);
-    res.status(500).json({ error: error.message });
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-app.post('/api/mindmaps', async (req, res) => {
+app.post('/api/mindmaps', async (req: Request, res: Response) => {
   try {
     const fs = await import('fs/promises');
     const mindMaps = req.body;
     const mindMapsPath = path.join(workspaceRoot, 'mindstrike-mindmaps.json');
-    
+
     // Read existing data to preserve mindmap data
     let existingMindMaps = [];
     try {
       const existingData = await fs.readFile(mindMapsPath, 'utf-8');
       existingMindMaps = JSON.parse(existingData);
-    } catch (error: any) {
-      if (error.code !== 'ENOENT') {
+    } catch (error: unknown) {
+      if ((error as any).code !== 'ENOENT') {
         throw error;
       }
       // File doesn't exist, that's fine
     }
-    
+
     // Create a map of existing mindmap data
     const existingMindmapData = new Map();
     existingMindMaps.forEach((mindMap: any) => {
@@ -1311,7 +1516,7 @@ app.post('/api/mindmaps', async (req, res) => {
         existingMindmapData.set(mindMap.id, mindMap.mindmapData);
       }
     });
-    
+
     // Merge new mindmaps with existing mindmap data
     const mergedMindMaps = mindMaps.map((mindMap: any) => {
       const existingMindmap = existingMindmapData.get(mindMap.id);
@@ -1324,70 +1529,82 @@ app.post('/api/mindmaps', async (req, res) => {
             id: `node-${Date.now()}-${mindMap.id}`,
             text: 'Central Idea',
             notes: null,
-            layout: 'graph-right'
-          }
+            layout: 'graph-right',
+          },
         };
         return { ...mindMap, mindmapData: initialMindmapData };
       }
     });
-    
+
     await fs.writeFile(mindMapsPath, JSON.stringify(mergedMindMaps, null, 2));
     res.json({ success: true });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error saving mindmaps:', error);
-    res.status(500).json({ error: error.message });
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
 // MindMap data API for MindMaps
-app.get('/api/mindmaps/:mindMapId/mindmap', async (req: Request, res: Response) => {
-  try {
-    const { mindMapId } = req.params;
-    const fs = await import('fs/promises');
-    const mindMapsPath = path.join(workspaceRoot, 'mindstrike-mindmaps.json');
-    
-    const result = await withFileLock(mindMapsPath, async () => {
-      try {
-        const data = await fs.readFile(mindMapsPath, 'utf-8');
-        if (!data.trim()) {
-          return null;
+app.get(
+  '/api/mindmaps/:mindMapId/mindmap',
+  async (req: Request, res: Response) => {
+    try {
+      const { mindMapId } = req.params;
+      const fs = await import('fs/promises');
+      const mindMapsPath = path.join(workspaceRoot, 'mindstrike-mindmaps.json');
+
+      const result = await withFileLock(mindMapsPath, async () => {
+        try {
+          const data = await fs.readFile(mindMapsPath, 'utf-8');
+          if (!data.trim()) {
+            return null;
+          }
+          const mindMaps = JSON.parse(data);
+          return mindMaps.find((m: { id: string }) => m.id === mindMapId);
+        } catch (error: unknown) {
+          if ((error as any).code === 'ENOENT') {
+            return null;
+          } else if (error instanceof SyntaxError) {
+            logger.warn(
+              `Corrupted mindmaps file detected during read: ${error.message}`
+            );
+            return null;
+          }
+          throw error;
         }
-        const mindMaps = JSON.parse(data);
-        return mindMaps.find((m: any) => m.id === mindMapId);
-      } catch (error: any) {
-        if (error.code === 'ENOENT') {
-          return null;
-        } else if (error instanceof SyntaxError) {
-          logger.warn(`Corrupted mindmaps file detected during read: ${error.message}`);
-          return null;
-        }
-        throw error;
+      });
+
+      if (!result) {
+        return res.status(404).json({ error: 'Mindmap data not found' });
       }
-    });
-    
-    if (!result) {
-      return res.status(404).json({ error: 'Mindmap data not found' });
+
+      res.json(result.mindmapData);
+    } catch (error: unknown) {
+      console.error('Error loading mindmap data:', error);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: errorMessage });
     }
-    
-    res.json(result.mindmapData);
-  } catch (error: any) {
-    console.error('Error loading mindmap data:', error);
-    res.status(500).json({ error: error.message });
   }
-});
+);
 
 // In-memory lock to prevent concurrent file operations
 const fileLocks = new Map<string, Promise<any>>();
 
-async function withFileLock<T>(filePath: string, operation: () => Promise<T>): Promise<T> {
+async function withFileLock<T>(
+  filePath: string,
+  operation: () => Promise<T>
+): Promise<T> {
   const existingLock = fileLocks.get(filePath);
-  
-  const lockPromise = existingLock 
+
+  const lockPromise = existingLock
     ? existingLock.then(() => operation()).catch(() => operation())
     : operation();
-  
+
   fileLocks.set(filePath, lockPromise);
-  
+
   try {
     const result = await lockPromise;
     // Clean up completed lock
@@ -1404,301 +1621,356 @@ async function withFileLock<T>(filePath: string, operation: () => Promise<T>): P
   }
 }
 
-app.post('/api/mindmaps/:mindMapId/mindmap', async (req: Request, res: Response) => {
-  try {
-    const { mindMapId } = req.params;
-    const mindmapData = req.body;
-    const fs = await import('fs/promises');
-    const mindMapsPath = path.join(workspaceRoot, 'mindstrike-mindmaps.json');
-    
-    await withFileLock(mindMapsPath, async () => {
-      let mindMaps = [];
-      try {
-        const data = await fs.readFile(mindMapsPath, 'utf-8');
-        if (data.trim()) {
-          mindMaps = JSON.parse(data);
-        }
-      } catch (error: any) {
-        if (error.code === 'ENOENT') {
-          // File doesn't exist, start with empty array
-          mindMaps = [];
-        } else if (error instanceof SyntaxError) {
-          // Corrupted JSON, log and start fresh
-          logger.warn(`Corrupted mindmaps file detected, recreating: ${error.message}`);
-          mindMaps = [];
-        } else {
-          throw error;
-        }
-      }
-      
-      const existingMindMapIndex = mindMaps.findIndex((m: any) => m.id === mindMapId);
-      if (existingMindMapIndex >= 0) {
-        mindMaps[existingMindMapIndex].mindmapData = mindmapData;
-        mindMaps[existingMindMapIndex].updatedAt = new Date().toISOString();
-      } else {
-        mindMaps.push({ id: mindMapId, mindmapData, updatedAt: new Date().toISOString() });
-      }
-      
-      await fs.writeFile(mindMapsPath, JSON.stringify(mindMaps, null, 2));
-    });
+app.post(
+  '/api/mindmaps/:mindMapId/mindmap',
+  async (req: Request, res: Response) => {
+    try {
+      const { mindMapId } = req.params;
+      const mindmapData = req.body;
+      const fs = await import('fs/promises');
+      const mindMapsPath = path.join(workspaceRoot, 'mindstrike-mindmaps.json');
 
-    res.json({ success: true });
-  } catch (error: any) {
-    logger.error('Error saving mindmap data:', error);
-    res.status(500).json({ error: error.message });
+      await withFileLock(mindMapsPath, async () => {
+        let mindMaps = [];
+        try {
+          const data = await fs.readFile(mindMapsPath, 'utf-8');
+          if (data.trim()) {
+            mindMaps = JSON.parse(data);
+          }
+        } catch (error: unknown) {
+          if ((error as any).code === 'ENOENT') {
+            // File doesn't exist, start with empty array
+            mindMaps = [];
+          } else if (error instanceof SyntaxError) {
+            // Corrupted JSON, log and start fresh
+            logger.warn(
+              `Corrupted mindmaps file detected, recreating: ${error.message}`
+            );
+            mindMaps = [];
+          } else {
+            throw error;
+          }
+        }
+
+        const existingMindMapIndex = mindMaps.findIndex(
+          (m: any) => m.id === mindMapId
+        );
+        if (existingMindMapIndex >= 0) {
+          mindMaps[existingMindMapIndex].mindmapData = mindmapData;
+          mindMaps[existingMindMapIndex].updatedAt = new Date().toISOString();
+        } else {
+          mindMaps.push({
+            id: mindMapId,
+            mindmapData,
+            updatedAt: new Date().toISOString(),
+          });
+        }
+
+        await fs.writeFile(mindMapsPath, JSON.stringify(mindMaps, null, 2));
+      });
+
+      res.json({ success: true });
+    } catch (error: unknown) {
+      logger.error('Error saving mindmap data:', error);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: errorMessage });
+    }
   }
-});
+);
 
 // Cancel Mindmap Generation API
-app.post('/api/mindmaps/cancel/:workflowId', async (req: Request, res: Response) => {
-  try {
-    const { workflowId } = req.params;
-    
-    // Import and call the cancel function
-    const { cancelWorkflow } = await import('./agents/mindmap-agent-iterative');
-    const cancelled = cancelWorkflow(workflowId);
-    
-    res.json({ 
-      success: true, 
-      cancelled: cancelled, 
-      workflowId 
-    });
-  } catch (error) {
-    console.error('❌ Failed to cancel workflow:', error);
-    res.status(500).json({ error: 'Failed to cancel generation' });
+app.post(
+  '/api/mindmaps/cancel/:workflowId',
+  async (req: Request, res: Response) => {
+    try {
+      const { workflowId } = req.params;
+
+      // Import and call the cancel function
+      const { cancelWorkflow } = await import(
+        './agents/mindmap-agent-iterative'
+      );
+      const cancelled = cancelWorkflow(workflowId);
+
+      res.json({
+        success: true,
+        cancelled: cancelled,
+        workflowId,
+      });
+    } catch (error) {
+      console.error('❌ Failed to cancel workflow:', error);
+      res.status(500).json({ error: 'Failed to cancel generation' });
+    }
   }
-});
+);
 
 // Mindmap Generation API
-app.post('/api/mindmaps/:mindMapId/generate', async (req: Request, res: Response) => {
-  try {
-    const { mindMapId } = req.params;
-    const { prompt, selectedNodeId, stream, useAgenticWorkflow = true } = req.body;
-    
-
-
-    if (!prompt || !prompt.trim()) {
-      return res.status(400).json({ error: 'Prompt is required' });
-    }
-
-    // Check if LLM model is configured
-    if (!currentLlmConfig.model || currentLlmConfig.model.trim() === '') {
-      return res.status(400).json({ error: 'No LLM model configured. Please select a model from the available options.' });
-    }
-
-    // If streaming is requested, set up SSE
-    if (stream) {
-      const streamId = `mindmap-${mindMapId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
-      // Generate workflow ID for agentic processing
-      const workflowId = useAgenticWorkflow ? 
-        `workflow-${mindMapId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}` : 
-        undefined;
-      
-      // Start the generation process in the background
-      setImmediate(async () => {
-        try {
-          // Create mindmap agent with current config
-          const mindmapAgent = new MindmapAgentIterative({
-            workspaceRoot,
-            llmConfig: currentLlmConfig
-          });
-
-          // Set mindmap context
-          await mindmapAgent.setMindmapContext(mindMapId, selectedNodeId);
-
-          // Process with streaming callback
-          sseManager.broadcast(streamId, { type: 'progress', status: 'Starting generation...' });
-          
-          // Simple token counting simulation with smoothed rate calculation
-          let tokenCount = 0;
-          let lastValidTokensPerSecond = 0;
-          let smoothedTokensPerSecond = 0;
-          const startTime = Date.now();
-          const targetTokensPerSecond = 25 + Math.random() * 20; // Target rate between 25-45 tokens/sec
-          
-          // Simulate token generation updates
-          const progressInterval = setInterval(() => {
-            // Use consistent rate instead of random fluctuations
-            const tokensThisSecond = Math.round(targetTokensPerSecond + (Math.random() - 0.5) * 4); // Small variance
-            tokenCount += tokensThisSecond;
-            
-            const elapsed = (Date.now() - startTime) / 1000;
-            
-            // Only update tokensPerSecond if we have a meaningful value
-            if (elapsed > 0.5) { // Wait at least 500ms before calculating rate
-              const currentRate = tokenCount / elapsed;
-              // Smooth the rate using exponential moving average
-              smoothedTokensPerSecond = smoothedTokensPerSecond === 0 ? currentRate : (smoothedTokensPerSecond * 0.8 + currentRate * 0.2);
-              lastValidTokensPerSecond = Math.round(smoothedTokensPerSecond * 10) / 10; // Round to 1 decimal place
-            }
-            
-            const updateData = {
-              type: 'token',
-              content: '',
-              totalTokens: tokenCount,
-              tokensPerSecond: lastValidTokensPerSecond
-            };
-            
-            sseManager.broadcast(streamId, updateData);
-          }, 150); // Slightly faster updates
-          
-          // Use iterative reasoning workflow if enabled, otherwise use regular processing
-          let response;
-          
-          if (useAgenticWorkflow && workflowId) {
-            response = await mindmapAgent.processMessageIterative(
-              prompt, 
-              [], // images
-              [], // notes  
-              undefined, // onUpdate callback - not used in streaming mode
-              workflowId,
-              streamId // Pass streamId for real-time SSE updates
-            );
-          } else {
-            response = await mindmapAgent.processMessage(prompt);
-          }
-          
-          // Clear the progress interval
-          clearInterval(progressInterval);
-          
-          // Send final token count
-          const finalElapsed = (Date.now() - startTime) / 1000;
-          const finalTokensPerSecond = finalElapsed > 0 ? tokenCount / finalElapsed : 0;
-          
-          // Parse the response content to extract changes and workflow info
-          let parsedResponse;
-          try {
-            parsedResponse = JSON.parse(response.content);
-          } catch (error) {
-            logger.error('Failed to parse streaming response content:', error);
-            parsedResponse = { changes: [], workflow: {} };
-          }
-
-          // Broadcast completion
-          sseManager.broadcast(streamId, {
-            type: 'complete',
-            result: {
-              success: true,
-              changes: parsedResponse.changes || [],
-              workflow: parsedResponse.workflow || {},
-              response: response.content,
-              toolCalls: response.toolCalls,
-              toolResults: response.toolResults
-            }
-          });
-
-        } catch (error: any) {
-          logger.error('Error in streaming mindmap generation:', error);
-          sseManager.broadcast(streamId, {
-            type: 'error',
-            error: error.message
-          });
-        }
-      });
-
-      // Return stream ID and workflow ID immediately
-      return res.json({ 
-        streamId,
-        workflowId: workflowId || null
-      });
-    }
-
-    // Non-streaming fallback (original implementation)
-    // Create mindmap agent with current config
-    const mindmapAgent = new MindmapAgentIterative({
-      workspaceRoot,
-      llmConfig: currentLlmConfig
-    });
-
-    // Set mindmap context
-    await mindmapAgent.setMindmapContext(mindMapId, selectedNodeId);
-
-    // Process the generation request
-    logger.info('Processing mindmap generation request:', { mindMapId, selectedNodeId, prompt: prompt.substring(0, 100), useAgenticWorkflow });
-    
-    let response;
-    if (useAgenticWorkflow) {
-      // Generate workflow ID for task tracking
-      const workflowId = `workflow-${mindMapId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
-      response = await mindmapAgent.processMessageIterative(
-        prompt, 
-        [], // images
-        [], // notes  
-        undefined, // onUpdate callback
-        workflowId
-      );
-    } else {
-      response = await mindmapAgent.processMessage(prompt);
-    }
-    
-    // Parse the response content to extract changes and workflow info
-    let parsedResponse;
+app.post(
+  '/api/mindmaps/:mindMapId/generate',
+  async (req: Request, res: Response) => {
     try {
-      parsedResponse = JSON.parse(response.content);
-    } catch (error) {
-      logger.error('Failed to parse response content:', error);
-      parsedResponse = { changes: [], workflow: {} };
+      const { mindMapId } = req.params;
+      const {
+        prompt,
+        selectedNodeId,
+        stream,
+        useAgenticWorkflow = true,
+      } = req.body;
+
+      if (!prompt || !prompt.trim()) {
+        return res.status(400).json({ error: 'Prompt is required' });
+      }
+
+      // Check if LLM model is configured
+      if (!currentLlmConfig.model || currentLlmConfig.model.trim() === '') {
+        return res.status(400).json({
+          error:
+            'No LLM model configured. Please select a model from the available options.',
+        });
+      }
+
+      // If streaming is requested, set up SSE
+      if (stream) {
+        const streamId = `mindmap-${mindMapId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+        // Generate workflow ID for agentic processing
+        const workflowId = useAgenticWorkflow
+          ? `workflow-${mindMapId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+          : undefined;
+
+        // Start the generation process in the background
+        setImmediate(async () => {
+          try {
+            // Create mindmap agent with current config
+            const mindmapAgent = new MindmapAgentIterative({
+              workspaceRoot,
+              llmConfig: currentLlmConfig,
+            });
+
+            // Set mindmap context
+            await mindmapAgent.setMindmapContext(mindMapId, selectedNodeId);
+
+            // Process with streaming callback
+            sseManager.broadcast(streamId, {
+              type: 'progress',
+              status: 'Starting generation...',
+            });
+
+            // Simple token counting simulation with smoothed rate calculation
+            let tokenCount = 0;
+            let lastValidTokensPerSecond = 0;
+            let smoothedTokensPerSecond = 0;
+            const startTime = Date.now();
+            const targetTokensPerSecond = 25 + Math.random() * 20; // Target rate between 25-45 tokens/sec
+
+            // Simulate token generation updates
+            const progressInterval = setInterval(() => {
+              // Use consistent rate instead of random fluctuations
+              const tokensThisSecond = Math.round(
+                targetTokensPerSecond + (Math.random() - 0.5) * 4
+              ); // Small variance
+              tokenCount += tokensThisSecond;
+
+              const elapsed = (Date.now() - startTime) / 1000;
+
+              // Only update tokensPerSecond if we have a meaningful value
+              if (elapsed > 0.5) {
+                // Wait at least 500ms before calculating rate
+                const currentRate = tokenCount / elapsed;
+                // Smooth the rate using exponential moving average
+                smoothedTokensPerSecond =
+                  smoothedTokensPerSecond === 0
+                    ? currentRate
+                    : smoothedTokensPerSecond * 0.8 + currentRate * 0.2;
+                lastValidTokensPerSecond =
+                  Math.round(smoothedTokensPerSecond * 10) / 10; // Round to 1 decimal place
+              }
+
+              const updateData = {
+                type: 'token',
+                content: '',
+                totalTokens: tokenCount,
+                tokensPerSecond: lastValidTokensPerSecond,
+              };
+
+              sseManager.broadcast(streamId, updateData);
+            }, 150); // Slightly faster updates
+
+            // Use iterative reasoning workflow if enabled, otherwise use regular processing
+            let response;
+
+            if (useAgenticWorkflow && workflowId) {
+              response = await mindmapAgent.processMessageIterative(
+                prompt,
+                [], // images
+                [], // notes
+                undefined, // onUpdate callback - not used in streaming mode
+                workflowId,
+                streamId // Pass streamId for real-time SSE updates
+              );
+            } else {
+              response = await mindmapAgent.processMessage(prompt);
+            }
+
+            // Clear the progress interval
+            clearInterval(progressInterval);
+
+            // Send final token count
+
+            // Parse the response content to extract changes and workflow info
+            let parsedResponse;
+            try {
+              parsedResponse = JSON.parse(response.content);
+            } catch (error) {
+              logger.error(
+                'Failed to parse streaming response content:',
+                error
+              );
+              parsedResponse = { changes: [], workflow: {} };
+            }
+
+            // Broadcast completion
+            sseManager.broadcast(streamId, {
+              type: 'complete',
+              result: {
+                success: true,
+                changes: parsedResponse.changes || [],
+                workflow: parsedResponse.workflow || {},
+                response: response.content,
+                toolCalls: response.toolCalls,
+                toolResults: response.toolResults,
+              },
+            });
+          } catch (error: unknown) {
+            logger.error('Error in streaming mindmap generation:', error);
+            const errorMessage =
+              error instanceof Error ? error.message : 'Unknown error';
+            sseManager.broadcast(streamId, {
+              type: 'error',
+              error: errorMessage,
+            });
+          }
+        });
+
+        // Return stream ID and workflow ID immediately
+        return res.json({
+          streamId,
+          workflowId: workflowId || null,
+        });
+      }
+
+      // Non-streaming fallback (original implementation)
+      // Create mindmap agent with current config
+      const mindmapAgent = new MindmapAgentIterative({
+        workspaceRoot,
+        llmConfig: currentLlmConfig,
+      });
+
+      // Set mindmap context
+      await mindmapAgent.setMindmapContext(mindMapId, selectedNodeId);
+
+      // Process the generation request
+      logger.info('Processing mindmap generation request:', {
+        mindMapId,
+        selectedNodeId,
+        prompt: prompt.substring(0, 100),
+        useAgenticWorkflow,
+      });
+
+      let response;
+      if (useAgenticWorkflow) {
+        // Generate workflow ID for task tracking
+        const workflowId = `workflow-${mindMapId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+        response = await mindmapAgent.processMessageIterative(
+          prompt,
+          [], // images
+          [], // notes
+          undefined, // onUpdate callback
+          workflowId
+        );
+      } else {
+        response = await mindmapAgent.processMessage(prompt);
+      }
+
+      // Parse the response content to extract changes and workflow info
+      let parsedResponse;
+      try {
+        parsedResponse = JSON.parse(response.content);
+      } catch (error) {
+        logger.error('Failed to parse response content:', error);
+        parsedResponse = { changes: [], workflow: {} };
+      }
+
+      res.json({
+        success: true,
+        changes: parsedResponse.changes || [],
+        workflow: parsedResponse.workflow || {},
+        response: response.content,
+        toolCalls: response.toolCalls,
+        toolResults: response.toolResults,
+      });
+    } catch (error: unknown) {
+      logger.error('Error in mindmap generation:', error);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: errorMessage });
     }
-
-    res.json({
-      success: true,
-      changes: parsedResponse.changes || [],
-      workflow: parsedResponse.workflow || {},
-      response: response.content,
-      toolCalls: response.toolCalls,
-      toolResults: response.toolResults
-    });
-
-  } catch (error: any) {
-    logger.error('Error in mindmap generation:', error);
-    res.status(500).json({ error: error.message });
   }
-});
+);
 
 // New Task-Based Mindmap Generation API
-app.post('/api/mindmaps/:mindMapId/plan-tasks', async (req: Request, res: Response) => {
-  try {
-    const { mindMapId } = req.params;
-    const { prompt, selectedNodeId } = req.body;
+app.post(
+  '/api/mindmaps/:mindMapId/plan-tasks',
+  async (req: Request, res: Response) => {
+    try {
+      const { prompt } = req.body;
 
-    if (!prompt || !prompt.trim()) {
-      return res.status(400).json({ error: 'Prompt is required' });
+      if (!prompt || !prompt.trim()) {
+        return res.status(400).json({ error: 'Prompt is required' });
+      }
+
+      // Check if LLM model is configured
+      if (!currentLlmConfig.model || currentLlmConfig.model.trim() === '') {
+        return res.status(400).json({
+          error:
+            'No LLM model configured. Please select a model from the available options.',
+        });
+      }
+
+      // Task planning is no longer needed with iterative reasoning
+      // The new system decides what to do step-by-step during execution
+
+      res.json({
+        success: true,
+        message:
+          'Task planning is no longer used. The iterative reasoning system decides actions dynamically during execution.',
+        tasks: [],
+        workflowId: null,
+      });
+    } catch (error: unknown) {
+      logger.error('Error planning mindmap tasks:', error);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: errorMessage });
     }
-
-    // Check if LLM model is configured
-    if (!currentLlmConfig.model || currentLlmConfig.model.trim() === '') {
-      return res.status(400).json({ error: 'No LLM model configured. Please select a model from the available options.' });
-    }
-
-    // Task planning is no longer needed with iterative reasoning
-    // The new system decides what to do step-by-step during execution
-    
-    res.json({
-      success: true,
-      message: 'Task planning is no longer used. The iterative reasoning system decides actions dynamically during execution.',
-      tasks: [],
-      workflowId: null
-    });
-
-  } catch (error: any) {
-    logger.error('Error planning mindmap tasks:', error);
-    res.status(500).json({ error: error.message });
   }
-});
+);
 
-app.post('/api/generate-title', async (req: any, res: any) => {
+app.post('/api/generate-title', async (req: Request, res: Response) => {
   try {
     const { context } = req.body;
-    
+
     if (!context) {
       return res.status(400).json({ error: 'Context is required' });
     }
 
     // Check if LLM model is configured
     if (!currentLlmConfig.model || currentLlmConfig.model.trim() === '') {
-      return res.status(400).json({ error: 'No LLM model configured. Please select a model from the available options.' });
+      return res.status(400).json({
+        error:
+          'No LLM model configured. Please select a model from the available options.',
+      });
     }
 
     // Create a prompt to generate a short title (filter out think tags from context)
@@ -1711,25 +1983,32 @@ Respond with only the title, no other text.`;
 
     const response = await agentPool.getCurrentAgent().processMessage(prompt);
     const title = cleanContentForLLM(response.content).trim();
-    
+
     res.json({ title });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error generating title:', error);
-    res.status(500).json({ error: error.message });
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-app.post('/api/generate-role', async (req: any, res: any) => {
+app.post('/api/generate-role', async (req: Request, res: Response) => {
   try {
     const { personality } = req.body;
-    
+
     if (!personality) {
-      return res.status(400).json({ error: 'Personality description is required' });
+      return res
+        .status(400)
+        .json({ error: 'Personality description is required' });
     }
 
     // Check if LLM model is configured
     if (!currentLlmConfig.model || currentLlmConfig.model.trim() === '') {
-      return res.status(400).json({ error: 'No LLM model configured. Please select a model from the available options.' });
+      return res.status(400).json({
+        error:
+          'No LLM model configured. Please select a model from the available options.',
+      });
     }
 
     // Create a prompt to generate a role definition based on the personality description
@@ -1752,66 +2031,76 @@ Generate only the role definition using the user's words as the foundation.`;
 
     const response = await agentPool.getCurrentAgent().processMessage(prompt);
     const role = cleanContentForLLM(response.content).trim();
-    
+
     res.json({ role });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error generating role:', error);
-    res.status(500).json({ error: error.message });
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-app.get('/api/role/:threadId?', (req, res) => {
+app.get('/api/role/:threadId?', (req: Request, res: Response) => {
   try {
     const threadId = req.params.threadId || 'default';
     const agent = agentPool.getAgent(threadId);
-    
+
     res.json({
       currentRole: agent.getCurrentRole(),
       defaultRole: agent.getDefaultRole(),
       isDefault: agent.getCurrentRole() === agent.getDefaultRole(),
-      hasCustomRole: threadRoles.has(threadId)
+      hasCustomRole: threadRoles.has(threadId),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error getting role:', error);
-    res.status(500).json({ error: error.message });
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-app.post('/api/role/:threadId?', (req: any, res: any) => {
+app.post('/api/role/:threadId?', (req: Request, res: Response) => {
   try {
     const threadId = req.params.threadId || 'default';
     const { customRole } = req.body;
-    
+
     // Store the custom role for the thread
     if (customRole) {
       threadRoles.set(threadId, customRole);
     } else {
       threadRoles.delete(threadId);
     }
-    
+
     // Update the agent's role
     const agent = agentPool.getAgent(threadId);
     agent.updateRole(customRole);
-    
+
     res.json({ success: true });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error updating role:', error);
-    res.status(500).json({ error: error.message });
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-
 // Get current working directory
-app.get('/api/workspace/directory', (req, res) => {
+app.get('/api/workspace/directory', (req: Request, res: Response) => {
   try {
-    res.json({ currentDirectory: currentWorkingDirectory, absolutePath: currentWorkingDirectory });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.json({
+      currentDirectory: currentWorkingDirectory,
+      absolutePath: currentWorkingDirectory,
+    });
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
 // Set current working directory
-app.post('/api/workspace/directory', (req: any, res: any) => {
+app.post('/api/workspace/directory', (req: Request, res: Response) => {
   try {
     const { path: newPath } = req.body;
     if (!newPath) {
@@ -1825,26 +2114,31 @@ app.post('/api/workspace/directory', (req: any, res: any) => {
     } else {
       fullPath = path.resolve(currentWorkingDirectory, newPath);
     }
-    
+
     // Check if the path exists and is a directory
     if (!existsSync(fullPath)) {
       return res.status(404).json({ error: 'Directory does not exist' });
     }
-    
+
     const stats = statSync(fullPath);
     if (!stats.isDirectory()) {
       return res.status(400).json({ error: 'Path is not a directory' });
     }
 
     currentWorkingDirectory = fullPath;
-    res.json({ currentDirectory: currentWorkingDirectory, absolutePath: currentWorkingDirectory });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.json({
+      currentDirectory: currentWorkingDirectory,
+      absolutePath: currentWorkingDirectory,
+    });
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
 // Set workspace root
-app.post('/api/workspace/root', async (req: any, res: any) => {
+app.post('/api/workspace/root', async (req: Request, res: Response) => {
   try {
     const { path: newPath } = req.body;
     if (!newPath) {
@@ -1858,12 +2152,12 @@ app.post('/api/workspace/root', async (req: any, res: any) => {
     } else {
       fullPath = path.resolve(currentWorkingDirectory, newPath);
     }
-    
+
     // Check if the path exists and is a directory
     if (!existsSync(fullPath)) {
       return res.status(404).json({ error: 'Directory does not exist' });
     }
-    
+
     const stats = statSync(fullPath);
     if (!stats.isDirectory()) {
       return res.status(400).json({ error: 'Path is not a directory' });
@@ -1872,30 +2166,32 @@ app.post('/api/workspace/root', async (req: any, res: any) => {
     // Update workspace root and reset current directory to the new root
     workspaceRoot = fullPath;
     currentWorkingDirectory = workspaceRoot;
-    
+
     // Update workspace root for all agents in the pool
     agentPool.updateAllAgentsWorkspace(workspaceRoot);
-    
+
     // Update conversation manager workspace
     conversationManager.updateWorkspaceRoot(workspaceRoot);
-    
+
     logger.info(`Workspace root changed to: ${workspaceRoot}`);
-    
-    res.json({ 
-      workspaceRoot: workspaceRoot, 
+
+    res.json({
+      workspaceRoot: workspaceRoot,
       currentDirectory: '.',
-      message: 'Workspace root changed successfully' 
+      message: 'Workspace root changed successfully',
     });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-app.get('/api/workspace/files', async (req, res) => {
+app.get('/api/workspace/files', async (req: Request, res: Response) => {
   try {
     const targetDir = currentWorkingDirectory;
     const entries = await fs.readdir(targetDir, { withFileTypes: true });
-    
+
     const files = entries
       .sort((a, b) => {
         // Directories first, then files
@@ -1903,27 +2199,31 @@ app.get('/api/workspace/files', async (req, res) => {
         if (!a.isDirectory() && b.isDirectory()) return 1;
         return a.name.localeCompare(b.name);
       })
-      .map(entry => entry.isDirectory() ? `${entry.name}/` : entry.name);
-    
+      .map(entry => (entry.isDirectory() ? `${entry.name}/` : entry.name));
+
     res.json(files);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-app.get('/api/workspace/file/:path(*)', async (req, res) => {
+app.get('/api/workspace/file/:path(*)', async (req: Request, res: Response) => {
   try {
     const filePath = req.params.path;
     const fullPath = path.resolve(workspaceRoot, filePath);
-    
+
     const content = await fs.readFile(fullPath, 'utf-8');
     res.json({ content });
-  } catch (error: any) {
-    res.status(404).json({ error: error.message });
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(404).json({ error: errorMessage });
   }
 });
 
-app.post('/api/workspace/save', async (req: any, res: any) => {
+app.post('/api/workspace/save', async (req: Request, res: Response) => {
   try {
     const { path: filePath, content } = req.body;
     if (!filePath || content === undefined) {
@@ -1933,14 +2233,16 @@ app.post('/api/workspace/save', async (req: any, res: any) => {
     const fullPath = path.resolve(workspaceRoot, filePath);
     await fs.mkdir(path.dirname(fullPath), { recursive: true });
     await fs.writeFile(fullPath, content, 'utf-8');
-    
+
     res.json({ success: true });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-app.post('/api/workspace/delete', async (req: any, res: any) => {
+app.post('/api/workspace/delete', async (req: Request, res: Response) => {
   const { path: filePath } = req.body;
   try {
     if (!filePath) {
@@ -1949,147 +2251,176 @@ app.post('/api/workspace/delete', async (req: any, res: any) => {
 
     const fullPath = path.resolve(workspaceRoot, filePath);
     await fs.unlink(fullPath);
-    
-    res.json({ success: true, message: `Successfully deleted file: ${filePath}` });
-  } catch (error: any) {
-    if (error.code === 'ENOENT') {
+
+    res.json({
+      success: true,
+      message: `Successfully deleted file: ${filePath}`,
+    });
+  } catch (error: unknown) {
+    if ((error as any).code === 'ENOENT') {
       res.status(404).json({ error: `File not found: ${filePath}` });
     } else {
-      res.status(500).json({ error: error.message });
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: errorMessage });
     }
   }
 });
 
 // MCP API Routes
-app.get('/api/mcp/servers', async (req, res) => {
+app.get('/api/mcp/servers', async (req: Request, res: Response) => {
   try {
     const servers = mcpManager.getServerConfigs();
     res.json({ servers });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-app.get('/api/mcp/tools', async (req, res) => {
+app.get('/api/mcp/tools', async (req: Request, res: Response) => {
   try {
     const tools = mcpManager.getAvailableTools();
     res.json({ tools });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-app.post('/api/mcp/servers', async (req, res) => {
+app.post('/api/mcp/servers', async (req: Request, res: Response) => {
   try {
     const config = req.body;
     if (!config.id || !config.name || !config.command) {
-      return res.status(400).json({ error: 'Missing required fields: id, name, command' });
+      return res
+        .status(400)
+        .json({ error: 'Missing required fields: id, name, command' });
     }
-    
+
     await mcpManager.addServerConfig(config);
     res.json({ success: true });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-app.put('/api/mcp/servers/:id', async (req, res) => {
+app.put('/api/mcp/servers/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const updates = req.body;
-    
+
     await mcpManager.updateServerConfig(id, updates);
     res.json({ success: true });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-app.delete('/api/mcp/servers/:id', async (req, res) => {
+app.delete('/api/mcp/servers/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     await mcpManager.removeServerConfig(id);
     res.json({ success: true });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-app.get('/api/mcp/status', async (req, res) => {
+app.get('/api/mcp/status', async (req: Request, res: Response) => {
   try {
     const connectedServers = mcpManager.getConnectedServers();
     const totalServers = mcpManager.getServerConfigs().length;
     const tools = mcpManager.getAvailableTools();
-    
+
     res.json({
       connectedServers: connectedServers.length,
       totalServers,
       totalTools: tools.length,
-      servers: connectedServers
+      servers: connectedServers,
     });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-app.get('/api/mcp/logs', async (req, res) => {
+app.get('/api/mcp/logs', async (req: Request, res: Response) => {
   try {
     const logs = mcpManager.getLogs();
     res.json({ logs });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-app.get('/api/mcp/diagnostics', async (req, res) => {
+app.get('/api/mcp/diagnostics', async (req: Request, res: Response) => {
   try {
     const diagnostics = await mcpManager.getDiagnostics();
     res.json(diagnostics);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-app.post('/api/mcp/refresh-cache', async (req, res) => {
+app.post('/api/mcp/refresh-cache', async (req: Request, res: Response) => {
   try {
     mcpManager.refreshCommandCache();
     res.json({ success: true, message: 'Command cache refreshed' });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-app.get('/api/mcp/logs/stream', (req, res) => {
+app.get('/api/mcp/logs/stream', (req: Request, res: Response) => {
   const clientId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-  
+
   // Add client to SSE manager for MCP logs
   sseManager.addClient(clientId, res, 'mcp-logs');
-  
+
   req.on('close', () => {
     sseManager.removeClient(clientId);
   });
 });
 
-app.get('/api/mcp/config', async (req, res) => {
+app.get('/api/mcp/config', async (req: Request, res: Response) => {
   try {
-    const { getMindstrikeDirectory } = await import('./utils/settings-directory.js');
+    const { getMindstrikeDirectory } = await import(
+      './utils/settings-directory.js'
+    );
     const configPath = path.join(getMindstrikeDirectory(), 'mcp-config.json');
     const configData = await fs.readFile(configPath, 'utf-8');
     res.json({ config: configData });
-  } catch (error: any) {
-    if (error.code === 'ENOENT') {
+  } catch (error: unknown) {
+    if ((error as any).code === 'ENOENT') {
       // Return default config if file doesn't exist
       const defaultConfig = {
-        mcpServers: {}
+        mcpServers: {},
       };
       res.json({ config: JSON.stringify(defaultConfig, null, 2) });
     } else {
-      res.status(500).json({ error: error.message });
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: errorMessage });
     }
   }
 });
 
-app.post('/api/mcp/config', async (req, res) => {
+app.post('/api/mcp/config', async (req: Request, res: Response) => {
   try {
     const { config } = req.body;
     if (typeof config !== 'string') {
@@ -2100,51 +2431,60 @@ app.post('/api/mcp/config', async (req, res) => {
     try {
       const parsed = JSON.parse(config);
       if (!parsed.mcpServers || typeof parsed.mcpServers !== 'object') {
-        return res.status(400).json({ error: 'Config must contain mcpServers object' });
+        return res
+          .status(400)
+          .json({ error: 'Config must contain mcpServers object' });
       }
-    } catch (e) {
+    } catch {
       return res.status(400).json({ error: 'Invalid JSON format' });
     }
 
-    const { getMindstrikeDirectory } = await import('./utils/settings-directory.js');
+    const { getMindstrikeDirectory } = await import(
+      './utils/settings-directory.js'
+    );
     const configPath = path.join(getMindstrikeDirectory(), 'mcp-config.json');
-    
+
     // Ensure directory exists
     await fs.mkdir(getMindstrikeDirectory(), { recursive: true });
     await fs.writeFile(configPath, config, 'utf-8');
-    
+
     // Reload MCP manager with new config
     await mcpManager.reload();
-    
+
     res.json({ success: true });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-app.post('/api/mcp/refresh', async (req, res) => {
+app.post('/api/mcp/refresh', async (req: Request, res: Response) => {
   try {
     await mcpManager.reload();
     res.json({ success: true });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-
-
 // Serve React app for all non-API routes (SPA catch-all)
-app.get('*', (req, res) => {
+app.get('*', (req: Request, res: Response) => {
   res.sendFile(path.join(__dirname, '../client/index.html'));
 });
 
 // Initialize MCP manager - always needed whether run directly or imported
 mcpManager.setWorkspaceRoot(workspaceRoot);
-mcpManager.initialize().then(() => {
-  logger.info('MCP Manager initialized');
-}).catch((error) => {
-  logger.error('Failed to initialize MCP Manager:', error);
-});
+mcpManager
+  .initialize()
+  .then(() => {
+    logger.info('MCP Manager initialized');
+  })
+  .catch(error => {
+    logger.error('Failed to initialize MCP Manager:', error);
+  });
 
 // Listen for MCP tool changes and refresh agent tools
 mcpManager.on('toolsChanged', async () => {

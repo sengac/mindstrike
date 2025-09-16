@@ -20,7 +20,7 @@ export const logger = winston.createLogger({
           }
           return `${timestamp} ${level}: ${message}${metaStr}`;
         })
-      )
-    })
-  ]
+      ),
+    }),
+  ],
 });

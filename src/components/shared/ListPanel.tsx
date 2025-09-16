@@ -56,7 +56,7 @@ export function ListPanel<T extends ListItem>({
   onChildComponentClose,
   childComponent,
   childComponentTitle,
-  showChildComponentHeader = true
+  showChildComponentHeader = true,
 }: ListPanelProps<T>) {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
@@ -91,21 +91,21 @@ export function ListPanel<T extends ListItem>({
   const EmptyIcon = emptyState.icon;
 
   return (
-    <div 
+    <div
       className={clsx(
-        "bg-gray-800 border-r border-gray-700 flex flex-col relative shrink-0 overflow-hidden transition-all duration-300 ease-in-out",
-        showChildComponent 
-          ? "w-[50%] min-w-[400px] max-w-[800px]" 
-          : "w-[20%] min-w-[200px] max-w-[500px]",
+        'bg-dark-panel border-r border-dark-border flex flex-col relative shrink-0 overflow-hidden transition-all duration-300 ease-in-out',
+        showChildComponent
+          ? 'w-[50%] min-w-[400px] max-w-[800px]'
+          : 'w-[20%] min-w-[200px] max-w-[500px]',
         className
-      )} 
+      )}
       data-testid={testId}
     >
       {/* List Container - slides left when child component is shown */}
-      <div 
+      <div
         className={clsx(
-          "absolute inset-0 flex flex-col transition-transform duration-300 ease-in-out",
-          showChildComponent ? "-translate-x-full" : "translate-x-0"
+          'absolute inset-0 flex flex-col transition-transform duration-300 ease-in-out',
+          showChildComponent ? '-translate-x-full' : 'translate-x-0'
         )}
       >
         {/* Items List */}
@@ -118,13 +118,15 @@ export function ListPanel<T extends ListItem>({
             </div>
           ) : (
             <div className="p-2 space-y-1">
-              {items.map((item) => (
+              {items.map(item => (
                 <div
                   key={item.id}
                   className={clsx(
                     'group relative p-3 rounded-lg cursor-pointer transition-colors',
-                    'hover:bg-gray-700',
-                    activeItemId === item.id ? 'bg-gray-700 border border-blue-500' : 'border border-transparent'
+                    'hover:bg-dark-hover',
+                    activeItemId === item.id
+                      ? 'bg-dark-hover border border-blue-500'
+                      : 'border border-transparent'
                   )}
                   onMouseEnter={() => setHoveredItemId(item.id)}
                   onMouseLeave={() => setHoveredItemId(null)}
@@ -134,7 +136,7 @@ export function ListPanel<T extends ListItem>({
                     <input
                       type="text"
                       value={editingName}
-                      onChange={(e) => setEditingName(e.target.value)}
+                      onChange={e => setEditingName(e.target.value)}
                       onKeyDown={handleKeyDown}
                       onBlur={handleSaveEdit}
                       className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -156,16 +158,16 @@ export function ListPanel<T extends ListItem>({
                             </p>
                           )}
                           <p className="text-xs text-gray-500 mt-1">
-                            {item.updatedAt instanceof Date 
+                            {item.updatedAt instanceof Date
                               ? item.updatedAt.toLocaleDateString()
                               : new Date(item.updatedAt).toLocaleDateString()}
                           </p>
                         </div>
-                        
+
                         {hoveredItemId === item.id && (
                           <div className="flex items-center space-x-1 ml-2">
                             <button
-                              onClick={(e) => {
+                              onClick={e => {
                                 e.stopPropagation();
                                 handleStartEdit(item);
                               }}
@@ -175,7 +177,7 @@ export function ListPanel<T extends ListItem>({
                               <Edit2 size={12} />
                             </button>
                             <button
-                              onClick={(e) => {
+                              onClick={e => {
                                 e.stopPropagation();
                                 onItemDelete(item.id);
                               }}
@@ -206,16 +208,18 @@ export function ListPanel<T extends ListItem>({
       </div>
 
       {/* Child Component - slides in from right when shown */}
-      <div 
+      <div
         className={clsx(
-          "absolute inset-0 flex flex-col bg-gray-800 transition-transform duration-300 ease-in-out",
-          showChildComponent ? "translate-x-0" : "translate-x-full"
+          'absolute inset-0 flex flex-col bg-dark-panel transition-transform duration-300 ease-in-out',
+          showChildComponent ? 'translate-x-0' : 'translate-x-full'
         )}
       >
         {/* Child Component Header with Close Button - optional */}
         {showChildComponentHeader && (
           <div className="flex-shrink-0 p-3 border-b border-gray-600 flex items-center justify-between">
-            <h3 className="text-white text-sm font-medium">{childComponentTitle || 'Details'}</h3>
+            <h3 className="text-white text-sm font-medium">
+              {childComponentTitle || 'Details'}
+            </h3>
             <button
               onClick={onChildComponentClose}
               className="text-gray-400 hover:text-white transition-colors"
@@ -225,7 +229,7 @@ export function ListPanel<T extends ListItem>({
             </button>
           </div>
         )}
-        
+
         {/* Child Component Content */}
         <div className="flex-1 overflow-hidden">
           {showChildComponent && childComponent}

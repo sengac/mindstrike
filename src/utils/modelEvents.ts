@@ -1,5 +1,9 @@
 // Simple event system for model-related changes
-type ModelEventType = 'models-changed' | 'local-model-downloaded' | 'service-added' | 'service-removed';
+type ModelEventType =
+  | 'models-changed'
+  | 'local-model-downloaded'
+  | 'service-added'
+  | 'service-removed';
 
 class ModelEventEmitter {
   private listeners: Map<ModelEventType, (() => void)[]> = new Map();

@@ -2,47 +2,56 @@ import { useState } from 'react';
 import { ChevronDown, ChevronRight, Copy } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+type JSONValue = string | number | boolean | null | JSONObject | JSONArray;
+type JSONObject = { [key: string]: JSONValue };
+type JSONArray = JSONValue[];
+
 interface JSONViewerProps {
-  data: any;
+  value: JSONValue;
   name?: string;
   level?: number;
   isLast?: boolean;
 }
 
-function JSONValue({ value, name, level = 0, isLast = true }: JSONViewerProps) {
+function JSONValueComponent({
+  value,
+  name,
+  level = 0,
+  isLast = true,
+}: JSONViewerProps) {
   const [isExpanded, setIsExpanded] = useState(level < 2); // Auto-expand first 2 levels
-  const indent = '  '.repeat(level);
-  
+
   // Prevent infinite recursion
   if (level > 10) {
     return <span className="text-red-400">Max nesting depth reached</span>;
   }
-  
 
-  
   const copyValue = () => {
     navigator.clipboard.writeText(JSON.stringify(value, null, 2));
     toast.success('Copied to clipboard');
   };
 
-  const renderValue = (val: any, key?: string) => {
+  const renderValue = (val: JSONValue, key?: string): React.ReactNode => {
     if (val === null) {
       return <span className="text-gray-500">null</span>;
     }
-    
+
     if (typeof val === 'boolean') {
       return <span className="text-purple-400">{val.toString()}</span>;
     }
-    
+
     if (typeof val === 'number') {
       return <span className="text-blue-400">{val}</span>;
     }
-    
-    if (typeof val === 'string') {
 
+    if (typeof val === 'string') {
       // Check if the string is actually JSON
       const trimmed = val.trim();
-      if (val.length > 0 && ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']')))) {
+      if (
+        val.length > 0 &&
+        ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+          (trimmed.startsWith('[') && trimmed.endsWith(']')))
+      ) {
         try {
           const parsed = JSON.parse(val);
           // Return the parsed JSON without the quotes - let it render as a nested structure
@@ -51,15 +60,20 @@ function JSONValue({ value, name, level = 0, isLast = true }: JSONViewerProps) {
           // Try to fix common JSON issues and parse again
           try {
             // Attempt to properly escape the string and parse it
-            const fixedJson = val.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
+            const fixedJson = val
+              .replace(/\n/g, '\\n')
+              .replace(/\r/g, '\\r')
+              .replace(/\t/g, '\\t');
             const parsed = JSON.parse(fixedJson);
             return renderValue(parsed, key);
-          } catch (error2) {
+          } catch {
             // Show as broken JSON with error indicator
             return (
               <div className="border border-red-500 bg-red-900/20 p-2 rounded">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-red-400 text-xs font-semibold">⚠ INVALID JSON</span>
+                  <span className="text-red-400 text-xs font-semibold">
+                    ⚠ INVALID JSON
+                  </span>
                   <span className="text-red-300 text-xs">
                     This appears to be JSON but contains syntax errors
                   </span>
@@ -68,14 +82,15 @@ function JSONValue({ value, name, level = 0, isLast = true }: JSONViewerProps) {
                   {val}
                 </pre>
                 <div className="text-red-400 text-xs mt-1">
-                  Error: {error instanceof Error ? error.message : String(error)}
+                  Error:{' '}
+                  {error instanceof Error ? error.message : String(error)}
                 </div>
               </div>
             );
           }
         }
       }
-      
+
       // Show full string for debug viewer
       return (
         <div className="flex items-center gap-2">
@@ -93,22 +108,22 @@ function JSONValue({ value, name, level = 0, isLast = true }: JSONViewerProps) {
         </div>
       );
     }
-    
+
     if (Array.isArray(val)) {
       return renderArray(val, key);
     }
-    
+
     if (typeof val === 'object') {
       return renderObject(val, key);
     }
-    
+
     return <span className="text-gray-300">{String(val)}</span>;
   };
 
-  const renderArray = (arr: any[], key?: string) => {
+  const renderArray = (arr: JSONArray, key?: string) => {
     const isEmpty = arr.length === 0;
     const displayKey = key ? `"${key}": ` : '';
-    
+
     if (isEmpty) {
       return (
         <div className="flex items-center gap-1">
@@ -119,7 +134,10 @@ function JSONValue({ value, name, level = 0, isLast = true }: JSONViewerProps) {
 
     return (
       <div>
-        <div className="flex items-center gap-1 cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
+        <div
+          className="flex items-center gap-1 cursor-pointer"
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
           {isExpanded ? (
             <ChevronDown size={12} className="text-gray-400" />
           ) : (
@@ -127,10 +145,12 @@ function JSONValue({ value, name, level = 0, isLast = true }: JSONViewerProps) {
           )}
           <span className="text-blue-300">{displayKey}[</span>
           {!isExpanded && (
-            <span className="text-gray-500 text-xs ml-1">{arr.length} items</span>
+            <span className="text-gray-500 text-xs ml-1">
+              {arr.length} items
+            </span>
           )}
           <button
-            onClick={(e) => {
+            onClick={e => {
               e.stopPropagation();
               copyValue();
             }}
@@ -145,9 +165,9 @@ function JSONValue({ value, name, level = 0, isLast = true }: JSONViewerProps) {
             {arr.map((item, index) => (
               <div key={index} className="group">
                 <span className="text-gray-500 text-xs mr-2">{index}:</span>
-                <JSONValue 
-                  value={item} 
-                  level={level + 1} 
+                <JSONValueComponent
+                  value={item}
+                  level={level + 1}
                   isLast={index === arr.length - 1}
                 />
               </div>
@@ -159,33 +179,44 @@ function JSONValue({ value, name, level = 0, isLast = true }: JSONViewerProps) {
     );
   };
 
-  const renderObject = (obj: any, key?: string) => {
+  const renderObject = (obj: JSONObject, key?: string) => {
     const keys = Object.keys(obj);
     const isEmpty = keys.length === 0;
     const displayKey = key ? `"${key}": ` : '';
-    
+
     if (isEmpty) {
       return (
         <div className="flex items-center gap-1">
-          <span className="text-yellow-300">{displayKey}{'{}'}</span>
+          <span className="text-yellow-300">
+            {displayKey}
+            {'{}'}
+          </span>
         </div>
       );
     }
 
     return (
       <div>
-        <div className="flex items-center gap-1 cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
+        <div
+          className="flex items-center gap-1 cursor-pointer"
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
           {isExpanded ? (
             <ChevronDown size={12} className="text-gray-400" />
           ) : (
             <ChevronRight size={12} className="text-gray-400" />
           )}
-          <span className="text-yellow-300">{displayKey}{'{'}</span>
+          <span className="text-yellow-300">
+            {displayKey}
+            {'{'}
+          </span>
           {!isExpanded && (
-            <span className="text-gray-500 text-xs ml-1">{keys.length} keys</span>
+            <span className="text-gray-500 text-xs ml-1">
+              {keys.length} keys
+            </span>
           )}
           <button
-            onClick={(e) => {
+            onClick={e => {
               e.stopPropagation();
               copyValue();
             }}
@@ -202,9 +233,9 @@ function JSONValue({ value, name, level = 0, isLast = true }: JSONViewerProps) {
                 <span className="text-blue-300">"{objKey}"</span>
                 <span className="text-gray-500 mx-1">:</span>
                 <div className="flex-1">
-                  <JSONValue 
-                    value={obj[objKey]} 
-                    level={level + 1} 
+                  <JSONValueComponent
+                    value={obj[objKey]}
+                    level={level + 1}
                     isLast={index === keys.length - 1}
                   />
                 </div>
@@ -231,26 +262,31 @@ function JSONValue({ value, name, level = 0, isLast = true }: JSONViewerProps) {
   return <div className="group">{renderValue(value)}</div>;
 }
 
-export function JSONViewer({ content, showControls = true }: { content: any, showControls?: boolean }) {
+export function JSONViewer({
+  content,
+  showControls = true,
+}: {
+  content: unknown;
+  showControls?: boolean;
+}) {
   const [rawView, setRawView] = useState(false);
 
-
-
   // Handle different content types
-  let jsonData;
+  let jsonData: JSONValue;
   let isValidJSON = false;
-  
+
   if (typeof content === 'string') {
     try {
-      jsonData = JSON.parse(content);
+      jsonData = JSON.parse(content) as JSONValue;
       isValidJSON = true;
-    } catch (error) {
+    } catch {
       // Not valid JSON, show as plain text
       isValidJSON = false;
+      jsonData = content;
     }
   } else {
     // Content is already an object
-    jsonData = content;
+    jsonData = content as JSONValue;
     isValidJSON = true;
   }
 
@@ -267,8 +303,12 @@ export function JSONViewer({ content, showControls = true }: { content: any, sho
             </button>
           </div>
         )}
-        <pre className={`text-sm text-gray-300 whitespace-pre-wrap overflow-auto ${showControls ? 'min-h-[50vh] h-full' : ''} font-mono`}>
-          {content}
+        <pre
+          className={`text-sm text-gray-300 whitespace-pre-wrap overflow-auto ${showControls ? 'min-h-[50vh] h-full' : ''} font-mono`}
+        >
+          {typeof content === 'string'
+            ? content
+            : JSON.stringify(content, null, 2)}
         </pre>
       </div>
     );
@@ -296,8 +336,10 @@ export function JSONViewer({ content, showControls = true }: { content: any, sho
           </button>
         </div>
       )}
-      <div className={`text-sm text-gray-300 overflow-auto ${showControls ? 'min-h-[50vh] h-full pt-8' : ''} font-mono`}>
-        <JSONValue value={jsonData} level={0} />
+      <div
+        className={`text-sm text-gray-300 overflow-auto ${showControls ? 'min-h-[50vh] h-full pt-8' : ''} font-mono`}
+      >
+        <JSONValueComponent value={jsonData} level={0} />
       </div>
     </div>
   );

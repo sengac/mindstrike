@@ -1,19 +1,27 @@
 import { useState } from 'react';
-import { Plus, Edit, Trash2, BookOpen, FileText, ExternalLink, Link } from 'lucide-react';
+import {
+  Plus,
+  Edit,
+  Trash2,
+  BookOpen,
+  FileText,
+  ExternalLink,
+  Link,
+} from 'lucide-react';
 import { Source } from '../../types/mindMap';
 
 const typeIcons = {
   file: FileText,
-  url: ExternalLink, 
+  url: ExternalLink,
   document: BookOpen,
-  reference: Link
+  reference: Link,
 };
 
 const typeColors = {
   file: 'text-blue-400',
   url: 'text-green-400',
-  document: 'text-orange-400', 
-  reference: 'text-purple-400'
+  document: 'text-orange-400',
+  reference: 'text-purple-400',
 };
 
 interface SourcesListProps {
@@ -29,7 +37,7 @@ export function SourcesList({ sources, onSourcesUpdate }: SourcesListProps) {
   const [newSource, setNewSource] = useState<Partial<Source>>({
     name: '',
     directory: '',
-    type: 'file'
+    type: 'file',
   });
 
   const handleStartCreate = () => {
@@ -37,20 +45,24 @@ export function SourcesList({ sources, onSourcesUpdate }: SourcesListProps) {
     setNewSource({
       name: '',
       directory: '',
-      type: 'file'
+      type: 'file',
     });
   };
 
   const handleFinishCreate = async () => {
-    if (newSource.name?.trim() && newSource.directory?.trim() && onSourcesUpdate) {
+    if (
+      newSource.name?.trim() &&
+      newSource.directory?.trim() &&
+      onSourcesUpdate
+    ) {
       const source: Source = {
         id: `source-${Date.now()}`,
         name: newSource.name.trim(),
         directory: newSource.directory.trim(),
-        type: newSource.type || 'file'
+        type: newSource.type || 'file',
       };
       const updatedSources = [...(sources || []), source];
-      
+
       try {
         await onSourcesUpdate(updatedSources);
         setIsCreating(false);
@@ -74,23 +86,27 @@ export function SourcesList({ sources, onSourcesUpdate }: SourcesListProps) {
     setEditingSource({
       name: source.name,
       directory: source.directory,
-      type: source.type
+      type: source.type,
     });
   };
 
   const handleFinishEdit = async (sourceId: string) => {
-    if (editingSource.name?.trim() && editingSource.directory?.trim() && onSourcesUpdate) {
+    if (
+      editingSource.name?.trim() &&
+      editingSource.directory?.trim() &&
+      onSourcesUpdate
+    ) {
       const updatedSources = (sources || []).map(source =>
         source.id === sourceId
           ? {
               ...source,
               name: editingSource.name!.trim(),
               directory: editingSource.directory!.trim(),
-              type: editingSource.type || source.type
+              type: editingSource.type || source.type,
             }
           : source
       );
-      
+
       try {
         await onSourcesUpdate(updatedSources);
         setEditingSourceId(null);
@@ -111,8 +127,10 @@ export function SourcesList({ sources, onSourcesUpdate }: SourcesListProps) {
 
   const handleDeleteSource = async (sourceId: string) => {
     if (onSourcesUpdate) {
-      const updatedSources = (sources || []).filter(source => source.id !== sourceId);
-      
+      const updatedSources = (sources || []).filter(
+        source => source.id !== sourceId
+      );
+
       try {
         await onSourcesUpdate(updatedSources);
       } catch (error) {
@@ -134,8 +152,8 @@ export function SourcesList({ sources, onSourcesUpdate }: SourcesListProps) {
           <input
             type="text"
             value={source.name || ''}
-            onChange={(e) => onSourceChange({ name: e.target.value })}
-            onKeyDown={(e) => {
+            onChange={e => onSourceChange({ name: e.target.value })}
+            onKeyDown={e => {
               if (e.key === 'Enter') onSave();
               else if (e.key === 'Escape') onCancel();
             }}
@@ -148,7 +166,9 @@ export function SourcesList({ sources, onSourcesUpdate }: SourcesListProps) {
           <label className="block text-xs text-gray-400 mb-1">Type</label>
           <select
             value={source.type || 'file'}
-            onChange={(e) => onSourceChange({ type: e.target.value as Source['type'] })}
+            onChange={e =>
+              onSourceChange({ type: e.target.value as Source['type'] })
+            }
             className="w-full bg-gray-600 border border-gray-500 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-400"
           >
             <option value="file">File</option>
@@ -159,12 +179,14 @@ export function SourcesList({ sources, onSourcesUpdate }: SourcesListProps) {
         </div>
       </div>
       <div>
-        <label className="block text-xs text-gray-400 mb-1">Directory/Location</label>
+        <label className="block text-xs text-gray-400 mb-1">
+          Directory/Location
+        </label>
         <input
           type="text"
           value={source.directory || ''}
-          onChange={(e) => onSourceChange({ directory: e.target.value })}
-          onKeyDown={(e) => {
+          onChange={e => onSourceChange({ directory: e.target.value })}
+          onKeyDown={e => {
             if (e.key === 'Enter') onSave();
             else if (e.key === 'Escape') onCancel();
           }}
@@ -197,23 +219,27 @@ export function SourcesList({ sources, onSourcesUpdate }: SourcesListProps) {
           <div className="p-4 text-center text-gray-500">
             <BookOpen size={24} className="mx-auto mb-2 opacity-50" />
             <p className="text-sm">No sources added yet</p>
-            <p className="text-xs mt-1">Add sources to track references and files</p>
+            <p className="text-xs mt-1">
+              Add sources to track references and files
+            </p>
           </div>
         ) : (
           <div className="p-2 space-y-2">
             {/* Create Form */}
-            {isCreating && renderSourceForm(
-              newSource,
-              (updates: Partial<Source>) => setNewSource({ ...newSource, ...updates }),
-              handleFinishCreate,
-              handleCancelCreate
-            )}
+            {isCreating &&
+              renderSourceForm(
+                newSource,
+                (updates: Partial<Source>) =>
+                  setNewSource({ ...newSource, ...updates }),
+                handleFinishCreate,
+                handleCancelCreate
+              )}
 
             {/* Sources List */}
-            {(sources || []).map((source) => {
+            {(sources || []).map(source => {
               const IconComponent = typeIcons[source.type] || FileText;
               const iconColor = typeColors[source.type] || 'text-gray-400';
-              
+
               return (
                 <div
                   key={source.id}
@@ -221,13 +247,15 @@ export function SourcesList({ sources, onSourcesUpdate }: SourcesListProps) {
                   onMouseEnter={() => setHoveredSourceId(source.id)}
                   onMouseLeave={() => setHoveredSourceId(null)}
                 >
-                  {editingSourceId === source.id ? 
+                  {editingSourceId === source.id ? (
                     renderSourceForm(
                       editingSource,
-                      (updates: Partial<Source>) => setEditingSource({ ...editingSource, ...updates }),
+                      (updates: Partial<Source>) =>
+                        setEditingSource({ ...editingSource, ...updates }),
                       () => handleFinishEdit(source.id),
                       handleCancelEdit
-                    ) : (
+                    )
+                  ) : (
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
@@ -243,31 +271,32 @@ export function SourcesList({ sources, onSourcesUpdate }: SourcesListProps) {
                           {source.directory}
                         </p>
                       </div>
-                      
-                      {hoveredSourceId === source.id && editingSourceId !== source.id && (
-                        <div className="flex items-center space-x-1 ml-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStartEdit(source);
-                            }}
-                            className="p-1 hover:bg-gray-600 rounded text-gray-400 hover:text-gray-200 transition-colors"
-                            title="Edit source"
-                          >
-                            <Edit size={12} />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteSource(source.id);
-                            }}
-                            className="p-1 hover:bg-gray-600 rounded text-gray-400 hover:text-red-400 transition-colors"
-                            title="Delete source"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                      )}
+
+                      {hoveredSourceId === source.id &&
+                        editingSourceId !== source.id && (
+                          <div className="flex items-center space-x-1 ml-2">
+                            <button
+                              onClick={e => {
+                                e.stopPropagation();
+                                handleStartEdit(source);
+                              }}
+                              className="p-1 hover:bg-gray-600 rounded text-gray-400 hover:text-gray-200 transition-colors"
+                              title="Edit source"
+                            >
+                              <Edit size={12} />
+                            </button>
+                            <button
+                              onClick={e => {
+                                e.stopPropagation();
+                                handleDeleteSource(source.id);
+                              }}
+                              className="p-1 hover:bg-gray-600 rounded text-gray-400 hover:text-red-400 transition-colors"
+                              title="Delete source"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        )}
                     </div>
                   )}
                 </div>

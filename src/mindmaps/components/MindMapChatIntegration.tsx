@@ -55,20 +55,21 @@ export function MindMapChatIntegration({
   onNavigateToChat,
   onDeleteMessage,
   onMessagesUpdate,
-  onFirstMessage,
   onRoleUpdate,
   onNotesUpdate,
   onSourcesUpdate,
-  onNodeAdd,
-  onNodeUpdate,
-  onNodeDelete,
+  onNodeAdd: _onNodeAdd,
+  onNodeUpdate: _onNodeUpdate,
+  onNodeDelete: _onNodeDelete,
   onNavigateToPrevNode,
-  onNavigateToNextNode
+  onNavigateToNextNode,
 }: MindMapChatIntegrationProps) {
   const chatPanelRef = useRef<ChatPanelRef>(null);
 
   // Find the associated thread if chatId exists
-  const associatedThreadMetadata = chatId ? threads.find(t => t.id === chatId) : null;
+  const associatedThreadMetadata = chatId
+    ? threads.find(t => t.id === chatId)
+    : null;
 
   const handleThreadSelect = (threadId: string) => {
     onThreadAssociate(nodeId, threadId);
@@ -121,14 +122,13 @@ export function MindMapChatIntegration({
       onClose={onClose}
       onDeleteMessage={handleDeleteMessageForThread}
       onMessagesUpdate={handleMessagesUpdateForThread}
-      onFirstMessage={onFirstMessage}
       onRoleUpdate={handleRoleUpdateForThread}
-      onNotesUpdate={async (notes) => {
+      onNotesUpdate={async notes => {
         if (onNotesUpdate) {
           await onNotesUpdate(nodeId, notes);
         }
       }}
-      onSourcesUpdate={async (sources) => {
+      onSourcesUpdate={async sources => {
         if (onSourcesUpdate) {
           await onSourcesUpdate(nodeId, sources);
         }

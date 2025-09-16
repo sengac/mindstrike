@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { TaskProgress } from './TaskProgress';
 import { useTaskStore } from '../store/useTaskStore';
 
@@ -11,16 +11,17 @@ export const TaskProgressDemo: React.FC = () => {
 
   const runDemo = async () => {
     if (isRunning) return;
-    
+
     setIsRunning(true);
-    
+
     // Simulate agentic workflow
     const workflowId = `demo-${Date.now()}`;
-    const mockQuery = "Add comprehensive information about machine learning including supervised learning, unsupervised learning, and deep learning with examples and code snippets";
-    
+    const mockQuery =
+      'Add comprehensive information about machine learning including supervised learning, unsupervised learning, and deep learning with examples and code snippets';
+
     // Start workflow
     taskStore.startWorkflow(workflowId, mockQuery, 'demo-mindmap');
-    
+
     // Add demo tasks
     const demoTasks = [
       {
@@ -29,7 +30,7 @@ export const TaskProgressDemo: React.FC = () => {
         description: 'Add main topic node for machine learning',
         priority: 'high' as const,
         status: 'todo' as const,
-        createdAt: new Date()
+        createdAt: new Date(),
       },
       {
         id: `task-${Date.now()}-1`,
@@ -37,7 +38,7 @@ export const TaskProgressDemo: React.FC = () => {
         description: 'Add supervised learning subtopic with examples',
         priority: 'medium' as const,
         status: 'todo' as const,
-        createdAt: new Date()
+        createdAt: new Date(),
       },
       {
         id: `task-${Date.now()}-2`,
@@ -45,7 +46,7 @@ export const TaskProgressDemo: React.FC = () => {
         description: 'Add unsupervised learning subtopic with examples',
         priority: 'medium' as const,
         status: 'todo' as const,
-        createdAt: new Date()
+        createdAt: new Date(),
       },
       {
         id: `task-${Date.now()}-3`,
@@ -53,8 +54,8 @@ export const TaskProgressDemo: React.FC = () => {
         description: 'Add deep learning subtopic with neural network examples',
         priority: 'medium' as const,
         status: 'todo' as const,
-        createdAt: new Date()
-      }
+        createdAt: new Date(),
+      },
     ];
 
     taskStore.setWorkflowTasks(workflowId, demoTasks);
@@ -62,30 +63,42 @@ export const TaskProgressDemo: React.FC = () => {
     // Simulate task execution
     for (let i = 0; i < demoTasks.length; i++) {
       const task = demoTasks[i];
-      
+
       // Set current task index
       taskStore.setCurrentTaskIndex(workflowId, i);
-      
+
       // Set task to in-progress
       taskStore.updateTaskStatus(workflowId, task.id, 'in-progress');
-      
+
       // Simulate work time
-      await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 3000));
-      
+      await new Promise(resolve =>
+        setTimeout(resolve, 2000 + Math.random() * 3000)
+      );
+
       // Complete task (90% success rate)
       if (Math.random() > 0.1) {
         taskStore.updateTaskStatus(workflowId, task.id, 'completed', {
-          changes: [{ action: 'create', nodeId: `node-${i}`, text: `Demo Node ${i}` }]
+          changes: [
+            { action: 'create', nodeId: `node-${i}`, text: `Demo Node ${i}` },
+          ],
         });
       } else {
-        taskStore.updateTaskStatus(workflowId, task.id, 'failed', undefined, 'Simulated random failure');
+        taskStore.updateTaskStatus(
+          workflowId,
+          task.id,
+          'failed',
+          undefined,
+          'Simulated random failure'
+        );
       }
     }
 
     // Complete workflow
-    const completedTasks = demoTasks.filter((_, i) => Math.random() > 0.1).length;
+    const completedTasks = demoTasks.filter(
+      (_, _i) => Math.random() > 0.1
+    ).length;
     taskStore.completeWorkflow(workflowId, completedTasks * 2); // 2 changes per task
-    
+
     setIsRunning(false);
   };
 
@@ -101,9 +114,10 @@ export const TaskProgressDemo: React.FC = () => {
           Agentic Workflow Demo
         </h2>
         <p className="text-gray-600 dark:text-gray-400 mb-4">
-          This demo simulates the new agentic mindmap workflow that breaks down complex requests into individual tasks and executes them step-by-step.
+          This demo simulates the new agentic mindmap workflow that breaks down
+          complex requests into individual tasks and executes them step-by-step.
         </p>
-        
+
         <div className="flex space-x-4">
           <button
             onClick={runDemo}
@@ -112,7 +126,7 @@ export const TaskProgressDemo: React.FC = () => {
           >
             {isRunning ? 'Running Demo...' : 'Start Workflow Demo'}
           </button>
-          
+
           <button
             onClick={clearDemo}
             className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
@@ -135,11 +149,26 @@ export const TaskProgressDemo: React.FC = () => {
           How the Agentic Workflow Works:
         </h3>
         <ul className="text-sm text-gray-700 dark:text-gray-300 space-y-1">
-          <li>• <strong>Task Decomposition:</strong> Complex queries are broken into specific, actionable tasks</li>
-          <li>• <strong>Iterative Execution:</strong> Each task is executed individually with updated context</li>
-          <li>• <strong>Progress Tracking:</strong> Real-time TODO list visible to users during generation</li>
-          <li>• <strong>Error Handling:</strong> Failed tasks don't prevent other tasks from completing</li>
-          <li>• <strong>Contextual Updates:</strong> Each task sees the updated mindmap state from previous tasks</li>
+          <li>
+            • <strong>Task Decomposition:</strong> Complex queries are broken
+            into specific, actionable tasks
+          </li>
+          <li>
+            • <strong>Iterative Execution:</strong> Each task is executed
+            individually with updated context
+          </li>
+          <li>
+            • <strong>Progress Tracking:</strong> Real-time TODO list visible to
+            users during generation
+          </li>
+          <li>
+            • <strong>Error Handling:</strong> Failed tasks don't prevent other
+            tasks from completing
+          </li>
+          <li>
+            • <strong>Contextual Updates:</strong> Each task sees the updated
+            mindmap state from previous tasks
+          </li>
         </ul>
       </div>
     </div>

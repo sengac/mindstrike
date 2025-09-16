@@ -1,28 +1,11 @@
 import React from 'react';
-import { Loader2, CheckCircle, XCircle, Clock, Brain, List, Play, Eye, FileText } from 'lucide-react';
-import { useTaskStore, TaskWorkflow } from '../../store/useTaskStore';
+import { Loader2, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { useTaskStore, Task } from '../../store/useTaskStore';
 
 interface WorkflowProgressProps {
   workflowId: string;
   className?: string;
 }
-
-const getPhaseIcon = (phase: string) => {
-  switch (phase) {
-    case 'reasoning':
-      return <Brain className="w-4 h-4" />;
-    case 'planning':
-      return <List className="w-4 h-4" />;
-    case 'executing':
-      return <Play className="w-4 h-4" />;
-    case 'observing':
-      return <Eye className="w-4 h-4" />;
-    case 'finalizing':
-      return <FileText className="w-4 h-4" />;
-    default:
-      return <Clock className="w-4 h-4" />;
-  }
-};
 
 const getStatusIcon = (status: string) => {
   switch (status) {
@@ -50,15 +33,23 @@ const getStatusColor = (status: string) => {
   }
 };
 
-export const WorkflowProgress: React.FC<WorkflowProgressProps> = ({ workflowId, className = '' }) => {
+export const WorkflowProgress: React.FC<WorkflowProgressProps> = ({
+  workflowId,
+  className = '',
+}) => {
   const { currentWorkflow, workflows, getWorkflowProgress } = useTaskStore();
-  
+
   // Find the workflow by ID
-  const workflow = currentWorkflow?.id === workflowId ? currentWorkflow : workflows.find(w => w.id === workflowId);
-  
+  const workflow =
+    currentWorkflow?.id === workflowId
+      ? currentWorkflow
+      : workflows.find(w => w.id === workflowId);
+
   if (!workflow) {
     return (
-      <div className={`p-4 bg-gray-800 rounded-lg border border-gray-700 ${className}`}>
+      <div
+        className={`p-4 bg-gray-800 rounded-lg border border-gray-700 ${className}`}
+      >
         <div className="flex items-center gap-2">
           <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
           <span className="text-gray-300">Initializing workflow...</span>
@@ -69,10 +60,13 @@ export const WorkflowProgress: React.FC<WorkflowProgressProps> = ({ workflowId, 
   }
 
   const progress = getWorkflowProgress(workflowId);
-  const isActive = workflow.status === 'executing' || workflow.status === 'planning';
+  const isActive =
+    workflow.status === 'executing' || workflow.status === 'planning';
 
   return (
-    <div className={`p-4 bg-gray-800 rounded-lg border border-gray-700 ${className}`}>
+    <div
+      className={`p-4 bg-gray-800 rounded-lg border border-gray-700 ${className}`}
+    >
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
@@ -86,22 +80,30 @@ export const WorkflowProgress: React.FC<WorkflowProgressProps> = ({ workflowId, 
             <Clock className="w-5 h-5 text-gray-400" />
           )}
           <h3 className="text-sm font-medium text-white">
-            {isActive ? 'Processing Workflow' : 
-             workflow.status === 'completed' ? 'Workflow Complete' :
-             workflow.status === 'failed' ? 'Workflow Failed' : 'Workflow'}
+            {isActive
+              ? 'Processing Workflow'
+              : workflow.status === 'completed'
+                ? 'Workflow Complete'
+                : workflow.status === 'failed'
+                  ? 'Workflow Failed'
+                  : 'Workflow'}
           </h3>
         </div>
-        
+
         {progress.total > 0 && (
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-gray-400">{progress.completed}/{progress.total}</span>
+            <span className="text-gray-400">
+              {progress.completed}/{progress.total}
+            </span>
             <div className="w-16 h-1 bg-gray-700 rounded">
-              <div 
+              <div
                 className="h-full bg-purple-400 rounded transition-all duration-300"
                 style={{ width: `${progress.percentage}%` }}
               />
             </div>
-            <span className="text-purple-400 font-mono">{progress.percentage}%</span>
+            <span className="text-purple-400 font-mono">
+              {progress.percentage}%
+            </span>
           </div>
         )}
       </div>
@@ -109,10 +111,10 @@ export const WorkflowProgress: React.FC<WorkflowProgressProps> = ({ workflowId, 
       {/* Task List */}
       {workflow.tasks.length > 0 && (
         <div className="space-y-2">
-          {workflow.tasks.map((task, index) => {
+          {workflow.tasks.map((task: Task, index) => {
             const isCurrentTask = index === workflow.currentTaskIndex;
             const statusColor = getStatusColor(task.status);
-            
+
             return (
               <div
                 key={task.id}
@@ -122,7 +124,7 @@ export const WorkflowProgress: React.FC<WorkflowProgressProps> = ({ workflowId, 
                 <div className="flex-shrink-0 mt-0.5">
                   {getStatusIcon(task.status)}
                 </div>
-                
+
                 {/* Task Content */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
@@ -130,36 +132,49 @@ export const WorkflowProgress: React.FC<WorkflowProgressProps> = ({ workflowId, 
                       Task {index + 1}
                     </span>
                     {task.priority && (
-                      <span className={`text-xs px-2 py-0.5 rounded ${
-                        task.priority === 'high' ? 'bg-red-600 text-red-100' :
-                        task.priority === 'medium' ? 'bg-yellow-600 text-yellow-100' :
-                        'bg-gray-600 text-gray-100'
-                      }`}>
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded ${
+                          task.priority === 'high'
+                            ? 'bg-red-600 text-red-100'
+                            : task.priority === 'medium'
+                              ? 'bg-yellow-600 text-yellow-100'
+                              : 'bg-gray-600 text-gray-100'
+                        }`}
+                      >
                         {task.priority}
                       </span>
                     )}
                     {isCurrentTask && task.status === 'in-progress' && (
                       <div className="flex gap-1">
-                        <div className="w-1 h-1 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                        <div className="w-1 h-1 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                        <div className="w-1 h-1 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                        <div
+                          className="w-1 h-1 bg-blue-400 rounded-full animate-bounce"
+                          style={{ animationDelay: '0ms' }}
+                        />
+                        <div
+                          className="w-1 h-1 bg-blue-400 rounded-full animate-bounce"
+                          style={{ animationDelay: '150ms' }}
+                        />
+                        <div
+                          className="w-1 h-1 bg-blue-400 rounded-full animate-bounce"
+                          style={{ animationDelay: '300ms' }}
+                        />
                       </div>
                     )}
                   </div>
-                  
+
                   <p className="text-sm text-gray-200 leading-relaxed">
                     {task.description}
                   </p>
-                  
+
                   {/* Error Message */}
-                  {task.error && (
+                  {(task.error as string) && (
                     <div className="mt-2 p-2 bg-red-900/30 border border-red-500/30 rounded text-xs text-red-200">
-                      <strong>Error:</strong> {task.error}
+                      <strong>Error:</strong> {task.error as string}
                     </div>
                   )}
-                  
+
                   {/* Task Result Preview */}
-                  {task.result && task.status === 'completed' && (
+                  {task.result != null && task.status === 'completed' && (
                     <div className="mt-2 text-xs text-gray-400">
                       <div className="flex items-center gap-1">
                         <CheckCircle className="w-3 h-3" />
@@ -186,7 +201,7 @@ export const WorkflowProgress: React.FC<WorkflowProgressProps> = ({ workflowId, 
           <span>Creating task breakdown...</span>
         </div>
       )}
-      
+
       {workflow.status === 'completed' && (
         <div className="mt-3 p-3 bg-green-900/20 border border-green-500/30 rounded-lg">
           <div className="flex items-center gap-2 text-sm text-green-300">
@@ -200,7 +215,7 @@ export const WorkflowProgress: React.FC<WorkflowProgressProps> = ({ workflowId, 
           )}
         </div>
       )}
-      
+
       {workflow.status === 'failed' && (
         <div className="mt-3 p-3 bg-red-900/20 border border-red-500/30 rounded-lg">
           <div className="flex items-center gap-2 text-sm text-red-300">

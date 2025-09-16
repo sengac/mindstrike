@@ -1,5 +1,14 @@
-import React, { useEffect } from 'react';
-import { AlertCircle, CheckCircle, Loader2, Search, X, Download, Database, FileCheck } from 'lucide-react';
+import { useEffect } from 'react';
+import {
+  AlertCircle,
+  CheckCircle,
+  Loader2,
+  Search,
+  X,
+  Download,
+  Database,
+  FileCheck,
+} from 'lucide-react';
 import { useModelScanStore } from '../store/useModelScanStore';
 
 interface ModelScanProgressProps {
@@ -7,15 +16,12 @@ interface ModelScanProgressProps {
   onClose?: () => void;
 }
 
-export function ModelScanProgress({ isVisible, onClose }: ModelScanProgressProps) {
-  const {
-    isScanning,
-    canCancel,
-    progress,
-    startScan,
-    cancelScan,
-    resetScan
-  } = useModelScanStore();
+export function ModelScanProgress({
+  isVisible,
+  onClose,
+}: ModelScanProgressProps) {
+  const { isScanning, canCancel, progress, startScan, cancelScan, resetScan } =
+    useModelScanStore();
 
   // Auto-start scan when component becomes visible
   useEffect(() => {
@@ -84,7 +90,11 @@ export function ModelScanProgress({ isVisible, onClose }: ModelScanProgressProps
   };
 
   const handleClose = () => {
-    if (progress.stage === 'completed' || progress.stage === 'error' || progress.stage === 'cancelled') {
+    if (
+      progress.stage === 'completed' ||
+      progress.stage === 'error' ||
+      progress.stage === 'cancelled'
+    ) {
       resetScan();
       onClose?.();
     }
@@ -108,7 +118,9 @@ export function ModelScanProgress({ isVisible, onClose }: ModelScanProgressProps
               Cancel
             </button>
           )}
-          {(progress.stage === 'completed' || progress.stage === 'error' || progress.stage === 'cancelled') && (
+          {(progress.stage === 'completed' ||
+            progress.stage === 'error' ||
+            progress.stage === 'cancelled') && (
             <button
               onClick={handleClose}
               className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-gray-200 transition-colors"
@@ -150,7 +162,9 @@ export function ModelScanProgress({ isVisible, onClose }: ModelScanProgressProps
       {progress.totalItems && (
         <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
           <span>Items processed</span>
-          <span>{progress.completedItems || 0} / {progress.totalItems}</span>
+          <span>
+            {progress.completedItems || 0} / {progress.totalItems}
+          </span>
         </div>
       )}
 
@@ -167,7 +181,8 @@ export function ModelScanProgress({ isVisible, onClose }: ModelScanProgressProps
         <div className="mt-3 p-3 bg-green-900/20 border border-green-600/30 rounded">
           <p className="text-green-300 text-sm">
             ✓ Scan completed successfully!
-            {progress.totalItems && ` Found ${progress.totalItems} models available for download.`}
+            {progress.totalItems &&
+              ` Found ${progress.totalItems} models available for download.`}
           </p>
         </div>
       )}

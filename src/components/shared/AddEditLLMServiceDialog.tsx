@@ -5,7 +5,14 @@ import { useDialogAnimation } from '../../hooks/useDialogAnimation';
 
 export interface LLMServiceFormData {
   name: string;
-  type: 'ollama' | 'vllm' | 'openai-compatible' | 'openai' | 'anthropic' | 'perplexity' | 'google';
+  type:
+    | 'ollama'
+    | 'vllm'
+    | 'openai-compatible'
+    | 'openai'
+    | 'anthropic'
+    | 'perplexity'
+    | 'google';
   baseURL: string;
   apiKey: string;
 }
@@ -23,19 +30,23 @@ export function AddEditLLMServiceDialog({
   onClose,
   onSave,
   editingService = null,
-  title
+  title,
 }: AddEditLLMServiceDialogProps) {
-  const { shouldRender, isVisible, handleClose } = useDialogAnimation(isOpen, onClose);
+  const { shouldRender, isVisible, handleClose } = useDialogAnimation(
+    isOpen,
+    onClose
+  );
   const [showApiKey, setShowApiKey] = useState(false);
   const [formData, setFormData] = useState<LLMServiceFormData>({
     name: '',
     type: 'ollama',
     baseURL: '',
-    apiKey: ''
+    apiKey: '',
   });
 
   const isEditing = !!editingService;
-  const dialogTitle = title || (isEditing ? 'Edit LLM Service' : 'Add Custom LLM Service');
+  const dialogTitle =
+    title || (isEditing ? 'Edit LLM Service' : 'Add Custom LLM Service');
 
   useEffect(() => {
     if (editingService) {
@@ -45,7 +56,7 @@ export function AddEditLLMServiceDialog({
         name: '',
         type: 'ollama',
         baseURL: '',
-        apiKey: ''
+        apiKey: '',
       });
     }
     setShowApiKey(false);
@@ -68,11 +79,11 @@ export function AddEditLLMServiceDialog({
       case 'openai':
         return 'https://api.openai.com/v1';
       case 'anthropic':
-      return 'https://api.anthropic.com';
-    case 'perplexity':
-      return 'https://api.perplexity.ai';
-    case 'google':
-      return 'https://generativelanguage.googleapis.com';
+        return 'https://api.anthropic.com';
+      case 'perplexity':
+        return 'https://api.perplexity.ai';
+      case 'google':
+        return 'https://generativelanguage.googleapis.com';
       case 'openai-compatible':
         return 'http://localhost:8080/v1';
       default:
@@ -85,7 +96,12 @@ export function AddEditLLMServiceDialog({
   };
 
   return (
-    <BaseDialog isOpen={shouldRender} onClose={handleClose} isVisible={isVisible} maxWidth="max-w-2xl">
+    <BaseDialog
+      isOpen={shouldRender}
+      onClose={handleClose}
+      isVisible={isVisible}
+      maxWidth="max-w-2xl"
+    >
       <div className="p-6">
         <div className="flex items-center space-x-3 mb-6">
           <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
@@ -94,7 +110,9 @@ export function AddEditLLMServiceDialog({
           <div>
             <h3 className="text-lg font-medium text-white">{dialogTitle}</h3>
             <p className="text-sm text-gray-400">
-              {isEditing ? 'Update service configuration' : 'Configure your LLM service connection'}
+              {isEditing
+                ? 'Update service configuration'
+                : 'Configure your LLM service connection'}
             </p>
           </div>
         </div>
@@ -108,7 +126,9 @@ export function AddEditLLMServiceDialog({
               <input
                 type="text"
                 value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                onChange={e =>
+                  setFormData({ ...formData, name: e.target.value })
+                }
                 placeholder="e.g., My Local Ollama"
                 className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 required
@@ -120,11 +140,13 @@ export function AddEditLLMServiceDialog({
               </label>
               <select
                 value={formData.type}
-                onChange={(e) => setFormData({ 
-                  ...formData, 
-                  type: e.target.value as LLMServiceFormData['type'],
-                  baseURL: getPlaceholderForType(e.target.value)
-                })}
+                onChange={e =>
+                  setFormData({
+                    ...formData,
+                    type: e.target.value as LLMServiceFormData['type'],
+                    baseURL: getPlaceholderForType(e.target.value),
+                  })
+                }
                 className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="ollama">Ollama</option>
@@ -137,7 +159,7 @@ export function AddEditLLMServiceDialog({
               </select>
             </div>
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Base URL *
@@ -145,13 +167,15 @@ export function AddEditLLMServiceDialog({
             <input
               type="url"
               value={formData.baseURL}
-              onChange={(e) => setFormData({ ...formData, baseURL: e.target.value })}
+              onChange={e =>
+                setFormData({ ...formData, baseURL: e.target.value })
+              }
               placeholder={getPlaceholderForType(formData.type)}
               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               API Key {requiresApiKey(formData.type) ? '*' : '(optional)'}
@@ -160,7 +184,9 @@ export function AddEditLLMServiceDialog({
               <input
                 type={showApiKey ? 'text' : 'password'}
                 value={formData.apiKey}
-                onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
+                onChange={e =>
+                  setFormData({ ...formData, apiKey: e.target.value })
+                }
                 placeholder="Enter API key if required"
                 className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 pr-10 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 required={requiresApiKey(formData.type)}

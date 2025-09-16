@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { decodeSseData } from '../utils/sseDecoder';
+import {
+  decodeSseEventData,
+  isSseDebugEntryData,
+  isSseTokenStatsData,
+} from '../utils/sseDecoder';
 
 export interface LLMDebugEntry {
   id: string;
@@ -36,21 +40,22 @@ export const useDebugStore = create<DebugState>()(
     currentTotalTokens: 0,
     isGenerating: false,
 
-    addEntry: (entry) => {
+    addEntry: entry => {
       const state = get();
       const newEntry: LLMDebugEntry = {
         ...entry,
         id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         timestamp: Date.now(),
         // Include current token stats if we're generating and this is a response
-        ...(state.isGenerating && entry.type === 'response' && {
-          tokensPerSecond: state.currentTokensPerSecond,
-          totalTokens: state.currentTotalTokens,
-        }),
+        ...(state.isGenerating &&
+          entry.type === 'response' && {
+            tokensPerSecond: state.currentTokensPerSecond,
+            totalTokens: state.currentTotalTokens,
+          }),
       };
 
-      set((state) => ({
-        entries: [newEntry, ...state.entries.slice(0, 999)] // Keep max 1000 entries
+      set(state => ({
+        entries: [newEntry, ...state.entries.slice(0, 999)], // Keep max 1000 entries
       }));
     },
 
@@ -58,15 +63,18 @@ export const useDebugStore = create<DebugState>()(
       set({ entries: [] });
     },
 
-    setConnected: (connected) => {
+    setConnected: connected => {
       set({ isConnected: connected });
     },
 
     updateTokenStats: (tokensPerSecond, totalTokens) => {
-      set({ currentTokensPerSecond: tokensPerSecond, currentTotalTokens: totalTokens });
+      set({
+        currentTokensPerSecond: tokensPerSecond,
+        currentTotalTokens: totalTokens,
+      });
     },
 
-    setGenerating: (generating) => {
+    setGenerating: generating => {
       const state = get();
       set({ isGenerating: generating });
       // Only reset token stats if we're actually stopping generation (was true, now false)
@@ -84,20 +92,23 @@ let currentDebugEventSource: EventSource | null = null;
 
 function createDebugSSEConnection(): EventSource {
   const eventSource = new EventSource('/api/debug/stream');
-  
+
   eventSource.onopen = () => {
     useDebugStore.getState().setConnected(true);
   };
-  
-  eventSource.onmessage = async (event) => {
+
+  eventSource.onmessage = async event => {
     try {
       const data = JSON.parse(event.data);
 
       // Decode the entire data object
-      const decodedData = await decodeSseData(data);
+      const decodedData = await decodeSseEventData(data);
 
-      if (decodedData.type === 'debug-entry') {
-        const { addEntry, isGenerating } = useDebugStore.getState();
+      if (
+        decodedData.type === 'debug-entry' &&
+        isSseDebugEntryData(decodedData)
+      ) {
+        const { addEntry } = useDebugStore.getState();
 
         addEntry({
           type: decodedData.entryType,
@@ -111,28 +122,42 @@ function createDebugSSEConnection(): EventSource {
         });
 
         // Update current stats from any response with token stats (regardless of generation state)
-        if (decodedData.entryType === 'response' && decodedData.tokensPerSecond && decodedData.totalTokens) {
+        if (
+          decodedData.entryType === 'response' &&
+          decodedData.tokensPerSecond &&
+          decodedData.totalTokens
+        ) {
           const { updateTokenStats } = useDebugStore.getState();
-          updateTokenStats(decodedData.tokensPerSecond, decodedData.totalTokens);
+          updateTokenStats(
+            decodedData.tokensPerSecond,
+            decodedData.totalTokens
+          );
         }
-      } else if (decodedData.type === 'token-stats') {
+      } else if (
+        decodedData.type === 'token-stats' &&
+        isSseTokenStatsData(decodedData)
+      ) {
         // Handle real-time token statistics updates
         const { updateTokenStats } = useDebugStore.getState();
-        updateTokenStats(decodedData.tokensPerSecond || 0, decodedData.totalTokens || 0);
+        updateTokenStats(decodedData.tokensPerSecond, decodedData.totalTokens);
       } else if (decodedData.type === 'generation-status') {
         // Handle generation start/stop
         const { setGenerating } = useDebugStore.getState();
-        setGenerating(decodedData.generating || false);
+        setGenerating(
+          typeof decodedData.generating === 'boolean'
+            ? decodedData.generating
+            : false
+        );
       }
     } catch (error) {
       console.error('Error parsing debug SSE data:', error);
     }
   };
 
-  eventSource.onerror = (error) => {
+  eventSource.onerror = error => {
     console.error('Debug SSE connection error:', error);
     useDebugStore.getState().setConnected(false);
-    
+
     if (eventSource.readyState === EventSource.CLOSED) {
       setTimeout(() => {
         currentDebugEventSource = createDebugSSEConnection();
@@ -146,15 +171,15 @@ function createDebugSSEConnection(): EventSource {
 export function initializeDebugSSE() {
   if (debugSSEInitialized) return;
   debugSSEInitialized = true;
-  
+
   // Close any existing connection
   if (currentDebugEventSource) {
     currentDebugEventSource.close();
   }
-  
+
   // Create new connection
   currentDebugEventSource = createDebugSSEConnection();
-  
+
   // Cleanup on page unload
   window.addEventListener('beforeunload', () => {
     if (currentDebugEventSource) {
@@ -165,7 +190,7 @@ export function initializeDebugSSE() {
 
 // Auto-initialize when store is first accessed
 useDebugStore.subscribe(
-  (state) => state.isConnected,
+  state => state.isConnected,
   () => {
     if (!debugSSEInitialized) {
       initializeDebugSSE();

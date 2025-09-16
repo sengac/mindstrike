@@ -7,7 +7,7 @@ interface ModelsState {
   isLoading: boolean;
   error: string | null;
   defaultModelId: string | null;
-  
+
   // Actions
   setModels: (models: LLMModel[]) => void;
   setIsLoading: (loading: boolean) => void;
@@ -24,27 +24,27 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
   error: null,
   defaultModelId: null,
 
-  setModels: (models) => {
+  setModels: models => {
     const defaultModel = models.find(m => m.isDefault);
-    set({ 
-      models, 
+    set({
+      models,
       defaultModelId: defaultModel?.id || null,
-      error: null 
+      error: null,
     });
   },
 
-  setIsLoading: (isLoading) => set({ isLoading }),
+  setIsLoading: isLoading => set({ isLoading }),
 
-  setError: (error) => set({ error }),
+  setError: error => set({ error }),
 
   setDefaultModel: async (modelId: string) => {
     try {
       const { models, defaultModelId } = get();
-      
+
       // Check if we're switching away from a local model
       const currentModel = models.find(m => m.id === defaultModelId);
       const newModel = models.find(m => m.id === modelId);
-      
+
       // If switching from local to non-local model, unload all local models
       if (currentModel?.type === 'local' && newModel?.type !== 'local') {
         try {
@@ -52,23 +52,30 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
           const localModelsResponse = await fetch('/api/local-llm/models');
           if (localModelsResponse.ok) {
             const localModels = await localModelsResponse.json();
-            
+
             // Check if any local models are loaded
-            const loadedModels = localModels.filter((model: any) => model.status === 'loaded');
+            const loadedModels = localModels.filter(
+              (model: any) => model.status === 'loaded'
+            );
             if (loadedModels.length > 0) {
-              console.log(`Unloading ${loadedModels.length} local model(s) to free memory...`);
+              console.log(
+                `Unloading ${loadedModels.length} local model(s) to free memory...`
+              );
             }
-            
+
             // Unload all loaded local models
             for (const model of localModels) {
               if (model.status === 'loaded') {
                 try {
                   await fetch(`/api/local-llm/models/${model.id}/unload`, {
-                    method: 'POST'
+                    method: 'POST',
                   });
                   console.log(`Unloaded local model: ${model.name}`);
                 } catch (unloadError) {
-                  console.warn(`Failed to unload local model ${model.name}:`, unloadError);
+                  console.warn(
+                    `Failed to unload local model ${model.name}:`,
+                    unloadError
+                  );
                 }
               }
             }
@@ -84,7 +91,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ modelId })
+        body: JSON.stringify({ modelId }),
       });
 
       if (!response.ok) {
@@ -94,13 +101,13 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
       // Update local state
       const updatedModels = models.map(model => ({
         ...model,
-        isDefault: model.id === modelId
+        isDefault: model.id === modelId,
       }));
-      
-      set({ 
+
+      set({
         models: updatedModels,
         defaultModelId: modelId,
-        error: null
+        error: null,
       });
 
       // Store in global app store
@@ -108,7 +115,12 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
       useAppStore.getState().setLastUsedModel(modelId);
     } catch (error) {
       console.error('Failed to set default model:', error);
-      set({ error: error instanceof Error ? error.message : 'Failed to set default model' });
+      set({
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Failed to set default model',
+      });
       throw error;
     }
   },
@@ -116,27 +128,30 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
   fetchModels: async () => {
     try {
       set({ isLoading: true, error: null });
-      
+
       const response = await fetch('/api/llm/models');
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-      
+
       const fetchedModels = await response.json();
       get().setModels(fetchedModels);
-      
+
       // Auto-select last used model if available
       const { useAppStore } = await import('./useAppStore');
       const lastUsedModel = useAppStore.getState().lastUsedModel;
-      
+
       if (lastUsedModel && !fetchedModels.find((m: LLMModel) => m.isDefault)) {
-        const lastUsedStillExists = fetchedModels.find((m: LLMModel) => m.id === lastUsedModel.modelId);
+        const lastUsedStillExists = fetchedModels.find(
+          (m: LLMModel) => m.id === lastUsedModel.modelId
+        );
         if (lastUsedStillExists) {
           await get().setDefaultModel(lastUsedModel.modelId);
         }
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch models';
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to fetch models';
       set({ error: errorMessage });
     } finally {
       set({ isLoading: false });
@@ -146,16 +161,17 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
   rescanModels: async () => {
     try {
       set({ isLoading: true, error: null });
-      
+
       const response = await fetch('/api/llm/rescan', { method: 'POST' });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-      
+
       await get().fetchModels();
     } catch (error) {
       console.error('Failed to rescan models:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to rescan models';
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to rescan models';
       set({ error: errorMessage });
       throw error;
     } finally {
@@ -166,7 +182,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
   getDefaultModel: () => {
     const { models, defaultModelId } = get();
     return models.find(model => model.id === defaultModelId) || null;
-  }
+  },
 }));
 
 // Global SSE listener that runs regardless of component mounting
@@ -177,8 +193,8 @@ let initializationTimeout: number | null = null;
 function createSSEConnection(): EventSource {
   // Server-Sent Events for real-time model updates
   const eventSource = new EventSource('/api/llm/model-updates');
-  
-  eventSource.onmessage = (event) => {
+
+  eventSource.onmessage = event => {
     try {
       const data = JSON.parse(event.data);
       if (data.type === 'models-updated') {
@@ -192,7 +208,7 @@ function createSSEConnection(): EventSource {
     }
   };
 
-  eventSource.onerror = (error) => {
+  eventSource.onerror = _error => {
     // Only attempt reconnect if connection was closed
     if (eventSource.readyState === EventSource.CLOSED) {
       setTimeout(() => {
@@ -207,24 +223,24 @@ function createSSEConnection(): EventSource {
 export function initializeModelsSSE() {
   if (sseInitialized) return;
   sseInitialized = true;
-  
+
   // Clear any existing timeout
   if (initializationTimeout) {
     clearTimeout(initializationTimeout);
   }
-  
+
   // Close any existing connection
   if (currentEventSource) {
     currentEventSource.close();
     currentEventSource = null;
   }
-  
+
   // Delay SSE connection to allow server to fully start
   initializationTimeout = window.setTimeout(() => {
     currentEventSource = createSSEConnection();
     initializationTimeout = null;
   }, 2000);
-  
+
   // Listen for model change events
   const handleModelChange = () => {
     const { isLoading, rescanModels } = useModelsStore.getState();

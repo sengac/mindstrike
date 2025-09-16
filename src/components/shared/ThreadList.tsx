@@ -25,10 +25,10 @@ export function ThreadList({
   onThreadRename,
   onThreadDelete,
   showCreateButton = true,
-  emptyStateTitle = "No chat threads yet",
-  emptyStateSubtitle = "Create a new conversation to get started",
-  createButtonTitle = "New Chat",
-  className = ""
+  emptyStateTitle = 'No chat threads yet',
+  emptyStateSubtitle = 'Create a new conversation to get started',
+  createButtonTitle = 'New Chat',
+  className = '',
 }: ThreadListProps) {
   const [hoveredThreadId, setHoveredThreadId] = useState<string | null>(null);
   const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
@@ -70,7 +70,7 @@ export function ThreadList({
           </div>
         ) : (
           <div className="p-2 space-y-1">
-            {threads.map((thread) => (
+            {threads.map(thread => (
               <div
                 key={thread.id}
                 className={`group relative p-3 rounded-lg cursor-pointer transition-colors border ${
@@ -90,9 +90,9 @@ export function ThreadList({
                   <input
                     type="text"
                     value={editingName}
-                    onChange={(e) => setEditingName(e.target.value)}
+                    onChange={e => setEditingName(e.target.value)}
                     onBlur={() => handleFinishEdit(thread.id)}
-                    onKeyDown={(e) => {
+                    onKeyDown={e => {
                       if (e.key === 'Enter') {
                         handleFinishEdit(thread.id);
                       } else if (e.key === 'Escape') {
@@ -111,9 +111,9 @@ export function ThreadList({
                         </h4>
                         {thread.customRole && (
                           <div title="Custom personality applied">
-                            <UserCheck 
-                              size={14} 
-                              className="text-purple-400 flex-shrink-0" 
+                            <UserCheck
+                              size={14}
+                              className="text-purple-400 flex-shrink-0"
                             />
                           </div>
                         )}
@@ -121,42 +121,45 @@ export function ThreadList({
 
                       <div className="flex items-center justify-between mt-1">
                         <p className="text-xs text-gray-500">
-                          {thread.messageCount} message{thread.messageCount !== 1 ? 's' : ''}
+                          {thread.messageCount} message
+                          {thread.messageCount !== 1 ? 's' : ''}
                         </p>
                         <p className="text-xs text-gray-500">
                           {thread.updatedAt.toLocaleDateString()}
                         </p>
                       </div>
                     </div>
-                    
-                    {hoveredThreadId === thread.id && editingThreadId !== thread.id && (onThreadRename || onThreadDelete) && (
-                      <div className="flex items-center space-x-1 ml-2">
-                        {onThreadRename && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStartEdit(thread);
-                            }}
-                            className="p-1 hover:bg-gray-600 rounded text-gray-400 hover:text-gray-200 transition-colors"
-                            title="Rename thread"
-                          >
-                            <Edit2 size={12} />
-                          </button>
-                        )}
-                        {onThreadDelete && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteThread(thread.id);
-                            }}
-                            className="p-1 hover:bg-gray-600 rounded text-gray-400 hover:text-red-400 transition-colors"
-                            title="Delete thread"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        )}
-                      </div>
-                    )}
+
+                    {hoveredThreadId === thread.id &&
+                      editingThreadId !== thread.id &&
+                      (onThreadRename || onThreadDelete) && (
+                        <div className="flex items-center space-x-1 ml-2">
+                          {onThreadRename && (
+                            <button
+                              onClick={e => {
+                                e.stopPropagation();
+                                handleStartEdit(thread);
+                              }}
+                              className="p-1 hover:bg-gray-600 rounded text-gray-400 hover:text-gray-200 transition-colors"
+                              title="Rename thread"
+                            >
+                              <Edit2 size={12} />
+                            </button>
+                          )}
+                          {onThreadDelete && (
+                            <button
+                              onClick={e => {
+                                e.stopPropagation();
+                                handleDeleteThread(thread.id);
+                              }}
+                              className="p-1 hover:bg-gray-600 rounded text-gray-400 hover:text-red-400 transition-colors"
+                              title="Delete thread"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          )}
+                        </div>
+                      )}
                   </div>
                 )}
               </div>

@@ -43,14 +43,14 @@ export class CommandResolver {
       path.join(process.env.APPDATA || '', 'nvm', 'current', 'node.exe'),
       path.join(process.env.APPDATA || '', 'nvm', '*', 'node.exe'),
       path.join(process.env.NVM_HOME || '', 'current', 'node.exe'),
-      path.join(process.env.NVM_HOME || '', '*', 'node.exe')
+      path.join(process.env.NVM_HOME || '', '*', 'node.exe'),
     ],
     darwin: [
       '/usr/local/bin/node',
       '/opt/homebrew/bin/node',
       '/usr/bin/node',
       path.join(process.env.HOME || '', '.nvm/current/bin/node'),
-      path.join(process.env.HOME || '', '.volta/bin/node')
+      path.join(process.env.HOME || '', '.volta/bin/node'),
     ],
     linux: [
       '/usr/local/bin/node',
@@ -58,8 +58,8 @@ export class CommandResolver {
       '/opt/node/bin/node',
       path.join(process.env.HOME || '', '.nvm/current/bin/node'),
       path.join(process.env.HOME || '', '.volta/bin/node'),
-      path.join(process.env.HOME || '', '.local/bin/node')
-    ]
+      path.join(process.env.HOME || '', '.local/bin/node'),
+    ],
   };
 
   private static readonly NPX_PATHS = {
@@ -68,14 +68,20 @@ export class CommandResolver {
       'C:\\Program Files (x86)\\nodejs\\npx.cmd',
       path.join(process.env.APPDATA || '', 'npm', 'npx.cmd'),
       path.join(process.env.LOCALAPPDATA || '', 'npm', 'npx.cmd'),
-      path.join(process.env.USERPROFILE || '', 'AppData', 'Roaming', 'npm', 'npx.cmd'),
+      path.join(
+        process.env.USERPROFILE || '',
+        'AppData',
+        'Roaming',
+        'npm',
+        'npx.cmd'
+      ),
       // nvm-windows paths (Local AppData)
       path.join(process.env.LOCALAPPDATA || '', 'nvm', 'current', 'npx.cmd'),
       path.join(process.env.LOCALAPPDATA || '', 'nvm', '*', 'npx.cmd'),
       path.join(process.env.APPDATA || '', 'nvm', 'current', 'npx.cmd'),
       path.join(process.env.APPDATA || '', 'nvm', '*', 'npx.cmd'),
       path.join(process.env.NVM_HOME || '', 'current', 'npx.cmd'),
-      path.join(process.env.NVM_HOME || '', '*', 'npx.cmd')
+      path.join(process.env.NVM_HOME || '', '*', 'npx.cmd'),
     ],
     darwin: [
       '/usr/local/bin/npx',
@@ -85,7 +91,7 @@ export class CommandResolver {
       path.join(process.env.HOME || '', '.volta/bin/npx'),
       path.join(process.env.HOME || '', '.nvm/versions/node/*/bin/npx'),
       '/usr/local/lib/node_modules/npm/bin/npx-cli.js',
-      '/opt/homebrew/lib/node_modules/npm/bin/npx-cli.js'
+      '/opt/homebrew/lib/node_modules/npm/bin/npx-cli.js',
     ],
     linux: [
       '/usr/local/bin/npx',
@@ -94,8 +100,8 @@ export class CommandResolver {
       path.join(process.env.HOME || '', '.nvm/current/bin/npx'),
       path.join(process.env.HOME || '', '.volta/bin/npx'),
       path.join(process.env.HOME || '', '.local/bin/npx'),
-      path.join(process.env.HOME || '', '.nvm/versions/node/*/bin/npx')
-    ]
+      path.join(process.env.HOME || '', '.nvm/versions/node/*/bin/npx'),
+    ],
   };
 
   static {
@@ -109,25 +115,27 @@ export class CommandResolver {
       {
         command: 'npx',
         args: ['@modelcontextprotocol/server-filesystem'],
-        packageName: '@modelcontextprotocol/server-filesystem'
+        packageName: '@modelcontextprotocol/server-filesystem',
       },
       {
-        command: 'npx', 
+        command: 'npx',
         args: ['@modelcontextprotocol/server-github'],
-        packageName: '@modelcontextprotocol/server-github'
-      }
+        packageName: '@modelcontextprotocol/server-github',
+      },
     ];
 
     for (const config of bundledServerConfigs) {
       const key = `${config.command} ${config.args[0]}`;
-      
+
       // Check if the package is bundled in node_modules
       const bundledPath = this.findBundledPackage(config.packageName);
       if (bundledPath) {
         config.bundledPath = bundledPath;
-        logger.info(`[CommandResolver] Found bundled MCP server: ${config.packageName} at ${bundledPath}`);
+        logger.info(
+          `[CommandResolver] Found bundled MCP server: ${config.packageName} at ${bundledPath}`
+        );
       }
-      
+
       this.bundledServers.set(key, config);
     }
   }
@@ -143,39 +151,77 @@ export class CommandResolver {
       // Electron app.asar path
       path.join(__dirname, '../node_modules', packageName),
       // Electron resources path (when packaged)
-      ...((process as any).resourcesPath ? [
-        path.join((process as any).resourcesPath, 'app', 'node_modules', packageName),
-        path.join((process as any).resourcesPath, 'node_modules', packageName)
-      ] : []),
+      ...((process as NodeJS.Process & { resourcesPath?: string }).resourcesPath
+        ? [
+            path.join(
+              (process as NodeJS.Process & { resourcesPath: string })
+                .resourcesPath,
+              'app',
+              'node_modules',
+              packageName
+            ),
+            path.join(
+              (process as NodeJS.Process & { resourcesPath: string })
+                .resourcesPath,
+              'node_modules',
+              packageName
+            ),
+          ]
+        : []),
       // Try from the app root in Electron
       path.join(path.dirname(process.execPath), 'node_modules', packageName),
       // Additional common Electron paths
       path.join(path.dirname(__dirname), 'node_modules', packageName),
-      path.join(path.dirname(path.dirname(__dirname)), 'node_modules', packageName),
+      path.join(
+        path.dirname(path.dirname(__dirname)),
+        'node_modules',
+        packageName
+      ),
       // Windows Electron packaged app paths
-      path.join(path.dirname(process.execPath), 'resources', 'app', 'node_modules', packageName),
-      path.join(path.dirname(process.execPath), 'resources', 'node_modules', packageName),
+      path.join(
+        path.dirname(process.execPath),
+        'resources',
+        'app',
+        'node_modules',
+        packageName
+      ),
+      path.join(
+        path.dirname(process.execPath),
+        'resources',
+        'node_modules',
+        packageName
+      ),
       // Try relative to main executable on Windows
-      path.join(path.dirname(path.dirname(process.execPath)), 'node_modules', packageName)
+      path.join(
+        path.dirname(path.dirname(process.execPath)),
+        'node_modules',
+        packageName
+      ),
     ];
 
-    logger.debug(`[CommandResolver] Searching for bundled package: ${packageName}`);
-    logger.debug(`[CommandResolver] Process info - execPath: ${process.execPath}, cwd: ${process.cwd()}, __dirname: ${__dirname}`);
-    
+    logger.debug(
+      `[CommandResolver] Searching for bundled package: ${packageName}`
+    );
+    logger.debug(
+      `[CommandResolver] Process info - execPath: ${process.execPath}, cwd: ${process.cwd()}, __dirname: ${__dirname}`
+    );
+
     for (const pkgPath of possiblePaths) {
       logger.debug(`[CommandResolver] Checking path: ${pkgPath}`);
-      
+
       const entryPoints = [
         path.join(pkgPath, 'dist/index.js'),
         path.join(pkgPath, 'index.js'),
         path.join(pkgPath, 'lib/index.js'),
-        path.join(pkgPath, 'src/index.js')
+        path.join(pkgPath, 'src/index.js'),
       ];
 
       for (const entryPoint of entryPoints) {
         logger.debug(`[CommandResolver] Checking entry point: ${entryPoint}`);
         if (fs.existsSync(entryPoint)) {
-          logger.info(`[CommandResolver] Found bundled MCP server: ${packageName} at ${entryPoint}`);
+          logger.info(
+            `[CommandResolver] Found bundled MCP server: ${packageName} at ${entryPoint}`
+          );
           return entryPoint;
         }
       }
@@ -190,9 +236,12 @@ export class CommandResolver {
    * @param args Original arguments from MCP config
    * @returns CommandResolution with availability and fallback info
    */
-  static async resolveCommand(command: string, args: string[]): Promise<CommandResolution> {
+  static async resolveCommand(
+    command: string,
+    args: string[]
+  ): Promise<CommandResolution> {
     const cacheKey = `${command} ${args.join(' ')}`;
-    
+
     // Check cache first
     if (this.commandCache.has(cacheKey)) {
       return this.commandCache.get(cacheKey)!;
@@ -201,7 +250,7 @@ export class CommandResolver {
     let resolution: CommandResolution = {
       command,
       args,
-      available: false
+      available: false,
     };
 
     try {
@@ -212,7 +261,7 @@ export class CommandResolver {
           command,
           args,
           available: true,
-          resolvedPath: await this.which(command)
+          resolvedPath: await this.which(command),
         };
         logger.info(`[CommandResolver] Command '${command}' found in PATH`);
         this.commandCache.set(cacheKey, resolution);
@@ -223,7 +272,7 @@ export class CommandResolver {
       if (command === 'npx' && args.length > 0) {
         const bundledKey = `${command} ${args[0]}`;
         const bundledServer = this.bundledServers.get(bundledKey);
-        
+
         if (bundledServer?.bundledPath) {
           const nodePath = await this.findNodeExecutable();
           if (nodePath) {
@@ -232,9 +281,11 @@ export class CommandResolver {
               args: [bundledServer.bundledPath, ...args.slice(1)],
               available: true,
               resolvedPath: bundledServer.bundledPath,
-              fallbackUsed: 'bundled-server'
+              fallbackUsed: 'bundled-server',
             };
-            logger.info(`[CommandResolver] Using bundled MCP server: ${bundledServer.packageName}`);
+            logger.info(
+              `[CommandResolver] Using bundled MCP server: ${bundledServer.packageName}`
+            );
             this.commandCache.set(cacheKey, resolution);
             return resolution;
           }
@@ -249,18 +300,24 @@ export class CommandResolver {
           args,
           available: true,
           resolvedPath: fallbackPath,
-          fallbackUsed: 'system-path'
+          fallbackUsed: 'system-path',
         };
-        logger.info(`[CommandResolver] Command '${command}' found at fallback path: ${fallbackPath}`);
+        logger.info(
+          `[CommandResolver] Command '${command}' found at fallback path: ${fallbackPath}`
+        );
         this.commandCache.set(cacheKey, resolution);
         return resolution;
       }
 
       // Command not found anywhere
-      logger.warn(`[CommandResolver] Command '${command}' not found in PATH or fallback locations`);
-      
-    } catch (error: any) {
-      logger.error(`[CommandResolver] Error resolving command '${command}':`, error.message);
+      logger.warn(
+        `[CommandResolver] Command '${command}' not found in PATH or fallback locations`
+      );
+    } catch (error: unknown) {
+      logger.error(
+        `[CommandResolver] Error resolving command '${command}':`,
+        error instanceof Error ? error.message : String(error)
+      );
     }
 
     this.commandCache.set(cacheKey, resolution);
@@ -271,16 +328,16 @@ export class CommandResolver {
    * Check if a command is available in the system PATH
    */
   private static async isCommandAvailable(command: string): Promise<boolean> {
-    return new Promise((resolve) => {
-      const child = spawn(command, ['--version'], { 
+    return new Promise(resolve => {
+      const child = spawn(command, ['--version'], {
         stdio: 'ignore',
-        timeout: 5000
+        timeout: 5000,
       });
-      
-      child.on('close', (code) => {
+
+      child.on('close', code => {
         resolve(code === 0);
       });
-      
+
       child.on('error', () => {
         resolve(false);
       });
@@ -293,9 +350,9 @@ export class CommandResolver {
   private static async which(command: string): Promise<string | undefined> {
     try {
       const whichCommand = process.platform === 'win32' ? 'where' : 'which';
-      const result = execSync(`${whichCommand} ${command}`, { 
+      const result = execSync(`${whichCommand} ${command}`, {
         encoding: 'utf8',
-        timeout: 5000
+        timeout: 5000,
       });
       return result.trim().split('\n')[0];
     } catch {
@@ -321,10 +378,10 @@ export class CommandResolver {
       if (fs.existsSync(nodePath)) {
         try {
           // Verify it's actually Node.js
-          execSync(`"${nodePath}" --version`, { 
+          execSync(`"${nodePath}" --version`, {
             encoding: 'utf8',
             timeout: 5000,
-            stdio: 'ignore'
+            stdio: 'ignore',
           });
           return nodePath;
         } catch {
@@ -351,7 +408,7 @@ export class CommandResolver {
 
     const [prefix, suffix] = parts;
     const parentDir = path.dirname(prefix);
-    
+
     try {
       if (fs.existsSync(parentDir)) {
         const entries = fs.readdirSync(parentDir);
@@ -372,13 +429,18 @@ export class CommandResolver {
   /**
    * Find a command by checking all directories in PATH environment variable
    */
-  private static async findCommandInPath(command: string): Promise<string | undefined> {
+  private static async findCommandInPath(
+    command: string
+  ): Promise<string | undefined> {
     const pathEnv = process.env.PATH || '';
     const pathSeparator = process.platform === 'win32' ? ';' : ':';
-    const pathDirs = pathEnv.split(pathSeparator).filter(dir => dir.trim() !== '');
-    
-    const extensions = process.platform === 'win32' ? ['.exe', '.cmd', '.bat', ''] : [''];
-    
+    const pathDirs = pathEnv
+      .split(pathSeparator)
+      .filter(dir => dir.trim() !== '');
+
+    const extensions =
+      process.platform === 'win32' ? ['.exe', '.cmd', '.bat', ''] : [''];
+
     for (const dir of pathDirs) {
       for (const ext of extensions) {
         const fullPath = path.join(dir.trim(), command + ext);
@@ -386,7 +448,9 @@ export class CommandResolver {
           try {
             // Test if it's executable
             await this.isCommandAvailable(fullPath);
-            logger.info(`[CommandResolver] Found '${command}' in PATH at: ${fullPath}`);
+            logger.info(
+              `[CommandResolver] Found '${command}' in PATH at: ${fullPath}`
+            );
             return fullPath;
           } catch {
             continue;
@@ -394,37 +458,39 @@ export class CommandResolver {
         }
       }
     }
-    
+
     return undefined;
   }
 
   /**
    * Find a command in platform-specific fallback paths
    */
-  private static async findCommandInFallbackPaths(command: string): Promise<string | undefined> {
+  private static async findCommandInFallbackPaths(
+    command: string
+  ): Promise<string | undefined> {
     const platform = process.platform as keyof typeof this.NPX_PATHS;
-    
+
     // First, check all directories in PATH environment variable
     const pathCheck = await this.findCommandInPath(command);
     if (pathCheck) {
       return pathCheck;
     }
-    
+
     // For npx specifically, use NPX_PATHS
     if (command === 'npx') {
       const paths = this.NPX_PATHS[platform] || this.NPX_PATHS.linux;
-      
+
       for (const npxPattern of paths) {
         // Expand glob patterns
         const expandedPaths = this.expandGlobPath(npxPattern);
-        
+
         for (const npxPath of expandedPaths) {
           if (fs.existsSync(npxPath)) {
             try {
-              execSync(`"${npxPath}" --version`, { 
+              execSync(`"${npxPath}" --version`, {
                 encoding: 'utf8',
                 timeout: 5000,
-                stdio: 'ignore'
+                stdio: 'ignore',
               });
               return npxPath;
             } catch {
@@ -449,28 +515,29 @@ export class CommandResolver {
     if (command === 'npx' || command === 'npm' || command === 'node') {
       return {
         title: 'Node.js Required',
-        message: 'MCP servers require Node.js and npm to be installed on your system. Node.js includes npx which is used to run MCP servers.',
+        message:
+          'MCP servers require Node.js and npm to be installed on your system. Node.js includes npx which is used to run MCP servers.',
         actions: [
           {
             label: 'Download Node.js',
-            url: 'https://nodejs.org/en/download/'
+            url: 'https://nodejs.org/en/download/',
           },
           {
             label: 'Install via Homebrew (macOS)',
-            command: 'brew install node'
+            command: 'brew install node',
           },
           {
             label: 'Install via package manager (Linux)',
-            command: 'sudo apt install nodejs npm'
-          }
-        ]
+            command: 'sudo apt install nodejs npm',
+          },
+        ],
       };
     }
 
     return {
       title: `${command} Not Found`,
       message: `The command '${command}' was not found on your system. Please install it and ensure it's available in your PATH.`,
-      actions: []
+      actions: [],
     };
   }
 

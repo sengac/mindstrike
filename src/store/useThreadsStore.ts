@@ -26,7 +26,7 @@ export interface ThreadsState {
   renameThread: (threadId: string, newName: string) => Promise<void>;
   updateThreadRole: (threadId: string, customRole?: string) => Promise<void>;
   clearThread: (threadId: string) => Promise<void>;
-  
+
   // Internal state updates
   setThreads: (threads: ThreadMetadata[]) => void;
   setActiveThreadId: (threadId: string | null) => void;
@@ -46,66 +46,74 @@ export const useThreadsStore = create<ThreadsState>()(
     // Actions
     loadThreads: async () => {
       set({ isLoading: true, error: null });
-      
+
       try {
         const response = await fetch('/api/threads');
         if (!response.ok) {
           throw new Error(`Failed to load threads: ${response.status}`);
         }
-        
+
         const threadsData = await response.json();
-        const threads: ThreadMetadata[] = threadsData.map((thread: any) => ({
-          ...thread,
-          createdAt: new Date(thread.createdAt),
-          updatedAt: new Date(thread.updatedAt)
-        }));
-        
-        set({ 
-          threads, 
-          isLoaded: true, 
+        const threads: ThreadMetadata[] = threadsData.map((thread: unknown) => {
+          const threadObj = thread as Record<string, unknown>;
+          return {
+            ...threadObj,
+            createdAt: new Date(threadObj.createdAt as string),
+            updatedAt: new Date(threadObj.updatedAt as string),
+          } as ThreadMetadata;
+        });
+
+        set({
+          threads,
+          isLoaded: true,
           isLoading: false,
           // Auto-select most recent thread if none selected
-          activeThreadId: get().activeThreadId || (threads.length > 0 ? threads[0].id : null)
+          activeThreadId:
+            get().activeThreadId || (threads.length > 0 ? threads[0].id : null),
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Failed to load threads:', error);
-        set({ error: error.message, isLoading: false });
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown error';
+        set({ error: errorMessage, isLoading: false });
       }
     },
 
     createThread: async (name?: string) => {
       set({ isLoading: true, error: null });
-      
+
       try {
         const response = await fetch('/api/threads', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name })
+          body: JSON.stringify({ name }),
         });
-        
+
         if (!response.ok) {
           throw new Error(`Failed to create thread: ${response.status}`);
         }
-        
+
         const newThread = await response.json();
         const threadMetadata: ThreadMetadata = {
           id: newThread.id,
           name: newThread.name,
           createdAt: new Date(newThread.createdAt),
           updatedAt: new Date(newThread.updatedAt),
-          messageCount: 0
+          messageCount: 0,
         };
-        
+
         set(state => ({
           threads: [threadMetadata, ...state.threads],
           activeThreadId: newThread.id,
-          isLoading: false
+          isLoading: false,
         }));
-        
+
         return newThread.id;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Failed to create thread:', error);
-        set({ error: error.message, isLoading: false });
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown error';
+        set({ error: errorMessage, isLoading: false });
         throw error;
       }
     },
@@ -116,30 +124,35 @@ export const useThreadsStore = create<ThreadsState>()(
 
     deleteThread: async (threadId: string) => {
       set({ isLoading: true, error: null });
-      
+
       try {
         const response = await fetch(`/api/threads/${threadId}`, {
-          method: 'DELETE'
+          method: 'DELETE',
         });
-        
+
         if (!response.ok) {
           throw new Error(`Failed to delete thread: ${response.status}`);
         }
-        
+
         const state = get();
         const updatedThreads = state.threads.filter(t => t.id !== threadId);
-        const newActiveThreadId = state.activeThreadId === threadId 
-          ? (updatedThreads.length > 0 ? updatedThreads[0].id : null)
-          : state.activeThreadId;
-        
+        const newActiveThreadId =
+          state.activeThreadId === threadId
+            ? updatedThreads.length > 0
+              ? updatedThreads[0].id
+              : null
+            : state.activeThreadId;
+
         set({
           threads: updatedThreads,
           activeThreadId: newActiveThreadId,
-          isLoading: false
+          isLoading: false,
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Failed to delete thread:', error);
-        set({ error: error.message, isLoading: false });
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown error';
+        set({ error: errorMessage, isLoading: false });
       }
     },
 
@@ -148,23 +161,25 @@ export const useThreadsStore = create<ThreadsState>()(
         const response = await fetch(`/api/threads/${threadId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: newName })
+          body: JSON.stringify({ name: newName }),
         });
-        
+
         if (!response.ok) {
           throw new Error(`Failed to rename thread: ${response.status}`);
         }
-        
+
         set(state => ({
           threads: state.threads.map(thread =>
             thread.id === threadId
               ? { ...thread, name: newName, updatedAt: new Date() }
               : thread
-          )
+          ),
         }));
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Failed to rename thread:', error);
-        set({ error: error.message });
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown error';
+        set({ error: errorMessage });
       }
     },
 
@@ -173,48 +188,52 @@ export const useThreadsStore = create<ThreadsState>()(
         const response = await fetch(`/api/threads/${threadId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ customRole })
+          body: JSON.stringify({ customRole }),
         });
-        
+
         if (!response.ok) {
           throw new Error(`Failed to update thread role: ${response.status}`);
         }
-        
+
         // No local state update needed for custom role
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Failed to update thread role:', error);
-        set({ error: error.message });
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown error';
+        set({ error: errorMessage });
       }
     },
 
     clearThread: async (threadId: string) => {
       try {
         const response = await fetch(`/api/threads/${threadId}/clear`, {
-          method: 'POST'
+          method: 'POST',
         });
-        
+
         if (!response.ok) {
           throw new Error(`Failed to clear thread: ${response.status}`);
         }
-        
+
         set(state => ({
           threads: state.threads.map(thread =>
             thread.id === threadId
               ? { ...thread, messageCount: 0, updatedAt: new Date() }
               : thread
-          )
+          ),
         }));
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Failed to clear thread:', error);
-        set({ error: error.message });
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown error';
+        set({ error: errorMessage });
       }
     },
 
     // Internal state setters
-    setThreads: (threads) => set({ threads }),
-    setActiveThreadId: (activeThreadId) => set({ activeThreadId }),
-    setLoading: (isLoading) => set({ isLoading }),
-    setError: (error) => set({ error })
+    setThreads: threads => set({ threads }),
+    setActiveThreadId: activeThreadId => set({ activeThreadId }),
+    setLoading: isLoading => set({ isLoading }),
+    setError: error => set({ error }),
   }))
 );
 

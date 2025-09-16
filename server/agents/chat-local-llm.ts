@@ -1,5 +1,12 @@
-import { BaseChatModel, BaseChatModelParams } from '@langchain/core/language_models/chat_models';
-import { BaseMessage, AIMessage, HumanMessage, AIMessageChunk } from '@langchain/core/messages';
+import {
+  BaseChatModel,
+  BaseChatModelParams,
+} from '@langchain/core/language_models/chat_models';
+import {
+  BaseMessage,
+  AIMessage,
+  AIMessageChunk,
+} from '@langchain/core/messages';
 import { CallbackManagerForLLMRun } from '@langchain/core/callbacks/manager';
 import { ChatGenerationChunk, ChatResult } from '@langchain/core/outputs';
 import { DynamicStructuredTool } from '@langchain/core/tools';
@@ -43,24 +50,24 @@ export class ChatLocalLLM extends BaseChatModel {
 
   async _generate(
     messages: BaseMessage[],
-    options?: this['ParsedCallOptions'],
-    runManager?: CallbackManagerForLLMRun
+    _options?: this['ParsedCallOptions'],
+    _runManager?: CallbackManagerForLLMRun
   ): Promise<ChatResult> {
     const localLlmManager = getLocalLLMManager();
-    
+
     // Ensure model is loaded
     await this.ensureModelLoaded(localLlmManager);
-    
+
     // Convert messages to the format expected by local LLM
     const formattedMessages = this.formatMessages(messages);
-    
+
     try {
       const response = await localLlmManager.generateResponse(
         this.modelName,
         formattedMessages,
         {
           temperature: this.temperature,
-          maxTokens: this.maxTokens
+          maxTokens: this.maxTokens,
         }
       );
 
@@ -73,30 +80,32 @@ export class ChatLocalLLM extends BaseChatModel {
         ],
       };
     } catch (error) {
-      throw new Error(`Local LLM generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(
+        `Local LLM generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   }
 
   async *_streamResponseChunks(
     messages: BaseMessage[],
-    options?: this['ParsedCallOptions'],
-    runManager?: CallbackManagerForLLMRun
+    _options?: this['ParsedCallOptions'],
+    _runManager?: CallbackManagerForLLMRun
   ): AsyncGenerator<ChatGenerationChunk> {
     const localLlmManager = getLocalLLMManager();
-    
+
     // Ensure model is loaded
     await this.ensureModelLoaded(localLlmManager);
-    
+
     // Convert messages to the format expected by local LLM
     const formattedMessages = this.formatMessages(messages);
-    
+
     try {
       const stream = localLlmManager.generateStreamResponse(
         this.modelName,
         formattedMessages,
         {
           temperature: this.temperature,
-          maxTokens: this.maxTokens
+          maxTokens: this.maxTokens,
         }
       );
 
@@ -107,7 +116,9 @@ export class ChatLocalLLM extends BaseChatModel {
         });
       }
     } catch (error) {
-      throw new Error(`Local LLM streaming failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(
+        `Local LLM streaming failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   }
 
@@ -117,16 +128,23 @@ export class ChatLocalLLM extends BaseChatModel {
       // The loadModel method automatically unloads other models and loads this one
       await localLlmManager.loadModel(this.modelName);
     } catch (error) {
-      throw new Error(`Failed to load model ${this.modelName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(
+        `Failed to load model ${this.modelName}: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   }
 
-  private formatMessages(messages: BaseMessage[]): { role: string; content: string; }[] {
+  private formatMessages(
+    messages: BaseMessage[]
+  ): { role: string; content: string }[] {
     // Convert LangChain messages to the format expected by LocalLLMManager
-    return messages.map((message) => {
+    return messages.map(message => {
       const role = message._getType();
-      const content = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
-      
+      const content =
+        typeof message.content === 'string'
+          ? message.content
+          : JSON.stringify(message.content);
+
       switch (role) {
         case 'human':
           return { role: 'user', content };

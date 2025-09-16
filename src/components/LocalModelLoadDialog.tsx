@@ -14,16 +14,19 @@ interface LocalModelLoadDialogProps {
   onModelLoaded: () => void; // Callback when model is successfully loaded
 }
 
-export function LocalModelLoadDialog({ 
-  isOpen, 
-  onClose, 
-  targetModelId, 
-  onModelLoaded 
+export function LocalModelLoadDialog({
+  isOpen,
+  onClose,
+  targetModelId,
+  onModelLoaded,
 }: LocalModelLoadDialogProps) {
   // Hooks
-  const { shouldRender, isVisible, handleClose } = useDialogAnimation(isOpen, onClose);
+  const { shouldRender, isVisible, handleClose } = useDialogAnimation(
+    isOpen,
+    onClose
+  );
   const { setActivePanel } = useAppStore();
-  
+
   // Store state and actions
   const {
     localModels,
@@ -36,7 +39,7 @@ export function LocalModelLoadDialog({
     deleteModel: storeDeleteModel,
     updateModelSettings: storeUpdateModelSettings,
     formatFileSize,
-    isModelLoaded
+    isModelLoaded,
   } = useLocalModelsStore();
 
   // Local state for delete confirmation
@@ -44,15 +47,22 @@ export function LocalModelLoadDialog({
   const [pendingDeleteModelId, setPendingDeleteModelId] = useState<string>('');
 
   // Wrapper functions to handle target model completion
-  const loadModel = useCallback(async (modelId: string, isAutoLoad = false) => {
-    await storeLoadModel(modelId, isAutoLoad);
-    
-    // Handle target model completion
-    if (targetModelId && modelId === targetModelId && isModelLoaded(modelId)) {
-      onModelLoaded();
-      onClose();
-    }
-  }, [storeLoadModel, targetModelId, onModelLoaded, onClose, isModelLoaded]);
+  const loadModel = useCallback(
+    async (modelId: string, isAutoLoad = false) => {
+      await storeLoadModel(modelId, isAutoLoad);
+
+      // Handle target model completion
+      if (
+        targetModelId &&
+        modelId === targetModelId &&
+        isModelLoaded(modelId)
+      ) {
+        onModelLoaded();
+        onClose();
+      }
+    },
+    [storeLoadModel, targetModelId, onModelLoaded, onClose, isModelLoaded]
+  );
 
   const handleDelete = useCallback((modelId: string) => {
     setPendingDeleteModelId(modelId);
@@ -68,8 +78,6 @@ export function LocalModelLoadDialog({
     }
   }, [pendingDeleteModelId, storeDeleteModel]);
 
-
-
   // Initial data loading
   useEffect(() => {
     if (isOpen) {
@@ -80,19 +88,25 @@ export function LocalModelLoadDialog({
   // Auto-load target model when data is available
   useEffect(() => {
     if (!isOpen || !targetModelId || loadingModelId || loading) return;
-    
+
     const targetModel = localModels.find(m => m.id === targetModelId);
     const isAlreadyLoaded = modelStatuses.get(targetModelId)?.loaded;
-    
+
     if (targetModel && !isAlreadyLoaded) {
       loadModel(targetModelId, true);
     }
-  }, [isOpen, targetModelId, localModels, modelStatuses, loadingModelId, loading, loadModel]);
-
-
+  }, [
+    isOpen,
+    targetModelId,
+    localModels,
+    modelStatuses,
+    loadingModelId,
+    loading,
+    loadModel,
+  ]);
 
   if (!shouldRender) return null;
-  
+
   // Don't show dialog UI when auto-loading a specific model
   // Just handle the loading logic in the background
   if (targetModelId) {
@@ -100,8 +114,8 @@ export function LocalModelLoadDialog({
   }
 
   return (
-    <BaseDialog 
-      isOpen={shouldRender} 
+    <BaseDialog
+      isOpen={shouldRender}
       onClose={handleClose}
       isVisible={isVisible}
       maxWidth="max-w-4xl"
@@ -111,7 +125,9 @@ export function LocalModelLoadDialog({
       <div className="flex items-center justify-between p-6 border-b border-gray-700">
         <div className="flex items-center gap-3">
           <Cpu size={24} className="text-blue-400" />
-          <h2 className="text-xl font-semibold text-white">Local Model Management</h2>
+          <h2 className="text-xl font-semibold text-white">
+            Local Model Management
+          </h2>
         </div>
         <div className="flex items-center gap-2">
           {!loading && localModels.length > 0 && (
@@ -123,7 +139,10 @@ export function LocalModelLoadDialog({
                 setTimeout(() => {
                   const element = document.getElementById('available-models');
                   if (element) {
-                    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    element.scrollIntoView({
+                      behavior: 'smooth',
+                      block: 'start',
+                    });
                   }
                 }, 300);
               }}
@@ -143,57 +162,62 @@ export function LocalModelLoadDialog({
         </div>
       </div>
 
-        <div className="p-6 overflow-y-auto max-h-[calc(80vh-120px)]">
-          {/* Model List */}
-          <div>
-            <ModelList
-              models={localModels}
-              modelStatuses={modelStatuses}
-              loading={loading}
-              loadingModelId={loadingModelId ?? undefined}
-              targetModelId={targetModelId}
-              onLoad={loadModel}
-              onUnload={storeUnloadModel}
-              onDelete={handleDelete}
-              onUpdateSettings={storeUpdateModelSettings}
-              formatFileSize={formatFileSize}
-              emptyStateTitle="No Local Models"
-              emptyStateDescription="Download models in Settings to get started."
-              emptyStateIcon={<Cpu size={48} className="text-gray-600 mx-auto mb-4" />}
-              emptyStateAction={
-                <button
-                  onClick={() => {
-                    setActivePanel('settings');
-                    handleClose();
-                    // Scroll to Available Models section after a brief delay
-                    setTimeout(() => {
-                      const element = document.getElementById('available-models');
-                      if (element) {
-                        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                      }
-                    }, 300);
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors mx-auto"
-                  title="Go to Available Models section"
-                >
-                  <Download size={16} />
-                  Available Models
-                </button>
-              }
-            />
-          </div>
+      <div className="p-6 overflow-y-auto max-h-[calc(80vh-120px)]">
+        {/* Model List */}
+        <div>
+          <ModelList
+            models={localModels}
+            modelStatuses={modelStatuses}
+            loading={loading}
+            loadingModelId={loadingModelId ?? undefined}
+            targetModelId={targetModelId}
+            onLoad={loadModel}
+            onUnload={storeUnloadModel}
+            onDelete={handleDelete}
+            onUpdateSettings={storeUpdateModelSettings}
+            formatFileSize={formatFileSize}
+            emptyStateTitle="No Local Models"
+            emptyStateDescription="Download models in Settings to get started."
+            emptyStateIcon={
+              <Cpu size={48} className="text-gray-600 mx-auto mb-4" />
+            }
+            emptyStateAction={
+              <button
+                onClick={() => {
+                  setActivePanel('settings');
+                  handleClose();
+                  // Scroll to Available Models section after a brief delay
+                  setTimeout(() => {
+                    const element = document.getElementById('available-models');
+                    if (element) {
+                      element.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start',
+                      });
+                    }
+                  }, 300);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors mx-auto"
+                title="Go to Available Models section"
+              >
+                <Download size={16} />
+                Available Models
+              </button>
+            }
+          />
         </div>
-        
-        <ConfirmDialog
-          isOpen={showDeleteConfirm}
-          onClose={() => setShowDeleteConfirm(false)}
-          onConfirm={confirmDelete}
-          title="Delete Model"
-          message="Are you sure you want to delete this model? This action cannot be undone and will permanently remove the model from your system."
-          confirmText="Delete Model"
-          type="danger"
-          icon={<Trash2 size={20} />}
-        />
+      </div>
+
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={confirmDelete}
+        title="Delete Model"
+        message="Are you sure you want to delete this model? This action cannot be undone and will permanently remove the model from your system."
+        confirmText="Delete Model"
+        type="danger"
+        icon={<Trash2 size={20} />}
+      />
     </BaseDialog>
   );
 }

@@ -23,7 +23,10 @@ interface MindMapsPanelProps {
   onThreadDelete?: (threadId: string) => void;
   onNavigateToChat?: (threadId?: string) => void;
   onDeleteMessage?: (threadId: string, messageId: string) => void;
-  onMessagesUpdate?: (threadId: string, messages: ConversationMessage[]) => void;
+  onMessagesUpdate?: (
+    threadId: string,
+    messages: ConversationMessage[]
+  ) => void;
   onFirstMessage?: () => void;
   onRoleUpdate?: (threadId: string, customRole?: string) => void;
   onNodeNotesUpdate?: (nodeId: string, notes: string) => Promise<void>;
@@ -56,7 +59,7 @@ export function MindMapsPanel({
   onNodeSourcesUpdate,
   onNodeAdd,
   onNodeUpdate,
-  onNodeDelete
+  onNodeDelete,
 }: MindMapsPanelProps) {
   const [showInferenceChat, setShowInferenceChat] = useState(false);
   const [inferenceChatNode, setInferenceChatNode] = useState<{
@@ -73,80 +76,104 @@ export function MindMapsPanel({
   // Listen for mindmap inference events
   useEffect(() => {
     const handleInferenceOpen = (event: CustomEvent) => {
-      const { nodeId, label, chatId, notes, sources, focusChat, focusNotes, focusSources } = event.detail;
-      setInferenceChatNode({ id: nodeId, label, chatId, notes, sources, focusChat, focusNotes, focusSources });
+      const {
+        nodeId,
+        label,
+        chatId,
+        notes,
+        sources,
+        focusChat,
+        focusNotes,
+        focusSources,
+      } = event.detail;
+      setInferenceChatNode({
+        id: nodeId,
+        label,
+        chatId,
+        notes,
+        sources,
+        focusChat,
+        focusNotes,
+        focusSources,
+      });
       setShowInferenceChat(true);
-      
+
       // Broadcast the active inference node ID for UI updates
-      window.dispatchEvent(new CustomEvent('mindmap-inference-active', {
-        detail: { activeNodeId: nodeId }
-      }));
+      window.dispatchEvent(
+        new CustomEvent('mindmap-inference-active', {
+          detail: { activeNodeId: nodeId },
+        })
+      );
     };
 
     const handleInferenceClose = () => {
       setShowInferenceChat(false);
       setInferenceChatNode(null);
-      
+
       // Broadcast that no node is active
-      window.dispatchEvent(new CustomEvent('mindmap-inference-active', {
-        detail: { activeNodeId: null }
-      }));
+      window.dispatchEvent(
+        new CustomEvent('mindmap-inference-active', {
+          detail: { activeNodeId: null },
+        })
+      );
     };
 
-    const handleGetActiveState = (event: CustomEvent) => {
-      const { requestingNodeId } = event.detail;
+    const handleGetActiveState = (_event: CustomEvent) => {
       const currentActiveNodeId = inferenceChatNode?.id || null;
-      
+
       // Respond with current active state for the requesting node
-      window.dispatchEvent(new CustomEvent('mindmap-inference-active', {
-        detail: { activeNodeId: currentActiveNodeId }
-      }));
+      window.dispatchEvent(
+        new CustomEvent('mindmap-inference-active', {
+          detail: { activeNodeId: currentActiveNodeId },
+        })
+      );
     };
 
     const handleNodeNotesUpdated = (event: CustomEvent) => {
       const { nodeId, notes } = event.detail;
-      
+
       // Update the inferenceChatNode if it's the same node
       if (inferenceChatNode && inferenceChatNode.id === nodeId) {
         setInferenceChatNode({
           ...inferenceChatNode,
-          notes
+          notes,
         });
       }
     };
 
     const handleNodeSourcesUpdated = (event: CustomEvent) => {
       const { nodeId, sources } = event.detail;
-      
+
       // Update the inferenceChatNode if it's the same node
       if (inferenceChatNode && inferenceChatNode.id === nodeId) {
         setInferenceChatNode({
           ...inferenceChatNode,
-          sources
+          sources,
         });
       }
     };
 
     const handleNodeLabelUpdated = (event: CustomEvent) => {
       const { nodeId, label } = event.detail;
-      
+
       // Update the inferenceChatNode label if it's the same node
       if (inferenceChatNode && inferenceChatNode.id === nodeId) {
         setInferenceChatNode({
           ...inferenceChatNode,
-          label
+          label,
         });
       }
     };
 
     const handleInferenceCheckAndClose = (event: CustomEvent) => {
       const { deletedNodeIds, parentId } = event.detail;
-      
+
       if (inferenceChatNode) {
         // Check if the active inference node is being deleted or is the parent of deleted nodes
-        const shouldClose = deletedNodeIds.includes(inferenceChatNode.id) || 
-                           (parentId && inferenceChatNode.id === parentId);
-        
+        const shouldClose =
+          deletedNodeIds.includes(inferenceChatNode.id) ||
+          (parentId && inferenceChatNode.id === parentId);
+
         if (shouldClose) {
           setShowInferenceChat(false);
           setInferenceChatNode(null);
@@ -155,22 +182,64 @@ export function MindMapsPanel({
       }
     };
 
-    window.addEventListener('mindmap-inference-open', handleInferenceOpen as EventListener);
-    window.addEventListener('mindmap-inference-close', handleInferenceClose as EventListener);
-    window.addEventListener('mindmap-inference-get-active', handleGetActiveState as EventListener);
-    window.addEventListener('mindmap-node-notes-updated', handleNodeNotesUpdated as EventListener);
-    window.addEventListener('mindmap-node-sources-updated', handleNodeSourcesUpdated as EventListener);
-    window.addEventListener('mindmap-node-update-finished', handleNodeLabelUpdated as EventListener);
-    window.addEventListener('mindmap-inference-check-and-close', handleInferenceCheckAndClose as EventListener);
+    window.addEventListener(
+      'mindmap-inference-open',
+      handleInferenceOpen as EventListener
+    );
+    window.addEventListener(
+      'mindmap-inference-close',
+      handleInferenceClose as EventListener
+    );
+    window.addEventListener(
+      'mindmap-inference-get-active',
+      handleGetActiveState as EventListener
+    );
+    window.addEventListener(
+      'mindmap-node-notes-updated',
+      handleNodeNotesUpdated as EventListener
+    );
+    window.addEventListener(
+      'mindmap-node-sources-updated',
+      handleNodeSourcesUpdated as EventListener
+    );
+    window.addEventListener(
+      'mindmap-node-update-finished',
+      handleNodeLabelUpdated as EventListener
+    );
+    window.addEventListener(
+      'mindmap-inference-check-and-close',
+      handleInferenceCheckAndClose as EventListener
+    );
 
     return () => {
-      window.removeEventListener('mindmap-inference-open', handleInferenceOpen as EventListener);
-      window.removeEventListener('mindmap-inference-close', handleInferenceClose as EventListener);
-      window.removeEventListener('mindmap-inference-get-active', handleGetActiveState as EventListener);
-      window.removeEventListener('mindmap-node-notes-updated', handleNodeNotesUpdated as EventListener);
-      window.removeEventListener('mindmap-node-sources-updated', handleNodeSourcesUpdated as EventListener);
-      window.removeEventListener('mindmap-node-update-finished', handleNodeLabelUpdated as EventListener);
-      window.removeEventListener('mindmap-inference-check-and-close', handleInferenceCheckAndClose as EventListener);
+      window.removeEventListener(
+        'mindmap-inference-open',
+        handleInferenceOpen as EventListener
+      );
+      window.removeEventListener(
+        'mindmap-inference-close',
+        handleInferenceClose as EventListener
+      );
+      window.removeEventListener(
+        'mindmap-inference-get-active',
+        handleGetActiveState as EventListener
+      );
+      window.removeEventListener(
+        'mindmap-node-notes-updated',
+        handleNodeNotesUpdated as EventListener
+      );
+      window.removeEventListener(
+        'mindmap-node-sources-updated',
+        handleNodeSourcesUpdated as EventListener
+      );
+      window.removeEventListener(
+        'mindmap-node-update-finished',
+        handleNodeLabelUpdated as EventListener
+      );
+      window.removeEventListener(
+        'mindmap-inference-check-and-close',
+        handleInferenceCheckAndClose as EventListener
+      );
     };
   }, [inferenceChatNode]);
 
@@ -179,22 +248,24 @@ export function MindMapsPanel({
     setInferenceChatNode(null);
     // Also dispatch close event to sync with MindMap component
     window.dispatchEvent(new CustomEvent('mindmap-inference-close'));
-    
+
     // Broadcast that no node is active
-    window.dispatchEvent(new CustomEvent('mindmap-inference-active', {
-      detail: { activeNodeId: null }
-    }));
+    window.dispatchEvent(
+      new CustomEvent('mindmap-inference-active', {
+        detail: { activeNodeId: null },
+      })
+    );
   };
 
   const handleThreadAssociate = (nodeId: string, threadId: string) => {
     // Update the mindmap node with the chatId
     onThreadAssociate(nodeId, threadId);
-    
+
     // Update local state to reflect the new chatId
     if (inferenceChatNode && inferenceChatNode.id === nodeId) {
       setInferenceChatNode({
         ...inferenceChatNode,
-        chatId: threadId
+        chatId: threadId,
       });
     }
   };
@@ -202,12 +273,12 @@ export function MindMapsPanel({
   const handleThreadUnassign = (nodeId: string) => {
     // Update the mindmap node to remove the chatId
     onThreadUnassign(nodeId);
-    
+
     // Update local state to reflect the removed chatId
     if (inferenceChatNode && inferenceChatNode.id === nodeId) {
       setInferenceChatNode({
         ...inferenceChatNode,
-        chatId: null
+        chatId: null,
       });
     }
   };
@@ -228,26 +299,30 @@ export function MindMapsPanel({
   // Navigation logic - using event system to get sibling nodes
   const handleNavigateToPrevNode = () => {
     if (!inferenceChatNode) return;
-    
+
     // Dispatch event to request previous sibling
-    window.dispatchEvent(new CustomEvent('mindmap-navigate-sibling', {
-      detail: {
-        currentNodeId: inferenceChatNode.id,
-        direction: 'prev'
-      }
-    }));
+    window.dispatchEvent(
+      new CustomEvent('mindmap-navigate-sibling', {
+        detail: {
+          currentNodeId: inferenceChatNode.id,
+          direction: 'prev',
+        },
+      })
+    );
   };
 
   const handleNavigateToNextNode = () => {
     if (!inferenceChatNode) return;
-    
+
     // Dispatch event to request next sibling
-    window.dispatchEvent(new CustomEvent('mindmap-navigate-sibling', {
-      detail: {
-        currentNodeId: inferenceChatNode.id,
-        direction: 'next'
-      }
-    }));
+    window.dispatchEvent(
+      new CustomEvent('mindmap-navigate-sibling', {
+        detail: {
+          currentNodeId: inferenceChatNode.id,
+          direction: 'next',
+        },
+      })
+    );
   };
   return (
     <ListPanel
@@ -259,8 +334,8 @@ export function MindMapsPanel({
       onItemDelete={onMindMapDelete}
       emptyState={{
         icon: Network,
-        title: "No MindMaps yet",
-        subtitle: "Create a new MindMap to begin"
+        title: 'No MindMaps yet',
+        subtitle: 'Create a new MindMap to begin',
       }}
       createButtonTitle="New MindMap"
       renameButtonTitle="Rename MindMap"

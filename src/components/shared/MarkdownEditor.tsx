@@ -19,25 +19,25 @@ interface MarkdownEditorProps {
 
 type TabType = 'preview' | 'edit';
 
-export function MarkdownEditor({ 
-  value, 
-  onChange, 
-  placeholder = "Enter markdown content...",
+export function MarkdownEditor({
+  value,
+  onChange: _onChange,
+  placeholder = 'Enter markdown content...',
   showTabs = true,
   defaultMode = 'preview',
   activeMode,
   onSave,
-  className = "",
-  additionalButtons
+  className = '',
+  additionalButtons,
 }: MarkdownEditorProps) {
-  const [activeTab, setActiveTab] = useState<TabType>(activeMode || defaultMode);
+  const [activeTab, setActiveTab] = useState<TabType>(
+    activeMode || defaultMode
+  );
   const [content, setContent] = useState(value);
-  const [originalValue, setOriginalValue] = useState(value);
 
   // Update content when value prop changes
   useEffect(() => {
     setContent(value);
-    setOriginalValue(value);
   }, [value]);
 
   // Update active tab when activeMode prop changes
@@ -47,8 +47,6 @@ export function MarkdownEditor({
     }
   }, [activeMode]);
 
-  const hasChanges = content !== originalValue;
-
   const handleContentChange = (newContent: string) => {
     setContent(newContent);
   };
@@ -57,7 +55,6 @@ export function MarkdownEditor({
     if (onSave) {
       try {
         await onSave(content);
-        setOriginalValue(content);
         toast.success('Notes saved successfully');
       } catch (error) {
         console.error('Save failed:', error);
@@ -66,12 +63,10 @@ export function MarkdownEditor({
     }
   };
 
-
-
   // If no tabs are shown, render in a simpler layout
   if (!showTabs) {
     return (
-      <div className={clsx("flex flex-col h-full", className)}>
+      <div className={clsx('flex flex-col h-full', className)}>
         <div className="h-full">
           <CodeEditor
             value={content}
@@ -87,7 +82,7 @@ export function MarkdownEditor({
   }
 
   return (
-    <div className={clsx("flex flex-col h-full", className)}>
+    <div className={clsx('flex flex-col h-full', className)}>
       {/* Tab Header */}
       <div className="border-b border-gray-700 bg-gray-800">
         <div className="flex items-center justify-between px-4 py-2">
@@ -121,7 +116,7 @@ export function MarkdownEditor({
           <div className="flex items-center space-x-2">
             {/* Additional buttons */}
             {additionalButtons}
-            
+
             {/* Save button */}
             {activeTab === 'edit' && onSave && (
               <button

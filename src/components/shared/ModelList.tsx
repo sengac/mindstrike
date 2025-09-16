@@ -63,15 +63,20 @@ export function ModelList({
   onDelete,
   onUpdateSettings,
   formatFileSize,
-  emptyStateTitle = "No Models",
-  emptyStateDescription = "No models available.",
-  emptyStateIcon = <HardDrive size={48} className="text-gray-600 mx-auto mb-4" />,
-  emptyStateAction
+  emptyStateTitle = 'No Models',
+  emptyStateDescription = 'No models available.',
+  emptyStateIcon = (
+    <HardDrive size={48} className="text-gray-600 mx-auto mb-4" />
+  ),
+  emptyStateAction,
 }: ModelListProps) {
   if (loading) {
     return (
       <div className="text-center py-8">
-        <Loader2 size={24} className="text-blue-400 animate-spin mx-auto mb-2" />
+        <Loader2
+          size={24}
+          className="text-blue-400 animate-spin mx-auto mb-2"
+        />
         <p className="text-gray-400">Loading models...</p>
       </div>
     );
@@ -81,7 +86,9 @@ export function ModelList({
     return (
       <div className="text-center py-8">
         {emptyStateIcon}
-        <h4 className="text-lg font-medium text-gray-400 mb-2">{emptyStateTitle}</h4>
+        <h4 className="text-lg font-medium text-gray-400 mb-2">
+          {emptyStateTitle}
+        </h4>
         <p className="text-gray-500 mb-4">{emptyStateDescription}</p>
         {emptyStateAction}
       </div>
@@ -90,7 +97,7 @@ export function ModelList({
 
   return (
     <div className="space-y-3">
-      {models.map((model) => (
+      {models.map(model => (
         <ModelCard
           key={model.id}
           model={model}

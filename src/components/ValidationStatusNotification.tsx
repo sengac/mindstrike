@@ -1,5 +1,12 @@
 import { useState, useEffect } from 'react';
-import { AlertTriangle, CheckCircle, Loader2, X, Settings, Brain } from 'lucide-react';
+import {
+  AlertTriangle,
+  CheckCircle,
+  Loader2,
+  X,
+  Settings,
+  Brain,
+} from 'lucide-react';
 import { ValidationProgress } from '../services/responseValidationOrchestrator';
 
 interface ValidationStatusNotificationProps {
@@ -10,15 +17,17 @@ interface ValidationStatusNotificationProps {
   validationEnabled?: boolean;
 }
 
-export function ValidationStatusNotification({ 
-  isVisible, 
-  progress, 
-  onDismiss, 
+export function ValidationStatusNotification({
+  isVisible,
+  progress,
+  onDismiss,
   onToggleValidation,
-  validationEnabled = true 
+  validationEnabled = true,
 }: ValidationStatusNotificationProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [autoHideTimer, setAutoHideTimer] = useState<NodeJS.Timeout | null>(null);
+  const [autoHideTimer, setAutoHideTimer] = useState<NodeJS.Timeout | null>(
+    null
+  );
 
   useEffect(() => {
     // Auto-hide on completion after 5 seconds
@@ -28,7 +37,7 @@ export function ValidationStatusNotification({
       }, 5000);
       setAutoHideTimer(timer);
     }
-    
+
     return () => {
       if (autoHideTimer) {
         clearTimeout(autoHideTimer);
@@ -67,8 +76,8 @@ export function ValidationStatusNotification({
       case 'retrying':
         return `Attempting fix #${progress.fixAttempts} for ${progress.currentItem}...`;
       case 'completed':
-        return progress.totalItems === 0 
-          ? 'Response validated successfully' 
+        return progress.totalItems === 0
+          ? 'Response validated successfully'
           : `Fixed ${progress.completedItems} content item(s)`;
       case 'failed':
         return `Validation failed: ${progress.error}`;
@@ -79,7 +88,9 @@ export function ValidationStatusNotification({
 
   const getProgressPercentage = () => {
     if (!progress.totalItems || progress.totalItems === 0) return 0;
-    return Math.round((progress.completedItems || 0) / progress.totalItems * 100);
+    return Math.round(
+      ((progress.completedItems || 0) / progress.totalItems) * 100
+    );
   };
 
   const getBgColor = () => {
@@ -94,7 +105,9 @@ export function ValidationStatusNotification({
   };
 
   return (
-    <div className={`w-full rounded-lg border p-3 shadow-lg backdrop-blur-sm transition-all duration-300 z-10 mb-4 ${getBgColor()}`}>
+    <div
+      className={`w-full rounded-lg border p-3 shadow-lg backdrop-blur-sm transition-all duration-300 z-10 mb-4 ${getBgColor()}`}
+    >
       <div className="flex items-start justify-between">
         <div className="flex items-start space-x-3 flex-1">
           {getStageIcon()}
@@ -105,7 +118,7 @@ export function ValidationStatusNotification({
             <div className="text-xs text-gray-300 mt-1">
               {getStageMessage()}
             </div>
-            
+
             {progress.totalItems && progress.totalItems > 0 && (
               <div className="mt-2">
                 <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
@@ -113,7 +126,7 @@ export function ValidationStatusNotification({
                   <span>{getProgressPercentage()}%</span>
                 </div>
                 <div className="w-full bg-gray-700 rounded-full h-1">
-                  <div 
+                  <div
                     className="bg-blue-500 h-1 rounded-full transition-all duration-300"
                     style={{ width: `${getProgressPercentage()}%` }}
                   />
@@ -128,13 +141,13 @@ export function ValidationStatusNotification({
                     Current: {progress.currentItem}
                   </div>
                 )}
-                
+
                 <div className="flex items-center space-x-2">
                   <label className="flex items-center space-x-2 text-xs">
                     <input
                       type="checkbox"
                       checked={validationEnabled}
-                      onChange={(e) => onToggleValidation?.(e.target.checked)}
+                      onChange={e => onToggleValidation?.(e.target.checked)}
                       className="w-3 h-3 rounded"
                     />
                     <span className="text-gray-300">Enable validation</span>
@@ -144,7 +157,7 @@ export function ValidationStatusNotification({
             )}
           </div>
         </div>
-        
+
         <div className="flex items-center space-x-1 ml-2">
           <button
             onClick={() => setIsExpanded(!isExpanded)}

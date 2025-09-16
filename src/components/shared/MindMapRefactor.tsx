@@ -15,7 +15,7 @@ export function MindMapRefactor({
   nodeLabel,
   onNodeAdd,
   onNodeUpdate,
-  onNodeDelete
+  onNodeDelete,
 }: MindMapRefactorProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedLabel, setEditedLabel] = useState(nodeLabel);
@@ -91,22 +91,26 @@ export function MindMapRefactor({
   return (
     <div className="flex flex-col h-full p-4 space-y-4">
       <div className="flex-shrink-0">
-        <h3 className="text-lg font-medium text-white mb-4">Refactor MindMap</h3>
-        
+        <h3 className="text-lg font-medium text-white mb-4">
+          Refactor MindMap
+        </h3>
+
         {/* Current Node Section */}
         <div className="bg-gray-800 rounded-lg p-4 mb-4">
-          <h4 className="text-sm font-medium text-gray-300 mb-3">Current Node</h4>
-          
+          <h4 className="text-sm font-medium text-gray-300 mb-3">
+            Current Node
+          </h4>
+
           {isEditing ? (
             <div className="space-y-3">
               <input
                 type="text"
                 value={editedLabel}
-                onChange={(e) => setEditedLabel(e.target.value)}
+                onChange={e => setEditedLabel(e.target.value)}
                 className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Node text..."
                 autoFocus
-                onKeyDown={(e) => {
+                onKeyDown={e => {
                   if (e.key === 'Enter') {
                     handleUpdateNode();
                   } else if (e.key === 'Escape') {
@@ -165,18 +169,20 @@ export function MindMapRefactor({
         {/* Add Child Node Section */}
         {onNodeAdd && (
           <div className="bg-gray-800 rounded-lg p-4">
-            <h4 className="text-sm font-medium text-gray-300 mb-3">Add Child Node</h4>
-            
+            <h4 className="text-sm font-medium text-gray-300 mb-3">
+              Add Child Node
+            </h4>
+
             {isAddingChild ? (
               <div className="space-y-3">
                 <input
                   type="text"
                   value={newChildText}
-                  onChange={(e) => setNewChildText(e.target.value)}
+                  onChange={e => setNewChildText(e.target.value)}
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="New child node text..."
                   autoFocus
-                  onKeyDown={(e) => {
+                  onKeyDown={e => {
                     if (e.key === 'Enter') {
                       handleAddChild();
                     } else if (e.key === 'Escape') {
@@ -220,16 +226,27 @@ export function MindMapRefactor({
       {/* Instructions */}
       <div className="flex-1 min-h-0 overflow-auto">
         <div className="bg-gray-800 rounded-lg p-4">
-          <h4 className="text-sm font-medium text-gray-300 mb-3">Instructions</h4>
+          <h4 className="text-sm font-medium text-gray-300 mb-3">
+            Instructions
+          </h4>
           <div className="text-sm text-gray-400 space-y-2">
             <p>Use this tab to modify your mind map structure:</p>
             <ul className="list-disc list-inside space-y-1 ml-2">
-              <li><strong>Edit:</strong> Change the text of the current node</li>
-              <li><strong>Add Child:</strong> Create a new child node under the current node</li>
-              <li><strong>Delete:</strong> Remove the current node and all its children</li>
+              <li>
+                <strong>Edit:</strong> Change the text of the current node
+              </li>
+              <li>
+                <strong>Add Child:</strong> Create a new child node under the
+                current node
+              </li>
+              <li>
+                <strong>Delete:</strong> Remove the current node and all its
+                children
+              </li>
             </ul>
             <p className="mt-3 text-xs text-gray-500">
-              Changes are applied immediately to your mind map. Use keyboard shortcuts:
+              Changes are applied immediately to your mind map. Use keyboard
+              shortcuts:
               <br />• Enter to save • Escape to cancel
             </p>
           </div>
