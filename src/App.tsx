@@ -12,13 +12,10 @@ import { ModelSelector } from './settings/components/ModelSelector';
 import { HeaderStats } from './components/HeaderStats';
 import { LocalModelLoadDialog } from './components/LocalModelLoadDialog';
 import { LLMDebugDialog } from './components/LLMDebugDialog';
-import { initializeDebugSSE } from './store/useDebugStore';
-import { initializeMCPLogsSSE, useMCPLogsStore } from './store/useMCPLogsStore';
 import { useThreadsRefactored } from './chat/hooks/useThreadsRefactored';
-import {
-  useChatMessagesStore,
-  initializeMessageEventsSSE,
-} from './store/useChatMessagesStore';
+import { useChatMessagesStore } from './store/useChatMessagesStore';
+import { sseEventBus } from './utils/sseEventBus';
+import { useMCPLogsStore } from './store/useMCPLogsStore';
 
 import { useMindMaps } from './mindmaps/hooks/useMindMaps';
 import { useAppStore } from './store/useAppStore';
@@ -85,14 +82,11 @@ function App() {
         );
         await initializeWorkspace();
 
-        // Initialize debug SSE for real-time logging
-        initializeDebugSSE();
-
-        // Initialize MCP logs SSE for real-time MCP server logging
-        initializeMCPLogsSSE();
-
-        // Initialize message events SSE for real-time message updates
-        initializeMessageEventsSSE();
+        // Initialize single SSE event bus for all real-time updates
+        console.log('[App] Initializing SSE event bus...');
+        sseEventBus.initialize();
+        console.log('[App] SSE event bus initialization completed');
+        
         // Fetch any existing MCP logs
         useMCPLogsStore.getState().fetchLogs();
       } catch (error) {

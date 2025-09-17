@@ -7,6 +7,7 @@ import {
   isSseTaskProgressData,
   isSseTaskCompletedData,
 } from '../utils/sseDecoder';
+import { sseEventBus } from '../utils/sseEventBus';
 
 export interface Task {
   id: string;
@@ -383,17 +384,17 @@ export const useTaskStore = create<TaskState>()(
 
 // Global SSE listener that runs immediately when the module loads
 let sseInitialized = false;
-let currentEventSource: EventSource | null = null;
+let taskUnsubscribeFunctions: (() => void)[] = [];
 
-function createWorkflowSSEConnection(): EventSource {
-  const eventSource = new EventSource('/api/tasks/stream/workflow-general');
+async function initializeTaskEventSubscriptions() {
+  if (taskUnsubscribeFunctions.length > 0) {
+    return; // Already subscribed
+  }
 
-  eventSource.onmessage = async event => {
+  const handleTaskEvent = async (event: { data: any }) => {
     try {
-      const rawData = JSON.parse(event.data);
-
       // Decode base64 fields if needed
-      const data = await decodeSseEventData(rawData);
+      const data = await decodeSseEventData(event.data);
 
       switch (data.type) {
         case 'workflow_started':
@@ -485,27 +486,33 @@ function createWorkflowSSEConnection(): EventSource {
     }
   };
 
-  eventSource.onerror = _error => {
-    if (eventSource.readyState === EventSource.CLOSED) {
-      // Auto-reconnect after 3 seconds
-      setTimeout(() => {
-        if (currentEventSource === eventSource) {
-          currentEventSource = createWorkflowSSEConnection();
-        }
-      }, 3000);
-    }
-  };
-
-  return eventSource;
+  // Subscribe to task-related events via event bus
+  const unsubscribeWorkflowStarted = sseEventBus.subscribe('workflow_started', handleTaskEvent);
+  taskUnsubscribeFunctions.push(unsubscribeWorkflowStarted);
+  
+  const unsubscribeTasksPlanned = sseEventBus.subscribe('tasks_planned', handleTaskEvent);
+  taskUnsubscribeFunctions.push(unsubscribeTasksPlanned);
+  
+  const unsubscribeTaskProgress = sseEventBus.subscribe('task_progress', handleTaskEvent);
+  taskUnsubscribeFunctions.push(unsubscribeTaskProgress);
+  
+  const unsubscribeTaskCompleted = sseEventBus.subscribe('task_completed', handleTaskEvent);
+  taskUnsubscribeFunctions.push(unsubscribeTaskCompleted);
+  
+  const unsubscribeWorkflowCompleted = sseEventBus.subscribe('workflow_completed', handleTaskEvent);
+  taskUnsubscribeFunctions.push(unsubscribeWorkflowCompleted);
+  
+  const unsubscribeWorkflowFailed = sseEventBus.subscribe('workflow_failed', handleTaskEvent);
+  taskUnsubscribeFunctions.push(unsubscribeWorkflowFailed);
 }
 
 // Initialize SSE connection when the module loads
-function initializeWorkflowSSE() {
+async function initializeWorkflowSSE() {
   if (!sseInitialized) {
     sseInitialized = true;
     // Small delay to ensure server is ready
-    setTimeout(() => {
-      currentEventSource = createWorkflowSSEConnection();
+    setTimeout(async () => {
+      await initializeTaskEventSubscriptions();
     }, 1000);
   }
 }

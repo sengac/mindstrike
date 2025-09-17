@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { ConversationMessage } from '../types';
-import { decodeSseDataSync } from '../utils/sseDecoder';
+import { sseEventBus } from '../utils/sseEventBus';
 
 export interface ChatMessagesState {
   // Display state only
@@ -120,64 +120,30 @@ export const useChatMessagesStore = create<ChatMessagesState>()(
 export const getCurrentThreadId = () =>
   useChatMessagesStore.getState().threadId;
 
-// Global singleton SSE connection for message events
-let currentMessageEventSource: EventSource | null = null;
+// Initialize message events subscription on module load
+let unsubscribeMessageEvents: (() => void) | null = null;
 
-export function initializeMessageEventsSSE(): void {
-  if (currentMessageEventSource || typeof window === 'undefined') {
-    return; // Already initialized or not in browser
+// Subscribe to message events through the unified event bus
+function initializeMessageEventsSubscription(): void {
+if (unsubscribeMessageEvents) {
+  return; // Already subscribed
   }
 
-  currentMessageEventSource = new EventSource('/api/message/events');
-
-  currentMessageEventSource.onopen = () => {
-    // Connection established
-  };
-
-  currentMessageEventSource.onmessage = event => {
-    try {
-      const rawData = JSON.parse(event.data);
-      const data = decodeSseDataSync(rawData);
-
-      if (
-        data &&
-        typeof data === 'object' &&
-        'type' in data &&
-        data.type === 'messages-deleted'
-      ) {
-        // Update the chat messages store directly
-        const store = useChatMessagesStore.getState();
-        const messageIds = (data as any).messageIds;
-        if (Array.isArray(messageIds)) {
-          store.setMessages(
-            store.messages.filter(msg => !messageIds.includes(msg.id))
-          );
-        }
-      }
-    } catch (error) {
-      console.error('[MessageEventsSSE] Error parsing event:', error);
-    }
-  };
-
-  currentMessageEventSource.onerror = error => {
-    console.error('[MessageEventsSSE] Connection error:', error);
-
-    // Clean up and retry
-    if (currentMessageEventSource) {
-      currentMessageEventSource.close();
-      currentMessageEventSource = null;
-    }
-
-    // Retry after 3 seconds
-    setTimeout(() => {
-      initializeMessageEventsSSE();
-    }, 3000);
-  };
+  console.log('[useChatMessagesStore] Subscribing to message events via SSE event bus');
+  
+  unsubscribeMessageEvents = sseEventBus.subscribe('messages-deleted', (event) => {
+    console.log('[useChatMessagesStore] Processing messages-deleted:', event.data.messageIds);
+    
+    // Update the chat messages store directly
+    const store = useChatMessagesStore.getState();
+    store.setMessages(
+      store.messages.filter(msg => !event.data.messageIds.includes(msg.id))
+    );
+  });
 }
 
-export function disconnectMessageEventsSSE(): void {
-  if (currentMessageEventSource) {
-    currentMessageEventSource.close();
-    currentMessageEventSource = null;
-  }
+// Auto-initialize subscription when module loads
+if (typeof window !== 'undefined') {
+  // Small delay to ensure the event bus is ready
+  setTimeout(initializeMessageEventsSubscription, 100);
 }

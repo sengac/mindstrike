@@ -15,11 +15,15 @@ interface DebugEntry {
 class ServerDebugLogger {
   private broadcastDebugEntry(entry: DebugEntry) {
     try {
-      sseManager.broadcast('debug', {
+      // Broadcast to both unified events and legacy debug topic for compatibility
+      const debugData = {
         type: 'debug-entry',
         timestamp: Date.now(),
         ...entry,
-      });
+      };
+      
+      sseManager.broadcast('unified-events', debugData);
+      sseManager.broadcast('debug', debugData);
     } catch (error) {
       logger.error('Failed to broadcast debug entry:', error);
     }

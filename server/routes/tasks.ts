@@ -26,9 +26,9 @@ router.get('/stream/:workflowId', (req, res) => {
  * Broadcast task update to all clients listening to a workflow
  */
 export const broadcastTaskUpdate = (workflowId: string, data: any) => {
-  const topic = `tasks-${workflowId}`;
-  sseManager.broadcast(topic, {
+  sseManager.broadcast('unified-events', {
     ...data,
+    workflowId: workflowId, // Include workflowId for client filtering
     timestamp: Date.now(),
   });
 };

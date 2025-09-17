@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { LLMModel } from '../hooks/useModels';
 import { modelEvents } from '../utils/modelEvents';
+import { sseEventBus } from '../utils/sseEventBus';
 
 interface ModelsState {
   models: LLMModel[];
@@ -185,75 +186,43 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
   },
 }));
 
-// Global SSE listener that runs regardless of component mounting
-let sseInitialized = false;
-let currentEventSource: EventSource | null = null;
-let initializationTimeout: number | null = null;
+// Event Bus Subscription for model updates
+let modelsUnsubscribe: (() => void) | null = null;
 
-function createSSEConnection(): EventSource {
-  // Server-Sent Events for real-time model updates
-  const eventSource = new EventSource('/api/llm/model-updates');
+export function initializeModelsEventSubscription(): void {
+  if (modelsUnsubscribe) {
+    return; // Already subscribed
+  }
 
-  eventSource.onmessage = event => {
-    try {
-      const data = JSON.parse(event.data);
-      if (data.type === 'models-updated') {
-        const { isLoading, fetchModels } = useModelsStore.getState();
-        if (!isLoading) {
-          fetchModels().catch(console.error);
-        }
-      }
-    } catch (error) {
-      console.error('Error parsing SSE data:', error);
+  console.log('[useModelsStore] Subscribing to model update events via SSE event bus');
+  
+  modelsUnsubscribe = sseEventBus.subscribe('models-updated', (_event) => {
+    const { isLoading, fetchModels } = useModelsStore.getState();
+    if (!isLoading) {
+      fetchModels().catch(console.error);
     }
-  };
-
-  eventSource.onerror = _error => {
-    // Only attempt reconnect if connection was closed
-    if (eventSource.readyState === EventSource.CLOSED) {
-      setTimeout(() => {
-        currentEventSource = createSSEConnection();
-      }, 5000);
-    }
-  };
-
-  return eventSource;
+  });
 }
 
-export function initializeModelsSSE() {
-  if (sseInitialized) return;
-  sseInitialized = true;
+// Auto-initialize subscription and model events when module loads
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    initializeModelsEventSubscription();
+    
+    // Listen for model change events
+    const handleModelChange = () => {
+      const { isLoading, rescanModels } = useModelsStore.getState();
+      if (!isLoading) {
+        rescanModels().catch(console.error);
+      }
+    };
 
-  // Clear any existing timeout
-  if (initializationTimeout) {
-    clearTimeout(initializationTimeout);
-  }
+    modelEvents.on('models-changed', handleModelChange);
+    modelEvents.on('local-model-downloaded', handleModelChange);
+    modelEvents.on('service-added', handleModelChange);
+    modelEvents.on('service-removed', handleModelChange);
 
-  // Close any existing connection
-  if (currentEventSource) {
-    currentEventSource.close();
-    currentEventSource = null;
-  }
-
-  // Delay SSE connection to allow server to fully start
-  initializationTimeout = window.setTimeout(() => {
-    currentEventSource = createSSEConnection();
-    initializationTimeout = null;
-  }, 2000);
-
-  // Listen for model change events
-  const handleModelChange = () => {
-    const { isLoading, rescanModels } = useModelsStore.getState();
-    if (!isLoading) {
-      rescanModels().catch(console.error);
-    }
-  };
-
-  modelEvents.on('models-changed', handleModelChange);
-  modelEvents.on('local-model-downloaded', handleModelChange);
-  modelEvents.on('service-added', handleModelChange);
-  modelEvents.on('service-removed', handleModelChange);
-
-  // Initial fetch
-  useModelsStore.getState().fetchModels().catch(console.error);
+    // Initial fetch
+    useModelsStore.getState().fetchModels().catch(console.error);
+  }, 100);
 }

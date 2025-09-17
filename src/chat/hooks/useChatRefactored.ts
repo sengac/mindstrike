@@ -15,6 +15,7 @@ import {
 } from '../../utils/sseDecoder';
 import { useChatMessagesStore } from '../../store/useChatMessagesStore';
 import { useThreadsStore } from '../../store/useThreadsStore';
+import { sseEventBus } from '../../utils/sseEventBus';
 
 interface UseChatProps {
   threadId?: string;
@@ -78,6 +79,91 @@ export function useChatRefactored({
     [validation]
   );
 
+  // Subscribe to unified event bus for real-time streaming events
+  useEffect(() => {
+    const unsubscribeContentChunk = sseEventBus.subscribe('content-chunk', async (event) => {
+      const data = event.data;
+      if (data && data.chunk) {
+        // Handle real-time content chunks for character-by-character streaming
+        const chatStore = useChatMessagesStore.getState();
+        const messages = chatStore.messages;
+        const lastMessage = messages[messages.length - 1];
+        
+        if (lastMessage && lastMessage.role === 'assistant' && lastMessage.status === 'processing') {
+          // Update the existing streaming message
+          chatStore.updateMessage(lastMessage.id, {
+            ...lastMessage,
+            content: lastMessage.content + data.chunk,
+          });
+        }
+        // Note: Do NOT create assistant messages here - server will send message-update with proper ID
+      }
+    });
+
+    const unsubscribeMessageUpdate = sseEventBus.subscribe('message-update', async (event) => {
+      const data = event.data;
+      if (data && data.message) {
+        console.log('[CHAT DEBUG] message-update event received:', data.message.status);
+        // Server sends complete message with server-generated ID
+        const messageData = data.message;
+        const assistantMessage = {
+          id: messageData.id,
+          role: 'assistant' as const,
+          content: messageData.content,
+          timestamp: new Date(messageData.timestamp),
+          status: (messageData.status || 'processing') as 'processing' | 'completed' | 'cancelled',
+          model: messageData.model,
+          toolCalls: messageData.toolCalls,
+          toolResults: messageData.toolResults,
+        };
+        
+        // Check if message already exists
+        const chatStore = useChatMessagesStore.getState();
+        const messages = chatStore.messages;
+        const existingMessage = messages.find(msg => msg.id === assistantMessage.id);
+        
+        if (existingMessage) {
+          // Update existing message
+          chatStore.updateMessage(assistantMessage.id, assistantMessage);
+        } else {
+          // Add new message (first time we see this assistant message)
+          console.log('[CHAT DEBUG] Adding new assistant message, keeping streaming=true');
+          chatStore.addMessage(assistantMessage);
+          // Keep streaming=true until message is completed
+        }
+      }
+    });
+
+    const unsubscribeCompleted = sseEventBus.subscribe('completed', async (event) => {
+      const data = event.data;
+      if (data && data.message) {
+        console.log('[CHAT DEBUG] completed event received, setting streaming=false');
+        // Final message completion
+        const messageData = data.message;
+        const completedMessage = {
+          id: messageData.id,
+          role: 'assistant' as const,
+          content: messageData.content,
+          timestamp: new Date(messageData.timestamp),
+          status: 'completed' as const,
+          model: messageData.model,
+          toolCalls: messageData.toolCalls,
+          toolResults: messageData.toolResults,
+        };
+        
+        const chatStore = useChatMessagesStore.getState();
+        chatStore.updateMessage(completedMessage.id, completedMessage);
+        chatStore.setStreaming(false);
+      }
+    });
+
+    return () => {
+      unsubscribeContentChunk();
+      unsubscribeMessageUpdate();
+      unsubscribeCompleted();
+    };
+  }, []); // Empty dependency array - event handlers access store directly
+
   const sendMessage = useCallback(
     async (
       content: string,
@@ -101,6 +187,7 @@ export function useChatRefactored({
         return;
       }
 
+      console.log('[CHAT DEBUG] Setting streaming=true');
       setStreaming(true);
       setError(null);
 
@@ -128,7 +215,7 @@ export function useChatRefactored({
           isAgentMode,
         };
 
-        // Start the streaming request - this will set up the SSE connection
+        // Start the streaming request - unified event bus will handle all streaming
         const response = await fetch('/api/message/stream', {
           method: 'POST',
           headers: {
@@ -144,149 +231,46 @@ export function useChatRefactored({
           );
         }
 
-        // Read the SSE stream directly from the response
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
+        // Just consume the response - the unified event bus handles streaming
+        await response.text();
 
-        if (!reader) {
-          throw new Error('No response body reader available');
-        }
-
-        let assistantMessage: ConversationMessage | null = null;
-
-        const processSSEData = async (data: any) => {
-          if (data.type === 'connected') {
-            // SSE connected
-          } else if (data.type === 'content-chunk') {
-            // Handle real-time content chunks for character-by-character streaming
-            if (!assistantMessage) {
-              // Create initial assistant message if it doesn't exist
-              assistantMessage = {
-                id: Date.now().toString(),
-                role: 'assistant' as const,
-                content: data.chunk,
-                timestamp: new Date(),
-                status: 'processing' as const,
-                model: 'Streaming...',
-              };
-              addMessage(assistantMessage);
-              setStreaming(false); // Set loading to false once streaming starts
-            } else {
-              // Append chunk to existing message
-              updateMessage(assistantMessage.id, {
-                content: assistantMessage.content + data.chunk,
-              });
-              assistantMessage.content += data.chunk;
-            }
-          } else if (data.type === 'message-update') {
-            const updatedMsg = {
-              ...data.message,
-              timestamp: new Date(data.message.timestamp),
-            };
-
-            // For streaming updates, we'll validate on completion instead of every update
-            if (!assistantMessage) {
-              // First update - add the message
-              assistantMessage = updatedMsg;
-              addMessage(updatedMsg);
-            } else {
-              // Update existing message
-              assistantMessage = updatedMsg;
-              updateMessage(updatedMsg.id, updatedMsg);
-            }
-          } else if (data.type === 'completed') {
-            const finalMsg = {
-              ...data.message,
-              timestamp: new Date(data.message.timestamp),
-            };
-
-            // Validate final message
-            const validatedFinalMsg = await validateAndProcessMessage(finalMsg);
-
-            if (assistantMessage) {
-              updateMessage(validatedFinalMsg.id, validatedFinalMsg);
-            } else {
-              addMessage(validatedFinalMsg);
-            }
-
-            // Set streaming to false when message is completed
-            setStreaming(false);
-
-            // Generate thread name for first message exchange
-            if (isFirstMessage && currentThreadId) {
-              try {
-                const response = await fetch('/api/generate-title', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    context: `User asked: ${content.slice(0, 200)}`,
-                  }),
-                });
-
-                if (response.ok) {
-                  const result = await response.json();
-                  const title = result.title?.trim();
-                  if (title && title.length > 0) {
-                    await useThreadsStore
-                      .getState()
-                      .renameThread(currentThreadId, title);
-                  }
-                }
-              } catch (error) {
-                console.error(
-                  '[useChatRefactored] Failed to generate thread title:',
-                  error
-                );
-              }
-            }
-
-            // Reload thread list to update message count and name
-            useThreadsStore.getState().loadThreads();
-          } else if (data.type === 'error') {
-            toast.error(`Connection Error: ${data.error}`);
-            setStreaming(false);
-            return;
-          } else if (data.type === 'local-model-not-loaded') {
-            // Set the error to trigger the dialog which will auto-load the model
-            setLocalModelError({
-              modelId: data.modelId,
-              error: data.error,
+        // Generate thread name for first message exchange
+        if (isFirstMessage && currentThreadId) {
+          try {
+            const titleResponse = await fetch('/api/generate-title', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                context: `User asked: ${content.slice(0, 200)}`,
+              }),
             });
-            setStreaming(false);
-            return;
-          }
-        };
 
-        // Process SSE stream using the fetch response body
-        while (true) {
-          const { done, value } = await reader.read();
-
-          if (done) break;
-
-          const chunk = decoder.decode(value);
-          const lines = chunk.split('\n');
-
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6));
-
-                const decodedData = await decodeSseEventData(data);
-                await processSSEData(decodedData);
-              } catch (parseError) {
-                console.error('Error parsing SSE data:', parseError);
+            if (titleResponse.ok) {
+              const result = await titleResponse.json();
+              const title = result.title?.trim();
+              if (title && title.length > 0) {
+                await useThreadsStore
+                  .getState()
+                  .renameThread(currentThreadId, title);
               }
             }
+          } catch (error) {
+            console.error(
+              '[useChatRefactored] Failed to generate thread title:',
+              error
+            );
           }
         }
+
+        // Reload thread list to update message count and name
+        useThreadsStore.getState().loadThreads();
       } catch (error) {
         console.error('SSE Error:', error);
         toast.error(`Failed to send message: ${error}`);
         setError(`Failed to send message: ${error}`);
-      } finally {
-        setStreaming(false);
+        setStreaming(false); // Only set false on error
       }
     },
     [

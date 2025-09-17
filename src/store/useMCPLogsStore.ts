@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { decodeSseEventData, isSseMcpLogData } from '../utils/sseDecoder';
+import { sseEventBus } from '../utils/sseEventBus';
 
 export interface MCPLogEntry {
   id: string;
@@ -52,80 +52,31 @@ export const useMCPLogsStore = create<MCPLogsState>()(
   }))
 );
 
-// Global SSE listener for MCP logs
-let mcpLogsSSEInitialized = false;
-let currentMCPLogsEventSource: EventSource | null = null;
+// Event Bus Subscriptions for MCP logs
+let mcpLogsUnsubscribe: (() => void) | null = null;
 
-function createMCPLogsSSEConnection(): EventSource {
-  const eventSource = new EventSource('/api/mcp/logs/stream');
-
-  eventSource.onopen = () => {
-    useMCPLogsStore.getState().setConnected(true);
-  };
-
-  eventSource.onmessage = async event => {
-    try {
-      const data = JSON.parse(event.data);
-
-      // Decode the entire data object using the shared SSE decoder
-      const decodedData = await decodeSseEventData(data);
-
-      if (decodedData.type === 'mcp-log' && isSseMcpLogData(decodedData)) {
-        const { addLog } = useMCPLogsStore.getState();
-        addLog({
-          id: decodedData.id,
-          timestamp: decodedData.timestamp,
-          serverId: decodedData.serverId,
-          level: decodedData.level,
-          message: decodedData.message,
-        });
-      }
-    } catch (error) {
-      console.error('Error parsing MCP logs SSE data:', error);
-    }
-  };
-
-  eventSource.onerror = error => {
-    console.error('MCP logs SSE connection error:', error);
-    useMCPLogsStore.getState().setConnected(false);
-
-    if (eventSource.readyState === EventSource.CLOSED) {
-      setTimeout(() => {
-        currentMCPLogsEventSource = createMCPLogsSSEConnection();
-      }, 5000);
-    }
-  };
-
-  return eventSource;
-}
-
-export function initializeMCPLogsSSE() {
-  if (mcpLogsSSEInitialized) return;
-  mcpLogsSSEInitialized = true;
-
-  // Close any existing connection
-  if (currentMCPLogsEventSource) {
-    currentMCPLogsEventSource.close();
+function initializeMCPLogsEventSubscription(): void {
+  if (mcpLogsUnsubscribe) {
+    return; // Already subscribed
   }
 
-  // Create new connection
-  currentMCPLogsEventSource = createMCPLogsSSEConnection();
-
-  // Cleanup on page unload
-  window.addEventListener('beforeunload', () => {
-    if (currentMCPLogsEventSource) {
-      currentMCPLogsEventSource.close();
-    }
+  console.log('[useMCPLogsStore] Subscribing to MCP log events via SSE event bus');
+  
+  mcpLogsUnsubscribe = sseEventBus.subscribe('mcp-log', (event) => {
+    const { addLog } = useMCPLogsStore.getState();
+    const data = event.data;
+    
+    addLog({
+      id: data.id,
+      timestamp: data.timestamp,
+      serverId: data.serverId,
+      level: data.level,
+      message: data.message,
+    });
   });
 }
 
-// Auto-initialize when store is accessed
-useMCPLogsStore.subscribe(
-  state => state.isConnected,
-  () => {
-    if (!mcpLogsSSEInitialized) {
-      initializeMCPLogsSSE();
-    }
-  },
-  { fireImmediately: true }
-);
+// Auto-initialize subscription when module loads
+if (typeof window !== 'undefined') {
+  setTimeout(initializeMCPLogsEventSubscription, 100);
+}

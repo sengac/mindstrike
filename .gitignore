@@ -81,6 +81,8 @@ CONVERSATIONS.json
 
 # Editor directories and files
 .vscode/*
+!.vscode/tasks.json
+!.vscode/launch.json
 !.vscode/extensions.json
 .idea
 .DS_Store

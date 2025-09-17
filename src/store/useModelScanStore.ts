@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { useAvailableModelsStore } from './useAvailableModelsStore';
+import { sseEventBus } from '../utils/sseEventBus';
 
 export interface ScanProgress {
   stage:
@@ -29,8 +30,9 @@ interface ModelScanState {
   scanId: string | null;
   progress: ScanProgress;
 
-  // SSE connection
-  eventSource: EventSource | null;
+  // Event bus subscription
+  unsubscribe: (() => void) | null;
+  eventSource: EventSource | { close: () => void } | null;
 
   // Actions
   startScan: () => Promise<void>;
@@ -43,9 +45,9 @@ interface ModelScanState {
   resetScan: () => void;
   updateProgress: (progress: ScanProgress) => void;
 
-  // Internal SSE management
-  connectSSE: () => void;
-  disconnectSSE: () => void;
+  // Internal event bus management
+  subscribeToEvents: () => void;
+  unsubscribeFromEvents: () => void;
 }
 
 export const useModelScanStore = create<ModelScanState>((set, get) => ({
@@ -57,10 +59,11 @@ export const useModelScanStore = create<ModelScanState>((set, get) => ({
     stage: 'idle',
     message: 'Ready to find models',
   },
+  unsubscribe: null,
   eventSource: null,
 
   startScan: async () => {
-    const { connectSSE } = get();
+    const { subscribeToEvents } = get();
 
     try {
       set({
@@ -73,7 +76,7 @@ export const useModelScanStore = create<ModelScanState>((set, get) => ({
       });
 
       // Connect to SSE first
-      connectSSE();
+      subscribeToEvents();
 
       // Start the scan
       const response = await fetch('/api/model-scan/start', {
@@ -97,8 +100,8 @@ export const useModelScanStore = create<ModelScanState>((set, get) => ({
         },
       });
     } catch (error) {
-      const { disconnectSSE } = get();
-      disconnectSSE();
+      const { unsubscribeFromEvents } = get();
+      unsubscribeFromEvents();
 
       set({
         isScanning: false,
@@ -116,7 +119,7 @@ export const useModelScanStore = create<ModelScanState>((set, get) => ({
   },
 
   startSearch: async (query: string, searchType: string, filters: any) => {
-    const { connectSSE } = get();
+    const { subscribeToEvents } = get();
 
     try {
       set({
@@ -130,7 +133,7 @@ export const useModelScanStore = create<ModelScanState>((set, get) => ({
       });
 
       // Connect to SSE first
-      connectSSE();
+      subscribeToEvents();
 
       // Start the search
       const response = await fetch('/api/model-scan/search', {
@@ -160,8 +163,8 @@ export const useModelScanStore = create<ModelScanState>((set, get) => ({
         },
       });
     } catch (error) {
-      const { disconnectSSE } = get();
-      disconnectSSE();
+      const { unsubscribeFromEvents } = get();
+      unsubscribeFromEvents();
 
       set({
         isScanning: false,
@@ -179,7 +182,7 @@ export const useModelScanStore = create<ModelScanState>((set, get) => ({
   },
 
   cancelScan: async () => {
-    const { scanId, disconnectSSE } = get();
+    const { scanId, unsubscribeFromEvents } = get();
 
     if (!scanId || !get().canCancel) {
       return;
@@ -202,7 +205,7 @@ export const useModelScanStore = create<ModelScanState>((set, get) => ({
         throw new Error(`Failed to cancel scan: ${response.statusText}`);
       }
 
-      disconnectSSE();
+      unsubscribeFromEvents();
 
       set({
         isScanning: false,
@@ -227,8 +230,8 @@ export const useModelScanStore = create<ModelScanState>((set, get) => ({
   },
 
   resetScan: () => {
-    const { disconnectSSE } = get();
-    disconnectSSE();
+    const { unsubscribeFromEvents } = get();
+    unsubscribeFromEvents();
 
     set({
       isScanning: false,
@@ -246,8 +249,8 @@ export const useModelScanStore = create<ModelScanState>((set, get) => ({
 
     // Auto-complete scan when stage is completed
     if (progress.stage === 'completed') {
-      const { disconnectSSE } = get();
-      disconnectSSE();
+      const { unsubscribeFromEvents } = get();
+      unsubscribeFromEvents();
 
       // If this was a search operation and we have results, update the available models store
       if (progress.operationType === 'search' && progress.results) {
@@ -267,8 +270,8 @@ export const useModelScanStore = create<ModelScanState>((set, get) => ({
 
     // Handle error state
     if (progress.stage === 'error') {
-      const { disconnectSSE } = get();
-      disconnectSSE();
+      const { unsubscribeFromEvents } = get();
+      unsubscribeFromEvents();
 
       set({
         isScanning: false,
@@ -277,48 +280,28 @@ export const useModelScanStore = create<ModelScanState>((set, get) => ({
     }
   },
 
-  connectSSE: () => {
-    const { eventSource, disconnectSSE } = get();
+  subscribeToEvents: () => {
+    const { eventSource, unsubscribeFromEvents } = get();
 
     // Close existing connection
     if (eventSource) {
-      disconnectSSE();
+      unsubscribeFromEvents();
     }
 
-    const newEventSource = new EventSource('/api/model-scan/progress');
-
-    newEventSource.onmessage = event => {
-      try {
-        const data = JSON.parse(event.data);
-
-        if (data.type === 'scan-progress') {
-          get().updateProgress(data.progress);
-        }
-      } catch (error) {
-        console.error('Error parsing SSE scan progress data:', error);
+    // Subscribe to unified event bus for scan progress
+    const unsubscribe = sseEventBus.subscribe('scan-progress', async (event) => {
+      const data = event.data;
+      if (data && data.progress) {
+        get().updateProgress(data.progress);
       }
-    };
+    });
 
-    newEventSource.onerror = error => {
-      console.error('SSE scan progress connection error:', error);
-
-      // Only attempt reconnect if we're still scanning
-      if (
-        get().isScanning &&
-        newEventSource.readyState === EventSource.CLOSED
-      ) {
-        setTimeout(() => {
-          if (get().isScanning) {
-            get().connectSSE();
-          }
-        }, 3000);
-      }
-    };
-
-    set({ eventSource: newEventSource });
+    // Store unsubscribe function as mock EventSource
+    const mockEventSource = { close: unsubscribe };
+    set({ eventSource: mockEventSource });
   },
 
-  disconnectSSE: () => {
+  unsubscribeFromEvents: () => {
     const { eventSource } = get();
 
     if (eventSource) {
@@ -331,7 +314,7 @@ export const useModelScanStore = create<ModelScanState>((set, get) => ({
 // Auto-cleanup on unmount
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', () => {
-    const { disconnectSSE } = useModelScanStore.getState();
-    disconnectSSE();
+    const { unsubscribeFromEvents } = useModelScanStore.getState();
+    unsubscribeFromEvents();
   });
 }

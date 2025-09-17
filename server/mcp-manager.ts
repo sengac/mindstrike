@@ -73,7 +73,7 @@ export class MCPManager extends EventEmitter {
     }
 
     // Broadcast to clients via SSE
-    sseManager.broadcast('mcp-logs', {
+    sseManager.broadcast('unified-events', {
       type: 'mcp-log',
       ...logEntry,
     });
@@ -345,7 +345,7 @@ export class MCPManager extends EventEmitter {
           );
 
           // Broadcast installation instructions via SSE
-          sseManager.broadcast('mcp-command-missing', {
+          sseManager.broadcast('unified-events', {
             type: 'command-missing',
             serverId: serverConfig.id,
             command: processedConfig.command,

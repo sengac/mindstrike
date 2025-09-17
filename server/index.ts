@@ -22,6 +22,7 @@ import modelScanRoutes from './routes/model-scan.js';
 import { MindmapAgentIterative } from './agents/mindmap-agent-iterative.js';
 import { WorkflowAgent } from './agents/workflow-agent.js';
 import { ConversationManager } from './conversation-manager.js';
+import { asyncHandler } from './utils/async-handler.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,6 +36,11 @@ process.setMaxListeners(200);
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
+
+// Handle OPTIONS requests explicitly
+app.options('*', (req: Request, res: Response) => {
+  res.status(200).end();
+});
 
 // Mount local LLM routes
 app.use('/api/local-llm', localLlmRoutes);
@@ -293,7 +299,7 @@ async function refreshModelList() {
     }
 
     // Broadcast model updates to connected clients
-    sseManager.broadcast('model-updates', {
+    sseManager.broadcast('unified-events', {
       type: 'models-updated',
       timestamp: Date.now(),
     });
@@ -302,15 +308,32 @@ async function refreshModelList() {
   }
 }
 
-initializeLLMServices();
+// Initialize services with proper error handling
+initializeLLMServices().catch(error => {
+  logger.error('Failed to initialize LLM services:', error);
+});
 
-// Initialize conversation manager
-conversationManager.load().catch(error => {
+// Initialize conversation manager with timeout
+Promise.race([
+  conversationManager.load(),
+  new Promise((_, reject) => 
+    setTimeout(() => reject(new Error('Conversation manager load timeout')), 5000)
+  )
+]).catch(error => {
   logger.error('Failed to load conversation manager:', error);
 });
 
 // API Routes
-// Health stream endpoint for connection monitoring
+// Health monitoring - both unified events AND legacy endpoint for compatibility
+setInterval(() => {
+  sseManager.broadcast('unified-events', {
+    type: 'health',
+    status: 'connected',
+    timestamp: Date.now(),
+  });
+}, 30000); // Every 30 seconds
+
+// Temporary bridge: Health stream endpoint for existing components
 app.get('/api/health/stream', (req: Request, res: Response) => {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -341,30 +364,27 @@ app.get('/api/health/stream', (req: Request, res: Response) => {
 // Legacy LLM configuration endpoints removed - now handled by server-side model management
 
 // Get all available models from server-side configuration
-app.get('/api/llm/models', async (req: Request, res: Response) => {
-  try {
+app.get(
+  '/api/llm/models',
+  asyncHandler(async (req: Request, res: Response) => {
     const models = await llmConfigManager.getModels();
     res.json(models);
-  } catch (error) {
-    logger.error('Error getting LLM models:', error);
-    res.status(500).json({ error: 'Failed to get LLM models' });
-  }
-});
+  })
+);
 
 // Get current default model
-app.get('/api/llm/default-model', async (req: Request, res: Response) => {
-  try {
+app.get(
+  '/api/llm/default-model',
+  asyncHandler(async (req: Request, res: Response) => {
     const defaultModel = await llmConfigManager.getDefaultModel();
     res.json(defaultModel);
-  } catch (error) {
-    logger.error('Error getting default LLM model:', error);
-    res.status(500).json({ error: 'Failed to get default LLM model' });
-  }
-});
+  })
+);
 
 // Set default model
-app.post('/api/llm/default-model', async (req: Request, res: Response) => {
-  try {
+app.post(
+  '/api/llm/default-model',
+  asyncHandler(async (req: Request, res: Response) => {
     const { modelId } = req.body;
     if (!modelId) {
       return res.status(400).json({ error: 'Model ID is required' });
@@ -387,11 +407,8 @@ app.post('/api/llm/default-model', async (req: Request, res: Response) => {
     }
 
     res.json({ success: true });
-  } catch (error) {
-    logger.error('Error setting default LLM model:', error);
-    res.status(500).json({ error: 'Failed to set default LLM model' });
-  }
-});
+  })
+);
 
 // Legacy endpoint removed - models now managed server-side
 
@@ -470,7 +487,7 @@ app.post('/api/llm/rescan', async (req: Request, res: Response) => {
     await llmConfigManager.refreshModels(services, localModels);
 
     // Broadcast model updates to connected clients
-    sseManager.broadcast('model-updates', {
+    sseManager.broadcast('unified-events', {
       type: 'models-updated',
       timestamp: Date.now(),
     });
@@ -697,13 +714,9 @@ app.post('/api/llm/test-service', async (req: Request, res: Response) => {
   }
 });
 
-// Server-Sent Events endpoint for real-time model updates
-app.get('/api/llm/model-updates', (req: Request, res: Response) => {
-  const clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  sseManager.addClient(clientId, res, 'model-updates');
-});
+// Legacy SSE endpoint removed - now using unified events
 
-// Server-Sent Events endpoint for debug logging
+// Debug logging - both unified events AND legacy endpoint for compatibility
 app.get('/api/debug/stream', (req: Request, res: Response) => {
   const clientId = `debug_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   sseManager.addClient(clientId, res, 'debug');
@@ -721,35 +734,7 @@ app.get('/api/large-content/:contentId', (req: Request, res: Response) => {
   }
 });
 
-// SSE endpoint for generation streaming
-app.get('/api/generate/stream/:streamId', (req: Request, res: Response) => {
-  const { streamId } = req.params;
-  const clientId = `generate-${streamId}-${Date.now()}`;
-  sseManager.addClient(clientId, res, streamId);
-});
-
-// SSE endpoint for task progress updates
-// SSE endpoint for general workflow updates (used by chat) - MUST be before the parameterized route
-app.get('/api/tasks/stream/workflow-general', (req: Request, res: Response) => {
-  const clientId = `workflow-${Date.now()}`;
-  sseManager.addClient(clientId, res, 'workflow');
-
-  // Send a test event after connection
-  setTimeout(() => {
-    sseManager.broadcast('workflow', {
-      type: 'test',
-      message: 'SSE connection working',
-      timestamp: Date.now(),
-    });
-  }, 1000);
-});
-
-app.get('/api/tasks/stream/:workflowId', (req: Request, res: Response) => {
-  const { workflowId } = req.params;
-  const clientId = `task-${workflowId}-${Date.now()}`;
-  const topic = `tasks-${workflowId}`;
-  sseManager.addClient(clientId, res, topic);
-});
+// Generation streaming, task progress, and workflow updates now handled by unified SSE event bus
 
 app.get('/api/conversation/:threadId', (req: Request, res: Response) => {
   const { threadId } = req.params;
@@ -832,20 +817,16 @@ app.post('/api/message/stream', async (req: Request, res: Response) => {
 
     // Generate unique client ID for this streaming session
     const clientId = `chat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const topic = `chat-${threadId || 'default'}`;
 
-    // Add client to SSE manager
-    sseManager.addClient(clientId, res, topic);
+    // Add client to unified events topic
+    sseManager.addClient(clientId, res, 'unified-events');
 
     // Process message with real-time streaming using thread-specific agent or workflow agent
     const agent = isAgentMode
       ? agentPool.getWorkflowAgent(threadId || 'default')
       : agentPool.getCurrentAgent();
 
-    // Set chat topic for workflow agent so it can broadcast to both workflow and chat topics
-    if (isAgentMode && agent && 'setChatTopic' in agent) {
-      (agent as WorkflowAgent).setChatTopic(topic);
-    }
+    // All agents now use unified events topic
 
     // Persist the user message
     await conversationManager.load();
@@ -859,7 +840,7 @@ app.post('/api/message/stream', async (req: Request, res: Response) => {
       images: images || [],
       notes: notes || [],
     };
-    conversationManager.addMessage(threadId || 'default', userMessage);
+    await conversationManager.addMessage(threadId || 'default', userMessage);
 
     // Create a custom streaming callback that sends character-by-character updates
     let assistantMessage: {
@@ -892,7 +873,7 @@ app.post('/api/message/stream', async (req: Request, res: Response) => {
 
         // Persist the new assistant message
         await conversationManager.load();
-        conversationManager.addMessage(threadId || 'default', {
+        await conversationManager.addMessage(threadId || 'default', {
           id: updatedMessage.id,
           role: 'assistant',
           content: updatedMessage.content,
@@ -905,7 +886,7 @@ app.post('/api/message/stream', async (req: Request, res: Response) => {
           notes: updatedMessage.notes || [],
         });
 
-        sseManager.broadcast(topic, {
+        sseManager.broadcast('unified-events', {
           type: 'message-update',
           message: updatedMessage,
         });
@@ -918,7 +899,7 @@ app.post('/api/message/stream', async (req: Request, res: Response) => {
         const newContent = updatedMessage.content.slice(lastContentLength);
         if (newContent) {
           // Send the new content as a chunk
-          sseManager.broadcast(topic, {
+          sseManager.broadcast('unified-events', {
             type: 'content-chunk',
             chunk: newContent,
           });
@@ -931,7 +912,7 @@ app.post('/api/message/stream', async (req: Request, res: Response) => {
 
       // Update the persisted message
       await conversationManager.load();
-      conversationManager.updateMessage(
+      await conversationManager.updateMessage(
         threadId || 'default',
         updatedMessage.id,
         {
@@ -944,7 +925,7 @@ app.post('/api/message/stream', async (req: Request, res: Response) => {
         }
       );
 
-      sseManager.broadcast(topic, {
+      sseManager.broadcast('unified-events', {
         type: 'message-update',
         message: updatedMessage,
       });
@@ -962,7 +943,7 @@ app.post('/api/message/stream', async (req: Request, res: Response) => {
 
       // Persist the final completed message
       await conversationManager.load();
-      conversationManager.updateMessage(threadId || 'default', response.id, {
+      await conversationManager.updateMessage(threadId || 'default', response.id, {
         content: response.content,
         status: 'completed',
         model: response.model,
@@ -972,7 +953,7 @@ app.post('/api/message/stream', async (req: Request, res: Response) => {
       });
 
       // Send final completion event
-      sseManager.broadcast(topic, {
+      sseManager.broadcast('unified-events', {
         type: 'completed',
         message: response,
       });
@@ -990,7 +971,7 @@ app.post('/api/message/stream', async (req: Request, res: Response) => {
         processingError instanceof Error &&
         processingError.message === 'LOCAL_MODEL_NOT_LOADED'
       ) {
-        sseManager.broadcast(topic, {
+        sseManager.broadcast('unified-events', {
           type: 'local-model-not-loaded',
           error:
             (processingError as any).originalMessage ||
@@ -1002,7 +983,7 @@ app.post('/api/message/stream', async (req: Request, res: Response) => {
           processingError instanceof Error
             ? processingError.message
             : 'Unknown error';
-        sseManager.broadcast(topic, {
+        sseManager.broadcast('unified-events', {
           type: 'error',
           error: errorMessage,
         });
@@ -1272,12 +1253,12 @@ app.delete('/api/message/:messageId', async (req: Request, res: Response) => {
   try {
     await conversationManager.load();
     const deletedMessageIds =
-      conversationManager.deleteMessageFromAllThreads(messageId);
+      await conversationManager.deleteMessageFromAllThreads(messageId);
     if (deletedMessageIds.length > 0) {
       await conversationManager.save();
 
       // Broadcast update to all clients with ALL deleted message IDs
-      sseManager.broadcast('message-events', {
+      sseManager.broadcast('unified-events', {
         type: 'messages-deleted',
         messageIds: deletedMessageIds,
       });
@@ -1292,23 +1273,49 @@ app.delete('/api/message/:messageId', async (req: Request, res: Response) => {
   }
 });
 
-// Message events SSE endpoint
-app.get('/api/message/events', (req: Request, res: Response) => {
-  const clientId = `message-events-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  sseManager.addClient(clientId, res, 'message-events');
+// Single unified SSE endpoint for all events
+app.get('/api/events/stream', (req: Request, res: Response) => {
+  const clientId = `events-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  sseManager.addClient(clientId, res, 'unified-events');
+  
+  // Send a test event after connection to verify it's working
+  setTimeout(() => {
+    sseManager.broadcast('unified-events', {
+      type: 'connection-test',
+      message: 'Unified SSE connection working',
+      timestamp: Date.now(),
+    });
+  }, 100);
 });
 
 // New Thread-based API
 app.get('/api/threads', async (req: Request, res: Response) => {
   try {
-    await conversationManager.load();
+    console.log('[API] Loading threads - starting conversation manager load');
+    
+    // Add timeout to conversation manager load
+    await Promise.race([
+      conversationManager.load(),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Conversation manager load timeout in API')), 3000)
+      )
+    ]);
+    
+    console.log('[API] Conversation manager loaded, getting thread list');
     const threads = conversationManager.getThreadList();
+    console.log(`[API] Found ${threads.length} threads`);
     res.json(threads);
   } catch (error: unknown) {
     console.error('Error loading threads:', error);
-    const errorMessage =
-      error instanceof Error ? error.message : 'Unknown error';
-    res.status(500).json({ error: errorMessage });
+    
+    // If timeout or other error, return empty threads array
+    if (error instanceof Error && error.message.includes('timeout')) {
+      console.log('[API] Returning empty threads due to timeout');
+      res.json([]);
+    } else {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: errorMessage });
+    }
   }
 });
 
@@ -1330,10 +1337,21 @@ app.get(
 );
 
 app.post('/api/threads', async (req: Request, res: Response) => {
+  console.log('/api/threads req.body', req.body);
   try {
     const { name } = req.body;
-    await conversationManager.load();
-    const thread = conversationManager.createThread(name);
+    console.log('[API] Creating thread - loading conversation manager');
+    
+    await Promise.race([
+      conversationManager.load(),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Conversation manager load timeout in create thread')), 3000)
+      )
+    ]);
+    
+    console.log('[API] Creating thread');
+    const thread = await conversationManager.createThread(name);
+    console.log('[API] Thread created:', thread.id);
     res.json(thread);
   } catch (error: unknown) {
     console.error('Error creating thread:', error);
@@ -1344,10 +1362,21 @@ app.post('/api/threads', async (req: Request, res: Response) => {
 });
 
 app.delete('/api/threads/:threadId', async (req: Request, res: Response) => {
+  console.log('/api/threads/:threadId req.params', req.params);
   try {
     const { threadId } = req.params;
-    await conversationManager.load();
-    const deleted = conversationManager.deleteThread(threadId);
+    console.log('[API] Deleting thread - loading conversation manager');
+    
+    await Promise.race([
+      conversationManager.load(),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Conversation manager load timeout in delete thread')), 3000)
+      )
+    ]);
+    
+    console.log('[API] Deleting thread:', threadId);
+    const deleted = await conversationManager.deleteThread(threadId);
+    console.log('[API] Thread deleted:', deleted);
     if (deleted) {
       res.json({ success: true });
     } else {
@@ -1368,10 +1397,10 @@ app.put('/api/threads/:threadId', async (req: Request, res: Response) => {
     await conversationManager.load();
 
     if (name !== undefined) {
-      conversationManager.renameThread(threadId, name);
+      await conversationManager.renameThread(threadId, name);
     }
     if (customRole !== undefined) {
-      conversationManager.updateThreadRole(threadId, customRole);
+      await conversationManager.updateThreadRole(threadId, customRole);
       threadRoles.set(threadId, customRole);
     }
 
@@ -1390,7 +1419,7 @@ app.post(
     try {
       const { threadId } = req.params;
       await conversationManager.load();
-      const cleared = conversationManager.clearThread(threadId);
+      const cleared = await conversationManager.clearThread(threadId);
       if (cleared) {
         res.json({ success: true });
       } else {
@@ -1751,9 +1780,10 @@ app.post(
             await mindmapAgent.setMindmapContext(mindMapId, selectedNodeId);
 
             // Process with streaming callback
-            sseManager.broadcast(streamId, {
+            sseManager.broadcast('unified-events', {
               type: 'progress',
               status: 'Starting generation...',
+              streamId: streamId, // Include streamId in data for filtering
             });
 
             // Simple token counting simulation with smoothed rate calculation
@@ -1791,9 +1821,9 @@ app.post(
                 content: '',
                 totalTokens: tokenCount,
                 tokensPerSecond: lastValidTokensPerSecond,
+                streamId: streamId, // Include streamId in data
               };
-
-              sseManager.broadcast(streamId, updateData);
+              sseManager.broadcast('unified-events', updateData);
             }, 150); // Slightly faster updates
 
             // Use iterative reasoning workflow if enabled, otherwise use regular processing
@@ -1830,8 +1860,9 @@ app.post(
             }
 
             // Broadcast completion
-            sseManager.broadcast(streamId, {
+            sseManager.broadcast('unified-events', {
               type: 'complete',
+              streamId: streamId,
               result: {
                 success: true,
                 changes: parsedResponse.changes || [],
@@ -1845,8 +1876,9 @@ app.post(
             logger.error('Error in streaming mindmap generation:', error);
             const errorMessage =
               error instanceof Error ? error.message : 'Unknown error';
-            sseManager.broadcast(streamId, {
+            sseManager.broadcast('unified-events', {
               type: 'error',
+              streamId: streamId,
               error: errorMessage,
             });
           }
@@ -2386,16 +2418,7 @@ app.post('/api/mcp/refresh-cache', async (req: Request, res: Response) => {
   }
 });
 
-app.get('/api/mcp/logs/stream', (req: Request, res: Response) => {
-  const clientId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-
-  // Add client to SSE manager for MCP logs
-  sseManager.addClient(clientId, res, 'mcp-logs');
-
-  req.on('close', () => {
-    sseManager.removeClient(clientId);
-  });
-});
+// MCP logs now handled by unified SSE event bus
 
 app.get('/api/mcp/config', async (req: Request, res: Response) => {
   try {

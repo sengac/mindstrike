@@ -16,13 +16,13 @@ export async function initializeWorkspace() {
   initializationPromise = (async () => {
     try {
       const { useAppStore } = await import('../store/useAppStore');
-      const { initializeModelsSSE } = await import('../store/useModelsStore');
+      const { initializeModelsEventSubscription } = await import('../store/useModelsStore');
       const { initializeLocalModelsStore } = await import(
         '../store/useLocalModelsStore'
       );
 
       // Initialize the global stores
-      initializeModelsSSE();
+      initializeModelsEventSubscription();
       initializeLocalModelsStore();
 
       const { workspaceRoot } = useAppStore.getState();

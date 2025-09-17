@@ -19,7 +19,7 @@ const activeScanSessions = new Map<
 
 // Progress update helper
 function broadcastProgress(scanId: string, progress: any) {
-  sseManager.broadcast('model-scan', {
+  sseManager.broadcast('unified-events', {
     type: 'scan-progress',
     scanId,
     progress,

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useDebugStore } from '../store/useDebugStore';
+import { sseEventBus } from '../utils/sseEventBus';
 
 interface GenerationStats {
   tokensPerSecond: number;
@@ -25,7 +26,6 @@ export function useGenerationStreaming() {
   // Connect to debug store for centralized token tracking
   const { updateTokenStats, setGenerating } = useDebugStore();
 
-  const eventSourceRef = useRef<EventSource | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const startTimeRef = useRef<number>(0);
   const tokenCountRef = useRef<number>(0);
@@ -116,20 +116,18 @@ export function useGenerationStreaming() {
           options.onWorkflowId(workflowId);
         }
 
-        // Connect to SSE endpoint for real-time updates
-        const sseUrl = `/api/generate/stream/${streamId}`;
-        console.log('Connecting to SSE:', sseUrl);
-        eventSourceRef.current = new EventSource(sseUrl);
-
+        // Subscribe to unified SSE event bus for updates
+        console.log('Subscribing to unified SSE events for streamId:', streamId);
+        
         updateStats(0, 'Generating...');
 
-        // Note: We no longer need a continuous interval since server provides stable values
+        const unsubscribe = sseEventBus.subscribe('*', (event) => {
+          if (event.streamId !== streamId) return;
 
-        eventSourceRef.current.onmessage = event => {
           try {
-            const data = JSON.parse(event.data);
+            const data = event.data;
 
-            switch (data.type) {
+            switch (event.type) {
               case 'connected':
                 updateStats(0, 'Connected');
                 break;
@@ -137,8 +135,8 @@ export function useGenerationStreaming() {
               case 'token':
                 // Use server-provided counts if available
                 if (
-                  data.totalTokens !== undefined &&
-                  data.tokensPerSecond !== undefined
+                  data?.totalTokens !== undefined &&
+                  data?.tokensPerSecond !== undefined
                 ) {
                   setStats(() => ({
                     tokensPerSecond: data.tokensPerSecond, // Always use the server value
@@ -157,28 +155,30 @@ export function useGenerationStreaming() {
                 // For chunk-based updates, estimate tokens
                 const estimatedTokens = Math.max(
                   1,
-                  Math.floor(data.content.length / 4)
+                  Math.floor((data?.content?.length || 0) / 4)
                 );
                 updateStats(estimatedTokens, 'Generating...');
                 break;
               }
 
               case 'progress':
-                updateStats(0, data.status || 'Generating...');
+                updateStats(0, data?.status || 'Generating...');
                 break;
 
               case 'complete':
                 updateStats(0, 'Completed');
                 if (options.onComplete) {
-                  options.onComplete(data.result);
+                  options.onComplete(data?.result);
                 }
+                unsubscribe();
                 stopStreaming();
                 break;
 
               case 'error':
                 if (options.onError) {
-                  options.onError(data.error);
+                  options.onError(data?.error || 'Unknown error');
                 }
+                unsubscribe();
                 stopStreaming();
                 break;
             }
@@ -188,22 +188,18 @@ export function useGenerationStreaming() {
               options.onProgress(stats);
             }
           } catch (error) {
-            console.error('Error parsing SSE data:', error);
+            console.error('Error processing SSE event:', error);
           }
-        };
+        });
 
-        eventSourceRef.current.onerror = error => {
-          console.error('SSE connection error:', error);
-          console.error('SSE readyState:', eventSourceRef.current?.readyState);
+        // Set up timeout for the stream
+        setTimeout(() => {
+          unsubscribe();
           if (options.onError) {
-            options.onError('Connection error occurred');
+            options.onError('Stream timeout');
           }
           stopStreaming();
-        };
-
-        eventSourceRef.current.onopen = () => {
-          console.log('SSE connection opened successfully');
-        };
+        }, 300000); // 5 minute timeout
       } catch (error: any) {
         console.error('Error starting stream:', error);
         if (options.onError) {
@@ -216,11 +212,6 @@ export function useGenerationStreaming() {
   );
 
   const stopStreaming = useCallback(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
-
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;

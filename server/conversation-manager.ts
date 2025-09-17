@@ -7,6 +7,7 @@ export class ConversationManager {
   private conversations: Map<string, Thread> = new Map();
   private isLoaded = false;
   private workspaceRoot: string;
+  private savePromise: Promise<void> | null = null;
 
   constructor(workspaceRoot: string) {
     this.workspaceRoot = workspaceRoot;
@@ -15,6 +16,11 @@ export class ConversationManager {
 
   // Update workspace root
   updateWorkspaceRoot(newWorkspaceRoot: string): void {
+    // Only reset if the workspace root actually changed
+    if (this.workspaceRoot === newWorkspaceRoot) {
+      return; // No change, don't reset
+    }
+    
     this.workspaceRoot = newWorkspaceRoot;
     this.conversationsPath = path.join(
       newWorkspaceRoot,
@@ -52,6 +58,17 @@ export class ConversationManager {
   }
 
   async save(): Promise<void> {
+    // Serialize save operations to prevent concurrent file writes
+    if (this.savePromise) {
+      await this.savePromise;
+    }
+    
+    this.savePromise = this._performSave();
+    await this.savePromise;
+    this.savePromise = null;
+  }
+  
+  private async _performSave(): Promise<void> {
     const threads = Array.from(this.conversations.values());
     await fs.writeFile(
       this.conversationsPath,
@@ -90,7 +107,7 @@ export class ConversationManager {
   }
 
   // Thread management operations
-  createThread(name?: string): Thread {
+  async createThread(name?: string): Promise<Thread> {
     const thread: Thread = {
       id: Date.now().toString(),
       name: name || `Conversation ${this.conversations.size + 1}`,
@@ -100,70 +117,73 @@ export class ConversationManager {
     };
 
     this.conversations.set(thread.id, thread);
-    this.save(); // Auto-save on changes
+    await this.save(); // Wait for save to complete
     return thread;
   }
 
-  deleteThread(threadId: string): boolean {
+  async deleteThread(threadId: string): Promise<boolean> {
     const deleted = this.conversations.delete(threadId);
     if (deleted) {
-      this.save(); // Auto-save on changes
+      await this.save(); // Wait for save to complete
     }
     return deleted;
   }
 
-  renameThread(threadId: string, newName: string): boolean {
+  async renameThread(threadId: string, newName: string): Promise<boolean> {
     const thread = this.conversations.get(threadId);
     if (thread) {
       thread.name = newName;
       thread.updatedAt = new Date();
-      this.save(); // Auto-save on changes
+      await this.save(); // Auto-save on changes
       return true;
     }
     return false;
   }
 
-  updateThreadRole(threadId: string, customRole?: string): boolean {
+  async updateThreadRole(
+    threadId: string,
+    customRole?: string
+  ): Promise<boolean> {
     const thread = this.conversations.get(threadId);
     if (thread) {
       thread.customRole = customRole;
       thread.updatedAt = new Date();
-      this.save(); // Auto-save on changes
+      await this.save(); // Auto-save on changes
       return true;
     }
     return false;
   }
 
-  clearThread(threadId: string): boolean {
+  async clearThread(threadId: string): Promise<boolean> {
     const thread = this.conversations.get(threadId);
     if (thread) {
       thread.messages = [];
       thread.updatedAt = new Date();
-      this.save(); // Auto-save on changes
+      await this.save(); // Auto-save on changes
       return true;
     }
     return false;
   }
 
   // Message operations - called during streaming
-  addMessage(threadId: string, message: ConversationMessage): void {
+  async addMessage(threadId: string, message: ConversationMessage): Promise<void> {
     let thread = this.conversations.get(threadId);
 
     // Create thread if it doesn't exist
     if (!thread) {
-      thread = this.createThread();
+      thread = await this.createThread();
     }
 
     thread.messages.push(message);
     thread.updatedAt = new Date();
-    this.save(); // Auto-save on changes
+    await this.save(); // Auto-save on changes
   }
 
-  updateMessage(
+  async updateMessage(
     threadId: string,
     messageId: string,
     updates: Partial<ConversationMessage>
-  ): boolean {
+  ): Promise<boolean> {
     const thread = this.conversations.get(threadId);
     if (!thread) return false;
 
@@ -175,11 +195,11 @@ export class ConversationManager {
       ...updates,
     };
     thread.updatedAt = new Date();
-    this.save(); // Auto-save on changes
+    await this.save(); // Auto-save on changes
     return true;
   }
 
-  deleteMessage(threadId: string, messageId: string): boolean {
+  async deleteMessage(threadId: string, messageId: string): Promise<boolean> {
     const thread = this.conversations.get(threadId);
     if (!thread) return false;
 
@@ -188,14 +208,15 @@ export class ConversationManager {
 
     if (thread.messages.length !== initialLength) {
       thread.updatedAt = new Date();
-      this.save(); // Auto-save on changes
+      await this.save(); // Auto-save on changes
       return true;
     }
     return false;
   }
 
-  deleteMessageFromAllThreads(messageId: string): string[] {
+  async deleteMessageFromAllThreads(messageId: string): Promise<string[]> {
     const deletedMessageIds: string[] = [];
+    let hasChanges = false;
 
     for (const thread of this.conversations.values()) {
       const messageIndex = thread.messages.findIndex(
@@ -236,7 +257,12 @@ export class ConversationManager {
 
       if (messagesToRemove.length > 0) {
         thread.updatedAt = new Date();
+        hasChanges = true;
       }
+    }
+
+    if (hasChanges) {
+      await this.save(); // Auto-save on changes
     }
 
     return deletedMessageIds;

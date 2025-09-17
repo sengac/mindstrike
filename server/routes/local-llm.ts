@@ -383,90 +383,73 @@ router.post('/download', async (req, res) => {
     // Start download in background
     llmManager
       .downloadModel(modelInfo, (progress, speed) => {
-        // Notify all SSE connections for this filename
-        const connections = sseConnections.get(filename);
-        if (connections) {
-          const data = JSON.stringify({ progress, speed, isDownloading: true });
-          connections.forEach(res => {
-            try {
-              res.write(`data: ${data}\n\n`);
-            } catch {
-              // Connection closed, remove it
-              connections.delete(res);
-            }
-          });
-        }
+        console.log('[LOCAL-LLM] Broadcasting download progress:', { filename, progress, speed });
+        // Broadcast progress via unified event bus
+        sseManager.broadcast('unified-events', {
+          type: 'download-progress',
+          data: { 
+            filename, 
+            progress, 
+            speed, 
+            isDownloading: true 
+          }
+        });
       })
       .then(() => {
-        // Download completed
-        const connections = sseConnections.get(filename);
-        if (connections) {
-          const data = JSON.stringify({
+        // Download completed - broadcast completion
+        sseManager.broadcast('unified-events', {
+          type: 'download-progress',
+          data: {
+            filename,
             progress: 100,
             speed: '0 B/s',
             isDownloading: false,
             completed: true,
-          });
-          connections.forEach(res => {
-            try {
-              res.write(`data: ${data}\n\n`);
-              res.end();
-            } catch {
-              // Connection already closed
-            }
-          });
-          sseConnections.delete(filename);
-        }
+          }
+        });
         console.log(`Download completed: ${filename}`);
 
         // Give server time to process the new model file before broadcasting update
         setTimeout(() => {
-          sseManager.broadcast('model-updates', {
+          sseManager.broadcast('unified-events', {
             type: 'models-updated',
             timestamp: Date.now(),
           });
         }, 2000);
       })
       .catch(error => {
-        // Download failed or cancelled
-        const connections = sseConnections.get(filename);
-        if (connections) {
-          const isCancelled = error.message === 'Download cancelled';
-          let errorDetails: any = {
-            progress: 0,
-            speed: '0 B/s',
-            isDownloading: false,
-            error: error.message,
-            cancelled: isCancelled,
-          };
+        // Download failed or cancelled - broadcast error
+        const isCancelled = error.message === 'Download cancelled';
+        let errorDetails: any = {
+          filename,
+          progress: 0,
+          speed: '0 B/s',
+          isDownloading: false,
+          error: error.message,
+          cancelled: isCancelled,
+        };
 
-          // Add specific handling for HF errors
-          if (error.message === 'UNAUTHORIZED_HF_TOKEN_REQUIRED') {
-            errorDetails.errorType = '401';
-            errorDetails.errorMessage =
-              'Hugging Face token required. Please add your token in settings.';
-          } else if (error.message === 'FORBIDDEN_MODEL_ACCESS_REQUIRED') {
-            errorDetails.errorType = '403';
-            errorDetails.errorMessage =
-              'Model access required. Request access on Hugging Face.';
-            // Extract model ID from URL for HF link
-            const modelId = modelUrl
-              .replace('https://huggingface.co/', '')
-              .split('/resolve/')[0];
-            errorDetails.huggingFaceUrl = `https://huggingface.co/${modelId}`;
-          }
-
-          const data = JSON.stringify(errorDetails);
-          connections.forEach(res => {
-            try {
-              res.write(`data: ${data}\n\n`);
-              res.end();
-            } catch {
-              // Connection already closed
-            }
-          });
-          sseConnections.delete(filename);
+        // Add specific handling for HF errors
+        if (error.message === 'UNAUTHORIZED_HF_TOKEN_REQUIRED') {
+          errorDetails.errorType = '401';
+          errorDetails.errorMessage =
+            'Hugging Face token required. Please add your token in settings.';
+        } else if (error.message === 'FORBIDDEN_MODEL_ACCESS_REQUIRED') {
+          errorDetails.errorType = '403';
+          errorDetails.errorMessage =
+            'Model access required. Request access on Hugging Face.';
+          // Extract model ID from URL for HF link
+          const modelId = modelUrl
+            .replace('https://huggingface.co/', '')
+            .split('/resolve/')[0];
+          errorDetails.huggingFaceUrl = `https://huggingface.co/${modelId}`;
         }
+
+        sseManager.broadcast('unified-events', {
+          type: 'download-progress',
+          data: errorDetails
+        });
+        
         console.error(`Download failed: ${filename}`, error);
       });
 
@@ -495,44 +478,7 @@ router.get('/download-progress/:filename', (req, res) => {
   });
 });
 
-/**
- * SSE endpoint for real-time download progress
- */
-router.get('/download-progress-stream/:filename', (req, res) => {
-  const { filename } = req.params;
-
-  // Set SSE headers
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-
-  // Add this connection to the set for this filename
-  if (!sseConnections.has(filename)) {
-    sseConnections.set(filename, new Set());
-  }
-  sseConnections.get(filename)!.add(res);
-
-  // Send initial status
-  const progressInfo = llmManager.getDownloadProgress(filename);
-  const initialData = JSON.stringify({
-    progress: progressInfo.progress,
-    speed: progressInfo.speed || '0 B/s',
-    isDownloading: progressInfo.isDownloading,
-  });
-  res.write(`data: ${initialData}\n\n`);
-
-  // Handle client disconnect
-  req.on('close', () => {
-    const connections = sseConnections.get(filename);
-    if (connections) {
-      connections.delete(res);
-      if (connections.size === 0) {
-        sseConnections.delete(filename);
-      }
-    }
-  });
-});
+// Legacy download progress endpoint removed - now using unified events
 
 /**
  * Cancel a download
@@ -564,7 +510,7 @@ router.delete('/models/:modelId', async (req, res) => {
 
     // Give server time to process the model deletion before broadcasting update
     setTimeout(() => {
-      sseManager.broadcast('model-updates', {
+      sseManager.broadcast('unified-events', {
         type: 'models-updated',
         timestamp: Date.now(),
       });
@@ -589,7 +535,7 @@ router.post('/models/:modelId/load', async (req, res) => {
     await llmManager.loadModel(modelId);
 
     // Broadcast model updates to connected clients
-    sseManager.broadcast('model-updates', {
+    sseManager.broadcast('unified-events', {
       type: 'models-updated',
       timestamp: Date.now(),
     });
@@ -613,7 +559,7 @@ router.post('/models/:modelId/unload', async (req, res) => {
     await llmManager.unloadModel(modelId);
 
     // Broadcast model updates to connected clients
-    sseManager.broadcast('model-updates', {
+    sseManager.broadcast('unified-events', {
       type: 'models-updated',
       timestamp: Date.now(),
     });

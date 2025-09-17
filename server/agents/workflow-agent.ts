@@ -78,11 +78,12 @@ export class WorkflowAgent extends BaseAgent {
 
   private broadcastWorkflowEvent(event: any) {
     // Always broadcast to the workflow topic
-    sseManager.broadcast('workflow', event);
+    sseManager.broadcast('unified-events', event);
 
     // Also broadcast to the chat topic if available
     if (this.chatTopic) {
-      sseManager.broadcast(this.chatTopic, event);
+      // Chat topic also uses unified events now
+      sseManager.broadcast('unified-events', { ...event, chatTopic: this.chatTopic });
     }
   }
 

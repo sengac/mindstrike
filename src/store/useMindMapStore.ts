@@ -13,6 +13,7 @@ import {
   isSseMindmapChangeData,
   isSseMindmapCompleteData,
 } from '../utils/sseDecoder';
+import { sseEventBus } from '../utils/sseEventBus';
 
 interface HistoryState {
   nodes: Node<MindMapNodeData>[];
@@ -63,11 +64,10 @@ interface MindMapState {
   saveCallback: ((data: MindMapData) => Promise<void>) | null;
 
   // SSE connection for task updates
-  taskEventSource: EventSource | null;
+  taskEventUnsubscribe: (() => void) | null;
   currentWorkflowId: string | null;
 
   // Active generation tracking
-  currentGenerationEventSource: EventSource | null;
   currentGenerationWorkflowId: string | null;
 }
 
@@ -180,9 +180,8 @@ export const useMindMapStore = create<MindMapStore>()(
       isInitialized: false,
       isInitializing: false,
       saveCallback: null,
-      taskEventSource: null,
+      taskEventUnsubscribe: null,
       currentWorkflowId: null,
-      currentGenerationEventSource: null,
       currentGenerationWorkflowId: null,
 
       // Initialize mind map
@@ -781,23 +780,20 @@ export const useMindMapStore = create<MindMapStore>()(
             throw new Error('No stream ID received');
           }
 
-          // Connect to SSE stream to get real progress updates
-          const eventSource = new EventSource(
-            `/api/generate/stream/${streamId}`
-          );
-          let finalResult = null;
+          // Subscribe to unified SSE event bus for real progress updates
+          let finalResult: any = null;
           let currentStepNumber = 0;
 
           // Track the current generation
           set({
-            currentGenerationEventSource: eventSource,
             currentGenerationWorkflowId: streamData.workflowId || streamId,
           });
 
-          eventSource.onmessage = event => {
+          const unsubscribe = sseEventBus.subscribe('*', (event) => {
+            if (event.streamId !== streamId) return;
+
             try {
-              const rawData = JSON.parse(event.data);
-              const decodedData = decodeSseDataSync(rawData); // Decode base64 strings
+              const decodedData = decodeSseDataSync(event.data); // Decode base64 strings
 
               if (
                 isSseObject(decodedData) &&
@@ -835,7 +831,7 @@ export const useMindMapStore = create<MindMapStore>()(
               ) {
                 // Store final result
                 finalResult = decodedData.result;
-                eventSource.close();
+                unsubscribe();
 
                 // Update progress to show completion
                 set({
@@ -860,14 +856,12 @@ export const useMindMapStore = create<MindMapStore>()(
                   set({
                     generationSummary: `Iterative reasoning completed! Created ${changes.length} node(s) through ${currentStepNumber || 1} reasoning steps.`,
                     isGenerating: false,
-                    currentGenerationEventSource: null,
                     currentGenerationWorkflowId: null,
                   });
                 } else {
                   set({
                     generationSummary: `Generation completed with ${currentStepNumber || 1} steps.`,
                     isGenerating: false,
-                    currentGenerationEventSource: null,
                     currentGenerationWorkflowId: null,
                   });
                 }
@@ -875,19 +869,20 @@ export const useMindMapStore = create<MindMapStore>()(
             } catch (error) {
               console.error('Failed to parse SSE data:', error);
             }
-          };
+          });
 
-          eventSource.onerror = error => {
-            console.error('SSE error:', error);
-            eventSource.close();
-            set({
-              generationError: 'Connection error during generation',
-              isGenerating: false,
-              generationProgress: null,
-              currentGenerationEventSource: null,
-              currentGenerationWorkflowId: null,
-            });
-          };
+          // Set up timeout for generation
+          setTimeout(() => {
+            if (!finalResult) {
+              unsubscribe();
+              set({
+                generationError: 'Generation timeout',
+                isGenerating: false,
+                generationProgress: null,
+                currentGenerationWorkflowId: null,
+              });
+            }
+          }, 300000); // 5 minute timeout
 
           // Return a promise that resolves when generation is complete
           return new Promise((resolve, reject) => {
@@ -920,11 +915,6 @@ export const useMindMapStore = create<MindMapStore>()(
       cancelIterativeGeneration: () => {
         const state = get();
 
-        // Close EventSource connection
-        if (state.currentGenerationEventSource) {
-          state.currentGenerationEventSource.close();
-        }
-
         // Tell server to cancel the workflow
         if (state.currentGenerationWorkflowId) {
           fetch(`/api/mindmaps/cancel/${state.currentGenerationWorkflowId}`, {
@@ -939,7 +929,6 @@ export const useMindMapStore = create<MindMapStore>()(
           isGenerating: false,
           generationError: 'Generation cancelled by user',
           generationProgress: null,
-          currentGenerationEventSource: null,
           currentGenerationWorkflowId: null,
         });
       },
@@ -1143,9 +1132,9 @@ export const useMindMapStore = create<MindMapStore>()(
           isInitialized: false,
           isInitializing: false,
           saveCallback: null,
-          taskEventSource: null,
+          taskEventUnsubscribe: null,
           currentWorkflowId: null,
-          currentGenerationEventSource: null,
+          
           currentGenerationWorkflowId: null,
         });
       },
@@ -1154,40 +1143,27 @@ export const useMindMapStore = create<MindMapStore>()(
       connectToWorkflow: (workflowId: string) => {
         const state = get();
 
-        // Disconnect any existing connection
-        if (state.taskEventSource) {
-          state.taskEventSource.close();
+        // Unsubscribe from any existing workflow events
+        if (state.taskEventUnsubscribe) {
+          state.taskEventUnsubscribe();
         }
 
-        // Create new SSE connection
-        const eventSource = new EventSource(`/api/tasks/stream/${workflowId}`);
-
-        eventSource.onmessage = event => {
+        // Subscribe to task events via event bus
+        const unsubscribe = sseEventBus.subscribe('task_completed', async (event: { data: any }) => {
           try {
-            const data = JSON.parse(event.data);
-
-            if (data.type === 'task_completed' && data.result?.changes) {
+            if (event.data.type === 'task_completed' && 
+                event.data.workflowId === workflowId && 
+                event.data.result?.changes) {
               // Apply changes directly in the store
-              get()
-                .applyMindmapChanges(data.result.changes)
-                .catch(error => {
-                  console.error(
-                    'Failed to apply task changes from SSE:',
-                    error
-                  );
-                });
+              await get().applyMindmapChanges(event.data.result.changes);
             }
           } catch (error) {
-            console.error('Error parsing SSE message:', error);
+            console.error('Failed to apply task changes from SSE:', error);
           }
-        };
-
-        eventSource.onerror = error => {
-          console.error('Task SSE error:', error);
-        };
+        });
 
         set({
-          taskEventSource: eventSource,
+          taskEventUnsubscribe: unsubscribe,
           currentWorkflowId: workflowId,
         });
       },
@@ -1195,12 +1171,12 @@ export const useMindMapStore = create<MindMapStore>()(
       disconnectFromWorkflow: () => {
         const state = get();
 
-        if (state.taskEventSource) {
-          state.taskEventSource.close();
+        if (state.taskEventUnsubscribe) {
+          state.taskEventUnsubscribe();
         }
 
         set({
-          taskEventSource: null,
+          taskEventUnsubscribe: null,
           currentWorkflowId: null,
         });
       },

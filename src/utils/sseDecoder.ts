@@ -464,7 +464,9 @@ export function decodeSseDataSync(obj: SseDataInput): SseDecodedData {
   if ('_base64' in obj && obj._base64 && typeof obj.data === 'string') {
     // Properly decode UTF-8 base64 string
     const bytes = Uint8Array.from(atob(obj.data), c => c.charCodeAt(0));
-    return new TextDecoder('utf-8').decode(bytes);
+    const decoded = new TextDecoder('utf-8').decode(bytes);
+    console.log('[SSEDecoder] Decoded base64 string:', { original: obj.data, decoded });
+    return decoded;
   }
 
   if ('_large_content' in obj && obj._large_content && obj.contentId) {

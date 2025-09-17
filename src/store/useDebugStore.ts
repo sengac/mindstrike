@@ -1,10 +1,7 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import {
-  decodeSseEventData,
-  isSseDebugEntryData,
-  isSseTokenStatsData,
-} from '../utils/sseDecoder';
+import { sseEventBus } from '../utils/sseEventBus';
+import { decodeSseEventData, isSseDebugEntryData, isSseTokenStatsData } from '../utils/sseDecoder';
 
 export interface LLMDebugEntry {
   id: string;
@@ -86,66 +83,66 @@ export const useDebugStore = create<DebugState>()(
   }))
 );
 
-// Global SSE listener for debug messages
+// Event Bus Subscriptions
+let debugUnsubscribeFunctions: (() => void)[] = [];
 let debugSSEInitialized = false;
-let currentDebugEventSource: EventSource | null = null;
 
-function createDebugSSEConnection(): EventSource {
-  const eventSource = new EventSource('/api/debug/stream');
+async function initializeDebugEventSubscriptions(): Promise<void> {
+  if (debugUnsubscribeFunctions.length > 0) {
+    return; // Already subscribed
+  }
 
-  eventSource.onopen = () => {
-    useDebugStore.getState().setConnected(true);
-  };
+  console.log('[useDebugStore] Subscribing to debug events via SSE event bus');
 
-  eventSource.onmessage = async event => {
+  const handleDebugEvent = async (event: { data: any }) => {
     try {
-      const data = JSON.parse(event.data);
-
-      // Decode the entire data object
-      const decodedData = await decodeSseEventData(data);
+      // Handle nested data structure from unified SSE - data is already decoded by event bus
+      const eventData = event.data.data || event.data;
+      
+      console.log('[useDebugStore] Debug event data:', eventData);
 
       if (
-        decodedData.type === 'debug-entry' &&
-        isSseDebugEntryData(decodedData)
+        eventData.type === 'debug-entry' &&
+        isSseDebugEntryData(eventData)
       ) {
         const { addEntry } = useDebugStore.getState();
 
         addEntry({
-          type: decodedData.entryType,
-          title: decodedData.title,
-          content: decodedData.content,
-          duration: decodedData.duration,
-          model: decodedData.model,
-          endpoint: decodedData.endpoint,
-          tokensPerSecond: decodedData.tokensPerSecond,
-          totalTokens: decodedData.totalTokens,
+          type: eventData.entryType,
+          title: eventData.title,
+          content: eventData.content,
+          duration: eventData.duration,
+          model: eventData.model,
+          endpoint: eventData.endpoint,
+          tokensPerSecond: eventData.tokensPerSecond,
+          totalTokens: eventData.totalTokens,
         });
 
         // Update current stats from any response with token stats (regardless of generation state)
         if (
-          decodedData.entryType === 'response' &&
-          decodedData.tokensPerSecond &&
-          decodedData.totalTokens
+          eventData.entryType === 'response' &&
+          eventData.tokensPerSecond &&
+          eventData.totalTokens
         ) {
           const { updateTokenStats } = useDebugStore.getState();
           updateTokenStats(
-            decodedData.tokensPerSecond,
-            decodedData.totalTokens
+            eventData.tokensPerSecond,
+            eventData.totalTokens
           );
         }
       } else if (
-        decodedData.type === 'token-stats' &&
-        isSseTokenStatsData(decodedData)
+        eventData.type === 'token-stats' &&
+        isSseTokenStatsData(eventData)
       ) {
         // Handle real-time token statistics updates
         const { updateTokenStats } = useDebugStore.getState();
-        updateTokenStats(decodedData.tokensPerSecond, decodedData.totalTokens);
-      } else if (decodedData.type === 'generation-status') {
+        updateTokenStats(eventData.tokensPerSecond, eventData.totalTokens);
+      } else if (eventData.type === 'generation-status') {
         // Handle generation start/stop
         const { setGenerating } = useDebugStore.getState();
         setGenerating(
-          typeof decodedData.generating === 'boolean'
-            ? decodedData.generating
+          typeof eventData.generating === 'boolean'
+            ? eventData.generating
             : false
         );
       }
@@ -154,37 +151,28 @@ function createDebugSSEConnection(): EventSource {
     }
   };
 
-  eventSource.onerror = error => {
-    console.error('Debug SSE connection error:', error);
-    useDebugStore.getState().setConnected(false);
+  // Subscribe to SSE event bus for debug events
+  const unsubscribe = sseEventBus.subscribe('debug-entry', handleDebugEvent);
+  debugUnsubscribeFunctions.push(unsubscribe);
 
-    if (eventSource.readyState === EventSource.CLOSED) {
-      setTimeout(() => {
-        currentDebugEventSource = createDebugSSEConnection();
-      }, 5000);
-    }
-  };
+  const unsubscribeTokenStats = sseEventBus.subscribe('token-stats', handleDebugEvent);
+  debugUnsubscribeFunctions.push(unsubscribeTokenStats);
 
-  return eventSource;
+  const unsubscribeGenerationStatus = sseEventBus.subscribe('generation-status', handleDebugEvent);
+  debugUnsubscribeFunctions.push(unsubscribeGenerationStatus);
 }
 
-export function initializeDebugSSE() {
+export async function initializeDebugSSE() {
   if (debugSSEInitialized) return;
   debugSSEInitialized = true;
 
-  // Close any existing connection
-  if (currentDebugEventSource) {
-    currentDebugEventSource.close();
-  }
-
-  // Create new connection
-  currentDebugEventSource = createDebugSSEConnection();
+  // Initialize event bus subscriptions
+  await initializeDebugEventSubscriptions();
 
   // Cleanup on page unload
   window.addEventListener('beforeunload', () => {
-    if (currentDebugEventSource) {
-      currentDebugEventSource.close();
-    }
+    debugUnsubscribeFunctions.forEach(unsubscribe => unsubscribe());
+    debugUnsubscribeFunctions = [];
   });
 }
 

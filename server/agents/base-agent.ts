@@ -817,7 +817,7 @@ export abstract class BaseAgent {
           const elapsed = (now - startTime) / 1000;
           if (elapsed > 0.5 && tokenCount > 0) {
             const tokensPerSecond = tokenCount / elapsed;
-            sseManager.broadcast('debug', {
+            sseManager.broadcast('unified-events', {
               type: 'token-stats',
               tokensPerSecond: tokensPerSecond,
               totalTokens: tokenCount,

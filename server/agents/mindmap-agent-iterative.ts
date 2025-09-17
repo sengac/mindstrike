@@ -8,8 +8,9 @@ const DEFAULT_MINDMAP_ROLE = `You are a specialized mindmap agent that uses iter
 
 // Direct SSE broadcasting function
 const broadcastUpdate = (streamId: string, data: any) => {
-  sseManager.broadcast(streamId, {
+  sseManager.broadcast('unified-events', {
     ...data,
+    streamId: streamId, // Include streamId for client filtering
     timestamp: Date.now(),
   });
 };

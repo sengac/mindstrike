@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { modelEvents } from '../utils/modelEvents';
+import { sseEventBus } from '../utils/sseEventBus';
 
 export interface LLMModel {
   id: string;
@@ -164,22 +165,15 @@ export function useModels() {
     };
   }, [rescanModels, isLoading]);
 
-  // Server-Sent Events for real-time model updates
+  // Server-Sent Events for real-time model updates via unified event bus
   useEffect(() => {
-    const eventSource = new EventSource('/api/llm/model-updates');
-
-    eventSource.onmessage = event => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'models-updated' && !isLoading) {
-          fetchModels();
-        }
-      } catch (error) {
-        console.error('Error parsing SSE data:', error);
+    const unsubscribe = sseEventBus.subscribe('models-updated', () => {
+      if (!isLoading) {
+        fetchModels();
       }
-    };
+    });
 
-    return () => eventSource.close();
+    return unsubscribe;
   }, [fetchModels, isLoading]);
 
   return {
