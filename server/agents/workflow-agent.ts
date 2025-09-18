@@ -76,6 +76,40 @@ export class WorkflowAgent extends BaseAgent {
     this.chatTopic = chatTopic;
   }
 
+  // OPTIMIZATION HELPER: Try to execute simple tool calls directly
+  private tryDirectToolExecution(
+    task: string
+  ): { action: string; toolCall: string } | null {
+    const taskLower = task.toLowerCase();
+
+    // Pattern matching for common browser actions
+    if (taskLower.includes('navigate') && taskLower.includes('google.com')) {
+      return {
+        action: 'navigate to Google',
+        toolCall:
+          'Use mcp_playwright_browser_navigate to open https://google.com',
+      };
+    }
+
+    if (taskLower.includes('search') && taskLower.includes('roland quast')) {
+      return {
+        action: 'search for Roland Quast',
+        toolCall:
+          'Use mcp_playwright_browser_type to enter "roland quast" in the search field',
+      };
+    }
+
+    if (taskLower.includes('click') && taskLower.includes('search')) {
+      return {
+        action: 'click search',
+        toolCall: 'Use mcp_playwright_browser_press_key to press Enter',
+      };
+    }
+
+    // Add more patterns as needed for common actions
+    return null;
+  }
+
   private broadcastWorkflowEvent(event: Record<string, unknown>) {
     // Always broadcast to the workflow topic
     sseManager.broadcast('unified-events', event);
@@ -323,17 +357,27 @@ export class WorkflowAgent extends BaseAgent {
         ?.content || '';
 
     const reasoningPrompt = `
-    **REASONING PHASE**
+    **ANALYSIS AND PLANNING PHASE**
     
     User Request: ${lastUserMessage}
     
-    Please analyze this request and provide:
+    First, analyze this request:
     1. Core objectives - What is the user trying to accomplish?
     2. Key constraints - What limitations or requirements should be considered?
-    3. Approach analysis - What are the different ways this could be solved?
-    4. Recommended strategy - Which approach would be most effective and why?
+    3. Recommended strategy - Which approach would be most effective and why?
     
-    Be thorough but concise in your reasoning.
+    Then create a numbered list of specific tasks to accomplish the goal.
+    
+    Format your response as:
+    ANALYSIS:
+    [Your analysis here]
+    
+    PLAN:
+    1. [First task]
+    2. [Second task]  
+    3. [Third task]
+    
+    Keep tasks concise and actionable.
     `;
 
     // Log the request for debugging
@@ -363,7 +407,33 @@ export class WorkflowAgent extends BaseAgent {
       })
     );
 
-    const reasoning = reasoningResponse.content.toString();
+    const responseText = reasoningResponse.content.toString();
+
+    // Parse analysis and plan
+    const analysisPart =
+      responseText.match(/ANALYSIS:(.*?)(?=PLAN:|$)/s)?.[1]?.trim() ||
+      responseText;
+    const planPart = responseText.match(/PLAN:(.*)/s)?.[1]?.trim() || '';
+
+    // Parse plan into array - simplified format
+    const plan = planPart
+      .split(/\d+\.\s/)
+      .filter(task => task.trim().length > 0)
+      .map(task => task.trim());
+
+    // Broadcast tasks planned if we have a plan
+    if (plan.length > 0) {
+      this.broadcastWorkflowEvent({
+        type: 'tasks_planned',
+        workflowId: state.workflowId,
+        tasks: plan.map((task: string, index: number) => ({
+          id: `task-${index + 1}`,
+          description: task.split('\n')[0], // First line as description
+          status: 'todo',
+          priority: 'medium',
+        })),
+      });
+    }
 
     // Broadcast reasoning completion
     this.broadcastWorkflowEvent({
@@ -371,18 +441,23 @@ export class WorkflowAgent extends BaseAgent {
       workflowId: state.workflowId,
       task: {
         id: 'reasoning',
-        description: 'Analyzed request and determined approach',
+        description: 'Analyzed request and created plan',
         status: 'completed',
         priority: 'high',
       },
     });
 
-    return { reasoning };
+    return { reasoning: analysisPart, plan };
   }
 
   private async planningNode(
     state: WorkflowStateType
   ): Promise<Partial<WorkflowStateType>> {
+    // If we already have a plan from reasoning, skip this step
+    if (state.plan && state.plan.length > 0) {
+      return { plan: state.plan };
+    }
+
     // Broadcast planning start
     this.broadcastWorkflowEvent({
       type: 'task_progress',
@@ -527,42 +602,59 @@ export class WorkflowAgent extends BaseAgent {
       },
     });
 
-    const actionPrompt = `
-    **ACTION PHASE**
-    
-    Current Task: ${currentTask}
-    
-    Previous Results: ${JSON.stringify(state.taskResults, null, 2)}
-    
-    Execute this specific task. Use appropriate tools if needed and provide a clear result.
-    Focus only on this task - don't try to complete multiple tasks at once.
-    
-    IMPORTANT: You have access to powerful tools including:
-    - Playwright tools for browser automation (browser_navigate, browser_click, browser_type, etc.)
-    - File system tools for reading/writing files
-    - Web search tools
-    
-    Use these tools to actually perform the task rather than just providing instructions.
-    `;
-
-    // Use the AgentExecutor to enable tool calling
+    // OPTIMIZATION 1: Smart Action Execution - Skip LLM for direct tool calls
+    const directToolMatch = this.tryDirectToolExecution(currentTask);
     let actionResult: string;
-    if (this.agentExecutor) {
+
+    if (directToolMatch && this.agentExecutor) {
+      // Execute tool directly without LLM overhead
       try {
         const result = await this.agentExecutor.invoke({
-          input: actionPrompt,
+          input: `Execute: ${directToolMatch.toolCall}`,
         });
-        actionResult = result.output || 'Task completed';
+        actionResult = result.output || `Executed ${directToolMatch.action}`;
       } catch (toolError: unknown) {
         const errorMessage =
           toolError instanceof Error ? toolError.message : 'Unknown error';
         actionResult = `Tool execution failed: ${errorMessage}`;
       }
     } else {
-      const response = await this.chatModel.invoke([
-        new HumanMessage(actionPrompt),
-      ]);
-      actionResult = response.content.toString();
+      // Use full LLM reasoning for complex tasks
+      const actionPrompt = `
+      **ACTION PHASE**
+      
+      Current Task: ${currentTask}
+      
+      Previous Results: ${JSON.stringify(state.taskResults, null, 2)}
+      
+      Execute this specific task. Use appropriate tools if needed and provide a clear result.
+      Focus only on this task - don't try to complete multiple tasks at once.
+      
+      IMPORTANT: You have access to powerful tools including:
+      - Playwright tools for browser automation (browser_navigate, browser_click, browser_type, etc.)
+      - File system tools for reading/writing files
+      - Web search tools
+      
+      Use these tools to actually perform the task rather than just providing instructions.
+      `;
+
+      if (this.agentExecutor) {
+        try {
+          const result = await this.agentExecutor.invoke({
+            input: actionPrompt,
+          });
+          actionResult = result.output || 'Task completed';
+        } catch (toolError: unknown) {
+          const errorMessage =
+            toolError instanceof Error ? toolError.message : 'Unknown error';
+          actionResult = `Tool execution failed: ${errorMessage}`;
+        }
+      } else {
+        const response = await this.chatModel.invoke([
+          new HumanMessage(actionPrompt),
+        ]);
+        actionResult = response.content.toString();
+      }
     }
 
     // Store the result

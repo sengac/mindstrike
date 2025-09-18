@@ -312,11 +312,6 @@ export abstract class BaseAgent {
     ]);
 
     await this.initializeAgentExecutor();
-    logger.info(
-      `[BaseAgent] Refreshed tools - now have ${this.langChainTools.length} tools available`
-    );
-
-    // System message handling will be done per thread in processMessage
   }
 
   protected formatAttachedNotes(notes: NotesAttachment[]): string {
@@ -356,18 +351,6 @@ export abstract class BaseAgent {
       }
     }
 
-    logger.info(
-      `[BaseAgent] Total messages in thread: ${allMessages.length}, using: ${messages.length}`
-    );
-
-    // Log each message for debugging
-    messages.forEach((msg, index) => {
-      const contentStr = JSON.stringify(msg.content) || 'undefined';
-      logger.info(
-        `[BaseAgent] Message ${index}: role=${msg.role}, contentType=${typeof msg.content}, content=${contentStr.substring(0, 100)}...`
-      );
-    });
-
     // Filter out messages with empty content (except final assistant message)
     const filteredMessages = messages.filter((msg, index) => {
       // Always filter out messages with no content
@@ -378,17 +361,10 @@ export abstract class BaseAgent {
         // Allow empty final assistant message as per LLM requirements
         const shouldKeep =
           msg.role === 'assistant' && index === messages.length - 1;
-        logger.info(
-          `[BaseAgent] Empty message ${index}: role=${msg.role}, keeping=${shouldKeep}`
-        );
         return shouldKeep;
       }
       return true;
     });
-
-    logger.info(
-      `[BaseAgent] Filtered messages count: ${filteredMessages.length}`
-    );
 
     // Check if this is Perplexity to apply special message formatting
     const isPerplexity =
@@ -651,6 +627,17 @@ export abstract class BaseAgent {
       ? [mergedSystemMessage, ...nonSystemMessages]
       : nonSystemMessages;
 
+    // Ensure we have at least one message for the LLM API
+    if (reorderedMessages.length === 0) {
+      // Create a fallback system message if no messages exist
+      const fallbackMessage = new SystemMessage(
+        this.systemPrompt ||
+          this.createSystemPrompt() ||
+          'You are a helpful AI assistant.'
+      );
+      return [fallbackMessage];
+    }
+
     // Special handling for Perplexity: ensure proper message alternation
     if (isPerplexity && reorderedMessages.length > 0) {
       return this.reorderMessagesForPerplexity(reorderedMessages);
@@ -740,6 +727,7 @@ export abstract class BaseAgent {
       onUpdate?: (message: ConversationMessage) => void;
       userMessageId?: string;
       includePriorConversation?: boolean;
+      signal?: AbortSignal;
     }
   ): Promise<ConversationMessage> {
     // Extract options with defaults
@@ -749,6 +737,7 @@ export abstract class BaseAgent {
       onUpdate,
       userMessageId,
       includePriorConversation = true,
+      signal,
     } = options || {};
     // Initialize conversation manager and load existing data
     await this.conversationManager.load();
@@ -766,12 +755,6 @@ export abstract class BaseAgent {
       // Ensure we have a valid system prompt
       const systemPromptContent =
         this.systemPrompt || this.createSystemPrompt();
-      logger.info(
-        `[BaseAgent] System prompt content length: ${systemPromptContent?.length || 0}`
-      );
-      logger.info(
-        `[BaseAgent] System prompt preview: ${systemPromptContent?.substring(0, 100) || 'EMPTY'}`
-      );
 
       if (!systemPromptContent || systemPromptContent.trim() === '') {
         throw new Error(
@@ -786,13 +769,7 @@ export abstract class BaseAgent {
         timestamp: new Date(),
         status: 'completed',
       };
-      logger.info(
-        `[BaseAgent] About to add system message: ${JSON.stringify({ id: systemMessage.id, role: systemMessage.role, contentLength: systemMessage.content.length })}`
-      );
       await this.conversationManager.addMessage(threadId, systemMessage);
-      logger.info(
-        `[BaseAgent] Added system message with content length: ${systemMessage.content.length}`
-      );
 
       // Send system message creation event to frontend
       sseManager.broadcast('unified-events', {
@@ -822,9 +799,6 @@ export abstract class BaseAgent {
       notes: notes || [],
     };
 
-    logger.info(
-      `[BaseAgent] About to add user message: ${JSON.stringify({ id: userMsg.id, role: userMsg.role, contentLength: userMsg.content.length, content: userMsg.content.substring(0, 50) })}`
-    );
     await this.conversationManager.addMessage(threadId, userMsg);
 
     // Send user message creation event to frontend
@@ -889,8 +863,12 @@ export abstract class BaseAgent {
       );
 
       // Use bound model with tools for proper tool call streaming
+      // Note: ChatOllama has issues with token-level streaming when tools are bound
+      const isOllamaModel = this.config.llmConfig.type === 'ollama';
       const boundModel =
-        this.chatModel.bindTools && this.langChainTools.length > 0
+        this.chatModel.bindTools &&
+        this.langChainTools.length > 0 &&
+        !isOllamaModel
           ? this.chatModel.bindTools(this.langChainTools)
           : this.chatModel;
 
@@ -916,9 +894,16 @@ export abstract class BaseAgent {
 
       // Set up abort controller for cancellation
       const abortController = new AbortController();
+      
+      // Connect external signal to local abort controller
+      if (signal) {
+        signal.addEventListener('abort', () => {
+          abortController.abort();
+        });
+      }
 
       for await (const chunk of stream) {
-        if (abortController.signal.aborted) {
+        if (abortController.signal.aborted || signal?.aborted) {
           await this.conversationManager.updateMessage(
             threadId,
             assistantMsgId,
@@ -1671,9 +1656,6 @@ export abstract class BaseAgent {
             const serverId = parts[1];
             const toolName = parts.slice(2).join('_'); // Handle tool names with underscores
 
-            logger.info(
-              `[BaseAgent] Executing MCP tool: ${serverId}:${toolName}`
-            );
             const mcpResult = await mcpManager.executeTool(
               serverId,
               toolName,
@@ -1703,13 +1685,6 @@ export abstract class BaseAgent {
               content = mcpResult.text || JSON.stringify(mcpResult);
             } else {
               content = String(mcpResult);
-            }
-
-            // Warn if content is very large (but don't truncate here - let SSE manager handle it)
-            if (content.length > 100000) {
-              logger.warn(
-                `[BaseAgent] Large tool result from ${serverId}:${toolName}: ${content.length} characters`
-              );
             }
 
             results.push({

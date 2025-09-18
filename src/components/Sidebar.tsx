@@ -1,6 +1,6 @@
 import { MessageSquare, Files, Settings, Bot, Network } from 'lucide-react';
 import { clsx } from 'clsx';
-import { MatrixEffect } from './MatrixEffect';
+import { NetworkEffect } from './NetworkEffect';
 
 interface SidebarProps {
   activePanel: 'chat' | 'files' | 'agents' | 'mind-maps' | 'settings';
@@ -24,7 +24,7 @@ export function Sidebar({ activePanel, onPanelChange }: SidebarProps) {
         className="h-16 flex items-center justify-center border-b border-dark-border bg-blue-600 relative overflow-hidden"
         data-test-id="sidebar-logo"
       >
-        <MatrixEffect />
+        <NetworkEffect />
       </div>
 
       {/* Menu items */}

@@ -10,13 +10,12 @@ export class MindMapActionsManager {
     private layoutManager: MindMapLayoutManager
   ) {}
 
-  // Helper to apply complete layout and save to history
+  // Helper to apply complete layout
   private async applyCompleteLayout(
     nodes: Node<MindMapNodeData>[],
     edges: Edge[],
     rootNodeId: string,
-    layout: 'LR' | 'RL' | 'TB' | 'BT',
-    skipSave = false
+    layout: 'LR' | 'RL' | 'TB' | 'BT'
   ): Promise<{
     nodes: Node<MindMapNodeData>[];
     edges: Edge[];
@@ -29,11 +28,6 @@ export class MindMapActionsManager {
         rootNodeId,
         layout
       );
-
-    // Save to history
-    if (!skipSave) {
-      this.dataManager.saveToHistory(finalNodes, rootNodeId, layout);
-    }
 
     return { nodes: finalNodes, edges: finalEdges };
   }
@@ -355,13 +349,7 @@ export class MindMapActionsManager {
     nodes: Node<MindMapNodeData>[];
     edges: Edge[];
   }> {
-    return await this.applyCompleteLayout(
-      nodes,
-      edges,
-      rootNodeId,
-      layout,
-      true
-    );
+    return await this.applyCompleteLayout(nodes, edges, rootNodeId, layout);
   }
 
   // Update node chatId

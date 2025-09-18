@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { app, BrowserWindow, Menu, shell, dialog } from 'electron';
+import { app, BrowserWindow, Menu, shell, dialog, ipcMain } from 'electron';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import fixPath from 'fix-path';
@@ -24,8 +24,9 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       webSecurity: true,
+      preload: path.join(__dirname, 'preload.js'),
     },
-    icon: path.join(__dirname, '../public/favicon.ico'),
+    icon: path.join(__dirname, '../public/web-app-manifest-512x512.png'),
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
     frame: process.platform !== 'win32',
     show: false,
@@ -81,11 +82,56 @@ function createWindow() {
   });
 }
 
+// IPC handlers for window controls
+ipcMain.handle('window-minimize', () => {
+  if (mainWindow) {
+    mainWindow.minimize();
+  }
+});
+
+ipcMain.handle('window-maximize', () => {
+  if (mainWindow) {
+    if (mainWindow.isMaximized()) {
+      mainWindow.unmaximize();
+    } else {
+      mainWindow.maximize();
+    }
+  }
+});
+
+ipcMain.handle('window-close', () => {
+  if (mainWindow) {
+    mainWindow.close();
+  }
+});
+
 async function startServer() {
   if (isDevelopment) {
     // In development, the server should already be running
     return;
   }
+
+  if (serverApp) {
+    console.log('Server already running, skipping startup');
+    return serverApp;
+  }
+
+  // Add additional protection against multiple server instances
+  if (global.mindstrikeServerStarting) {
+    console.log('Server startup already in progress, waiting...');
+    return new Promise(resolve => {
+      const checkServer = () => {
+        if (serverApp) {
+          resolve(serverApp);
+        } else {
+          setTimeout(checkServer, 100);
+        }
+      };
+      checkServer();
+    });
+  }
+
+  global.mindstrikeServerStarting = true;
 
   try {
     console.log('Starting embedded server...');
@@ -104,11 +150,13 @@ async function startServer() {
       console.log(
         'MindStrike server running on port 3001 with full functionality'
       );
+      global.mindstrikeServerStarting = false;
     });
 
     return serverApp;
   } catch (error) {
     console.error('Failed to start MindStrike server:', error);
+    global.mindstrikeServerStarting = false;
     throw error;
   }
 }
@@ -123,6 +171,13 @@ function stopServer() {
 app.whenReady().then(async () => {
   try {
     await startServer();
+
+    // Set up application menu
+    if (process.platform === 'darwin') {
+      createMenu();
+    } else {
+      Menu.setApplicationMenu(null);
+    }
 
     // Give the server a moment to start, then create the window
     setTimeout(
@@ -250,11 +305,4 @@ function createMenu() {
   Menu.setApplicationMenu(menu);
 }
 
-// Show menu bar only on macOS
-app.whenReady().then(() => {
-  if (process.platform === 'darwin') {
-    createMenu();
-  } else {
-    Menu.setApplicationMenu(null);
-  }
-});
+// Menu setup is now handled in the main app.whenReady() above

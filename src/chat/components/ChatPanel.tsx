@@ -494,10 +494,10 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
           }
         >
           {messages.length === 0 && (
-            <div className="text-center text-gray-500 mt-8">
+            <div className="text-center text-gray-500 mt-2">
               <div className="mb-4">
-                <div className="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <MindStrikeIcon className="text-white" size={64} />
+                <div className="flex items-center justify-center mx-auto">
+                  <MindStrikeIcon size={128} />
                 </div>
                 <h3 className="text-lg font-medium mb-2">
                   Welcome to{' '}

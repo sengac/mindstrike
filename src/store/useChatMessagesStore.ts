@@ -26,6 +26,7 @@ export interface ChatMessagesState {
   messages: ConversationMessage[];
   isLoading: boolean;
   isStreaming: boolean;
+  streamingThreadId: string | null; // Track which thread is currently streaming
   error: string | null;
 
   // Actions (API calls only)
@@ -40,7 +41,7 @@ export interface ChatMessagesState {
   ) => void;
   removeMessage: (messageId: string) => void;
   setMessages: (messages: ConversationMessage[]) => void;
-  setStreaming: (isStreaming: boolean) => void;
+  setStreaming: (isStreaming: boolean, threadId?: string) => void;
   setError: (error: string | null) => void;
 }
 
@@ -51,6 +52,7 @@ export const useChatMessagesStore = create<ChatMessagesState>()(
     messages: [],
     isLoading: false,
     isStreaming: false,
+    streamingThreadId: null,
     error: null,
 
     // Actions
@@ -73,13 +75,19 @@ export const useChatMessagesStore = create<ChatMessagesState>()(
           })
         );
 
-        set({ messages, isLoading: false, isStreaming: false });
+        set({
+          messages,
+          isLoading: false,
+          isStreaming: false,
+          streamingThreadId: null,
+        });
       } catch (error: unknown) {
         console.error('[useChatMessagesStore] Error loading messages:', error);
         set({
           error: error instanceof Error ? error.message : 'Unknown error',
           isLoading: false,
           isStreaming: false,
+          streamingThreadId: null,
           messages: [],
         });
       }
@@ -123,8 +131,11 @@ export const useChatMessagesStore = create<ChatMessagesState>()(
       set({ messages });
     },
 
-    setStreaming: (isStreaming: boolean) => {
-      set({ isStreaming });
+    setStreaming: (isStreaming: boolean, threadId?: string) => {
+      set({
+        isStreaming,
+        streamingThreadId: isStreaming ? threadId || null : null,
+      });
     },
 
     setError: (error: string | null) => {

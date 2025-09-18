@@ -14,6 +14,7 @@ import {
   HardDrive,
   Info,
 } from 'lucide-react';
+import { AppBar } from '../../components/AppBar';
 import { useCustomServices, CustomLLMService } from '../../hooks/useModels';
 import { useAppStore } from '../../store/useAppStore';
 import { LocalLLMManager } from './LocalLLMManager';
@@ -294,15 +295,7 @@ export function SettingsPanel() {
   return (
     <div className="flex-1 flex flex-col bg-dark-bg overflow-hidden">
       {/* Header */}
-      <div
-        className="px-6 border-b border-gray-700 flex items-center"
-        style={{ height: 'var(--header-height)' }}
-      >
-        <div className="flex items-center gap-3">
-          <Settings size={24} className="text-blue-400" />
-          <h1 className="text-xl font-semibold text-white">Settings</h1>
-        </div>
-      </div>
+      <AppBar icon={Settings} title="Settings" />
 
       {/* Tab Navigation */}
       <div className="border-b border-gray-700">

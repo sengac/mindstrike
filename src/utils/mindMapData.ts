@@ -9,6 +9,7 @@ export interface MindMapNode {
   chatId?: string | null;
   side?: 'left' | 'right';
   children?: MindMapNode[];
+  isCollapsed?: boolean;
   customColors?: {
     backgroundClass: string;
     foregroundClass: string;
@@ -53,7 +54,7 @@ export class MindMapDataManager {
           level,
           hasChildren:
             (treeNode.children && treeNode.children.length > 0) || false,
-          isCollapsed: false,
+          isCollapsed: treeNode.isCollapsed || false,
           chatId: treeNode.chatId || undefined,
           notes: treeNode.notes || undefined,
           sources: treeNode.sources || undefined,
@@ -125,6 +126,11 @@ export class MindMapDataManager {
       // Include sources if they exist
       if (node.data.sources && node.data.sources.length > 0) {
         nodeData.sources = node.data.sources;
+      }
+
+      // Include isCollapsed if it exists and is true
+      if (node.data.isCollapsed) {
+        nodeData.isCollapsed = node.data.isCollapsed;
       }
 
       // Include customColors if they exist
@@ -225,20 +231,5 @@ export class MindMapDataManager {
 
       return { nodes, edges, rootNodeId: rootId, layout };
     }
-  }
-
-  // Save current state to history
-  saveToHistory(
-    nodes: Node<MindMapNodeData>[],
-    rootNodeId: string,
-    layout: 'LR' | 'RL' | 'TB' | 'BT'
-  ): void {
-    // Implementation would depend on your history management system
-    // This is a placeholder to satisfy the TypeScript compiler
-    console.log('Saving to history:', {
-      nodes: nodes.length,
-      rootNodeId,
-      layout,
-    });
   }
 }

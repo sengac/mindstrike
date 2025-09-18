@@ -8,6 +8,7 @@ import {
   X,
   Terminal,
 } from 'lucide-react';
+import { AppBar } from './AppBar';
 import { useState, useEffect } from 'react';
 import { CodeEditor } from './CodeEditor';
 
@@ -132,31 +133,29 @@ export function AgentsPanel() {
   return (
     <div className="flex-1 flex flex-col bg-dark-bg overflow-hidden">
       {/* Header */}
-      <div
-        className="px-6 border-b border-gray-700 flex items-center justify-between"
-        style={{ height: 'var(--header-height)' }}
-      >
-        <div className="flex items-center gap-3">
-          <Settings size={24} className="text-green-400" />
-          <h1 className="text-xl font-semibold text-white">MCP Agents</h1>
-        </div>
-        {mcpStatus && (
-          <div className="flex items-center gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <CheckCircle size={16} className="text-green-400" />
-              <span className="text-gray-300">
-                {mcpStatus.connectedServers}/{mcpStatus.totalServers} servers
-              </span>
+      <AppBar
+        icon={Settings}
+        title="MCP Agents"
+        iconColor="text-green-400"
+        actions={
+          mcpStatus && (
+            <div className="flex items-center gap-4 text-sm">
+              <div className="flex items-center gap-2">
+                <CheckCircle size={16} className="text-green-400" />
+                <span className="text-gray-300">
+                  {mcpStatus.connectedServers}/{mcpStatus.totalServers} servers
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Settings size={16} className="text-green-400" />
+                <span className="text-gray-300">
+                  {mcpStatus.totalTools} tools
+                </span>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Settings size={16} className="text-green-400" />
-              <span className="text-gray-300">
-                {mcpStatus.totalTools} tools
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
+          )
+        }
+      />
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6 space-y-8">

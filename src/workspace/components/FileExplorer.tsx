@@ -10,6 +10,7 @@ import {
   ArrowUp,
   Home,
 } from 'lucide-react';
+import { AppBar } from '../../components/AppBar';
 import { useWorkspaceStore } from '../hooks/useWorkspaceStore';
 import { useDialogAnimation } from '../../hooks/useDialogAnimation';
 import { CodeEditor } from './CodeEditor';
@@ -293,28 +294,20 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
   return (
     <div className="h-screen flex flex-col">
       {/* Header */}
-      <div
-        className="flex-shrink-0 px-6 border-b border-gray-700 flex items-center"
-        style={{ height: 'var(--header-height)' }}
-        data-test-id="custom-draggable-region"
-      >
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center gap-3">
-            <Folder size={24} className="text-blue-400" />
-            <h1 className="text-xl font-semibold text-white">Workspace</h1>
-          </div>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={handleSetWorkspaceRoot}
-              className="px-4 py-1 border border-gray-600 hover:bg-gray-800 rounded-lg transition-colors text-gray-400 hover:text-gray-200 flex items-center gap-1"
-              title="Set current directory as workspace root"
-            >
-              <Home size={16} className="text-gray-400" />
-              <span className="text-xs">Set workspace root</span>
-            </button>
-          </div>
-        </div>
-      </div>
+      <AppBar
+        icon={Folder}
+        title="Workspace"
+        actions={
+          <button
+            onClick={handleSetWorkspaceRoot}
+            className="px-4 py-1 border border-gray-600 hover:bg-gray-800 rounded-lg transition-colors text-gray-400 hover:text-gray-200 flex items-center gap-1"
+            title="Set current directory as workspace root"
+          >
+            <Home size={16} className="text-gray-400" />
+            <span className="text-xs">Set workspace root</span>
+          </button>
+        }
+      />
 
       {/* Main content area */}
       <div className="flex flex-1 min-h-0">

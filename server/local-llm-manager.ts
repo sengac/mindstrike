@@ -83,6 +83,7 @@ export class LocalLLMManager {
     string,
     { contextSize: number; timestamp: number }
   >();
+  private loadingLocks = new Map<string, Promise<void>>();
 
   // Clear cache to force recalculation (useful after fixing VRAM calculation bugs)
   clearContextSizeCache(): void {
@@ -619,6 +620,31 @@ export class LocalLLMManager {
       return; // Already loaded
     }
 
+    // Check if this model is already being loaded
+    if (this.loadingLocks.has(modelId)) {
+      console.log(
+        `Model ${modelInfo.name} is already being loaded, waiting...`
+      );
+      await this.loadingLocks.get(modelId);
+      return;
+    }
+
+    // Create a loading promise and store it in the lock map
+    const loadingPromise = this._doLoadModel(modelId, modelInfo);
+    this.loadingLocks.set(modelId, loadingPromise);
+
+    try {
+      await loadingPromise;
+    } finally {
+      // Always clean up the lock when done
+      this.loadingLocks.delete(modelId);
+    }
+  }
+
+  /**
+   * Internal method that does the actual model loading
+   */
+  private async _doLoadModel(modelId: string, modelInfo: any): Promise<void> {
     // Unload all other models first to free up memory
     // This ensures only one local model is loaded at a time
     const otherModelIds = Array.from(this.activeModels.keys()).filter(

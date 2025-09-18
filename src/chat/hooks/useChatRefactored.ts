@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
 import {
   ConversationMessage,
@@ -28,19 +28,28 @@ export function useChatRefactored({
   } | null>(null);
   const validation = useResponseValidation();
 
+  // Track if the next completed message should trigger thread name generation
+  const pendingTitleGeneration = useRef<{
+    threadId: string;
+    userContent: string;
+  } | null>(null);
+
   // Get store state and actions
   const {
     messages,
     isLoading,
-    isStreaming,
     error,
     loadMessages,
     addMessage,
     updateMessage,
     setMessages,
-    setStreaming,
     setError,
   } = useChatMessagesStore();
+
+  // Derive streaming state from actual message status instead of global state
+  const isStreaming = messages.some(
+    msg => msg.role === 'assistant' && msg.status === 'processing'
+  );
 
   const { activeThreadId } = useThreadsStore();
   const currentThreadId = threadId || activeThreadId;
@@ -77,11 +86,24 @@ export function useChatRefactored({
 
   // Subscribe to unified event bus for real-time streaming events
   useEffect(() => {
+    if (!currentThreadId) return;
+
+    const subscriptionThreadId = currentThreadId; // Capture thread ID at subscription time
+
     const unsubscribeContentChunk = sseEventBus.subscribe(
       'content-chunk',
       async event => {
+        // Double-check that we're still on the same thread
+        if (subscriptionThreadId !== currentThreadId) {
+          return;
+        }
         const data = event.data;
         if (isSSEChunkEvent(data)) {
+          // Only process if this is for the currently selected thread
+          if (event.threadId && event.threadId !== currentThreadId) {
+            return;
+          }
+
           // Handle real-time content chunks for character-by-character streaming
           const chatStore = useChatMessagesStore.getState();
           const messages = chatStore.messages;
@@ -106,8 +128,17 @@ export function useChatRefactored({
     const unsubscribeMessageUpdate = sseEventBus.subscribe(
       'message-update',
       async event => {
+        // Double-check that we're still on the same thread
+        if (subscriptionThreadId !== currentThreadId) {
+          return;
+        }
         const data = event.data;
         if (isSSEMessageEvent(data)) {
+          // Only process if this is for the currently selected thread
+          if (event.threadId && event.threadId !== currentThreadId) {
+            return;
+          }
+
           // Server sends complete message with server-generated ID
           const messageData = data.message;
           const assistantMessage = {
@@ -150,6 +181,11 @@ export function useChatRefactored({
       async event => {
         const data = event.data;
         if (isSSEMessageEvent(data)) {
+          // Only process if this is for the currently selected thread
+          if (event.threadId && event.threadId !== currentThreadId) {
+            return;
+          }
+
           // Final message completion
           const messageData = data.message;
           const completedMessage = {
@@ -167,7 +203,63 @@ export function useChatRefactored({
 
           const chatStore = useChatMessagesStore.getState();
           chatStore.updateMessage(completedMessage.id, completedMessage);
-          chatStore.setStreaming(false);
+
+          // Generate thread title if this was the first message exchange
+          if (pendingTitleGeneration.current) {
+            const { threadId: titleThreadId, userContent } =
+              pendingTitleGeneration.current;
+            pendingTitleGeneration.current = null; // Clear the pending state
+
+            try {
+              const titleResponse = await fetch('/api/generate-title', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  context: `User asked: ${userContent}`,
+                }),
+              });
+
+              if (titleResponse.ok) {
+                const result = await titleResponse.json();
+                const title = result.title?.trim();
+                if (title && title.length > 0) {
+                  await useThreadsStore
+                    .getState()
+                    .renameThread(titleThreadId, title);
+                  // Reload thread list to update the displayed name
+                  useThreadsStore.getState().loadThreads();
+                }
+              }
+            } catch (error) {
+              console.error(
+                '[useChatRefactored] Failed to generate thread title:',
+                error
+              );
+            }
+          }
+        }
+      }
+    );
+
+    const unsubscribeCancelled = sseEventBus.subscribe(
+      'cancelled',
+      async event => {
+        const data = event.data;
+        // Only process if this is for the currently selected thread
+        if (event.threadId && event.threadId !== currentThreadId) {
+          return;
+        }
+
+        // Update message status to cancelled
+        if (data && typeof data === 'object' && 'messageId' in data) {
+          const messageId = data.messageId as string;
+          const chatStore = useChatMessagesStore.getState();
+          const message = chatStore.messages.find(m => m.id === messageId);
+          if (message) {
+            chatStore.updateMessage(messageId, { status: 'cancelled' });
+          }
         }
       }
     );
@@ -176,8 +268,9 @@ export function useChatRefactored({
       unsubscribeContentChunk();
       unsubscribeMessageUpdate();
       unsubscribeCompleted();
+      unsubscribeCancelled();
     };
-  }, []); // Empty dependency array - event handlers access store directly
+  }, [currentThreadId]); // Include currentThreadId since event handlers filter by it
 
   const sendMessage = useCallback(
     async (
@@ -202,11 +295,18 @@ export function useChatRefactored({
         return;
       }
 
-      setStreaming(true);
       setError(null);
 
       // Check if this is the first message in the thread
       const isFirstMessage = messages.length === 0;
+
+      // Track if we need to generate a title after completion
+      if (isFirstMessage) {
+        pendingTitleGeneration.current = {
+          threadId: currentThreadId,
+          userContent: content.slice(0, 200),
+        };
+      }
 
       // Add user message to the store immediately
       const userMessage: ConversationMessage = {
@@ -248,35 +348,7 @@ export function useChatRefactored({
         // Response contains the message - SSE will handle real-time updates
         await response.json();
 
-        // Generate thread name for first message exchange
-        if (isFirstMessage && currentThreadId) {
-          try {
-            const titleResponse = await fetch('/api/generate-title', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                context: `User asked: ${content.slice(0, 200)}`,
-              }),
-            });
-
-            if (titleResponse.ok) {
-              const result = await titleResponse.json();
-              const title = result.title?.trim();
-              if (title && title.length > 0) {
-                await useThreadsStore
-                  .getState()
-                  .renameThread(currentThreadId, title);
-              }
-            }
-          } catch (error) {
-            console.error(
-              '[useChatRefactored] Failed to generate thread title:',
-              error
-            );
-          }
-        }
+        // Thread title generation moved to streaming completion handler
 
         // Reload thread list to update message count and name
         useThreadsStore.getState().loadThreads();
@@ -284,7 +356,7 @@ export function useChatRefactored({
         console.error('SSE Error:', error);
         toast.error(`Failed to send message: ${error}`);
         setError(`Failed to send message: ${error}`);
-        setStreaming(false); // Only set false on error
+        // Streaming state derived from message status
       }
     },
     [
@@ -293,7 +365,6 @@ export function useChatRefactored({
       isAgentMode,
       addMessage,
       updateMessage,
-      setStreaming,
       setError,
       loadMessages,
       validateAndProcessMessage,
@@ -312,19 +383,45 @@ export function useChatRefactored({
     }
   }, [currentThreadId, loadMessages]);
 
-  const cancelStreaming = useCallback(() => {
-    setStreaming(false);
-    // Find the currently streaming message and mark it as cancelled
+  const cancelStreaming = useCallback(async () => {
+    // Find the currently streaming message
     const streamingMessage = messages.find(
       msg => msg.role === 'assistant' && msg.status === 'processing'
     );
-    if (streamingMessage) {
-      updateMessage(streamingMessage.id, {
-        status: 'cancelled' as const,
-        content: streamingMessage.content + '\n\n[Cancelled by user]',
-      });
+    if (streamingMessage && currentThreadId) {
+      // Call the server cancel endpoint
+      try {
+        const response = await fetch('/api/message/cancel', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            messageId: streamingMessage.id, 
+            threadId: currentThreadId 
+          }),
+        });
+
+        if (response.ok) {
+          // The SSE stream will send the cancelled update automatically
+          // so we don't need to manually update the message here
+        } else {
+          // Fallback to local cancellation if server call fails
+          updateMessage(streamingMessage.id, {
+            status: 'cancelled' as const,
+            content: streamingMessage.content + '\n\n[Cancelled by user]',
+          });
+        }
+      } catch (error) {
+        console.error('Failed to cancel streaming:', error);
+        // Fallback to local cancellation
+        updateMessage(streamingMessage.id, {
+          status: 'cancelled' as const,
+          content: streamingMessage.content + '\n\n[Cancelled by user]',
+        });
+      }
     }
-  }, [messages, updateMessage, setStreaming]);
+  }, [messages, updateMessage, currentThreadId]);
 
   const clearLocalModelError = useCallback(() => {
     setLocalModelError(null);
@@ -337,13 +434,11 @@ export function useChatRefactored({
         return;
       }
 
-      setStreaming(true);
       setError(null);
 
       // Find the message and get the previous user message to regenerate from
       const messageIndex = messages.findIndex(msg => msg.id === messageId);
       if (messageIndex === -1 || messageIndex === 0) {
-        setStreaming(false);
         return;
       }
 
@@ -353,7 +448,6 @@ export function useChatRefactored({
         .reverse()
         .findIndex(msg => msg.role === 'user');
       if (userMessageIndex === -1) {
-        setStreaming(false);
         return;
       }
 
@@ -395,7 +489,7 @@ export function useChatRefactored({
         setError(`Failed to regenerate message: ${error}`);
         await loadMessages(currentThreadId); // Reload from server
       } finally {
-        setStreaming(false);
+        // Streaming state is derived from message status
       }
     },
     [
@@ -404,7 +498,6 @@ export function useChatRefactored({
       isAgentMode,
       addMessage,
       updateMessage,
-      setStreaming,
       setError,
       loadMessages,
       validateAndProcessMessage,
@@ -418,13 +511,11 @@ export function useChatRefactored({
         return;
       }
 
-      setStreaming(true);
       setError(null);
 
       // Find the message to edit
       const messageIndex = messages.findIndex(msg => msg.id === messageId);
       if (messageIndex === -1) {
-        setStreaming(false);
         return;
       }
 
@@ -472,7 +563,7 @@ export function useChatRefactored({
         setError(`Failed to edit message: ${error}`);
         await loadMessages(currentThreadId); // Reload from server
       } finally {
-        setStreaming(false);
+        // Streaming state is derived from message status
       }
     },
     [
@@ -481,7 +572,6 @@ export function useChatRefactored({
       isAgentMode,
       addMessage,
       updateMessage,
-      setStreaming,
       setError,
       loadMessages,
       validateAndProcessMessage,
@@ -516,7 +606,6 @@ export function useChatRefactored({
     const lastMessage = messages[messages.length - 1];
     if (lastMessage.role !== 'user') return;
 
-    setStreaming(true);
     setError(null);
 
     try {
@@ -548,7 +637,7 @@ export function useChatRefactored({
     } catch (error: unknown) {
       console.error('Error retrying message:', error);
       setError(`Failed to retry message: ${error}`);
-      setStreaming(false);
+      // Streaming state is derived from message status
     }
   }, [
     messages,
@@ -556,7 +645,6 @@ export function useChatRefactored({
     validateAndProcessMessage,
     addMessage,
     updateMessage,
-    setStreaming,
     setError,
   ]);
 

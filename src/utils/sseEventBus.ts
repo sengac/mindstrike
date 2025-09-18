@@ -6,6 +6,7 @@ export interface SSEEvent {
   timestamp: number;
   streamId?: string;
   workflowId?: string;
+  threadId?: string;
 }
 
 type EventHandler = (event: SSEEvent) => void;
@@ -84,6 +85,13 @@ class SSEEventBus {
             'workflowId' in data &&
             typeof data.workflowId === 'string'
               ? data.workflowId
+              : undefined,
+          threadId:
+            data &&
+            typeof data === 'object' &&
+            'threadId' in data &&
+            typeof data.threadId === 'string'
+              ? data.threadId
               : undefined,
         };
 

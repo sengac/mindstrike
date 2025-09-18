@@ -25,6 +25,41 @@ import { ConversationManager } from './conversation-manager.js';
 import { asyncHandler } from './utils/async-handler.js';
 import { ImageAttachment, NotesAttachment } from '../src/types.js';
 
+// Cancellation system for ongoing message processing
+class MessageCancellationManager {
+  private activeTasks = new Map<string, AbortController>();
+
+  startTask(threadId: string): AbortController {
+    // Cancel any existing task for this thread
+    this.cancelTask(threadId);
+    
+    const controller = new AbortController();
+    this.activeTasks.set(threadId, controller);
+    return controller;
+  }
+
+  cancelTask(threadId: string): boolean {
+    const controller = this.activeTasks.get(threadId);
+    if (controller) {
+      controller.abort();
+      this.activeTasks.delete(threadId);
+      return true;
+    }
+    return false;
+  }
+
+  isTaskActive(threadId: string): boolean {
+    return this.activeTasks.has(threadId);
+  }
+
+  cleanup() {
+    for (const controller of this.activeTasks.values()) {
+      controller.abort();
+    }
+    this.activeTasks.clear();
+  }
+}
+
 // Type definitions
 interface ToolCall {
   id: string;
@@ -60,6 +95,9 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Initialize cancellation manager
+const cancellationManager = new MessageCancellationManager();
 
 // Increase max listeners for development
 process.setMaxListeners(200);
@@ -812,6 +850,7 @@ app.post('/api/message', async (req: Request, res: Response) => {
           sseManager.broadcast('unified-events', {
             type: 'content-chunk',
             chunk: newContent,
+            threadId: threadId || 'default',
           });
           lastContentLength = updatedMessage.content.length;
         }
@@ -838,11 +877,16 @@ app.post('/api/message', async (req: Request, res: Response) => {
       sseManager.broadcast('unified-events', {
         type: 'message-update',
         message: updatedMessage,
+        threadId: threadId || 'default',
       });
     };
 
     // Process message in background - response will stream via SSE
     setImmediate(async () => {
+      const abortController = cancellationManager.startTask(
+        threadId || 'default'
+      );
+
       try {
         const agent = isAgentMode
           ? agentPool.getWorkflowAgent(threadId || 'default')
@@ -856,6 +900,7 @@ app.post('/api/message', async (req: Request, res: Response) => {
             notes,
             onUpdate: streamingCallback,
             userMessageId: messageId,
+            signal: abortController.signal, // Pass abort signal for cancellation
           }
         );
 
@@ -878,8 +923,26 @@ app.post('/api/message', async (req: Request, res: Response) => {
         sseManager.broadcast('unified-events', {
           type: 'completed',
           message: response,
+          threadId: threadId || 'default',
         });
+
+        // Clean up successful task
+        cancellationManager.cancelTask(threadId || 'default');
       } catch (processingError: unknown) {
+        // Clean up failed task
+        cancellationManager.cancelTask(threadId || 'default');
+
+        // Check if this was a cancellation
+        if (
+          processingError instanceof Error &&
+          processingError.name === 'AbortError'
+        ) {
+          sseManager.broadcast('unified-events', {
+            type: 'cancelled',
+            threadId: threadId || 'default',
+          });
+          return;
+        }
         // Check if this is a local model not loaded error
         if (
           processingError instanceof Error &&
@@ -1004,6 +1067,7 @@ app.post('/api/message/stream', async (req: Request, res: Response) => {
           sseManager.broadcast('unified-events', {
             type: 'content-chunk',
             chunk: newContent,
+            threadId: threadId || 'default',
           });
           lastContentLength = updatedMessage.content.length;
         }
@@ -1030,6 +1094,7 @@ app.post('/api/message/stream', async (req: Request, res: Response) => {
       sseManager.broadcast('unified-events', {
         type: 'message-update',
         message: updatedMessage,
+        threadId: threadId || 'default',
       });
     };
 
@@ -1348,16 +1413,33 @@ app.post('/api/message/cancel', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Thread ID is required' });
   }
 
-  // Set current thread if provided
-  agentPool.setCurrentThread(threadId);
+  // Cancel the active task for this thread
+  const cancelled = cancellationManager.cancelTask(threadId);
 
-  const cancelled = await agentPool
-    .getCurrentAgent()
-    .cancelMessage(threadId, messageId);
   if (cancelled) {
+    // Also update the message status in conversation manager
+    try {
+      const conversationManager = new ConversationManager(workspaceRoot);
+      await conversationManager.load();
+      await conversationManager.updateMessage(threadId, messageId, {
+        status: 'cancelled',
+      });
+
+      // Broadcast cancellation event
+      sseManager.broadcast('unified-events', {
+        type: 'cancelled',
+        threadId: threadId,
+        messageId: messageId,
+      });
+    } catch (error) {
+      logger.error('Error updating cancelled message:', error);
+    }
+
     res.json({ success: true });
   } else {
-    res.status(404).json({ error: 'Message not found or not processing' });
+    res
+      .status(404)
+      .json({ error: 'No active processing found for this thread' });
   }
 });
 
@@ -2537,13 +2619,33 @@ mcpManager.on('configReloaded', async () => {
   await agentPool.refreshAllAgentsTools();
 });
 
-// Only start the server if this file is run directly (not imported)
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Export the app for use in Electron or direct startup
+export default app;
+
+// Only start the server if not imported by Electron
+if (
+  !process.env.ELECTRON_RUN_AS_NODE &&
+  process.argv[1] !== 'electron/main.js'
+) {
   app.listen(PORT, () => {
+    console.log('\n🚀 MindStrike Server Started Successfully!');
+    console.log('━'.repeat(50));
+    console.log(`📍 Server URL: http://localhost:${PORT}`);
+    console.log(`🌐 Port: ${PORT}`);
+    console.log(`📁 Workspace: ${workspaceRoot}`);
+    console.log(`📂 Working Dir: ${currentWorkingDirectory}`);
+    console.log(
+      `🧠 LLM Model: ${currentLlmConfig.displayName || currentLlmConfig.model || 'None selected'}`
+    );
+    if (currentLlmConfig.model) {
+      console.log(`🔗 LLM URL: ${currentLlmConfig.baseURL}`);
+      console.log(`⚙️  LLM Type: ${currentLlmConfig.type || 'unknown'}`);
+    }
+    console.log('━'.repeat(50));
+    console.log('✅ Server ready to accept connections\n');
+
     logger.info(`Server running on port ${PORT}`);
     logger.info(`Workspace: ${workspaceRoot}`);
     logger.info(`LLM: ${currentLlmConfig.baseURL} (${currentLlmConfig.model})`);
   });
 }
-
-export default app;

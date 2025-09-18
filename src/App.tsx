@@ -22,6 +22,7 @@ import { useAppStore } from './store/useAppStore';
 
 import { Source } from './types/mindMap';
 import { Menu, X, MessageSquare, Network, Cpu, FileText } from 'lucide-react';
+import { AppBar } from './components/AppBar';
 import { Toaster } from 'react-hot-toast';
 import { ConnectionMonitorDialog } from './components/shared/ConnectionMonitorDialog';
 import { useConnectionMonitor } from './hooks/useConnectionMonitor';
@@ -258,17 +259,11 @@ function App() {
         {activePanel === 'chat' && (
           <div className="flex flex-col h-full">
             {/* Chat Header spanning across threads and messages */}
-            <div
-              className="flex-shrink-0 px-6 border-b border-gray-700 flex items-center"
-              style={{ height: 'var(--header-height)' }}
-              data-test-id="custom-draggable-region"
-            >
-              <div className="flex items-center justify-between w-full">
-                <div className="flex items-center gap-3">
-                  <MessageSquare size={24} className="text-blue-400" />
-                  <h1 className="text-xl font-semibold text-white">Chat</h1>
-                </div>
-                <div className="flex items-center space-x-4">
+            <AppBar
+              icon={MessageSquare}
+              title="Chat"
+              actions={
+                <>
                   <HeaderStats messages={currentMessages} />
                   <div className="flex items-center gap-2">
                     <ModelSelector />
@@ -287,9 +282,9 @@ function App() {
                       <FileText size={16} />
                     </button>
                   </div>
-                </div>
-              </div>
-            </div>
+                </>
+              }
+            />
 
             {/* Chat content area */}
             <div className="flex flex-1 min-h-0">
@@ -315,17 +310,11 @@ function App() {
         {activePanel === 'mind-maps' && (
           <div className="flex flex-col h-full">
             {/* MindMaps Header */}
-            <div
-              className="flex-shrink-0 px-6 border-b border-gray-700 flex items-center"
-              style={{ height: 'var(--header-height)' }}
-              data-test-id="custom-draggable-region"
-            >
-              <div className="flex items-center justify-between w-full">
-                <div className="flex items-center gap-3">
-                  <Network size={24} className="text-blue-400" />
-                  <h1 className="text-xl font-semibold text-white">MindMaps</h1>
-                </div>
-                <div className="flex items-center space-x-4">
+            <AppBar
+              icon={Network}
+              title="MindMaps"
+              actions={
+                <>
                   <div className="flex items-center gap-2">
                     <ModelSelector />
                     <button
@@ -343,9 +332,9 @@ function App() {
                       <FileText size={16} />
                     </button>
                   </div>
-                </div>
-              </div>
-            </div>
+                </>
+              }
+            />
 
             {/* MindMaps content area */}
             <div className="flex flex-1 min-h-0">

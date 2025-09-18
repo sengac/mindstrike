@@ -8,8 +8,8 @@
   "main": "electron/main.js",
   "homepage": "./",
   "scripts": {
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
-    "dev:debug": "concurrently \"npm run dev:server:debug\" \"npm run dev:client\"",
+    "dev": "npm-run-all --parallel dev:server dev:client",
+    "dev:debug": "npm-run-all --parallel dev:server:debug dev:client",
     "dev:client": "vite",
     "dev:server": "tsx watch server/index.ts",
     "dev:server:debug": "tsx watch server/index.ts --debug",
@@ -87,7 +87,7 @@
     "@typescript-eslint/parser": "^8.35.0",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
-    "concurrently": "^9.1.0",
+    "npm-run-all": "^4.1.5",
     "electron": "^36.4.0",
     "electron-builder": "^26.0.12",
     "eslint": "^9.29.0",
@@ -108,10 +108,12 @@
   "build": {
     "appId": "com.mindstrike.app",
     "productName": "MindStrike",
+    "icon": "public/web-app-manifest-512x512.png",
     "directories": {
       "output": "dist/electron"
     },
     "files": [
+      "electron/preload.js",
       "electron/main.js",
       "dist/client/**/*",
       "dist/server/**/*",
@@ -135,6 +137,7 @@
       "writeUpdateInfo": false
     },
     "win": {
+      "icon": "public/web-app-manifest-512x512.png",
       "target": [
         {
           "target": "nsis",

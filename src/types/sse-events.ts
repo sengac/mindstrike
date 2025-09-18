@@ -2,6 +2,7 @@
 
 export interface SSEChunkEvent {
   chunk: string;
+  threadId?: string;
 }
 
 export interface SSEMessageEvent {
@@ -12,6 +13,7 @@ export interface SSEMessageEvent {
     timestamp: number;
     [key: string]: unknown;
   };
+  threadId?: string;
 }
 
 export interface SSETokenStatsEvent {
@@ -85,6 +87,11 @@ export interface SSEModelScanEvent {
   [key: string]: unknown;
 }
 
+export interface SSECancelledEvent {
+  threadId?: string;
+  messageId?: string;
+}
+
 // Union type for all SSE events
 export type SSEEventData =
   | SSEChunkEvent
@@ -98,7 +105,8 @@ export type SSEEventData =
   | SSEDebugEvent
   | SSEDownloadEvent
   | SSELogEvent
-  | SSEModelScanEvent;
+  | SSEModelScanEvent
+  | SSECancelledEvent;
 
 // Type guards for SSE events
 export function isSSEChunkEvent(data: unknown): data is SSEChunkEvent {
@@ -173,5 +181,13 @@ export function isSSEModelScanEvent(data: unknown): data is SSEModelScanEvent {
     typeof data === 'object' &&
     data !== null &&
     ('models' in data || typeof data === 'object')
+  );
+}
+
+export function isSSECancelledEvent(data: unknown): data is SSECancelledEvent {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    ('threadId' in data || 'messageId' in data)
   );
 }
