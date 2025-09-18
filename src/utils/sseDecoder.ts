@@ -272,7 +272,7 @@ export interface SseObjectData {
 }
 
 // Union type for all possible decoded results
-type SseDecodedData =
+export type SseDecodedData =
   | SseObjectData
   | string
   | number
@@ -465,7 +465,7 @@ export function decodeSseDataSync(obj: SseDataInput): SseDecodedData {
     // Properly decode UTF-8 base64 string
     const bytes = Uint8Array.from(atob(obj.data), c => c.charCodeAt(0));
     const decoded = new TextDecoder('utf-8').decode(bytes);
-    console.log('[SSEDecoder] Decoded base64 string:', { original: obj.data, decoded });
+
     return decoded;
   }
 

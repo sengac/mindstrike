@@ -11,7 +11,7 @@ import { SettingsPanel } from './settings/components/SettingsPanel';
 import { ModelSelector } from './settings/components/ModelSelector';
 import { HeaderStats } from './components/HeaderStats';
 import { LocalModelLoadDialog } from './components/LocalModelLoadDialog';
-import { LLMDebugDialog } from './components/LLMDebugDialog';
+import { ApplicationLogsDialog } from './components/ApplicationLogsDialog';
 import { useThreadsRefactored } from './chat/hooks/useThreadsRefactored';
 import { useChatMessagesStore } from './store/useChatMessagesStore';
 import { sseEventBus } from './utils/sseEventBus';
@@ -29,7 +29,8 @@ import { useConnectionMonitor } from './hooks/useConnectionMonitor';
 function App() {
   const [, setWorkspaceRestored] = useState(false);
   const [showLocalModelDialog, setShowLocalModelDialog] = useState(false);
-  const [showLLMDebugDialog, setShowLLMDebugDialog] = useState(false);
+  const [showApplicationLogsDialog, setShowApplicationLogsDialog] =
+    useState(false);
   const [debugDialogInitialTab, setDebugDialogInitialTab] = useState<
     'debug' | 'tasks' | 'mcp'
   >('debug');
@@ -39,7 +40,7 @@ function App() {
   // Function to open debug dialog with specific tab
   const openDebugDialog = (tab: 'debug' | 'tasks' | 'mcp' = 'debug') => {
     setDebugDialogInitialTab(tab);
-    setShowLLMDebugDialog(true);
+    setShowApplicationLogsDialog(true);
   };
 
   // Make it available globally
@@ -83,10 +84,8 @@ function App() {
         await initializeWorkspace();
 
         // Initialize single SSE event bus for all real-time updates
-        console.log('[App] Initializing SSE event bus...');
         sseEventBus.initialize();
-        console.log('[App] SSE event bus initialization completed');
-        
+
         // Fetch any existing MCP logs
         useMCPLogsStore.getState().fetchLogs();
       } catch (error) {
@@ -281,7 +280,7 @@ function App() {
                       <Cpu size={16} />
                     </button>
                     <button
-                      onClick={() => setShowLLMDebugDialog(true)}
+                      onClick={() => setShowApplicationLogsDialog(true)}
                       className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
                       title="Application Logs"
                     >
@@ -337,7 +336,7 @@ function App() {
                       <Cpu size={16} />
                     </button>
                     <button
-                      onClick={() => setShowLLMDebugDialog(true)}
+                      onClick={() => setShowApplicationLogsDialog(true)}
                       className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
                       title="Application Logs"
                     >
@@ -430,11 +429,11 @@ function App() {
         />
       )}
 
-      {/* LLM Debug Dialog */}
-      {showLLMDebugDialog && (
-        <LLMDebugDialog
-          isOpen={showLLMDebugDialog}
-          onClose={() => setShowLLMDebugDialog(false)}
+      {/* Application Logs Dialog */}
+      {showApplicationLogsDialog && (
+        <ApplicationLogsDialog
+          isOpen={showApplicationLogsDialog}
+          onClose={() => setShowApplicationLogsDialog(false)}
           initialTab={debugDialogInitialTab}
         />
       )}

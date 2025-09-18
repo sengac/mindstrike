@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { Node } from 'reactflow';
+import { Node, Edge } from 'reactflow';
 import { MindMapNodeData } from '../types/mindMap';
 import { MindMapData } from './useMindMapData';
 
@@ -8,22 +8,22 @@ interface UseMindMapActionsProps {
   rootNodeId: string;
   layout: 'LR' | 'RL' | 'TB' | 'BT';
   setNodes: (nodes: Node<MindMapNodeData>[]) => void;
-  setEdges: (edges: any[]) => void;
+  setEdges: (edges: Edge[]) => void;
   setSelectedNodeId: (id: string | null) => void;
   setIsLoading: (loading: boolean) => void;
   generateEdges: (
     nodes: Node<MindMapNodeData>[],
     layout: 'LR' | 'RL' | 'TB' | 'BT'
-  ) => any[];
+  ) => Edge[];
   arrangeNodes: (
     nodes: Node<MindMapNodeData>[],
-    edges: any[],
+    edges: Edge[],
     rootId: string,
     layout?: 'LR' | 'RL' | 'TB' | 'BT'
   ) => Node<MindMapNodeData>[];
   updateNodeLevels: (
     nodes: Node<MindMapNodeData>[],
-    edges: any[],
+    edges: Edge[],
     rootId: string,
     layout: 'LR' | 'RL' | 'TB' | 'BT'
   ) => Node<MindMapNodeData>[];

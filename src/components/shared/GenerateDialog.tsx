@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { X, Loader2, Brain, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useDialogAnimation } from '../../hooks/useDialogAnimation';
-import { useDebugStore } from '../../store/useDebugStore';
 import { useMindMapGeneration } from '../../store/useMindMapStore';
 import { BaseDialog } from './BaseDialog';
 
@@ -39,11 +38,9 @@ export function GenerateDialog({
     cancelIterativeGeneration,
   } = useMindMapGeneration();
 
-  // Token performance metrics
-  const currentTokensPerSecond = useDebugStore(
-    state => state.currentTokensPerSecond
-  );
-  const currentTotalTokens = useDebugStore(state => state.currentTotalTokens);
+  // Token performance metrics from generation progress
+  const currentTokensPerSecond = generationProgress?.tokensPerSecond || 0;
+  const currentTotalTokens = generationProgress?.totalTokens || 0;
 
   // Animate dots
   useEffect(() => {

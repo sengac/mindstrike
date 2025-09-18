@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import {
-  decodeSseEventData,
   isSseWorkflowStartedData,
   isSseTasksPlannedData,
   isSseTaskProgressData,
@@ -393,8 +392,8 @@ async function initializeTaskEventSubscriptions() {
 
   const handleTaskEvent = async (event: { data: any }) => {
     try {
-      // Decode base64 fields if needed
-      const data = await decodeSseEventData(event.data);
+      // Handle nested data structure from unified SSE - data is already decoded by event bus
+      const data = event.data.data || event.data;
 
       switch (data.type) {
         case 'workflow_started':
@@ -487,22 +486,40 @@ async function initializeTaskEventSubscriptions() {
   };
 
   // Subscribe to task-related events via event bus
-  const unsubscribeWorkflowStarted = sseEventBus.subscribe('workflow_started', handleTaskEvent);
+  const unsubscribeWorkflowStarted = sseEventBus.subscribe(
+    'workflow_started',
+    handleTaskEvent
+  );
   taskUnsubscribeFunctions.push(unsubscribeWorkflowStarted);
-  
-  const unsubscribeTasksPlanned = sseEventBus.subscribe('tasks_planned', handleTaskEvent);
+
+  const unsubscribeTasksPlanned = sseEventBus.subscribe(
+    'tasks_planned',
+    handleTaskEvent
+  );
   taskUnsubscribeFunctions.push(unsubscribeTasksPlanned);
-  
-  const unsubscribeTaskProgress = sseEventBus.subscribe('task_progress', handleTaskEvent);
+
+  const unsubscribeTaskProgress = sseEventBus.subscribe(
+    'task_progress',
+    handleTaskEvent
+  );
   taskUnsubscribeFunctions.push(unsubscribeTaskProgress);
-  
-  const unsubscribeTaskCompleted = sseEventBus.subscribe('task_completed', handleTaskEvent);
+
+  const unsubscribeTaskCompleted = sseEventBus.subscribe(
+    'task_completed',
+    handleTaskEvent
+  );
   taskUnsubscribeFunctions.push(unsubscribeTaskCompleted);
-  
-  const unsubscribeWorkflowCompleted = sseEventBus.subscribe('workflow_completed', handleTaskEvent);
+
+  const unsubscribeWorkflowCompleted = sseEventBus.subscribe(
+    'workflow_completed',
+    handleTaskEvent
+  );
   taskUnsubscribeFunctions.push(unsubscribeWorkflowCompleted);
-  
-  const unsubscribeWorkflowFailed = sseEventBus.subscribe('workflow_failed', handleTaskEvent);
+
+  const unsubscribeWorkflowFailed = sseEventBus.subscribe(
+    'workflow_failed',
+    handleTaskEvent
+  );
   taskUnsubscribeFunctions.push(unsubscribeWorkflowFailed);
 }
 

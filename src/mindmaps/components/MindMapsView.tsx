@@ -11,7 +11,7 @@ import {
   Settings,
 } from 'lucide-react';
 import { MindMap as MindMapType } from '../hooks/useMindMaps';
-import { MindMap } from './MindMap';
+import { MindMap, MindMapControls } from './MindMap';
 import { ControlsModal } from '../../components/ControlsModal';
 import { ColorPalette } from '../../components/ColorPalette';
 import { useAppStore } from '../../store/useAppStore';
@@ -157,7 +157,8 @@ export function MindMapsView({
   );
 
   // Store the mindmap controls
-  const [mindMapControls, setMindMapControls] = useState<any>(null);
+  const [mindMapControls, setMindMapControls] =
+    useState<MindMapControls | null>(null);
 
   // Control handlers that use the actual MindMap component controls
   const handleUndo = useCallback(() => {

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { sseEventBus } from '../utils/sseEventBus';
+import { isSSELogEvent } from '../types/sse-events';
 
 export interface MCPLogEntry {
   id: string;
@@ -60,17 +61,17 @@ function initializeMCPLogsEventSubscription(): void {
     return; // Already subscribed
   }
 
-  console.log('[useMCPLogsStore] Subscribing to MCP log events via SSE event bus');
-  
-  mcpLogsUnsubscribe = sseEventBus.subscribe('mcp-log', (event) => {
+  mcpLogsUnsubscribe = sseEventBus.subscribe('mcp-log', event => {
     const { addLog } = useMCPLogsStore.getState();
+    // Handle nested data structure from unified SSE
+    if (!isSSELogEvent(event.data)) return;
     const data = event.data;
-    
+
     addLog({
-      id: data.id,
+      id: data.id as string,
       timestamp: data.timestamp,
-      serverId: data.serverId,
-      level: data.level,
+      serverId: data.serverId as string,
+      level: data.level as 'info' | 'error' | 'warn',
       message: data.message,
     });
   });

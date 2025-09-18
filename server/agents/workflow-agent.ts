@@ -34,7 +34,7 @@ const WorkflowState = Annotation.Root({
     reducer: (x, y) => y ?? x,
     default: () => '',
   }),
-  taskResults: Annotation<Record<string, any>>({
+  taskResults: Annotation<Record<string, unknown>>({
     reducer: (x, y) => ({ ...x, ...y }),
     default: () => ({}),
   }),
@@ -76,24 +76,34 @@ export class WorkflowAgent extends BaseAgent {
     this.chatTopic = chatTopic;
   }
 
-  private broadcastWorkflowEvent(event: any) {
+  private broadcastWorkflowEvent(event: Record<string, unknown>) {
     // Always broadcast to the workflow topic
     sseManager.broadcast('unified-events', event);
 
     // Also broadcast to the chat topic if available
     if (this.chatTopic) {
       // Chat topic also uses unified events now
-      sseManager.broadcast('unified-events', { ...event, chatTopic: this.chatTopic });
+      sseManager.broadcast('unified-events', {
+        ...event,
+        chatTopic: this.chatTopic,
+      });
     }
   }
 
   // Override processMessage to use workflow instead of AgentExecutor
   async processMessage(
+    threadId: string,
     userMessage: string,
-    images?: ImageAttachment[],
-    notes?: NotesAttachment[],
-    onUpdate?: (message: ConversationMessage) => void
+    options?: {
+      images?: ImageAttachment[];
+      notes?: NotesAttachment[];
+      onUpdate?: (message: ConversationMessage) => void;
+      userMessageId?: string;
+      includePriorConversation?: boolean;
+    }
   ): Promise<ConversationMessage> {
+    // Extract options with defaults (workflow agent defaults to no prior conversation)
+    const { images, notes, onUpdate, userMessageId } = options || {};
     const workflowId = this.generateId();
     try {
       // Create initial state
@@ -111,44 +121,52 @@ export class WorkflowAgent extends BaseAgent {
       // Run the workflow
       const result = await this.workflowGraph.invoke(initialState);
 
-      // Add user message to store
-      this.store.getState().addMessage({
+      // Initialize conversation manager and load existing data
+      await this.conversationManager.load();
+
+      // Ensure thread exists, create if needed
+      let thread = this.conversationManager.getThread(threadId);
+      if (!thread) {
+        thread = await this.conversationManager.createThread();
+        threadId = thread.id;
+      }
+
+      // Add user message to conversation
+      const userMsg: ConversationMessage = {
+        id: userMessageId || this.generateId(),
         role: 'user',
         content: userMessage,
-        status: 'completed',
+        timestamp: new Date(),
         images: images || [],
         notes: notes || [],
-      });
+      };
+      this.conversationManager.addMessage(threadId, userMsg);
 
-      // Add assistant message to store
+      // Create assistant response from workflow result
       const content =
         result.messages[result.messages.length - 1]?.content ||
         'Workflow completed';
-      const assistantMsgId = this.store.getState().addMessage({
+
+      const conversationMessage: ConversationMessage = {
+        id: this.generateId(),
         role: 'assistant',
         content: content.toString(),
-        status: 'completed',
+        timestamp: new Date(),
         model: this.config.llmConfig.displayName || this.config.llmConfig.model,
-      });
+      };
 
-      // Get the message from store and convert to ConversationMessage
-      const assistantMessage = this.store
-        .getState()
-        .messages.find(m => m.id === assistantMsgId);
-      if (!assistantMessage) {
-        throw new Error('Failed to retrieve assistant message');
-      }
-
-      const conversationMessage =
-        this.convertToConversationMessage(assistantMessage);
+      // Add assistant message to conversation
+      this.conversationManager.addMessage(threadId, conversationMessage);
 
       if (onUpdate) {
         onUpdate(conversationMessage);
       }
 
       return conversationMessage;
-    } catch (error: any) {
-      logger.error(`[WorkflowAgent] Error in workflow: ${error.message}`, {
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`[WorkflowAgent] Error in workflow: ${errorMessage}`, {
         error,
       });
 
@@ -156,26 +174,22 @@ export class WorkflowAgent extends BaseAgent {
       this.broadcastWorkflowEvent({
         type: 'workflow_failed',
         workflowId,
-        error: error.message,
+        error: errorMessage,
       });
 
-      // Add error message to store
-      const errorMsgId = this.store.getState().addMessage({
+      // Create error message
+      const conversationMessage: ConversationMessage = {
+        id: this.generateId(),
         role: 'assistant',
-        content: `I encountered an error while processing your request: ${error.message}`,
-        status: 'cancelled',
+        content: `I encountered an error while processing your request: ${errorMessage}`,
+        timestamp: new Date(),
         model: this.config.llmConfig.displayName || this.config.llmConfig.model,
-      });
+      };
 
-      const errorMessage = this.store
-        .getState()
-        .messages.find(m => m.id === errorMsgId);
-      if (!errorMessage) {
-        throw error;
+      // Add error message to conversation if thread exists
+      if (threadId) {
+        this.conversationManager.addMessage(threadId, conversationMessage);
       }
-
-      const conversationMessage =
-        this.convertToConversationMessage(errorMessage);
 
       if (onUpdate) {
         onUpdate(conversationMessage);
@@ -447,10 +461,10 @@ export class WorkflowAgent extends BaseAgent {
       } else {
         throw new Error('No JSON array found in response');
       }
-    } catch (error: any) {
-      logger.warn(
-        `[WorkflowAgent] Failed to parse JSON plan: ${error.message}`
-      );
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      logger.warn(`[WorkflowAgent] Failed to parse JSON plan: ${errorMessage}`);
       // Simple fallback: split by newlines and filter non-empty lines
       plan = planText
         .split('\n')
@@ -465,7 +479,7 @@ export class WorkflowAgent extends BaseAgent {
     this.broadcastWorkflowEvent({
       type: 'tasks_planned',
       workflowId: state.workflowId,
-      tasks: plan.map((task: any, index: any) => ({
+      tasks: plan.map((task: string, index: number) => ({
         id: `task-${index + 1}`,
         description: task.split('\n')[0], // First line as description
         status: 'todo',
@@ -539,8 +553,10 @@ export class WorkflowAgent extends BaseAgent {
           input: actionPrompt,
         });
         actionResult = result.output || 'Task completed';
-      } catch (toolError: any) {
-        actionResult = `Tool execution failed: ${toolError.message}`;
+      } catch (toolError: unknown) {
+        const errorMessage =
+          toolError instanceof Error ? toolError.message : 'Unknown error';
+        actionResult = `Tool execution failed: ${errorMessage}`;
       }
     } else {
       const response = await this.chatModel.invoke([

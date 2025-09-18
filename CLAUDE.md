@@ -46,7 +46,6 @@ MindStrike is an agentic AI knowledge assistant built with a modern tech stack f
 - **Mindmaps**: `/api/mindmaps/:id/generate`, `/api/mindmaps/:id/mindmap`
 - **SSE Streams**: `/api/generate/stream/:streamId`, `/api/tasks/stream/:workflowId`
 - **Models**: `/api/llm/models`, `/api/llm/default-model`
-- **Workflows**: `/api/workflows`
 
 ## Frontend Architecture
 

@@ -6,9 +6,11 @@ export function useConnectionMonitor() {
 
   useEffect(() => {
     // Subscribe to SSE event bus connection status
-    const unsubscribe = sseEventBus.subscribeToConnectionStatus((connected: boolean) => {
-      setIsConnected(connected);
-    });
+    const unsubscribe = sseEventBus.subscribeToConnectionStatus(
+      (connected: boolean) => {
+        setIsConnected(connected);
+      }
+    );
 
     // Also handle browser network events
     const handleOffline = () => {

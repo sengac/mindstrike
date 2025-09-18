@@ -16,7 +16,9 @@ export async function initializeWorkspace() {
   initializationPromise = (async () => {
     try {
       const { useAppStore } = await import('../store/useAppStore');
-      const { initializeModelsEventSubscription } = await import('../store/useModelsStore');
+      const { initializeModelsEventSubscription } = await import(
+        '../store/useModelsStore'
+      );
       const { initializeLocalModelsStore } = await import(
         '../store/useLocalModelsStore'
       );

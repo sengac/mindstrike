@@ -20,7 +20,7 @@ export class ConversationManager {
     if (this.workspaceRoot === newWorkspaceRoot) {
       return; // No change, don't reset
     }
-    
+
     this.workspaceRoot = newWorkspaceRoot;
     this.conversationsPath = path.join(
       newWorkspaceRoot,
@@ -62,12 +62,12 @@ export class ConversationManager {
     if (this.savePromise) {
       await this.savePromise;
     }
-    
+
     this.savePromise = this._performSave();
     await this.savePromise;
     this.savePromise = null;
   }
-  
+
   private async _performSave(): Promise<void> {
     const threads = Array.from(this.conversations.values());
     await fs.writeFile(
@@ -166,7 +166,10 @@ export class ConversationManager {
   }
 
   // Message operations - called during streaming
-  async addMessage(threadId: string, message: ConversationMessage): Promise<void> {
+  async addMessage(
+    threadId: string,
+    message: ConversationMessage
+  ): Promise<void> {
     let thread = this.conversations.get(threadId);
 
     // Create thread if it doesn't exist

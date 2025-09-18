@@ -854,9 +854,6 @@ export function LocalLLMManager() {
                   local => local.filename === model.filename
                 );
                 const hasError = progressInfo?.errorType;
-                
-                // Debug logging for downloads - show for any model
-                console.log('[UI] Model:', model.filename, 'progressInfo:', progressInfo, 'isDownloading:', isDownloading, 'downloads size:', downloads.size);
 
                 return (
                   <div

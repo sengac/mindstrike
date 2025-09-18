@@ -8,6 +8,7 @@ export interface ThreadMetadata {
   updatedAt: Date;
   messageCount: number;
   customRole?: string;
+  [key: string]: unknown; // Allow additional properties for ListItem compatibility
 }
 
 export interface ThreadsState {

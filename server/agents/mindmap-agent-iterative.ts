@@ -4,10 +4,19 @@ import { logger } from '../logger.js';
 import { sseManager } from '../sse-manager.js';
 import * as path from 'path';
 
+export interface MindmapChange {
+  action: 'create' | 'update' | 'delete';
+  nodeId: string;
+  parentId?: string;
+  text?: string;
+  notes?: string;
+  sources?: Array<{ id: string; title: string; url: string; type: string }>;
+}
+
 const DEFAULT_MINDMAP_ROLE = `You are a specialized mindmap agent that uses iterative reasoning to process user requests. You examine each request, create content step-by-step, and decide what to do next based on accumulated results.`;
 
 // Direct SSE broadcasting function
-const broadcastUpdate = (streamId: string, data: any) => {
+const broadcastUpdate = (streamId: string, data: Record<string, unknown>) => {
   sseManager.broadcast('unified-events', {
     ...data,
     streamId: streamId, // Include streamId for client filtering
@@ -27,7 +36,7 @@ export interface ReasoningStep {
   request: string;
   context: string;
   decision: string;
-  changes: any[];
+  changes: MindmapChange[];
   reasoning: string;
   shouldContinue: boolean;
   timestamp: Date;
@@ -39,7 +48,7 @@ export interface IterativeWorkflowState {
   currentStep: number;
   maxSteps: number;
   reasoningHistory: ReasoningStep[];
-  allChanges: any[];
+  allChanges: MindmapChange[];
   isComplete: boolean;
   isCancelled: boolean;
   abortController: AbortController;
@@ -71,7 +80,7 @@ export class MindmapAgentIterative extends BaseAgent {
   private async processMessageWithAbort(
     userMessage: string,
     signal: AbortSignal
-  ): Promise<any> {
+  ): Promise<{ content: string; id: string; role: string }> {
     // Check if already aborted
     if (signal.aborted) {
       throw new Error('Request was aborted');
@@ -84,8 +93,16 @@ export class MindmapAgentIterative extends BaseAgent {
       });
     });
 
+    // Create a temporary thread for this reasoning step
+    const reasoningThreadId = `reasoning-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
     // Race between the actual LLM call and the abort signal
-    return Promise.race([this.processMessage(userMessage), abortPromise]);
+    return Promise.race([
+      this.processMessage(reasoningThreadId, userMessage, {
+        includePriorConversation: false,
+      }),
+      abortPromise,
+    ]) as Promise<{ content: string; id: string; role: string }>;
   }
 
   constructor(config: AgentConfig) {
@@ -175,11 +192,13 @@ export class MindmapAgentIterative extends BaseAgent {
       }
 
       const mindMaps = JSON.parse(data);
-      const mindMap = mindMaps.find((m: any) => m.id === mindMapId);
+      const mindMap = mindMaps.find(
+        (m: { id: string; mindmapData: MindMapData }) => m.id === mindMapId
+      );
 
       return mindMap ? mindMap.mindmapData : null;
-    } catch (error: any) {
-      if (error.code === 'ENOENT') {
+    } catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return null;
       }
       throw error;
@@ -277,16 +296,29 @@ export class MindmapAgentIterative extends BaseAgent {
    */
   async processMessageIterative(
     userMessage: string,
-    images?: any[],
-    notes?: any[],
-    onUpdate?: (message: any) => void,
+    images?: string[],
+    notes?: string[],
+    onUpdate?: (message: {
+      type: string;
+      data: Record<string, unknown>;
+    }) => void,
     workflowId?: string,
     streamId?: string
-  ): Promise<any> {
+  ): Promise<{
+    content: string;
+    id: string;
+    role: 'assistant';
+    timestamp: Date;
+  }> {
     // Generate workflow ID if not provided
     const finalWorkflowId =
       workflowId ||
       `iterative-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    // Set streamId for token stats broadcasting
+    if (streamId) {
+      this.setStreamId(streamId);
+    }
 
     if (!this.currentMindmapContext?.selectedNode) {
       throw new Error('No mindmap context or selected node available');
@@ -313,11 +345,26 @@ export class MindmapAgentIterative extends BaseAgent {
 
       // Broadcast workflow start
       broadcastUpdate(finalWorkflowId, {
-        type: 'iterative_workflow_started',
+        type: 'workflow_started',
         workflowId: finalWorkflowId,
-        originalRequest: userMessage,
+        originalQuery: userMessage,
         parentTopic: this.workflowState.parentTopic,
         maxSteps: this.workflowState.maxSteps,
+      });
+
+      // Broadcast initial tasks planned
+      broadcastUpdate(finalWorkflowId, {
+        type: 'tasks_planned',
+        workflowId: finalWorkflowId,
+        tasks: Array.from({ length: this.workflowState.maxSteps }, (_, i) => ({
+          id: `reasoning-step-${i + 1}`,
+          description:
+            i === 0
+              ? 'Analyze request and determine approach'
+              : `Reasoning step ${i + 1}`,
+          priority: 'medium',
+          status: 'todo',
+        })),
       });
 
       // Main iterative reasoning loop
@@ -333,6 +380,19 @@ export class MindmapAgentIterative extends BaseAgent {
           break;
         }
 
+        // Broadcast task progress start - USE STREAMID FOR MINDMAP FILTERING
+        if (streamId) {
+          broadcastUpdate(streamId, {
+            type: 'task_progress',
+            workflowId: finalWorkflowId,
+            task: {
+              id: `reasoning-step-${this.workflowState.currentStep}`,
+              status: 'in-progress',
+              description: `Step ${this.workflowState.currentStep}: Processing...`,
+            },
+          });
+        }
+
         // Execute one reasoning step
         const stepResult = await this.executeReasoningStep();
 
@@ -346,6 +406,20 @@ export class MindmapAgentIterative extends BaseAgent {
 
         // Update completion status
         this.workflowState.isComplete = !stepResult.shouldContinue;
+
+        // Broadcast task progress completion - USE STREAMID FOR MINDMAP FILTERING
+        if (streamId) {
+          broadcastUpdate(streamId, {
+            type: 'task_progress',
+            workflowId: finalWorkflowId,
+            task: {
+              id: `reasoning-step-${this.workflowState.currentStep}`,
+              status: 'completed',
+              description: `Step ${this.workflowState.currentStep}: ${stepResult.reasoning}`,
+              result: stepResult.reasoning,
+            },
+          });
+        }
 
         // Broadcast actual mindmap changes only
         if (streamId && stepResult.changes.length > 0) {
@@ -408,7 +482,7 @@ export class MindmapAgentIterative extends BaseAgent {
 
       // Broadcast workflow completion
       broadcastUpdate(finalWorkflowId, {
-        type: 'iterative_workflow_completed',
+        type: 'workflow_completed',
         workflowId: finalWorkflowId,
         stepsCompleted: this.workflowState.currentStep,
         totalChanges: this.workflowState.allChanges.length,
@@ -443,7 +517,7 @@ export class MindmapAgentIterative extends BaseAgent {
 
       // Broadcast workflow failure
       broadcastUpdate(finalWorkflowId, {
-        type: 'iterative_workflow_failed',
+        type: 'workflow_failed',
         workflowId: finalWorkflowId,
         error: error instanceof Error ? error.message : String(error),
       });

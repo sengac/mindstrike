@@ -1,7 +1,24 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { ConversationMessage } from '../types';
-import { sseEventBus } from '../utils/sseEventBus';
+import { sseEventBus, SSEEvent } from '../utils/sseEventBus';
+
+// Interface for message deletion event data
+interface MessageDeletionEventData {
+  messageIds: string[];
+}
+
+// Type guard for message deletion event data
+function isMessageDeletionEventData(
+  data: unknown
+): data is MessageDeletionEventData {
+  return (
+    data !== null &&
+    typeof data === 'object' &&
+    'messageIds' in data &&
+    Array.isArray((data as MessageDeletionEventData).messageIds)
+  );
+}
 
 export interface ChatMessagesState {
   // Display state only
@@ -50,17 +67,17 @@ export const useChatMessagesStore = create<ChatMessagesState>()(
         const messagesData = await response.json();
 
         const messages: ConversationMessage[] = messagesData.map(
-          (msg: any) => ({
+          (msg: Record<string, unknown>) => ({
             ...msg,
-            timestamp: new Date(msg.timestamp),
+            timestamp: new Date(msg.timestamp as string),
           })
         );
 
         set({ messages, isLoading: false, isStreaming: false });
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('[useChatMessagesStore] Error loading messages:', error);
         set({
-          error: error.message,
+          error: error instanceof Error ? error.message : 'Unknown error',
           isLoading: false,
           isStreaming: false,
           messages: [],
@@ -125,21 +142,26 @@ let unsubscribeMessageEvents: (() => void) | null = null;
 
 // Subscribe to message events through the unified event bus
 function initializeMessageEventsSubscription(): void {
-if (unsubscribeMessageEvents) {
-  return; // Already subscribed
+  if (unsubscribeMessageEvents) {
+    return; // Already subscribed
   }
 
-  console.log('[useChatMessagesStore] Subscribing to message events via SSE event bus');
-  
-  unsubscribeMessageEvents = sseEventBus.subscribe('messages-deleted', (event) => {
-    console.log('[useChatMessagesStore] Processing messages-deleted:', event.data.messageIds);
-    
-    // Update the chat messages store directly
-    const store = useChatMessagesStore.getState();
-    store.setMessages(
-      store.messages.filter(msg => !event.data.messageIds.includes(msg.id))
-    );
-  });
+  unsubscribeMessageEvents = sseEventBus.subscribe(
+    'messages-deleted',
+    (event: SSEEvent) => {
+      // Handle message deletion events
+      const data = event.data;
+
+      // Check if data has messageIds directly (from unified-events)
+      if (isMessageDeletionEventData(data)) {
+        const store = useChatMessagesStore.getState();
+        store.setMessages(
+          store.messages.filter(msg => !data.messageIds.includes(msg.id))
+        );
+        return;
+      }
+    }
+  );
 }
 
 // Auto-initialize subscription when module loads

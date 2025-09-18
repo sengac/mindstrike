@@ -28,23 +28,20 @@ window.fetch = (
 // Override EventSource to handle /api routes
 const OriginalEventSource = window.EventSource;
 window.EventSource = function (
-  this: EventSource,
   url: string | URL,
   eventSourceInitDict?: { withCredentials?: boolean }
 ) {
   const urlString = typeof url === 'string' ? url : url.href;
-  console.log('EventSource intercepted:', urlString);
 
   if (urlString.startsWith('/api')) {
     const baseUrl =
       import.meta.env.MODE === 'development' ? 'http://localhost:3001' : '';
     const fullUrl = baseUrl + urlString;
-    console.log('Redirecting EventSource from', urlString, 'to', fullUrl);
     return new OriginalEventSource(fullUrl, eventSourceInitDict);
   }
 
   return new OriginalEventSource(url, eventSourceInitDict);
-} as any;
+} as unknown as typeof EventSource;
 
 // Import App after setting up overrides to avoid race condition
 async function startApp() {

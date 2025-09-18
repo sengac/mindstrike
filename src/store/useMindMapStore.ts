@@ -8,10 +8,10 @@ import { MindMapData, MindMapDataManager } from '../utils/mindMapData';
 import { MindMapLayoutManager } from '../utils/mindMapLayout';
 import { MindMapActionsManager } from '../utils/mindMapActions';
 import {
-  decodeSseDataSync,
   isSseObject,
   isSseMindmapChangeData,
   isSseMindmapCompleteData,
+  SseDecodedData,
 } from '../utils/sseDecoder';
 import { sseEventBus } from '../utils/sseEventBus';
 
@@ -44,6 +44,8 @@ interface MindMapState {
     reasoning: string | null;
     decision: string | null;
     isComplete: boolean;
+    tokensPerSecond: number;
+    totalTokens: number;
   } | null;
 
   // History state for undo/redo
@@ -69,6 +71,12 @@ interface MindMapState {
 
   // Active generation tracking
   currentGenerationWorkflowId: string | null;
+
+  // Track mindmap changes completion
+  pendingMindmapChanges: number;
+  expectedMindmapChanges: number;
+  generationComplete: boolean;
+  finalGenerationResult: any;
 }
 
 interface MindMapActions {
@@ -127,6 +135,8 @@ interface MindMapActions {
       reasoning: string | null;
       decision: string | null;
       isComplete: boolean;
+      tokensPerSecond: number;
+      totalTokens: number;
     } | null
   ) => void;
 
@@ -183,6 +193,10 @@ export const useMindMapStore = create<MindMapStore>()(
       taskEventUnsubscribe: null,
       currentWorkflowId: null,
       currentGenerationWorkflowId: null,
+      pendingMindmapChanges: 0,
+      expectedMindmapChanges: 0,
+      generationComplete: false,
+      finalGenerationResult: null,
 
       // Initialize mind map
       initializeMindMap: async (mindMapId, initialData, saveCallback) => {
@@ -738,7 +752,9 @@ export const useMindMapStore = create<MindMapStore>()(
       // Iterative generation
       startIterativeGeneration: async (mindMapId, prompt, selectedNodeId) => {
         const state = get();
-        if (state.isGenerating) return;
+        if (state.isGenerating) {
+          return;
+        }
 
         set({
           isGenerating: true,
@@ -750,7 +766,13 @@ export const useMindMapStore = create<MindMapStore>()(
             reasoning: 'Starting iterative reasoning...',
             decision: null,
             isComplete: false,
+            tokensPerSecond: 0,
+            totalTokens: 0,
           },
+          pendingMindmapChanges: 0,
+          expectedMindmapChanges: 0,
+          generationComplete: false,
+          finalGenerationResult: null,
         });
 
         try {
@@ -781,34 +803,64 @@ export const useMindMapStore = create<MindMapStore>()(
           }
 
           // Subscribe to unified SSE event bus for real progress updates
-          let finalResult: any = null;
           let currentStepNumber = 0;
+          let completionReceived = false;
+
+          // Helper function to check if generation can complete
+          const checkGenerationCompletion = () => {
+            const state = get();
+            if (state.pendingMindmapChanges === 0 && state.generationComplete) {
+              // All changes applied, safe to complete
+              if (
+                state.finalGenerationResult &&
+                typeof state.finalGenerationResult === 'object' &&
+                state.finalGenerationResult !== null
+              ) {
+                const changes =
+                  (state.finalGenerationResult as any).changes || [];
+                set({
+                  generationSummary: `Iterative reasoning completed! Created ${changes.length} node(s) through ${currentStepNumber || 1} reasoning steps.`,
+                  isGenerating: false,
+                  currentGenerationWorkflowId: null,
+                });
+              } else {
+                set({
+                  generationSummary: `Generation completed with ${currentStepNumber || 1} steps.`,
+                  isGenerating: false,
+                  currentGenerationWorkflowId: null,
+                });
+              }
+            }
+          };
 
           // Track the current generation
           set({
             currentGenerationWorkflowId: streamData.workflowId || streamId,
           });
 
-          const unsubscribe = sseEventBus.subscribe('*', (event) => {
+          const unsubscribe = sseEventBus.subscribe('*', event => {
             if (event.streamId !== streamId) return;
 
             try {
-              const decodedData = decodeSseDataSync(event.data); // Decode base64 strings
+              // Handle nested data structure from unified SSE - data is already decoded by event bus
+              if (typeof event.data !== 'object' || event.data === null) return;
+              const eventData = ((event.data as Record<string, unknown>).data ||
+                event.data) as SseDecodedData;
 
               if (
-                isSseObject(decodedData) &&
-                decodedData.type === 'mindmap_change' &&
-                isSseMindmapChangeData(decodedData)
+                isSseObject(eventData) &&
+                eventData.type === 'mindmap_change' &&
+                isSseMindmapChangeData(eventData)
               ) {
                 // Real mindmap operation from backend
                 currentStepNumber++;
 
                 const actionText =
-                  decodedData.action === 'create'
+                  eventData.action === 'create'
                     ? 'Creating node'
-                    : decodedData.action === 'update'
+                    : eventData.action === 'update'
                       ? 'Updating node'
-                      : decodedData.action === 'delete'
+                      : eventData.action === 'delete'
                         ? 'Deleting node'
                         : 'Processing node';
 
@@ -816,21 +868,106 @@ export const useMindMapStore = create<MindMapStore>()(
                   generationProgress: {
                     currentStep: currentStepNumber,
                     maxSteps: 5,
-                    reasoning: `${actionText}: "${decodedData.text || 'Untitled'}"`,
-                    decision: decodedData.action,
+                    reasoning: `${actionText}: "${eventData.text || 'Untitled'}"`,
+                    decision: eventData.action,
                     isComplete: false,
+                    tokensPerSecond:
+                      get().generationProgress?.tokensPerSecond || 0,
+                    totalTokens: get().generationProgress?.totalTokens || 0,
                   },
                 });
 
+                // Track this mindmap change
+                set(state => ({
+                  pendingMindmapChanges: state.pendingMindmapChanges + 1,
+                }));
+
                 // Apply the change immediately to the mindmap
-                get().applyMindmapChanges([decodedData]);
+                get().applyMindmapChanges([eventData]);
+
+                // Mark this change as complete and check if generation can complete
+                set(state => {
+                  const newPending = state.pendingMindmapChanges - 1;
+                  return {
+                    pendingMindmapChanges: newPending,
+                  };
+                });
+
+                // Check if generation can complete now
+                checkGenerationCompletion();
               } else if (
-                isSseObject(decodedData) &&
-                decodedData.type === 'complete' &&
-                isSseMindmapCompleteData(decodedData)
+                isSseObject(eventData) &&
+                eventData.type === 'progress' &&
+                eventData.status
               ) {
-                // Store final result
-                finalResult = decodedData.result;
+                // Handle initial progress updates
+                set({
+                  generationProgress: {
+                    currentStep: 1,
+                    maxSteps: 5,
+                    reasoning: eventData.status as string,
+                    decision: 'starting',
+                    isComplete: false,
+                    tokensPerSecond: 0,
+                    totalTokens: 0,
+                  },
+                });
+              } else if (
+                isSseObject(eventData) &&
+                eventData.type === 'task_progress' &&
+                eventData.task
+              ) {
+                // Handle task progress updates for reasoning steps
+                const task = eventData.task as {
+                  id?: string;
+                  result?: string;
+                  status?: string;
+                };
+                const stepMatch = task.id?.match(/reasoning-step-(\d+)/);
+                if (stepMatch) {
+                  const stepNumber = parseInt(stepMatch[1]);
+                  set({
+                    generationProgress: {
+                      currentStep: stepNumber,
+                      maxSteps: 5,
+                      reasoning: task.result || `Step ${stepNumber}`,
+                      decision:
+                        task.status === 'completed'
+                          ? 'completed'
+                          : 'processing',
+                      isComplete: false,
+                      tokensPerSecond:
+                        get().generationProgress?.tokensPerSecond || 0,
+                      totalTokens: get().generationProgress?.totalTokens || 0,
+                    },
+                  });
+                }
+              } else if (
+                isSseObject(eventData) &&
+                eventData.type === 'token' &&
+                eventData.tokensPerSecond != null
+              ) {
+                // Handle token progress updates
+                const state = get();
+                if (
+                  state.generationProgress &&
+                  !state.generationProgress.isComplete
+                ) {
+                  set({
+                    generationProgress: {
+                      ...state.generationProgress,
+                      tokensPerSecond: eventData.tokensPerSecond ?? 0,
+                      totalTokens: eventData.totalTokens ?? 0,
+                    },
+                  });
+                }
+              } else if (
+                isSseObject(eventData) &&
+                eventData.type === 'complete' &&
+                isSseMindmapCompleteData(eventData)
+              ) {
+                // Store final result and mark generation as complete
+                completionReceived = true;
                 unsubscribe();
 
                 // Update progress to show completion
@@ -841,30 +978,16 @@ export const useMindMapStore = create<MindMapStore>()(
                     reasoning: `Completed ${currentStepNumber || 1} reasoning steps`,
                     decision: 'completed',
                     isComplete: true,
+                    tokensPerSecond:
+                      get().generationProgress?.tokensPerSecond || 0,
+                    totalTokens: get().generationProgress?.totalTokens || 0,
                   },
+                  generationComplete: true,
+                  finalGenerationResult: eventData.result,
                 });
 
-                // Process the final result - NO MINDMAP CHANGES HERE!
-                if (
-                  finalResult &&
-                  typeof finalResult === 'object' &&
-                  finalResult !== null
-                ) {
-                  const changes = (finalResult as any).changes || [];
-
-                  // Just mark as complete - changes already applied via SSE events
-                  set({
-                    generationSummary: `Iterative reasoning completed! Created ${changes.length} node(s) through ${currentStepNumber || 1} reasoning steps.`,
-                    isGenerating: false,
-                    currentGenerationWorkflowId: null,
-                  });
-                } else {
-                  set({
-                    generationSummary: `Generation completed with ${currentStepNumber || 1} steps.`,
-                    isGenerating: false,
-                    currentGenerationWorkflowId: null,
-                  });
-                }
+                // Check if generation can complete now
+                checkGenerationCompletion();
               }
             } catch (error) {
               console.error('Failed to parse SSE data:', error);
@@ -873,7 +996,7 @@ export const useMindMapStore = create<MindMapStore>()(
 
           // Set up timeout for generation
           setTimeout(() => {
-            if (!finalResult) {
+            if (!completionReceived) {
               unsubscribe();
               set({
                 generationError: 'Generation timeout',
@@ -1134,7 +1257,7 @@ export const useMindMapStore = create<MindMapStore>()(
           saveCallback: null,
           taskEventUnsubscribe: null,
           currentWorkflowId: null,
-          
+
           currentGenerationWorkflowId: null,
         });
       },
@@ -1149,18 +1272,26 @@ export const useMindMapStore = create<MindMapStore>()(
         }
 
         // Subscribe to task events via event bus
-        const unsubscribe = sseEventBus.subscribe('task_completed', async (event: { data: any }) => {
-          try {
-            if (event.data.type === 'task_completed' && 
-                event.data.workflowId === workflowId && 
-                event.data.result?.changes) {
-              // Apply changes directly in the store
-              await get().applyMindmapChanges(event.data.result.changes);
+        const unsubscribe = sseEventBus.subscribe(
+          'task_completed',
+          async (event: { data: any }) => {
+            try {
+              // Handle nested data structure from unified SSE
+              const eventData = event.data.data || event.data;
+
+              if (
+                eventData.type === 'task_completed' &&
+                eventData.workflowId === workflowId &&
+                eventData.result?.changes
+              ) {
+                // Apply changes directly in the store
+                await get().applyMindmapChanges(eventData.result.changes);
+              }
+            } catch (error) {
+              console.error('Failed to apply task changes from SSE:', error);
             }
-          } catch (error) {
-            console.error('Failed to apply task changes from SSE:', error);
           }
-        });
+        );
 
         set({
           taskEventUnsubscribe: unsubscribe,

@@ -1,6 +1,10 @@
 import { create } from 'zustand';
-import { useAvailableModelsStore } from './useAvailableModelsStore';
+import {
+  useAvailableModelsStore,
+  AvailableModel,
+} from './useAvailableModelsStore';
 import { sseEventBus } from '../utils/sseEventBus';
+import { isSSEModelScanEvent } from '../types/sse-events';
 
 export interface ScanProgress {
   stage:
@@ -20,7 +24,7 @@ export interface ScanProgress {
   completedItems?: number;
   error?: string;
   operationType?: 'scan' | 'search';
-  results?: any[]; // Search results when operationType is 'search'
+  results?: Record<string, unknown>[]; // Search results when operationType is 'search'
 }
 
 interface ModelScanState {
@@ -39,7 +43,7 @@ interface ModelScanState {
   startSearch: (
     query: string,
     searchType: string,
-    filters: any
+    filters: Record<string, unknown>
   ) => Promise<void>;
   cancelScan: () => Promise<void>;
   resetScan: () => void;
@@ -118,7 +122,11 @@ export const useModelScanStore = create<ModelScanState>((set, get) => ({
     }
   },
 
-  startSearch: async (query: string, searchType: string, filters: any) => {
+  startSearch: async (
+    query: string,
+    searchType: string,
+    filters: Record<string, unknown>
+  ) => {
     const { subscribeToEvents } = get();
 
     try {
@@ -256,7 +264,7 @@ export const useModelScanStore = create<ModelScanState>((set, get) => ({
       if (progress.operationType === 'search' && progress.results) {
         // Set the search results directly, replacing any previous results
         useAvailableModelsStore.setState({
-          searchResults: progress.results,
+          searchResults: progress.results as unknown as AvailableModel[],
           hasSearched: true,
           currentPage: 1,
         });
@@ -289,10 +297,12 @@ export const useModelScanStore = create<ModelScanState>((set, get) => ({
     }
 
     // Subscribe to unified event bus for scan progress
-    const unsubscribe = sseEventBus.subscribe('scan-progress', async (event) => {
+    const unsubscribe = sseEventBus.subscribe('scan-progress', async event => {
+      // Handle nested data structure from unified SSE
+      if (!isSSEModelScanEvent(event.data)) return;
       const data = event.data;
       if (data && data.progress) {
-        get().updateProgress(data.progress);
+        get().updateProgress(data.progress as ScanProgress);
       }
     });
 

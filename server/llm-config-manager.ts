@@ -52,6 +52,30 @@ export interface LLMConfiguration {
   lastUpdated: Date;
 }
 
+interface DetectedService {
+  id: string;
+  name: string;
+  baseURL: string;
+  type: string;
+  available: boolean;
+  models?: string[];
+  modelsWithMetadata?: Array<{
+    name: string;
+    display_name?: string;
+    context_length?: number;
+    parameter_count?: string;
+    quantization?: string;
+  }>;
+}
+
+interface LocalModel {
+  id: string;
+  name: string;
+  contextLength?: number;
+  parameterCount?: string;
+  quantization?: string;
+}
+
 export class LLMConfigManager {
   private configDirectory: string;
   private configPath: string;
@@ -78,8 +102,8 @@ export class LLMConfigManager {
       }
 
       return this.configuration!;
-    } catch (error: any) {
-      if (error.code === 'ENOENT') {
+    } catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         // Create default configuration
         await fs.mkdir(this.configDirectory, { recursive: true });
         this.configuration = {
@@ -235,8 +259,8 @@ export class LLMConfigManager {
   }
 
   async refreshModels(
-    detectedServices: any[],
-    localModels: any[] = []
+    detectedServices: DetectedService[],
+    localModels: LocalModel[] = []
   ): Promise<LLMModel[]> {
     if (!this.configuration) {
       await this.loadConfiguration();
@@ -266,7 +290,7 @@ export class LLMConfigManager {
             model: modelMeta.name,
             displayName: `${modelMeta.display_name || modelMeta.name} | ${service.name}`,
             baseURL: service.baseURL,
-            type: service.type,
+            type: service.type as LLMModel['type'],
             contextLength: modelMeta.context_length,
             parameterCount: modelMeta.parameter_count,
             quantization: modelMeta.quantization,
@@ -274,7 +298,7 @@ export class LLMConfigManager {
           });
         }
       } else if (service.models) {
-        // Legacy format
+        // Fallback for services without metadata (backward compatibility and hardcoded services)
         for (const modelName of service.models) {
           newModels.push({
             id: `${service.id}:${modelName}`,
@@ -283,7 +307,7 @@ export class LLMConfigManager {
             model: modelName,
             displayName: `${modelName} | ${service.name}`,
             baseURL: service.baseURL,
-            type: service.type,
+            type: service.type as LLMModel['type'],
             available: true,
           });
         }

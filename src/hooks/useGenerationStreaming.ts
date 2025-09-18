@@ -1,6 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useDebugStore } from '../store/useDebugStore';
 import { sseEventBus } from '../utils/sseEventBus';
+import {
+  isSSETokenStatsEvent,
+  isSSEContentEvent,
+  isSSEStatusEvent,
+  isSSEResultEvent,
+  isSSEErrorEvent,
+} from '../types/sse-events';
 
 interface GenerationStats {
   tokensPerSecond: number;
@@ -10,7 +17,7 @@ interface GenerationStats {
 
 interface StreamingOptions {
   onProgress?: (stats: GenerationStats) => void;
-  onComplete?: (result: any) => void;
+  onComplete?: (result: unknown) => void;
   onError?: (error: string) => void;
   onWorkflowId?: (workflowId: string | null) => void;
 }
@@ -61,7 +68,11 @@ export function useGenerationStreaming() {
   );
 
   const startStreaming = useCallback(
-    async (url: string, requestData: any, options: StreamingOptions = {}) => {
+    async (
+      url: string,
+      requestData: Record<string, unknown>,
+      options: StreamingOptions = {}
+    ) => {
       if (isStreaming) {
         console.warn('Already streaming, ignoring new request');
         return;
@@ -117,11 +128,14 @@ export function useGenerationStreaming() {
         }
 
         // Subscribe to unified SSE event bus for updates
-        console.log('Subscribing to unified SSE events for streamId:', streamId);
-        
+        console.log(
+          'Subscribing to unified SSE events for streamId:',
+          streamId
+        );
+
         updateStats(0, 'Generating...');
 
-        const unsubscribe = sseEventBus.subscribe('*', (event) => {
+        const unsubscribe = sseEventBus.subscribe('*', event => {
           if (event.streamId !== streamId) return;
 
           try {
@@ -134,10 +148,7 @@ export function useGenerationStreaming() {
 
               case 'token':
                 // Use server-provided counts if available
-                if (
-                  data?.totalTokens !== undefined &&
-                  data?.tokensPerSecond !== undefined
-                ) {
+                if (isSSETokenStatsEvent(data)) {
                   setStats(() => ({
                     tokensPerSecond: data.tokensPerSecond, // Always use the server value
                     totalTokens: data.totalTokens,
@@ -153,22 +164,31 @@ export function useGenerationStreaming() {
 
               case 'chunk': {
                 // For chunk-based updates, estimate tokens
+                const contentLength = isSSEContentEvent(data)
+                  ? data.content.length
+                  : 0;
                 const estimatedTokens = Math.max(
                   1,
-                  Math.floor((data?.content?.length || 0) / 4)
+                  Math.floor(contentLength / 4)
                 );
                 updateStats(estimatedTokens, 'Generating...');
                 break;
               }
 
               case 'progress':
-                updateStats(0, data?.status || 'Generating...');
+                updateStats(
+                  0,
+                  isSSEStatusEvent(data) ? data.status : 'Generating...'
+                );
                 break;
 
               case 'complete':
                 updateStats(0, 'Completed');
                 if (options.onComplete) {
-                  options.onComplete(data?.result);
+                  const result = isSSEResultEvent(data)
+                    ? data.result
+                    : undefined;
+                  options.onComplete(result);
                 }
                 unsubscribe();
                 stopStreaming();
@@ -176,7 +196,12 @@ export function useGenerationStreaming() {
 
               case 'error':
                 if (options.onError) {
-                  options.onError(data?.error || 'Unknown error');
+                  const error = isSSEErrorEvent(data)
+                    ? typeof data.error === 'string'
+                      ? data.error
+                      : data.error.message
+                    : 'Unknown error';
+                  options.onError(error);
                 }
                 unsubscribe();
                 stopStreaming();
@@ -200,10 +225,12 @@ export function useGenerationStreaming() {
           }
           stopStreaming();
         }, 300000); // 5 minute timeout
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Error starting stream:', error);
         if (options.onError) {
-          options.onError(error.message);
+          options.onError(
+            error instanceof Error ? error.message : 'Unknown error'
+          );
         }
         stopStreaming();
       }

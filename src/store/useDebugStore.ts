@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { sseEventBus } from '../utils/sseEventBus';
-import { decodeSseEventData, isSseDebugEntryData, isSseTokenStatsData } from '../utils/sseDecoder';
+import { sseEventBus, SSEEvent } from '../utils/sseEventBus';
+import { isSseDebugEntryData, isSseTokenStatsData } from '../utils/sseDecoder';
 
 export interface LLMDebugEntry {
   id: string;
@@ -92,58 +92,66 @@ async function initializeDebugEventSubscriptions(): Promise<void> {
     return; // Already subscribed
   }
 
-  console.log('[useDebugStore] Subscribing to debug events via SSE event bus');
-
-  const handleDebugEvent = async (event: { data: any }) => {
+  const handleDebugEvent = async (event: SSEEvent) => {
     try {
       // Handle nested data structure from unified SSE - data is already decoded by event bus
-      const eventData = event.data.data || event.data;
-      
-      console.log('[useDebugStore] Debug event data:', eventData);
+      const eventData = (event.data as { data?: unknown }).data || event.data;
 
       if (
-        eventData.type === 'debug-entry' &&
-        isSseDebugEntryData(eventData)
+        eventData &&
+        typeof eventData === 'object' &&
+        (eventData as Record<string, unknown>).type === 'debug-entry' &&
+        isSseDebugEntryData(eventData as Record<string, unknown>)
       ) {
         const { addEntry } = useDebugStore.getState();
 
+        const data = eventData as Record<string, unknown>;
         addEntry({
-          type: eventData.entryType,
-          title: eventData.title,
-          content: eventData.content,
-          duration: eventData.duration,
-          model: eventData.model,
-          endpoint: eventData.endpoint,
-          tokensPerSecond: eventData.tokensPerSecond,
-          totalTokens: eventData.totalTokens,
+          type: data.entryType as 'request' | 'response' | 'error',
+          title: data.title as string,
+          content: data.content as string,
+          duration: data.duration as number,
+          model: data.model as string,
+          endpoint: data.endpoint as string,
+          tokensPerSecond: data.tokensPerSecond as number,
+          totalTokens: data.totalTokens as number,
         });
 
         // Update current stats from any response with token stats (regardless of generation state)
         if (
-          eventData.entryType === 'response' &&
-          eventData.tokensPerSecond &&
-          eventData.totalTokens
+          data.entryType === 'response' &&
+          data.tokensPerSecond &&
+          data.totalTokens
         ) {
           const { updateTokenStats } = useDebugStore.getState();
           updateTokenStats(
-            eventData.tokensPerSecond,
-            eventData.totalTokens
+            data.tokensPerSecond as number,
+            data.totalTokens as number
           );
         }
       } else if (
-        eventData.type === 'token-stats' &&
-        isSseTokenStatsData(eventData)
+        eventData &&
+        typeof eventData === 'object' &&
+        (eventData as Record<string, unknown>).type === 'token-stats' &&
+        isSseTokenStatsData(eventData as Record<string, unknown>)
       ) {
         // Handle real-time token statistics updates
         const { updateTokenStats } = useDebugStore.getState();
-        updateTokenStats(eventData.tokensPerSecond, eventData.totalTokens);
-      } else if (eventData.type === 'generation-status') {
+        const data = eventData as Record<string, unknown>;
+        updateTokenStats(
+          data.tokensPerSecond as number,
+          data.totalTokens as number
+        );
+      } else if (
+        eventData &&
+        typeof eventData === 'object' &&
+        (eventData as Record<string, unknown>).type === 'generation-status'
+      ) {
         // Handle generation start/stop
         const { setGenerating } = useDebugStore.getState();
+        const data = eventData as Record<string, unknown>;
         setGenerating(
-          typeof eventData.generating === 'boolean'
-            ? eventData.generating
-            : false
+          typeof data.generating === 'boolean' ? data.generating : false
         );
       }
     } catch (error) {
@@ -155,10 +163,16 @@ async function initializeDebugEventSubscriptions(): Promise<void> {
   const unsubscribe = sseEventBus.subscribe('debug-entry', handleDebugEvent);
   debugUnsubscribeFunctions.push(unsubscribe);
 
-  const unsubscribeTokenStats = sseEventBus.subscribe('token-stats', handleDebugEvent);
+  const unsubscribeTokenStats = sseEventBus.subscribe(
+    'token-stats',
+    handleDebugEvent
+  );
   debugUnsubscribeFunctions.push(unsubscribeTokenStats);
 
-  const unsubscribeGenerationStatus = sseEventBus.subscribe('generation-status', handleDebugEvent);
+  const unsubscribeGenerationStatus = sseEventBus.subscribe(
+    'generation-status',
+    handleDebugEvent
+  );
   debugUnsubscribeFunctions.push(unsubscribeGenerationStatus);
 }
 

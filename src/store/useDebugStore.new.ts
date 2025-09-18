@@ -1,6 +1,11 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { sseEventBus } from '../utils/sseEventBus';
+import {
+  isSSEDebugEvent,
+  isSSETokenStatsEvent,
+  isSSEStatusEvent,
+} from '../types/sse-events';
 
 export interface LLMDebugEntry {
   id: string;
@@ -84,40 +89,38 @@ function initializeDebugEventSubscriptions(): void {
     return; // Already subscribed
   }
 
-  console.log('[useDebugStore] Subscribing to debug events via SSE event bus');
-
   // Subscribe to debug entries
   debugUnsubscribeFunctions.push(
-    sseEventBus.subscribe('debug-entry', (event) => {
+    sseEventBus.subscribe('debug-entry', event => {
+      if (!isSSEDebugEvent(event.data)) return;
+
       const { addEntry } = useDebugStore.getState();
       const data = event.data;
 
       addEntry({
-        type: data.entryType,
-        title: data.title,
-        content: data.content,
+        type: data.type as 'request' | 'response' | 'error',
+        title: data.prompt ? 'LLM Request' : 'LLM Response',
+        content: data.response || data.prompt || 'Debug entry',
         duration: data.duration,
         model: data.model,
-        endpoint: data.endpoint,
+        endpoint: 'llm',
         tokensPerSecond: data.tokensPerSecond,
-        totalTokens: data.totalTokens,
+        totalTokens: data.tokens,
       });
 
       // Update current stats from any response with token stats
-      if (
-        data.entryType === 'response' &&
-        data.tokensPerSecond &&
-        data.totalTokens
-      ) {
+      if (data.response && data.tokensPerSecond && data.tokens) {
         const { updateTokenStats } = useDebugStore.getState();
-        updateTokenStats(data.tokensPerSecond, data.totalTokens);
+        updateTokenStats(data.tokensPerSecond, data.tokens);
       }
     })
   );
 
   // Subscribe to token stats
   debugUnsubscribeFunctions.push(
-    sseEventBus.subscribe('token-stats', (event) => {
+    sseEventBus.subscribe('token-stats', event => {
+      if (!isSSETokenStatsEvent(event.data)) return;
+
       const { updateTokenStats } = useDebugStore.getState();
       const data = event.data;
       updateTokenStats(data.tokensPerSecond, data.totalTokens);
@@ -126,10 +129,16 @@ function initializeDebugEventSubscriptions(): void {
 
   // Subscribe to generation status
   debugUnsubscribeFunctions.push(
-    sseEventBus.subscribe('generation-status', (event) => {
+    sseEventBus.subscribe('generation-status', event => {
+      if (!isSSEStatusEvent(event.data)) return;
+
       const { setGenerating } = useDebugStore.getState();
-      const data = event.data;
-      setGenerating(typeof data.generating === 'boolean' ? data.generating : false);
+      const data = event.data as { status: string; generating?: boolean };
+      setGenerating(
+        typeof data.generating === 'boolean'
+          ? data.generating
+          : data.status === 'generating'
+      );
     })
   );
 

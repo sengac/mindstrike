@@ -4,15 +4,11 @@ import {
   ConversationMessage,
   ImageAttachment,
   NotesAttachment,
+  ToolCall,
 } from '../../types';
 import { useResponseValidation } from '../../hooks/useResponseValidation';
-import {
-  decodeSseEventData,
-  isSseCompletedData,
-  isSseLocalModelNotLoadedData,
-  isSseMessageUpdateData,
-  isSseContentChunkData,
-} from '../../utils/sseDecoder';
+// SSE decoder functions are no longer needed - using direct SSE event bus
+import { isSSEChunkEvent, isSSEMessageEvent } from '../../types/sse-events';
 import { useChatMessagesStore } from '../../store/useChatMessagesStore';
 import { useThreadsStore } from '../../store/useThreadsStore';
 import { sseEventBus } from '../../utils/sseEventBus';
@@ -81,81 +77,100 @@ export function useChatRefactored({
 
   // Subscribe to unified event bus for real-time streaming events
   useEffect(() => {
-    const unsubscribeContentChunk = sseEventBus.subscribe('content-chunk', async (event) => {
-      const data = event.data;
-      if (data && data.chunk) {
-        // Handle real-time content chunks for character-by-character streaming
-        const chatStore = useChatMessagesStore.getState();
-        const messages = chatStore.messages;
-        const lastMessage = messages[messages.length - 1];
-        
-        if (lastMessage && lastMessage.role === 'assistant' && lastMessage.status === 'processing') {
-          // Update the existing streaming message
-          chatStore.updateMessage(lastMessage.id, {
-            ...lastMessage,
-            content: lastMessage.content + data.chunk,
-          });
-        }
-        // Note: Do NOT create assistant messages here - server will send message-update with proper ID
-      }
-    });
+    const unsubscribeContentChunk = sseEventBus.subscribe(
+      'content-chunk',
+      async event => {
+        const data = event.data;
+        if (isSSEChunkEvent(data)) {
+          // Handle real-time content chunks for character-by-character streaming
+          const chatStore = useChatMessagesStore.getState();
+          const messages = chatStore.messages;
+          const lastMessage = messages[messages.length - 1];
 
-    const unsubscribeMessageUpdate = sseEventBus.subscribe('message-update', async (event) => {
-      const data = event.data;
-      if (data && data.message) {
-        console.log('[CHAT DEBUG] message-update event received:', data.message.status);
-        // Server sends complete message with server-generated ID
-        const messageData = data.message;
-        const assistantMessage = {
-          id: messageData.id,
-          role: 'assistant' as const,
-          content: messageData.content,
-          timestamp: new Date(messageData.timestamp),
-          status: (messageData.status || 'processing') as 'processing' | 'completed' | 'cancelled',
-          model: messageData.model,
-          toolCalls: messageData.toolCalls,
-          toolResults: messageData.toolResults,
-        };
-        
-        // Check if message already exists
-        const chatStore = useChatMessagesStore.getState();
-        const messages = chatStore.messages;
-        const existingMessage = messages.find(msg => msg.id === assistantMessage.id);
-        
-        if (existingMessage) {
-          // Update existing message
-          chatStore.updateMessage(assistantMessage.id, assistantMessage);
-        } else {
-          // Add new message (first time we see this assistant message)
-          console.log('[CHAT DEBUG] Adding new assistant message, keeping streaming=true');
-          chatStore.addMessage(assistantMessage);
-          // Keep streaming=true until message is completed
+          if (
+            lastMessage &&
+            lastMessage.role === 'assistant' &&
+            lastMessage.status === 'processing'
+          ) {
+            // Update the existing streaming message
+            chatStore.updateMessage(lastMessage.id, {
+              ...lastMessage,
+              content: lastMessage.content + data.chunk,
+            });
+          }
+          // Note: Do NOT create assistant messages here - server will send message-update with proper ID
         }
       }
-    });
+    );
 
-    const unsubscribeCompleted = sseEventBus.subscribe('completed', async (event) => {
-      const data = event.data;
-      if (data && data.message) {
-        console.log('[CHAT DEBUG] completed event received, setting streaming=false');
-        // Final message completion
-        const messageData = data.message;
-        const completedMessage = {
-          id: messageData.id,
-          role: 'assistant' as const,
-          content: messageData.content,
-          timestamp: new Date(messageData.timestamp),
-          status: 'completed' as const,
-          model: messageData.model,
-          toolCalls: messageData.toolCalls,
-          toolResults: messageData.toolResults,
-        };
-        
-        const chatStore = useChatMessagesStore.getState();
-        chatStore.updateMessage(completedMessage.id, completedMessage);
-        chatStore.setStreaming(false);
+    const unsubscribeMessageUpdate = sseEventBus.subscribe(
+      'message-update',
+      async event => {
+        const data = event.data;
+        if (isSSEMessageEvent(data)) {
+          // Server sends complete message with server-generated ID
+          const messageData = data.message;
+          const assistantMessage = {
+            id: messageData.id,
+            role: 'assistant' as const,
+            content: messageData.content,
+            timestamp: new Date(messageData.timestamp),
+            status: (messageData.status || 'processing') as
+              | 'processing'
+              | 'completed'
+              | 'cancelled',
+            model: messageData.model as string | undefined,
+            toolCalls: messageData.toolCalls as ToolCall[] | undefined,
+            toolResults: messageData.toolResults as
+              | Array<{ name: string; result: unknown }>
+              | undefined,
+          };
+
+          // Check if message already exists
+          const chatStore = useChatMessagesStore.getState();
+          const messages = chatStore.messages;
+          const existingMessage = messages.find(
+            msg => msg.id === assistantMessage.id
+          );
+
+          if (existingMessage) {
+            // Update existing message
+            chatStore.updateMessage(assistantMessage.id, assistantMessage);
+          } else {
+            // Add new message (first time we see this assistant message)
+            chatStore.addMessage(assistantMessage);
+            // Keep streaming=true until message is completed
+          }
+        }
       }
-    });
+    );
+
+    const unsubscribeCompleted = sseEventBus.subscribe(
+      'completed',
+      async event => {
+        const data = event.data;
+        if (isSSEMessageEvent(data)) {
+          // Final message completion
+          const messageData = data.message;
+          const completedMessage = {
+            id: messageData.id,
+            role: 'assistant' as const,
+            content: messageData.content,
+            timestamp: new Date(messageData.timestamp),
+            status: 'completed' as const,
+            model: messageData.model as string | undefined,
+            toolCalls: messageData.toolCalls as ToolCall[] | undefined,
+            toolResults: messageData.toolResults as
+              | Array<{ name: string; result: unknown }>
+              | undefined,
+          };
+
+          const chatStore = useChatMessagesStore.getState();
+          chatStore.updateMessage(completedMessage.id, completedMessage);
+          chatStore.setStreaming(false);
+        }
+      }
+    );
 
     return () => {
       unsubscribeContentChunk();
@@ -187,7 +202,6 @@ export function useChatRefactored({
         return;
       }
 
-      console.log('[CHAT DEBUG] Setting streaming=true');
       setStreaming(true);
       setError(null);
 
@@ -215,8 +229,8 @@ export function useChatRefactored({
           isAgentMode,
         };
 
-        // Start the streaming request - unified event bus will handle all streaming
-        const response = await fetch('/api/message/stream', {
+        // Send HTTP POST - SSE event bus will handle streaming updates
+        const response = await fetch('/api/message', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -231,8 +245,8 @@ export function useChatRefactored({
           );
         }
 
-        // Just consume the response - the unified event bus handles streaming
-        await response.text();
+        // Response contains the message - SSE will handle real-time updates
+        await response.json();
 
         // Generate thread name for first message exchange
         if (isFirstMessage && currentThreadId) {
@@ -351,8 +365,8 @@ export function useChatRefactored({
       setMessages(messagesBeforeRegeneration);
 
       try {
-        // Use SSE for real-time streaming regeneration
-        const response = await fetch('/api/message/stream', {
+        // Send HTTP POST for regeneration - SSE will handle streaming updates
+        const response = await fetch('/api/message', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -373,108 +387,8 @@ export function useChatRefactored({
           );
         }
 
-        // Process SSE stream similar to sendMessage
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-
-        if (!reader) {
-          throw new Error('No response body reader available');
-        }
-
-        let assistantMessage: ConversationMessage | null = null;
-
-        while (true) {
-          const { done, value } = await reader.read();
-
-          if (done) break;
-
-          const chunk = decoder.decode(value);
-          const lines = chunk.split('\n');
-
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                const decodedData = await decodeSseEventData(data);
-
-                if (decodedData.type === 'connected') {
-                  // SSE connected
-                } else if (decodedData.type === 'content-chunk') {
-                  if (!assistantMessage) {
-                    assistantMessage = {
-                      id: Date.now().toString(),
-                      role: 'assistant' as const,
-                      content: decodedData.chunk || '',
-                      timestamp: new Date(),
-                      status: 'processing' as const,
-                      model: 'Streaming...',
-                    };
-                    addMessage(assistantMessage);
-                    setStreaming(false);
-                  } else {
-                    updateMessage(assistantMessage.id, {
-                      content:
-                        assistantMessage.content + (decodedData.chunk || ''),
-                    });
-                    assistantMessage.content += decodedData.chunk || '';
-                  }
-                } else if (decodedData.type === 'message-update') {
-                  const message = decodedData.message as ConversationMessage;
-                  const updatedMsg = {
-                    ...message,
-                    timestamp: new Date(message.timestamp),
-                  };
-
-                  if (!assistantMessage) {
-                    assistantMessage = updatedMsg;
-                    addMessage(updatedMsg);
-                  } else {
-                    assistantMessage = updatedMsg;
-                    updateMessage(updatedMsg.id, updatedMsg);
-                  }
-                } else if (
-                  decodedData.type === 'completed' &&
-                  isSseCompletedData(decodedData)
-                ) {
-                  const finalMsg = {
-                    ...decodedData.message,
-                    timestamp: new Date(decodedData.message.timestamp),
-                  } as ConversationMessage;
-
-                  const validatedFinalMsg =
-                    await validateAndProcessMessage(finalMsg);
-
-                  if (assistantMessage) {
-                    updateMessage(validatedFinalMsg.id, validatedFinalMsg);
-                  } else {
-                    addMessage(validatedFinalMsg);
-                  }
-
-                  setStreaming(false);
-                  useThreadsStore.getState().loadThreads();
-                } else if (decodedData.type === 'error') {
-                  toast.error(
-                    `Regenerate Error: ${decodedData.error || 'Unknown error'}`
-                  );
-                  setStreaming(false);
-                  return;
-                } else if (
-                  decodedData.type === 'local-model-not-loaded' &&
-                  isSseLocalModelNotLoadedData(decodedData)
-                ) {
-                  setLocalModelError({
-                    modelId: decodedData.modelId,
-                    error: decodedData.error,
-                  });
-                  setStreaming(false);
-                  return;
-                }
-              } catch (parseError) {
-                console.error('Error parsing SSE data:', parseError);
-              }
-            }
-          }
-        }
+        // Response contains the message - SSE will handle real-time updates
+        await response.json();
       } catch (error) {
         console.error('SSE Error:', error);
         toast.error(`Failed to regenerate message: ${error}`);
@@ -529,8 +443,8 @@ export function useChatRefactored({
       setMessages(messagesBeforeRegeneration);
 
       try {
-        // Use SSE for real-time updates
-        const response = await fetch('/api/message/stream', {
+        // Send HTTP POST for edit - SSE will handle streaming updates
+        const response = await fetch('/api/message', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -550,103 +464,8 @@ export function useChatRefactored({
           );
         }
 
-        // Process SSE stream similar to sendMessage
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-
-        if (!reader) {
-          throw new Error('No response body reader available');
-        }
-
-        let assistantMessage: ConversationMessage | null = null;
-
-        while (true) {
-          const { done, value } = await reader.read();
-
-          if (done) break;
-
-          const chunk = decoder.decode(value);
-          const lines = chunk.split('\n');
-
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                const decodedData = await decodeSseEventData(data);
-
-                if (decodedData.type === 'connected') {
-                  // SSE connected
-                } else if (
-                  decodedData.type === 'content-chunk' &&
-                  isSseContentChunkData(decodedData)
-                ) {
-                  const chunk = decodedData.chunk || decodedData.content || '';
-                  if (!assistantMessage) {
-                    assistantMessage = {
-                      id: Date.now().toString(),
-                      role: 'assistant' as const,
-                      content: chunk,
-                      timestamp: new Date(),
-                      status: 'processing' as const,
-                      model: 'Streaming...',
-                    };
-                    addMessage(assistantMessage);
-                    setStreaming(false);
-                  } else {
-                    updateMessage(assistantMessage.id, {
-                      content: assistantMessage.content + chunk,
-                    });
-                    assistantMessage.content += chunk;
-                  }
-                } else if (
-                  decodedData.type === 'message-update' &&
-                  isSseMessageUpdateData(decodedData)
-                ) {
-                  const updatedMsg = {
-                    ...decodedData.message,
-                    timestamp: new Date(decodedData.message.timestamp),
-                  } as ConversationMessage;
-
-                  if (!assistantMessage) {
-                    assistantMessage = updatedMsg;
-                    addMessage(updatedMsg);
-                  } else {
-                    assistantMessage = updatedMsg;
-                    updateMessage(updatedMsg.id, updatedMsg);
-                  }
-                } else if (
-                  decodedData.type === 'completed' &&
-                  isSseCompletedData(decodedData)
-                ) {
-                  const finalMsg = {
-                    ...decodedData.message,
-                    timestamp: new Date(decodedData.message.timestamp),
-                  } as ConversationMessage;
-
-                  const validatedFinalMsg =
-                    await validateAndProcessMessage(finalMsg);
-
-                  if (assistantMessage) {
-                    updateMessage(validatedFinalMsg.id, validatedFinalMsg);
-                  } else {
-                    addMessage(validatedFinalMsg);
-                  }
-
-                  setStreaming(false);
-                  useThreadsStore.getState().loadThreads();
-                } else if (decodedData.type === 'error') {
-                  toast.error(
-                    `Edit Error: ${decodedData.error || 'Unknown error'}`
-                  );
-                  setStreaming(false);
-                  return;
-                }
-              } catch (parseError) {
-                console.error('Error parsing SSE data:', parseError);
-              }
-            }
-          }
-        }
+        // Response contains the message - SSE will handle real-time updates
+        await response.json();
       } catch (error) {
         console.error('SSE Error:', error);
         toast.error(`Failed to edit message: ${error}`);
@@ -708,8 +527,8 @@ export function useChatRefactored({
         isAgentMode,
       };
 
-      // Use SSE for real-time updates
-      const response = await fetch('/api/message/stream', {
+      // Send HTTP POST for retry - SSE will handle streaming updates
+      const response = await fetch('/api/message', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -724,106 +543,9 @@ export function useChatRefactored({
         );
       }
 
-      // Process SSE stream similar to sendMessage
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('Failed to get response reader');
-      }
-      const decoder = new TextDecoder();
-      let assistantMessage: ConversationMessage | null = null;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n');
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              const decodedData = await decodeSseEventData(data);
-
-              if (
-                decodedData.type === 'content-chunk' &&
-                isSseContentChunkData(decodedData)
-              ) {
-                const chunk = decodedData.chunk || decodedData.content || '';
-                if (!assistantMessage) {
-                  assistantMessage = {
-                    id: Date.now().toString(),
-                    role: 'assistant' as const,
-                    content: chunk,
-                    timestamp: new Date(),
-                    status: 'processing' as const,
-                    model: 'Streaming...',
-                  };
-                  addMessage(assistantMessage);
-                  setStreaming(false);
-                } else {
-                  updateMessage(assistantMessage.id, {
-                    content: assistantMessage.content + chunk,
-                  });
-                  assistantMessage.content += chunk;
-                }
-              } else if (
-                decodedData.type === 'message-update' &&
-                isSseMessageUpdateData(decodedData)
-              ) {
-                const updatedMessage = {
-                  ...decodedData.message,
-                  timestamp: new Date(decodedData.message.timestamp),
-                } as ConversationMessage;
-
-                const validatedMessage =
-                  await validateAndProcessMessage(updatedMessage);
-
-                if (assistantMessage) {
-                  updateMessage(validatedMessage.id, validatedMessage);
-                } else {
-                  assistantMessage = validatedMessage;
-                  addMessage(validatedMessage);
-                }
-              } else if (
-                decodedData.type === 'completed' &&
-                isSseCompletedData(decodedData)
-              ) {
-                const finalMsg = {
-                  ...decodedData.message,
-                  timestamp: new Date(decodedData.message.timestamp),
-                } as ConversationMessage;
-
-                const validatedFinalMsg =
-                  await validateAndProcessMessage(finalMsg);
-
-                if (assistantMessage) {
-                  updateMessage(validatedFinalMsg.id, validatedFinalMsg);
-                } else {
-                  addMessage(validatedFinalMsg);
-                }
-
-                setStreaming(false);
-              } else if (decodedData.type === 'error') {
-                throw new Error(decodedData.error || 'Unknown error');
-              } else if (
-                decodedData.type === 'local-model-not-loaded' &&
-                isSseLocalModelNotLoadedData(decodedData)
-              ) {
-                setLocalModelError({
-                  modelId: decodedData.modelId,
-                  error: decodedData.error,
-                });
-                setStreaming(false);
-                return;
-              }
-            } catch (parseError) {
-              console.error('Error parsing SSE data:', parseError);
-            }
-          }
-        }
-      }
-    } catch (error: any) {
+      // Response contains the message - SSE will handle real-time updates
+      await response.json();
+    } catch (error: unknown) {
       console.error('Error retrying message:', error);
       setError(`Failed to retry message: ${error}`);
       setStreaming(false);

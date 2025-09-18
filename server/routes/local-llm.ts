@@ -9,9 +9,6 @@ import { getLocalModelsDirectory } from '../utils/settings-directory.js';
 const router = Router();
 const llmManager = getLocalLLMManager();
 
-// SSE connections for download progress
-const sseConnections = new Map<string, Set<any>>();
-
 /**
  * Get all local models
  */
@@ -383,16 +380,20 @@ router.post('/download', async (req, res) => {
     // Start download in background
     llmManager
       .downloadModel(modelInfo, (progress, speed) => {
-        console.log('[LOCAL-LLM] Broadcasting download progress:', { filename, progress, speed });
+        console.log('[LOCAL-LLM] Broadcasting download progress:', {
+          filename,
+          progress,
+          speed,
+        });
         // Broadcast progress via unified event bus
         sseManager.broadcast('unified-events', {
           type: 'download-progress',
-          data: { 
-            filename, 
-            progress, 
-            speed, 
-            isDownloading: true 
-          }
+          data: {
+            filename,
+            progress,
+            speed,
+            isDownloading: true,
+          },
         });
       })
       .then(() => {
@@ -405,7 +406,7 @@ router.post('/download', async (req, res) => {
             speed: '0 B/s',
             isDownloading: false,
             completed: true,
-          }
+          },
         });
         console.log(`Download completed: ${filename}`);
 
@@ -447,9 +448,9 @@ router.post('/download', async (req, res) => {
 
         sseManager.broadcast('unified-events', {
           type: 'download-progress',
-          data: errorDetails
+          data: errorDetails,
         });
-        
+
         console.error(`Download failed: ${filename}`, error);
       });
 
@@ -462,23 +463,6 @@ router.post('/download', async (req, res) => {
     });
   }
 });
-
-/**
- * Get download progress (legacy endpoint)
- */
-router.get('/download-progress/:filename', (req, res) => {
-  const { filename } = req.params;
-  const progressInfo = llmManager.getDownloadProgress(filename);
-
-  res.json({
-    progress: progressInfo.progress,
-    isDownloading: progressInfo.isDownloading,
-    speed: progressInfo.speed,
-    completed: !progressInfo.isDownloading && progressInfo.progress === 0,
-  });
-});
-
-// Legacy download progress endpoint removed - now using unified events
 
 /**
  * Cancel a download

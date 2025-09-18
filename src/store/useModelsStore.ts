@@ -56,7 +56,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
 
             // Check if any local models are loaded
             const loadedModels = localModels.filter(
-              (model: any) => model.status === 'loaded'
+              (model: { status: string }) => model.status === 'loaded'
             );
             if (loadedModels.length > 0) {
               console.log(
@@ -194,9 +194,7 @@ export function initializeModelsEventSubscription(): void {
     return; // Already subscribed
   }
 
-  console.log('[useModelsStore] Subscribing to model update events via SSE event bus');
-  
-  modelsUnsubscribe = sseEventBus.subscribe('models-updated', (_event) => {
+  modelsUnsubscribe = sseEventBus.subscribe('models-updated', _event => {
     const { isLoading, fetchModels } = useModelsStore.getState();
     if (!isLoading) {
       fetchModels().catch(console.error);
@@ -208,7 +206,7 @@ export function initializeModelsEventSubscription(): void {
 if (typeof window !== 'undefined') {
   setTimeout(() => {
     initializeModelsEventSubscription();
-    
+
     // Listen for model change events
     const handleModelChange = () => {
       const { isLoading, rescanModels } = useModelsStore.getState();

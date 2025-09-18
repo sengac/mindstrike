@@ -47,7 +47,7 @@ export function ModelSelector({ className = '' }: ModelSelectorProps) {
 
     // If no default model is set, auto-select the first available model
     if (!defaultModel) {
-      setDefaultModel(models[0].id).catch((error: any) => {
+      setDefaultModel(models[0].id).catch((error: unknown) => {
         console.error('Failed to set default model:', error);
         toast.error('Failed to set default model');
       });

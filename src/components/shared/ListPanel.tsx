@@ -7,11 +7,11 @@ interface ListItem {
   name: string;
   description?: string;
   updatedAt: string | Date;
-  [key: string]: any; // Allow additional properties
+  [key: string]: unknown; // Allow additional properties
 }
 
 interface EmptyState {
-  icon: React.ComponentType<any>;
+  icon: React.ComponentType<{ className?: string; size?: number | string }>;
   title: string;
   subtitle: string;
 }

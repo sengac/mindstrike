@@ -12,6 +12,20 @@ import { ChatGenerationChunk, ChatResult } from '@langchain/core/outputs';
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import { getLocalLLMManager } from '../local-llm-singleton.js';
 
+interface LocalLLMManagerInterface {
+  loadModel: (modelName: string) => Promise<void>;
+  generateResponse: (
+    modelName: string,
+    messages: { role: string; content: string }[],
+    options: { temperature: number; maxTokens: number }
+  ) => Promise<string>;
+  generateStreamResponse: (
+    modelName: string,
+    messages: { role: string; content: string }[],
+    options: { temperature: number; maxTokens: number }
+  ) => AsyncIterable<string>;
+}
+
 export interface ChatLocalLLMInput extends BaseChatModelParams {
   modelName: string;
   temperature?: number;
@@ -122,7 +136,9 @@ export class ChatLocalLLM extends BaseChatModel {
     }
   }
 
-  private async ensureModelLoaded(localLlmManager: any): Promise<void> {
+  private async ensureModelLoaded(
+    localLlmManager: LocalLLMManagerInterface
+  ): Promise<void> {
     try {
       // Check if model is already loaded by attempting to get model info
       // The loadModel method automatically unloads other models and loads this one

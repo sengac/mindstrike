@@ -169,7 +169,11 @@ export function AgentsPanel() {
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => (window as any).openDebugDialog?.('mcp')}
+                onClick={() =>
+                  (
+                    window as { openDebugDialog?: (type: string) => void }
+                  ).openDebugDialog?.('mcp')
+                }
                 className="flex items-center gap-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg transition-colors"
               >
                 <Terminal size={16} />

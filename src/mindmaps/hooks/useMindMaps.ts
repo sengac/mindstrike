@@ -7,6 +7,7 @@ export interface MindMap {
   description?: string;
   createdAt: Date;
   updatedAt: Date;
+  [key: string]: unknown; // Allow additional properties for ListItem compatibility
 }
 
 export function useMindMaps() {
@@ -22,10 +23,10 @@ export function useMindMaps() {
       if (response.ok) {
         const data = await response.json();
         const parsedMindMaps = data
-          .map((graph: any) => ({
+          .map((graph: Record<string, unknown>) => ({
             ...graph,
-            createdAt: new Date(graph.createdAt),
-            updatedAt: new Date(graph.updatedAt),
+            createdAt: new Date(graph.createdAt as string),
+            updatedAt: new Date(graph.updatedAt as string),
           }))
           .sort(
             (a: MindMap, b: MindMap) =>
@@ -39,7 +40,7 @@ export function useMindMaps() {
             // Keep current active mindmap if it still exists
             if (
               activeMindMapId &&
-              parsedMindMaps.some((m: any) => m.id === activeMindMapId)
+              parsedMindMaps.some((m: MindMap) => m.id === activeMindMapId)
             ) {
               // Current active mindmap still exists, keep it
             } else {

@@ -97,7 +97,9 @@ function setupMermaidObserver(container: HTMLElement) {
   };
 
   // Store cleanup function on the container
-  (container as any)._mermaidObserverCleanup = cleanupObserver;
+  (
+    container as HTMLElement & { _mermaidObserverCleanup?: () => void }
+  )._mermaidObserverCleanup = cleanupObserver;
 }
 
 // Single function to render all mermaid diagrams in a container

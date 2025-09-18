@@ -110,7 +110,9 @@ export class LLMScanner {
 
     try {
       let endpoint: string;
-      let expectedResponseStructure: (data: any) => string[];
+      let expectedResponseStructure: (
+        data: Record<string, unknown>
+      ) => string[];
 
       switch (service.type) {
         case 'ollama':
@@ -118,7 +120,10 @@ export class LLMScanner {
           expectedResponseStructure = data => {
             if (data?.models && Array.isArray(data.models)) {
               return data.models
-                .map((model: any) => model.name || model.model || '')
+                .map(
+                  (model: { name?: string; model?: string }) =>
+                    model.name || model.model || ''
+                )
                 .filter(Boolean);
             }
             return [];
@@ -131,7 +136,10 @@ export class LLMScanner {
           expectedResponseStructure = data => {
             if (data?.data && Array.isArray(data.data)) {
               return data.data
-                .map((model: any) => model.id || model.model || '')
+                .map(
+                  (model: { id?: string; model?: string }) =>
+                    model.id || model.model || ''
+                )
                 .filter(Boolean);
             }
             return [];
