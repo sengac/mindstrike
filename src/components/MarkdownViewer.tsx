@@ -280,32 +280,30 @@ export function MarkdownViewer({ content }: MarkdownViewerProps) {
   };
 
   const renderContent = (content: string) => {
-    // Check for code blocks
-    const codeBlockRegex = /```(\w+)?\n([\s\S]*?)\n```/g;
-    const hasCodeBlocks = codeBlockRegex.test(content);
+    // Check for code blocks - improved regex to handle blocks without language
+    const allBlocks: Array<{
+      type: 'code';
+      match: RegExpExecArray;
+      language?: string;
+      content: string;
+    }> = [];
 
-    if (hasCodeBlocks) {
+    // Find code blocks - improved regex to handle blocks without language
+    const codeRegex = /```([a-zA-Z0-9_+-]*)\n?([\s\S]*?)\n?```/g;
+
+    let codeMatch;
+    while ((codeMatch = codeRegex.exec(content)) !== null) {
+      allBlocks.push({
+        type: 'code',
+        match: codeMatch,
+        language: codeMatch[1] || undefined,
+        content: codeMatch[2].trim(),
+      });
+    }
+
+    if (allBlocks.length > 0) {
       const parts: JSX.Element[] = [];
       let lastIndex = 0;
-
-      const allBlocks: Array<{
-        type: 'code';
-        match: RegExpExecArray;
-        language?: string;
-        content: string;
-      }> = [];
-
-      // Find code blocks
-      const codeRegex = /```(\w+)?\n([\s\S]*?)\n```/g;
-      let codeMatch;
-      while ((codeMatch = codeRegex.exec(content)) !== null) {
-        allBlocks.push({
-          type: 'code',
-          match: codeMatch,
-          language: codeMatch[1],
-          content: codeMatch[2],
-        });
-      }
 
       // Sort blocks by position
       allBlocks.sort((a, b) => a.match.index - b.match.index);
@@ -346,7 +344,7 @@ export function MarkdownViewer({ content }: MarkdownViewerProps) {
           parts.push(
             <div
               key="after"
-              className="prose prose-invert prose-sm max-w-full overflow-hidden"
+              className="prose prose-invert prose-sm max-w-full overflow-hidden markdown-content"
             >
               {processLatexInContent(afterContent)}
             </div>
@@ -357,7 +355,7 @@ export function MarkdownViewer({ content }: MarkdownViewerProps) {
       return <div ref={mermaidRef}>{parts}</div>;
     } else {
       return (
-        <div className="prose prose-invert prose-sm max-w-full overflow-hidden">
+        <div className="prose prose-invert prose-sm max-w-full overflow-hidden markdown-content">
           {processLatexInContent(content)}
         </div>
       );

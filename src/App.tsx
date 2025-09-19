@@ -20,12 +20,12 @@ import { useMCPLogsStore } from './store/useMCPLogsStore';
 
 import { useMindMaps } from './mindmaps/hooks/useMindMaps';
 import { useAppStore } from './store/useAppStore';
+import { loadFontScheme } from './utils/fontSchemes';
 
 import { Source } from './types/mindMap';
 import { Menu, X, MessageSquare, Network, Cpu, FileText } from 'lucide-react';
 import { AppBar } from './components/AppBar';
-import { MiniMusicControls } from './components/MiniMusicControls';
-import toast, { Toaster } from 'react-hot-toast';
+import { Toaster } from 'react-hot-toast';
 import { initStormToastEffect } from './utils/stormToastEffect';
 import { ConnectionMonitorDialog } from './components/shared/ConnectionMonitorDialog';
 import { useConnectionMonitor } from './hooks/useConnectionMonitor';
@@ -78,8 +78,13 @@ function App() {
     | undefined
   >(undefined);
 
-  const { sidebarOpen, setSidebarOpen, activePanel, setActivePanel } =
-    useAppStore();
+  const {
+    sidebarOpen,
+    setSidebarOpen,
+    activePanel,
+    setActivePanel,
+    fontScheme,
+  } = useAppStore();
   const chatPanelRef = useRef<ChatPanelRef>(null);
   const { activeThreadId } = useThreadsStore();
   // Always call the hook with a fallback threadId to avoid conditional hook calls
@@ -91,6 +96,11 @@ function App() {
   const currentMessages = activeThreadId ? allMessages : [];
 
   // LLM config is now managed server-side through ModelSelector
+
+  // Load font scheme on startup and when it changes
+  useEffect(() => {
+    loadFontScheme(fontScheme);
+  }, [fontScheme]);
 
   // Initialize workspace once globally
   useEffect(() => {

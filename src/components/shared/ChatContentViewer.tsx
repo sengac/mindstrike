@@ -289,6 +289,29 @@ export const ChatContentViewer = forwardRef<
 
             {/* Action Buttons */}
             <div className="flex items-center gap-1 pl-6 pr-3">
+              {/* Chat-specific actions - only show when chat tab is active and thread exists */}
+              {activeTab === 'chat' && threadId && (
+                <>
+                  {onUnassignThread && (
+                    <button
+                      onClick={onUnassignThread}
+                      className="p-2 hover:bg-white/10 rounded transition-colors text-gray-400 hover:text-white"
+                      title="Unassign thread from this node"
+                    >
+                      <Unlink size={20} />
+                    </button>
+                  )}
+                  {onNavigateToChat && (
+                    <button
+                      onClick={() => onNavigateToChat(threadId)}
+                      className="p-2 hover:bg-white/10 rounded transition-colors text-gray-400 hover:text-white"
+                      title="Open in chat view"
+                    >
+                      <ExternalLink size={20} />
+                    </button>
+                  )}
+                </>
+              )}
               {onNavigateToPrevNode && (
                 <button
                   onClick={onNavigateToPrevNode}
@@ -322,30 +345,6 @@ export const ChatContentViewer = forwardRef<
 
         {/* Tab Content */}
         <div className="flex-1 min-h-0 bg-dark-bg relative">
-          {/* Floating Action Buttons - Only show when chat tab is active and thread exists */}
-          {activeTab === 'chat' && threadId && (
-            <div className="absolute top-4 left-4 z-10 flex gap-2 bg-black/20 p-3 rounded-lg backdrop-blur-sm">
-              {onUnassignThread && (
-                <button
-                  onClick={onUnassignThread}
-                  className="bg-transparent hover:bg-red-700 text-white p-3 rounded-full shadow-lg transition-colors border border-white"
-                  title="Unassign thread from this node"
-                >
-                  <Unlink size={20} />
-                </button>
-              )}
-              {onNavigateToChat && (
-                <button
-                  onClick={() => onNavigateToChat(threadId)}
-                  className="bg-transparent hover:bg-blue-700 text-white p-3 rounded-full shadow-lg transition-colors border border-white"
-                  title="Open in chat view"
-                >
-                  <ExternalLink size={20} />
-                </button>
-              )}
-            </div>
-          )}
-
           {activeTab === 'chat' ? (
             threadId ? (
               <ChatPanel
@@ -363,6 +362,7 @@ export const ChatContentViewer = forwardRef<
                 }}
                 onRoleUpdate={onRoleUpdate}
                 onCopyToNotes={handleCopyToNotes}
+                inMindMapContext={true}
               />
             ) : (
               <ThreadList

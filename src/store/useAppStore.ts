@@ -18,6 +18,7 @@ export interface ModelLoadingSettings {
 interface AppState {
   // UI State
   fontSize: number;
+  fontScheme: 'system' | 'inter' | 'serif' | 'monospace' | 'academic';
   sidebarOpen: boolean;
   activePanel: 'chat' | 'files' | 'agents' | 'mind-maps' | 'settings';
 
@@ -43,6 +44,9 @@ interface AppState {
 
   // Actions
   setFontSize: (fontSize: number) => void;
+  setFontScheme: (
+    fontScheme: 'system' | 'inter' | 'serif' | 'monospace' | 'academic'
+  ) => void;
   setSidebarOpen: (open: boolean) => void;
   setActivePanel: (
     panel: 'chat' | 'files' | 'agents' | 'mind-maps' | 'settings'
@@ -75,6 +79,7 @@ export const useAppStore = create<AppState>()(
     (set, get) => ({
       // Initial state
       fontSize: 14,
+      fontScheme: 'system',
       sidebarOpen: true,
       activePanel: 'chat',
       workspaceRoot: undefined,
@@ -90,6 +95,9 @@ export const useAppStore = create<AppState>()(
 
       // Actions
       setFontSize: (fontSize: number) => set({ fontSize }),
+      setFontScheme: (
+        fontScheme: 'system' | 'inter' | 'serif' | 'monospace' | 'academic'
+      ) => set({ fontScheme }),
       setSidebarOpen: (sidebarOpen: boolean) => set({ sidebarOpen }),
       setActivePanel: (
         activePanel: 'chat' | 'files' | 'agents' | 'mind-maps' | 'settings'
@@ -162,7 +170,9 @@ export const useAppStore = create<AppState>()(
       name: 'mindstrike-preferences',
       partialize: state => ({
         fontSize: state.fontSize,
+        fontScheme: state.fontScheme,
         workspaceRoot: state.workspaceRoot,
+        musicRoot: state.musicRoot,
         lastUsedModel: state.lastUsedModel,
         modelSettings: state.modelSettings,
         defaultCustomRole: state.defaultCustomRole,

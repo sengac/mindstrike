@@ -46,6 +46,9 @@ interface AudioState {
   currentTime: number;
   duration: number;
 
+  // Visualizations
+  visualizationsEnabled: boolean;
+
   // Howl instance
   howl: Howl | null;
 
@@ -61,6 +64,7 @@ interface AudioState {
   previousTrack: () => void;
   updateCurrentTime: () => void;
   cleanup: () => void;
+  toggleVisualizations: () => void;
 }
 
 export const useAudioStore = create<AudioState>((set, get) => ({
@@ -73,6 +77,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
   volume: 0.7,
   currentTime: 0,
   duration: 0,
+  visualizationsEnabled: true,
   howl: null,
 
   // Actions
@@ -116,7 +121,20 @@ export const useAudioStore = create<AudioState>((set, get) => ({
           const toastContent = `${currentTrack.title}\n${currentTrack.artist || 'Unknown Artist'}${album}${year}`;
           toast(toastContent, {
             duration: 15000,
-            icon: '🎵',
+            icon: currentTrack.coverArtUrl ? (
+              <img
+                src={currentTrack.coverArtUrl}
+                alt="Album cover"
+                style={{
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: '4px',
+                  objectFit: 'cover',
+                }}
+              />
+            ) : (
+              '🎵'
+            ),
           });
         }
 
@@ -220,5 +238,9 @@ export const useAudioStore = create<AudioState>((set, get) => ({
       currentTime: 0,
       duration: 0,
     });
+  },
+
+  toggleVisualizations: () => {
+    set(state => ({ visualizationsEnabled: !state.visualizationsEnabled }));
   },
 }));

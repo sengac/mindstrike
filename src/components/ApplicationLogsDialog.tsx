@@ -36,7 +36,7 @@ export function ApplicationLogsDialog({
   const { entries, clearEntries } = useDebugStore();
   const { currentWorkflow, workflows, getWorkflowProgress, getActiveTask } =
     useTaskStore();
-  const { logs, isConnected: mcpConnected, clearLogs } = useMCPLogsStore();
+  const { logs, clearLogs } = useMCPLogsStore();
   const [expandedEntries, setExpandedEntries] = useState<Set<string>>(
     new Set()
   );
@@ -390,16 +390,6 @@ export function ApplicationLogsDialog({
                   ))}
                 </select>
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    {mcpConnected ? (
-                      <Wifi className="text-green-400" size={16} />
-                    ) : (
-                      <WifiOff className="text-red-400" size={16} />
-                    )}
-                    <span className="text-xs text-gray-400">
-                      {mcpConnected ? 'Live' : 'Offline'}
-                    </span>
-                  </div>
                   <span className="text-gray-400 text-sm">
                     {filteredMCPLogs.length} of {logs.length} logs
                   </span>

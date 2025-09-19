@@ -436,45 +436,39 @@ function ChatMessageComponent({
   const renderContent = (content: string) => {
     if (showMarkdown) {
       // Check for code blocks and think blocks
-      const codeBlockRegex = /```(\w+)?\n([\s\S]*?)\n```/g;
-      const thinkBlockRegex = /<think>([\s\S]*?)<\/think>/g;
-      const hasCodeBlocks = codeBlockRegex.test(content);
-      const hasThinkBlocks = thinkBlockRegex.test(content);
+      const allBlocks: Array<{
+        type: 'code' | 'think';
+        match: RegExpExecArray;
+        language?: string;
+        content: string;
+      }> = [];
 
-      if (hasCodeBlocks || hasThinkBlocks) {
+      // Find code blocks - improved regex to handle blocks without language
+      const codeRegex = /```([a-zA-Z0-9_+-]*)\n?([\s\S]*?)\n?```/g;
+      let codeMatch;
+      while ((codeMatch = codeRegex.exec(content)) !== null) {
+        allBlocks.push({
+          type: 'code',
+          match: codeMatch,
+          language: codeMatch[1] || undefined,
+          content: codeMatch[2].trim(),
+        });
+      }
+
+      // Find think blocks
+      const thinkRegex = /<think>([\s\S]*?)<\/think>/g;
+      let thinkMatch;
+      while ((thinkMatch = thinkRegex.exec(content)) !== null) {
+        allBlocks.push({
+          type: 'think',
+          match: thinkMatch,
+          content: thinkMatch[1],
+        });
+      }
+
+      if (allBlocks.length > 0) {
         const parts: JSX.Element[] = [];
         let lastIndex = 0;
-
-        // Find all blocks (code and think) and sort by position
-        const allBlocks: Array<{
-          type: 'code' | 'think';
-          match: RegExpExecArray;
-          language?: string;
-          content: string;
-        }> = [];
-
-        // Find code blocks
-        const codeRegex = /```(\w+)?\n([\s\S]*?)\n```/g;
-        let codeMatch;
-        while ((codeMatch = codeRegex.exec(content)) !== null) {
-          allBlocks.push({
-            type: 'code',
-            match: codeMatch,
-            language: codeMatch[1],
-            content: codeMatch[2],
-          });
-        }
-
-        // Find think blocks
-        const thinkRegex = /<think>([\s\S]*?)<\/think>/g;
-        let thinkMatch;
-        while ((thinkMatch = thinkRegex.exec(content)) !== null) {
-          allBlocks.push({
-            type: 'think',
-            match: thinkMatch,
-            content: thinkMatch[1],
-          });
-        }
 
         // Sort blocks by position
         allBlocks.sort((a, b) => a.match.index - b.match.index);
@@ -489,7 +483,7 @@ function ChatMessageComponent({
               parts.push(
                 <div
                   key={`before-${blockId}`}
-                  className={`prose prose-invert prose-sm max-w-full overflow-hidden ${isUser ? 'prose-p:my-0 prose-headings:my-0 prose-ul:my-0 prose-ol:my-0' : ''}`}
+                  className={`prose prose-invert prose-sm max-w-full overflow-hidden markdown-content ${isUser ? 'prose-p:my-0 prose-headings:my-0 prose-ul:my-0 prose-ol:my-0' : ''}`}
                   style={{
                     fontSize: `var(--dynamic-font-size, ${fontSize}px)`,
                   }}
@@ -522,7 +516,7 @@ function ChatMessageComponent({
             parts.push(
               <div
                 key="after"
-                className={`prose prose-invert prose-sm max-w-full overflow-hidden ${isUser ? 'prose-p:my-0 prose-headings:my-0 prose-ul:my-0 prose-ol:my-0' : ''}`}
+                className={`prose prose-invert prose-sm max-w-full overflow-hidden markdown-content ${isUser ? 'prose-p:my-0 prose-headings:my-0 prose-ul:my-0 prose-ol:my-0' : ''}`}
                 style={{ fontSize: `var(--dynamic-font-size, ${fontSize}px)` }}
               >
                 {processLatexInContent(afterContent)}
@@ -535,7 +529,7 @@ function ChatMessageComponent({
       } else {
         return (
           <div
-            className={`prose prose-invert prose-sm max-w-full overflow-hidden ${isUser ? 'prose-p:my-0 prose-headings:my-0 prose-ul:my-0 prose-ol:my-0' : ''}`}
+            className={`prose prose-invert prose-sm max-w-full overflow-hidden markdown-content ${isUser ? 'prose-p:my-0 prose-headings:my-0 prose-ul:my-0 prose-ol:my-0' : ''}`}
             style={{ fontSize: `var(--dynamic-font-size, ${fontSize}px)` }}
           >
             {processLatexInContent(content)}

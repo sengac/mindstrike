@@ -1,9 +1,19 @@
+/* Import markdown styles */
+@import './styles/markdown.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  /* Font scheme variables - will be updated by JS */
+  --font-family-base: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  --font-family-heading: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  --font-family-code:
+    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono',
+    monospace;
+
+  font-family: var(--font-family-base);
   line-height: 1.5;
   font-weight: 400;
   color-scheme: dark;
@@ -98,6 +108,16 @@ body {
   100% {
     transform: scale(1);
     opacity: 1;
+  }
+}
+
+@keyframes liquid-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
   }
 }
 

@@ -25,7 +25,8 @@ import { PersonalityModal } from '../../settings/components/PersonalityModal';
 import { ValidationStatusNotification } from '../../components/ValidationStatusNotification';
 import { LocalModelLoadDialog } from '../../components/LocalModelLoadDialog';
 import { MusicVisualization } from '../../components/MusicVisualization';
-import { useDialogAnimation } from '../../hooks/useDialogAnimation';
+import { ConfirmDialog } from '../../components/shared/ConfirmDialog';
+
 import toast from 'react-hot-toast';
 
 import { useChatRefactored } from '../hooks/useChatRefactored';
@@ -50,6 +51,7 @@ interface ChatPanelProps {
   onRoleUpdate?: (threadId: string, customRole?: string) => void;
   onNavigateToWorkspaces?: () => void;
   onCopyToNotes?: (content: string) => void;
+  inMindMapContext?: boolean;
 }
 
 export interface ChatPanelRef {
@@ -68,6 +70,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
       onRoleUpdate,
       onNavigateToWorkspaces,
       onCopyToNotes,
+      inMindMapContext = false,
     },
     ref
   ) => {
@@ -85,11 +88,6 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
     const currentModel = getDefaultModel();
     const isLocalModel = currentModel?.type === 'local';
 
-    const {
-      shouldRender: shouldRenderClearConfirm,
-      isVisible: isClearConfirmVisible,
-      handleClose: handleCloseClearConfirm,
-    } = useDialogAnimation(showClearConfirm, () => setShowClearConfirm(false));
     const {
       messages,
       isLoading,
@@ -471,183 +469,227 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
     };
 
     return (
-      <div
-        className="flex flex-col h-full flex-1 relative"
-        key={`chat-panel-${fontSize}`}
-      >
-        {/* Floating Validation Status Notification */}
-        <div className="absolute top-4 left-4 right-4 z-20 pointer-events-none">
-          <div className="pointer-events-auto">
-            <ValidationStatusNotification
-              isVisible={validation.showNotification}
-              progress={validation.validationProgress}
-              onDismiss={validation.dismissNotification}
-              onToggleValidation={validation.setValidationEnabled}
-              validationEnabled={validation.validationEnabled}
-            />
-          </div>
-        </div>
-
-        {/* Messages */}
+      <div className="flex flex-col h-full flex-1">
         <div
-          ref={messagesContainerRef}
-          className="flex-1 overflow-y-auto p-4 space-y-4 relative"
-          style={
-            { '--dynamic-font-size': `${fontSize}px` } as React.CSSProperties
-          }
+          className="flex flex-col flex-1 min-h-0 relative"
+          key={`chat-panel-${fontSize}`}
         >
           {/* Music Visualization Background */}
-          <MusicVisualization className="absolute inset-0 w-full h-full pointer-events-none" />
-          {messages.length === 0 && (
-            <div className="text-center text-gray-500 mt-2 relative z-10">
-              <div className="mb-4">
-                <div className="flex items-center justify-center mx-auto">
-                  <MindStrikeIcon size={128} />
-                </div>
-                <h3 className="text-lg font-medium mb-2">
-                  Welcome to{' '}
-                  <a
-                    href="https://mindstrike.ai"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-500 hover:text-blue-600 underline"
-                  >
-                    MindStrike
-                  </a>
-                  &trade;
-                </h3>
-                <div className="flex justify-center space-x-4 mb-4">
-                  <a
-                    href="https://mindstrike.ai/link/github"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-gray-400 hover:text-white transition-colors"
-                    title="MindStrike GitHub Repository"
-                  >
-                    <Github size={24} />
-                  </a>
-                  <a
-                    href="https://mindstrike.ai/link/youtube"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-gray-400 hover:text-red-500 transition-colors"
-                    title="MindStrike YouTube Channel"
-                  >
-                    <Youtube size={24} />
-                  </a>
-                  <a
-                    href="https://mindstrike.ai/link/discord"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-gray-400 hover:text-indigo-500 transition-colors"
-                    title="MindStrike Discord Server"
-                  >
-                    <DiscordIcon size={24} />
-                  </a>
-                </div>
-                <p className="text-sm mt-8">
-                  Use Agent Mode{' '}
-                  <span className="inline-flex items-center mx-1 p-1 border border-gray-600 rounded bg-gray-800">
-                    <Bot size={12} className="text-gray-400" />
-                  </span>{' '}
-                  for complex tasks that need tools and workflows.
-                </p>
-                <p className="text-sm mt-4">
-                  Start a conversation with your current workspace:
-                </p>
-                <div className="flex items-center justify-center gap-3 mt-1">
-                  <p className="text-xs font-mono text-gray-400">
-                    {workspaceRoot || 'No workspace selected'}
-                  </p>
-                  {onNavigateToWorkspaces && (
-                    <button
-                      onClick={onNavigateToWorkspaces}
-                      className="text-xs text-blue-400 hover:text-blue-300 transition-colors underline"
-                    >
-                      Change
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
+          {!inMindMapContext && (
+            <MusicVisualization className="fixed inset-0 w-full h-full pointer-events-none z-0" />
           )}
 
-          {messages.map(message => (
-            <div
-              key={`message-wrapper-${message.id}`}
-              className="relative z-10"
-            >
-              <ChatMessage
-                key={message.id}
-                message={message}
-                fontSize={fontSize}
-                onDelete={onDeleteMessage ? handleDeleteMessage : undefined}
-                onRegenerate={
-                  message.role === 'assistant'
-                    ? handleRegenerateMessage
-                    : undefined
-                }
-                onEdit={message.role === 'user' ? handleEditMessage : undefined}
-                onCancelToolCalls={
-                  message.status === 'processing' &&
-                  message.toolCalls &&
-                  message.toolCalls.length > 0
-                    ? handleCancelToolCalls
-                    : undefined
-                }
-                onCopyToNotes={
-                  message.role === 'assistant' ? onCopyToNotes : undefined
-                }
+          {/* Floating Validation Status Notification */}
+          <div className="absolute top-4 left-4 right-4 z-20 pointer-events-none">
+            <div className="pointer-events-auto">
+              <ValidationStatusNotification
+                isVisible={validation.showNotification}
+                progress={validation.validationProgress}
+                onDismiss={validation.dismissNotification}
+                onToggleValidation={validation.setValidationEnabled}
+                validationEnabled={validation.validationEnabled}
               />
             </div>
-          ))}
+          </div>
 
-          {isLoading &&
-            !isLoadingThread &&
-            !messages.some(
-              msg => msg.role === 'assistant' && msg.status === 'processing'
-            ) && (
-              <div className="relative z-10">
-                {isAgentActive ? (
-                  (() => {
-                    // Show current workflow or most recent completed workflow (within last 10 seconds)
-                    const workflowToShow =
-                      currentWorkflow ||
-                      workflows
-                        .filter(
-                          w =>
-                            w.completedAt &&
-                            Date.now() - w.completedAt.getTime() < 10000
-                        )
-                        .sort(
-                          (a, b) =>
-                            (b.completedAt?.getTime() || 0) -
-                            (a.completedAt?.getTime() || 0)
-                        )[0];
-
-                    return workflowToShow ? (
-                      <WorkflowProgress
-                        workflowId={workflowToShow.id}
-                        className="mb-4"
-                      />
-                    ) : (
-                      <div className="p-4 bg-gray-800 rounded-lg border border-gray-700 mb-4">
-                        <div className="flex items-center gap-2">
-                          <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
-                          <span className="text-gray-300">
-                            Finalizing response...
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })()
-                ) : (
-                  <TypingIndicator className="mb-4" />
-                )}
+          {/* Messages */}
+          <div
+            ref={messagesContainerRef}
+            className="flex-1 overflow-y-auto p-4 space-y-4 relative"
+            style={
+              { '--dynamic-font-size': `${fontSize}px` } as React.CSSProperties
+            }
+          >
+            {messages.length === 0 && (
+              <div className="text-center text-gray-500 mt-2 relative z-10">
+                <div className="mb-4">
+                  <div className="flex items-center justify-center mx-auto">
+                    <MindStrikeIcon size={128} />
+                  </div>
+                  <h3 className="text-lg font-medium mb-2">
+                    Welcome to{' '}
+                    <a
+                      href="https://mindstrike.ai"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-500 hover:text-blue-600 underline"
+                    >
+                      MindStrike
+                    </a>
+                    &trade;
+                  </h3>
+                  <div className="flex justify-center space-x-4 mb-4">
+                    <a
+                      href="https://mindstrike.ai/link/github"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-gray-400 hover:text-white transition-colors"
+                      title="MindStrike GitHub Repository"
+                    >
+                      <Github size={24} />
+                    </a>
+                    <a
+                      href="https://mindstrike.ai/link/youtube"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-gray-400 hover:text-red-500 transition-colors"
+                      title="MindStrike YouTube Channel"
+                    >
+                      <Youtube size={24} />
+                    </a>
+                    <a
+                      href="https://mindstrike.ai/link/discord"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-gray-400 hover:text-indigo-500 transition-colors"
+                      title="MindStrike Discord Server"
+                    >
+                      <DiscordIcon size={24} />
+                    </a>
+                  </div>
+                  <p className="text-sm mt-8">
+                    Use Agent Mode{' '}
+                    <span className="inline-flex items-center mx-1 p-1 border border-gray-600 rounded bg-gray-800">
+                      <Bot size={12} className="text-gray-400" />
+                    </span>{' '}
+                    for complex tasks that need tools and workflows.
+                  </p>
+                  <p className="text-sm mt-4">
+                    Start a conversation with your current workspace:
+                  </p>
+                  <div className="flex items-center justify-center gap-3 mt-1">
+                    <p className="text-xs font-mono text-gray-400">
+                      {workspaceRoot || 'No workspace selected'}
+                    </p>
+                    {onNavigateToWorkspaces && (
+                      <button
+                        onClick={onNavigateToWorkspaces}
+                        className="text-xs text-blue-400 hover:text-blue-300 transition-colors underline"
+                      >
+                        Change
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 
-          <div ref={messagesEndRef} className="relative z-10" />
+            {messages.map(message => (
+              <div
+                key={`message-wrapper-${message.id}`}
+                className="relative z-10"
+              >
+                <ChatMessage
+                  key={message.id}
+                  message={message}
+                  fontSize={fontSize}
+                  onDelete={onDeleteMessage ? handleDeleteMessage : undefined}
+                  onRegenerate={
+                    message.role === 'assistant'
+                      ? handleRegenerateMessage
+                      : undefined
+                  }
+                  onEdit={
+                    message.role === 'user' ? handleEditMessage : undefined
+                  }
+                  onCancelToolCalls={
+                    message.status === 'processing' &&
+                    message.toolCalls &&
+                    message.toolCalls.length > 0
+                      ? handleCancelToolCalls
+                      : undefined
+                  }
+                  onCopyToNotes={
+                    message.role === 'assistant' ? onCopyToNotes : undefined
+                  }
+                />
+              </div>
+            ))}
+
+            {isLoading &&
+              !isLoadingThread &&
+              !messages.some(
+                msg => msg.role === 'assistant' && msg.status === 'processing'
+              ) && (
+                <div className="relative z-10">
+                  {isAgentActive ? (
+                    (() => {
+                      // Show current workflow or most recent completed workflow (within last 10 seconds)
+                      const workflowToShow =
+                        currentWorkflow ||
+                        workflows
+                          .filter(
+                            w =>
+                              w.completedAt &&
+                              Date.now() - w.completedAt.getTime() < 10000
+                          )
+                          .sort(
+                            (a, b) =>
+                              (b.completedAt?.getTime() || 0) -
+                              (a.completedAt?.getTime() || 0)
+                          )[0];
+
+                      return workflowToShow ? (
+                        <WorkflowProgress
+                          workflowId={workflowToShow.id}
+                          className="mb-4"
+                        />
+                      ) : (
+                        <div className="p-4 bg-gray-800 rounded-lg border border-gray-700 mb-4">
+                          <div className="flex items-center gap-2">
+                            <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
+                            <span className="text-gray-300">
+                              Finalizing response...
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })()
+                  ) : (
+                    <TypingIndicator className="mb-4" />
+                  )}
+                </div>
+              )}
+
+            <div ref={messagesEndRef} className="relative z-10" />
+          </div>
+
+          {/* Clear Confirmation Modal */}
+          <ConfirmDialog
+            isOpen={showClearConfirm}
+            onClose={() => setShowClearConfirm(false)}
+            onConfirm={clearConversation}
+            title="Clear Conversation"
+            message="Are you sure you want to clear the entire conversation? All messages will be permanently deleted."
+            confirmText="Clear Chat"
+            cancelText="Cancel"
+            type="danger"
+          />
+
+          {/* Personality Modal */}
+          {showPersonalityModal && (
+            <PersonalityModal
+              isOpen={showPersonalityModal}
+              onClose={() => setShowPersonalityModal(false)}
+              currentRole={currentRole}
+              defaultRole={defaultRole}
+              onRoleChange={handleRoleChange}
+            />
+          )}
+
+          {/* Local Model Load Dialog */}
+          {localModelError && (
+            <LocalModelLoadDialog
+              isOpen={!!localModelError}
+              onClose={clearLocalModelError}
+              targetModelId={localModelError.modelId}
+              onModelLoaded={() => {
+                clearLocalModelError();
+                // Retry the last message without adding it to the chat again
+                retryLastMessage();
+              }}
+            />
+          )}
         </div>
 
         {/* Input */}
@@ -841,87 +883,6 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
             Press Enter to send, Shift+Enter for new line
           </p>
         </div>
-
-        {/* Clear Confirmation Modal */}
-        {shouldRenderClearConfirm && (
-          <div
-            className={`fixed inset-0 bg-black flex items-center justify-center z-50 transition-opacity duration-250 ease-out ${
-              isClearConfirmVisible ? 'bg-opacity-50' : 'bg-opacity-0'
-            }`}
-            onClick={handleCloseClearConfirm}
-          >
-            <div
-              className={`bg-gray-800 border border-gray-600 rounded-lg p-6 max-w-md w-full mx-4 transition-all duration-250 ease-out ${
-                isClearConfirmVisible
-                  ? 'scale-100 opacity-100'
-                  : 'scale-95 opacity-0'
-              }`}
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="flex items-center space-x-3 mb-4">
-                <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-                  <Trash2 size={20} className="text-red-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-medium text-white">
-                    Clear Conversation
-                  </h3>
-                  <p className="text-sm text-gray-400">
-                    This action cannot be undone.
-                  </p>
-                </div>
-              </div>
-
-              <p className="text-gray-300 mb-6">
-                Are you sure you want to clear the entire conversation? All
-                messages will be permanently deleted.
-              </p>
-
-              <div className="flex space-x-3 justify-end">
-                <button
-                  onClick={handleCloseClearConfirm}
-                  className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    clearConversation();
-                    handleCloseClearConfirm();
-                  }}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
-                >
-                  Clear Chat
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Personality Modal */}
-        {showPersonalityModal && (
-          <PersonalityModal
-            isOpen={showPersonalityModal}
-            onClose={() => setShowPersonalityModal(false)}
-            currentRole={currentRole}
-            defaultRole={defaultRole}
-            onRoleChange={handleRoleChange}
-          />
-        )}
-
-        {/* Local Model Load Dialog */}
-        {localModelError && (
-          <LocalModelLoadDialog
-            isOpen={!!localModelError}
-            onClose={clearLocalModelError}
-            targetModelId={localModelError.modelId}
-            onModelLoaded={() => {
-              clearLocalModelError();
-              // Retry the last message without adding it to the chat again
-              retryLastMessage();
-            }}
-          />
-        )}
       </div>
     );
   }

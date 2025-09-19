@@ -5,6 +5,11 @@ export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['var(--font-family-base)'],
+        serif: ['var(--font-family-heading)'],
+        mono: ['var(--font-family-code)'],
+      },
       colors: {
         // Discord/VS Code inspired dark theme
         dark: {

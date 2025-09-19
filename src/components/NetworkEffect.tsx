@@ -99,7 +99,7 @@ export function NetworkEffect({
       return;
     }
 
-    const audioElement = howl._sounds[0]?._node;
+    const audioElement = (howl as any)._sounds[0]?._node;
     if (!audioElement) {
       console.warn('NetworkEffect: No audio element found in Howler instance');
       return;

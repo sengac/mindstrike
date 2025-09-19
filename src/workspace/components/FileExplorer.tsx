@@ -18,6 +18,7 @@ import { CodeEditor } from './CodeEditor';
 import { TabbedEditor } from './TabbedEditor';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog';
 import toast from 'react-hot-toast';
+import { joinPath } from '../../utils/pathUtils';
 
 interface FileExplorerProps {
   onDirectoryChange?: () => void;
@@ -94,8 +95,7 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
     if (filePath.endsWith('/')) {
       // Navigate to directory
       const dirName = filePath.slice(0, -1);
-      const newPath =
-        currentDirectory === '.' ? dirName : `${currentDirectory}/${dirName}`;
+      const newPath = joinPath(currentDirectory, dirName);
       const result = await changeDirectory(newPath, onDirectoryChange);
       if (!result.success) {
         toast.error(`Failed to change directory: ${result.error}`);
@@ -177,10 +177,7 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
 
     try {
       // Construct full path relative to workspace root
-      const fullPath =
-        currentDirectory === '.'
-          ? selectedFile
-          : `${currentDirectory}/${selectedFile}`;
+      const fullPath = joinPath(currentDirectory, selectedFile);
       const response = await fetch('/api/workspace/save', {
         method: 'POST',
         headers: {
@@ -214,10 +211,7 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
 
     try {
       // Construct full path relative to workspace root
-      const fullPath =
-        currentDirectory === '.'
-          ? fileToDelete
-          : `${currentDirectory}/${fileToDelete}`;
+      const fullPath = joinPath(currentDirectory, fileToDelete);
       const response = await fetch('/api/workspace/delete', {
         method: 'POST',
         headers: {
@@ -494,10 +488,10 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
                             // Save to server
                             try {
                               // Construct full path relative to workspace root
-                              const fullPath =
-                                currentDirectory === '.'
-                                  ? selectedFile
-                                  : `${currentDirectory}/${selectedFile}`;
+                              const fullPath = joinPath(
+                                currentDirectory,
+                                selectedFile
+                              );
                               const response = await fetch(
                                 '/api/workspace/save',
                                 {

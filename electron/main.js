@@ -1,8 +1,17 @@
 // @ts-nocheck
-import { app, BrowserWindow, Menu, shell, dialog, ipcMain } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  Menu,
+  shell,
+  dialog,
+  ipcMain,
+  screen,
+} from 'electron';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import fixPath from 'fix-path';
+import windowStateKeeper from 'electron-window-state';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,9 +26,38 @@ const isDevelopment = process.env.NODE_ENV === 'development';
 fixPath();
 
 function createWindow() {
+  // Calculate smart default window size (16:9 ratio)
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width: screenWidth, height: screenHeight } =
+    primaryDisplay.workAreaSize;
+
+  // Calculate 16:9 dimensions that fit the screen
+  const aspectRatio = 16 / 9;
+  let defaultWidth, defaultHeight;
+
+  if (screenWidth / screenHeight > aspectRatio) {
+    // Screen is wider than 16:9, use full height
+    defaultHeight = Math.floor(screenHeight * 0.9); // 90% of screen height
+    defaultWidth = Math.floor(defaultHeight * aspectRatio);
+  } else {
+    // Screen is taller than 16:9, use full width
+    defaultWidth = Math.floor(screenWidth * 0.9); // 90% of screen width
+    defaultHeight = Math.floor(defaultWidth / aspectRatio);
+  }
+
+  // Load window state or use smart defaults
+  const windowState = windowStateKeeper({
+    defaultWidth,
+    defaultHeight,
+    // Don't maximize by default
+    maximize: false,
+  });
+
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
+    x: windowState.x,
+    y: windowState.y,
+    width: windowState.width,
+    height: windowState.height,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -32,8 +70,14 @@ function createWindow() {
     show: false,
   });
 
-  // Maximize window to fill the screen
-  mainWindow.maximize();
+  // Manage window state
+  windowState.manage(mainWindow);
+
+  // Only maximize if it was previously maximized
+  if (windowState.isMaximized) {
+    mainWindow.maximize();
+  }
+
   mainWindow.show();
 
   if (isDevelopment) {

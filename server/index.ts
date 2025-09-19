@@ -3,6 +3,9 @@ import cors from 'cors';
 import path from 'path';
 import fs from 'fs/promises';
 import { existsSync, statSync, createReadStream, stat } from 'fs';
+import { parseBuffer, parseFile } from 'music-metadata';
+import { musicMetadataCache } from './music-metadata-cache.js';
+import multer from 'multer';
 import { Stats } from 'fs';
 
 import { fileURLToPath } from 'url';
@@ -874,10 +877,31 @@ app.get('/api/audio/files', async (req: Request, res: Response) => {
       id: number;
       title: string;
       artist: string;
+      album?: string;
+      genre?: string[];
+      year?: number;
       duration: string;
       url: string;
       path: string;
       size: number;
+      metadata?: {
+        common: {
+          title?: string;
+          artist?: string;
+          album?: string;
+          genre?: string[];
+          year?: number;
+          [key: string]: unknown;
+        };
+        format: {
+          duration?: number;
+          bitrate?: number;
+          sampleRate?: number;
+          numberOfChannels?: number;
+          [key: string]: unknown;
+        };
+      };
+      coverArtUrl?: string;
       isActive: boolean;
     }> = [];
 
@@ -936,16 +960,53 @@ app.get('/api/audio/files', async (req: Request, res: Response) => {
                 const normalizedPath = relativePath.replace(/\\/g, '/');
                 const fileUrl = `/audio/${normalizedPath}`;
 
+                // Extract metadata using cache
+                let metadata: (typeof audioFiles)[0]['metadata'] = undefined;
+                let title: string;
+                let artist: string;
+                let album: string | undefined;
+                let genre: string[] | undefined;
+                let year: number | undefined;
+                let coverArtUrl: string | undefined;
+                let duration: string;
+
+                try {
+                  const cachedMetadata =
+                    await musicMetadataCache.getMetadata(fullPath);
+                  metadata = cachedMetadata.metadata;
+                  title = cachedMetadata.title;
+                  artist = cachedMetadata.artist;
+                  album = cachedMetadata.album;
+                  genre = cachedMetadata.genre;
+                  year = cachedMetadata.year;
+                  duration = cachedMetadata.duration;
+                  coverArtUrl = cachedMetadata.coverArtUrl;
+                } catch (error) {
+                  // If metadata extraction fails, use file name as fallback
+                  console.log(
+                    `Failed to extract metadata for ${fullPath}:`,
+                    error
+                  );
+                  title = fileName
+                    .replace(/[-_]/g, ' ')
+                    .replace(/\b\w/g, l => l.toUpperCase());
+                  artist = 'Unknown Artist';
+                  duration = '0:00';
+                }
+
                 audioFiles.push({
                   id: audioFiles.length + 1,
-                  title: fileName
-                    .replace(/[-_]/g, ' ')
-                    .replace(/\b\w/g, l => l.toUpperCase()),
-                  artist: 'Unknown Artist',
-                  duration: '0:00',
+                  title,
+                  artist,
+                  album,
+                  genre,
+                  year,
+                  duration,
                   url: fileUrl,
                   path: relativePath,
                   size: stats.size,
+                  metadata,
+                  coverArtUrl,
                   isActive: false,
                 });
               } catch (error) {
@@ -961,6 +1022,9 @@ app.get('/api/audio/files', async (req: Request, res: Response) => {
 
     await scanDirectory(musicRoot);
     audioFiles.sort((a, b) => a.title.localeCompare(b.title));
+
+    // Save metadata cache after scanning all files
+    await musicMetadataCache.saveCache();
 
     res.json(audioFiles);
   } catch (error) {
@@ -2518,7 +2582,7 @@ app.post('/api/workspace/root', async (req: Request, res: Response) => {
 
     res.json({
       workspaceRoot: workspaceRoot,
-      currentDirectory: '.',
+      currentDirectory: currentWorkingDirectory,
       message: 'Workspace root changed successfully',
     });
   } catch (error: unknown) {

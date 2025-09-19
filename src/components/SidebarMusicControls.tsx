@@ -6,9 +6,7 @@ interface SidebarMusicControlsProps {
   isMusicPlayerVisible: boolean;
 }
 
-export function SidebarMusicControls({
-  isMusicPlayerVisible,
-}: SidebarMusicControlsProps) {
+export function SidebarMusicControls({}: SidebarMusicControlsProps) {
   const {
     currentTrack,
     isPlaying,

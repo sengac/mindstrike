@@ -17,7 +17,7 @@ export function MusicVisualization({
   } | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
-  const { howl, isPlaying } = useAudioStore();
+  const { howl, isPlaying, visualizationsEnabled } = useAudioStore();
 
   // Connect to audio analyzer when howl is available
   useEffect(() => {
@@ -27,7 +27,7 @@ export function MusicVisualization({
       return;
     }
 
-    const audioElement = howl._sounds[0]?._node;
+    const audioElement = (howl as any)._sounds[0]?._node;
     if (!audioElement) {
       console.warn('No audio element found in Howler instance');
       return;
@@ -256,8 +256,8 @@ export function MusicVisualization({
     });
   };
 
-  // Don't render if audio isn't playing
-  if (!isPlaying || !howl) {
+  // Don't render if audio isn't playing or visualizations are disabled
+  if (!isPlaying || !howl || !visualizationsEnabled) {
     return null;
   }
 

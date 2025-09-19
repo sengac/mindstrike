@@ -66,7 +66,7 @@ function setupStormToast(toast: Element) {
   }, 3500); // Start scattering 500ms before toast disappears
 }
 
-function startStormScatter(toast: Element, textElement: Element) {
+function startStormScatter(toast: Element, _textElement: Element) {
   // Just add the scattering class to trigger the simple slide-out animation
   toast.classList.add('storm-scattering');
 }

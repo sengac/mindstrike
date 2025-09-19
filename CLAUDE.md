@@ -1,313 +1,241 @@
-# AGENT.md - MindStrike Application Architecture
+# MindStrike Agent Architecture
 
 ## Overview
 
-MindStrike is an agentic AI knowledge assistant built with a modern tech stack featuring reactive state management, real-time streaming, and sophisticated workflow management.
+MindStrike is an agentic AI knowledge assistant built as a modern desktop application featuring multi-threaded conversations, interactive mind mapping, workspace management, and real-time AI agent workflows.
 
-## Application Architecture
+## Core Architecture
 
-### Core Technologies
+### Technology Stack
 
-- **Frontend**: React + TypeScript + Vite
+- **Frontend**: React + TypeScript + Vite + Tailwind CSS
 - **Backend**: Node.js + Express + TypeScript
-- **State Management**: Zustand with middleware (persist, immer, subscribeWithSelector)
-- **AI Integration**: LangChain for LLM orchestration
-- **Real-time Updates**: Server-Sent Events (SSE)
-- **UI Components**: Tailwind CSS + Lucide React
-- **Specialized Libraries**: ReactFlow (mindmaps), Mermaid (diagrams), KaTeX (math)
+- **Desktop**: Electron with cross-platform packaging
+- **State Management**: Zustand with persistence and SSE integration
+- **AI Integration**: LangChain + Multiple LLM providers
+- **Real-time**: Server-Sent Events (SSE) for streaming
+- **UI Components**: ReactFlow (mind maps), Monaco Editor (code), Lucide icons
 
-### Key Design Principles
+### Application Structure
 
-- **Reactive Architecture**: Zustand stores automatically update UI via SSE events
-- **Agentic Workflows**: LangChain-powered agents with task decomposition
-- **Real-time Transparency**: Users see live progress via SSE streaming
-- **Centralized State**: Business logic in Zustand stores, not components
+```
+src/
+├── App.tsx                 # Main app orchestrator with 5 panels
+├── chat/                   # Multi-threaded chat system
+├── mindmaps/              # Interactive knowledge visualization
+├── workspace/             # File explorer and code editor
+├── components/            # Shared UI components
+├── settings/              # LLM configuration and management
+├── store/                 # Zustand state management
+└── types/                 # TypeScript definitions
 
-## Server Architecture
+server/
+├── index.ts               # Express server with comprehensive API
+├── agents/                # AI agent implementations
+├── routes/                # API endpoint handlers
+├── conversation-manager.ts # Thread and message persistence
+├── sse-manager.ts         # Real-time event broadcasting
+├── llm-config-manager.ts  # Model configuration
+└── mcp-manager.ts         # Model Context Protocol integration
+```
 
-### Core Components
+## Core Features
 
-- **LangChain Integration**: Extensive use of LangChain for LLM interactions
-- **SSE Manager**: Central hub for real-time updates via Server-Sent Events
-- **Agent System**: LangChain-based agents for different tasks
-- **Workflow Management**: Agentic task decomposition with ReAct methodology
+### 1. Multi-threaded Chat System
 
-### Key Files
+- **Thread Management**: Persistent conversations with metadata
+- **Real-time Streaming**: SSE-powered response streaming
+- **Agent Modes**: Standard chat vs. workflow execution
+- **Attachments**: Image and note integration
+- **Cancellation**: Real-time message cancellation
+- **Personalities**: Custom roles per thread
 
-- `server/index.ts` - Main Express server with all API routes
-- `server/sse-manager.ts` - SSE broadcasting system
-- `server/agents/base-agent.ts` - LangChain AgentExecutor implementation
-- `server/agents/mindmap-agent.ts` - Mindmap-specific agent with agentic workflows
-- `server/agents/chat-local-llm.ts` - Custom LangChain chat model for local LLMs
+### 2. Interactive Mind Maps
 
-### API Endpoints
+- **AI Generation**: Automated content creation with iterative agents
+- **Visual Interface**: ReactFlow-based drag-and-drop nodes
+- **Chat Integration**: Contextual discussions within mind maps
+- **Persistence**: JSON-based storage with workspace organization
+- **Source Linking**: Connect nodes to external references
 
-- **Chat**: `/api/message`, `/api/message/stream`
-- **Mindmaps**: `/api/mindmaps/:id/generate`, `/api/mindmaps/:id/mindmap`
-- **SSE Streams**: `/api/generate/stream/:streamId`, `/api/tasks/stream/:workflowId`
-- **Models**: `/api/llm/models`, `/api/llm/default-model`
+### 3. Workspace Management
 
-## Frontend Architecture
+- **File Explorer**: Directory navigation with file operations
+- **Code Editor**: Monaco-powered editing with syntax highlighting
+- **Tabbed Interface**: Multi-file editing support
+- **Workspace Initialization**: Automatic setup and persistence
+
+### 4. Agent System
+
+- **BaseAgent**: Abstract foundation with LLM integration
+- **ChatAgent**: Standard conversational AI
+- **WorkflowAgent**: Multi-step task execution
+- **MindmapAgentIterative**: Specialized mind map generation
+- **Thread Isolation**: Agent pool for concurrent conversations
+
+## State Management Architecture
 
 ### Zustand Store System
 
-All business logic and state management is handled through Zustand stores:
+All business logic centralized in reactive stores:
 
-#### Core Application Stores
-
-- **`useAppStore`**: Global app configuration with localStorage persistence
-- **`useMindMapStore`**: Complex mindmap state with history, SSE integration
-- **`useAgentStore`**: Factory pattern for multi-agent conversation management
-- **`useTaskStore`**: Workflow and task progress management
-
-#### Model Management Stores
-
-- **`useModelsStore`**: Global model registry with SSE updates
-- **`useLocalModelsStore`**: Local model lifecycle management
-- **`useDownloadStore`**: Model download progress via SSE
-- **`useDebugStore`**: Real-time LLM debugging and monitoring
+- **`useAppStore`**: Global configuration, workspace, model settings
+- **`useChatThreadStore`**: Thread-specific message management
+- **`useThreadsStore`**: Thread list and active thread tracking
+- **`useMindMapStore`**: Mind map data and operations
+- **`useModelsStore`**: Available models and configurations
+- **`useTaskStore`**: Background task and workflow tracking
+- **`useDebugStore`**: Development debugging and monitoring
 
 ### SSE Integration Pattern
 
-Zustand stores connect to SSE streams for reactive updates:
-
 ```typescript
-// Example: Models store auto-refreshes on SSE events
+// Frontend: sseEventBus singleton manages single connection
+import { sseEventBus } from '../utils/sseEventBus';
+
+// Stores subscribe to specific event types
 useEffect(() => {
-  const eventSource = new EventSource('/api/llm/model-updates');
-  eventSource.onmessage = () => fetchModels();
-  return () => eventSource.close();
+  const unsubscribe = sseEventBus.subscribe('thread_updated', event => {
+    updateThread(event.data.threadId, event.data.updates);
+  });
+  return unsubscribe;
 }, []);
-```
 
-### Component Structure
-
-```
-src/
-├── store/              # Zustand stores (business logic)
-├── components/         # Reusable UI components
-├── chat/              # Chat interface
-├── mindmaps/          # Mindmap interface
-├── settings/          # Configuration UI
-├── workflows/         # Workflow management
-└── workspace/         # Workspace management
-```
-
-## Agentic Workflow System
-
-### Task Decomposition (ReAct Pattern)
-
-1. **Reasoning**: Analyze user query and current context
-2. **Planning**: Break down into specific, actionable tasks
-3. **Acting**: Execute each task with focused prompts
-4. **Reflection**: Use results to inform subsequent tasks
-
-### Real-time Progress Tracking
-
-- **SSE Events**: `workflow_started`, `tasks_planned`, `task_progress`, `task_completed`
-- **UI Updates**: Live task list with status icons (⏳🔄✅❌)
-- **Progress Bar**: Visual completion percentage
-- **Transparent Execution**: Users see exactly what the AI is working on
-
-### Workflow Integration
-
-```typescript
-// Server broadcasts task updates
-broadcastTaskUpdate(workflowId, {
-  type: 'task_progress',
-  task: { id, description, status, priority },
+// Backend: sseManager broadcasts to topic-based clients
+sseManager.broadcast('general', {
+  type: 'thread_updated',
+  threadId: 'abc123',
+  updates: { title: 'New Title' },
 });
-
-// Frontend stores react to updates
-useMindMapStore.getState().applyMindmapChanges(changes);
 ```
 
-## Response Validation System
+## LLM Provider Integration
 
-### Automatic Error Correction
+### Supported Providers
 
-- **Off-screen Validation**: Hidden DOM elements test rendering
-- **Debug LLM Service**: Separate LLM connection for fixing errors
-- **Content Types**: Mermaid diagrams, LaTeX expressions, code blocks
-- **User Transparency**: Real-time notifications during correction
-
-## State Management Patterns
-
-### Zustand Best Practices
-
-- **Selective Subscriptions**: Components only re-render when relevant state changes
-- **Middleware Stack**: `persist` + `immer` + `subscribeWithSelector`
-- **Action-based Updates**: All mutations through store actions
-- **SSE Integration**: Automatic state updates from server events
-
-### Store Examples
-
-```typescript
-// Reactive store with SSE
-const useMindMapStore = create<MindMapState>()(
-  subscribeWithSelector(
-    immer((set, get) => ({
-      nodes: [],
-      edges: [],
-      addNode: node =>
-        set(state => {
-          state.nodes.push(node);
-        }),
-      // SSE handler
-      applyMindmapChanges: changes =>
-        set(state => {
-          // Apply changes reactively
-        }),
-    }))
-  )
-);
-```
-
-## Development Commands
-
-### Development
-
-```bash
-npm run dev                 # Start both client and server
-npm run dev:debug          # Start with debug logging
-npm run dev:client         # Frontend only (Vite)
-npm run dev:server         # Backend only (tsx watch)
-```
-
-### Build & Deploy
-
-```bash
-npm run build              # Build both client and server
-npm run typecheck          # TypeScript checking
-npm run start              # Production server
-```
-
-### Electron Desktop App
-
-```bash
-npm run electron:dev       # Development electron app
-npm run package           # Build desktop app
-npm run package:mac:arm64  # macOS ARM64 build
-```
-
-## Code Conventions
-
-### TypeScript
-
-- **Strict Mode**: Full type safety throughout
-- **Interface Definitions**: Clear contracts between components
-- **Generic Types**: Reusable type patterns
-
-### State Management
-
-- **Zustand Actions**: All state mutations through actions
-- **SSE Reactivity**: Automatic UI updates from server events
-- **Immutable Updates**: Using immer for clean state updates
-
-### Component Patterns
-
-- **Functional Components**: React hooks throughout
-- **Custom Hooks**: Extract business logic from components
-- **Store Subscriptions**: Selective state subscriptions for performance
-
-## File Structure
-
-### Backend
-
-```
-server/
-├── agents/           # LangChain agents
-├── routes/           # API route handlers
-├── utils/            # Utility functions
-├── workers/          # Background workers
-├── sse-manager.ts    # SSE broadcasting
-├── llm-config-manager.ts  # LLM configuration
-└── index.ts          # Main server
-```
-
-### Frontend
-
-```
-src/
-├── store/            # Zustand stores (business logic)
-├── components/       # Reusable UI components
-├── chat/            # Chat interface
-├── mindmaps/        # Mindmap interface
-├── settings/        # Configuration UI
-├── workflows/       # Workflow management
-├── workspace/       # Workspace management
-└── types/           # TypeScript definitions
-```
-
-## Key Features
-
-### Mindmap System
-
-- **Reactive State**: Zustand-powered with real-time updates
-- **Agentic Generation**: Task-based content creation
-- **Visual Interface**: ReactFlow-based interactive mindmaps
-- **History Management**: Undo/redo with state snapshots
-
-### Chat System
-
-- **Multi-agent Support**: Factory pattern for agent management
-- **Streaming Responses**: Real-time SSE updates
-- **Tool Integration**: LangChain tools for enhanced capabilities
-- **Message History**: Persistent conversation storage
+- **Ollama**: Local model hosting
+- **OpenAI**: GPT models with streaming
+- **Anthropic**: Claude models
+- **Google**: Gemini integration
+- **Perplexity**: Web-enhanced responses
+- **Local Models**: node-llama-cpp integration
+- **Custom**: OpenAI-compatible endpoints
 
 ### Model Management
 
-- **Local & Remote**: Support for both local and cloud LLMs
-- **Auto-switching**: Automatic model management
-- **Progress Tracking**: Real-time download and loading progress
-- **Configuration**: Flexible model settings per provider
+- **Auto-detection**: Scan and discover available models
+- **Configuration**: Per-provider settings and authentication
+- **Switching**: Dynamic model selection per thread
+- **Local Loading**: Download and run models locally
 
-## Testing & Debugging
+## Real-time Communication
 
-### Debug Features
+### SSE Architecture
 
-- **Real-time Logs**: SSE streaming of debug information
-- **Token Tracking**: Monitor LLM usage and performance
-- **Workflow Visibility**: Complete task execution transparency
-- **Error Handling**: Graceful degradation with user feedback
+- **Frontend**: `sseEventBus` singleton manages single EventSource connection
+- **Backend**: `sseManager` handles topic-based client broadcasting
+- **Connection Management**: Automatic reconnection with exponential backoff
+- **Event Types**: `message_chunk`, `thread_updated`, `task_progress`, `model_loaded`
+- **Topic-based Broadcasting**: Targeted updates to relevant client groups
+- **Large Content Handling**: Automatic chunking and reference storage
 
-### Development Tools
+### API Endpoints
 
-- **Hot Reload**: Instant updates during development
-- **TypeScript**: Compile-time error checking
-- **Console Logging**: Structured logging with Winston
-- **Browser DevTools**: Zustand state inspection
+```
+POST /api/message              # Send chat message with streaming
+GET  /api/threads              # List all conversation threads
+POST /api/threads              # Create new thread
+GET  /api/mindmaps/:id         # Get mind map data
+POST /api/mindmaps/:id/generate # Generate mind map content
+GET  /api/llm/models           # List available models
+POST /api/llm/scan             # Scan for new models
+GET  /api/events/stream        # SSE event stream
+```
 
-## Performance Considerations
+## Agent Workflow System
+
+### Task-based Execution
+
+1. **Planning**: Break down user requests into actionable tasks
+2. **Execution**: Process tasks with appropriate tools and context
+3. **Progress Tracking**: Real-time updates via SSE
+4. **Result Integration**: Merge outputs into conversation or mind map
+
+### Tool Integration (MCP)
+
+- **Filesystem**: File operations and directory navigation
+- **GitHub**: Repository access and code analysis
+- **Web Search**: External information retrieval
+- **Code Analysis**: Syntax checking and diagnostics
+- **Custom Tools**: Extensible tool system
+
+## Development Workflow
+
+### Commands
+
+```bash
+npm run dev                # Parallel client/server development
+npm run dev:debug          # Debug mode with enhanced logging
+npm run build              # Production build (client + server)
+npm run typecheck          # TypeScript validation
+npm run lint               # ESLint checking
+npm run electron:dev       # Desktop app development
+npm run package:mac:arm64  # macOS ARM64 build
+```
+
+### Code Conventions
+
+- **Files**: kebab-case (`chat-panel.tsx`, `use-threads.ts`)
+- **Components**: PascalCase functional components with hooks
+- **State**: Zustand actions for all mutations
+- **Types**: Comprehensive TypeScript interfaces
+- **Imports**: External first, then internal grouped by type
+- **Error Handling**: Try-catch with user-friendly notifications
+
+## Performance Optimizations
 
 ### State Management
 
-- **Selective Re-renders**: Components only update when subscribed state changes
-- **Batched Updates**: Multiple state changes in single render cycle
-- **Memory Management**: Automatic cleanup of unused stores
+- **Selective Subscriptions**: Components only re-render on relevant changes
+- **Batched Updates**: Multiple state changes in single cycle
+- **Memory Management**: Automatic cleanup of unused resources
 
-### SSE Optimization
+### Real-time Updates
 
-- **Topic-based Broadcasting**: Targeted updates to relevant connections
-- **Connection Management**: Automatic cleanup and reconnection
+- **Connection Pooling**: Efficient SSE connection management
+- **Event Filtering**: Targeted updates to relevant clients
 - **Backpressure Handling**: Prevent memory leaks from slow clients
+
+## Deployment Architecture
+
+### Development
+
+- **Client**: Vite dev server (localhost:5173)
+- **Server**: Node.js with tsx watch (localhost:3001)
+- **Hot Reload**: Instant updates during development
+
+### Production
+
+- **Build**: Static client + compiled server
+- **Electron**: Cross-platform desktop packaging
+- **Distribution**: DMG (macOS), NSIS (Windows), AppImage (Linux)
 
 ## Future Enhancements
 
 ### Planned Features
 
-- **LangGraph Integration**: Replace custom workflow system with LangGraph
-- **Collaborative Editing**: Real-time multi-user mindmap editing
-- **Advanced Analytics**: Performance metrics and usage tracking
+- **Collaborative Editing**: Multi-user mind map collaboration
 - **Plugin System**: Extensible architecture for custom tools
+- **Advanced Analytics**: Usage tracking and performance metrics
+- **Mobile Support**: React Native companion app
 
 ### Technical Improvements
 
-- **Micro-frontends**: Modular UI architecture
+- **LangGraph Integration**: Replace custom workflow system
 - **Worker Threads**: Offload heavy processing
 - **Caching Layer**: Improve response times
 - **Error Boundaries**: Better error isolation and recovery
 
 ---
 
-_This architecture enables a responsive, transparent, and powerful AI-assisted knowledge management system with real-time collaboration capabilities._
+This architecture enables a responsive, transparent, and powerful AI-assisted knowledge management system with real-time collaboration capabilities and extensible agent workflows.

@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import { joinPath } from '../../utils/pathUtils';
 
 export function useWorkspaceStore() {
   const {
@@ -152,8 +153,7 @@ export function useWorkspaceStore() {
   const getFileContent = useCallback(
     async (filePath: string): Promise<string> => {
       // Construct full path relative to workspace root
-      const fullPath =
-        currentDirectory === '.' ? filePath : `${currentDirectory}/${filePath}`;
+      const fullPath = joinPath(currentDirectory, filePath);
       const response = await fetch(
         `/api/workspace/file/${encodeURIComponent(fullPath)}`
       );

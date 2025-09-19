@@ -14,6 +14,7 @@ import {
   HardDrive,
   Info,
 } from 'lucide-react';
+import { fontSchemes } from '../../utils/fontSchemes';
 import { AppBar } from '../../components/AppBar';
 import { useCustomServices, CustomLLMService } from '../../hooks/useModels';
 import { useAppStore } from '../../store/useAppStore';
@@ -150,7 +151,13 @@ export function SettingsPanel() {
     testService,
     refetch,
   } = useCustomServices();
-  const { fontSize, increaseFontSize, decreaseFontSize } = useAppStore();
+  const {
+    fontSize,
+    increaseFontSize,
+    decreaseFontSize,
+    fontScheme,
+    setFontScheme,
+  } = useAppStore();
   const [activeTab, setActiveTab] = useState<SettingsTab>('builtin-llm');
   const [showAddEditDialog, setShowAddEditDialog] = useState(false);
   const [testingService, setTestingService] = useState<string | null>(null);
@@ -545,6 +552,42 @@ export function SettingsPanel() {
                       </button>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              <div className="p-4 bg-gray-800 rounded-lg border border-gray-700">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-white font-medium mb-1">Font Scheme</h3>
+                    <p className="text-sm text-gray-400">
+                      Choose a font scheme for markdown content
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <select
+                      value={fontScheme}
+                      onChange={e =>
+                        setFontScheme(
+                          e.target.value as
+                            | 'system'
+                            | 'inter'
+                            | 'serif'
+                            | 'monospace'
+                            | 'academic'
+                        )
+                      }
+                      className="bg-gray-700 text-white border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {Object.entries(fontSchemes).map(([key, scheme]) => (
+                        <option key={key} value={key}>
+                          {scheme.displayName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="mt-2 text-xs text-gray-500">
+                  {fontSchemes[fontScheme]?.description}
                 </div>
               </div>
             </div>
