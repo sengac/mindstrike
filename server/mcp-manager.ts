@@ -171,11 +171,29 @@ export class MCPManager extends EventEmitter {
         for (const [serverId, serverConfig] of Object.entries(
           config.mcpServers
         )) {
+          const configData = serverConfig as Partial<MCPServerConfig>;
+
+          // Ensure required fields are present
+          if (!configData.command) {
+            this.logMCP(
+              'manager',
+              'warn',
+              `Server config for ${serverId} missing required 'command' field`
+            );
+            continue;
+          }
+
           const fullConfig: MCPServerConfig = {
             id: serverId,
             name: serverId, // Use ID as name by default
-            ...(serverConfig as any),
-            enabled: true, // Default to enabled for MCP spec format
+            command: configData.command,
+            args: configData.args,
+            env: configData.env,
+            transport: configData.transport,
+            url: configData.url,
+            description: configData.description,
+            enabled:
+              configData.enabled !== undefined ? configData.enabled : true, // Default to enabled for MCP spec format
           };
 
           if (this.isValidServerConfig(fullConfig)) {
@@ -684,6 +702,9 @@ export class MCPManager extends EventEmitter {
         }
         if (server.url) {
           mcpServers[id].url = server.url;
+        }
+        if (server.enabled !== undefined) {
+          mcpServers[id].enabled = server.enabled;
         }
 
         this.logMCP('manager', 'info', `Prepared config for server: ${id}`);

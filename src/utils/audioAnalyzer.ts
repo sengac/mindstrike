@@ -55,7 +55,6 @@ class AudioAnalyzer {
       this.analyzer.connect(this.audioContext.destination);
 
       this.currentAudioElement = audioElement;
-      console.log('Audio analyzer connected successfully');
 
       this.startAnalysis();
       return true;

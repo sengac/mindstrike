@@ -104,6 +104,8 @@ function App() {
 
   // Initialize workspace once globally
   useEffect(() => {
+    let cleanup: (() => void) | undefined;
+
     const initializeApp = async () => {
       try {
         const { initializeWorkspace } = await import(
@@ -114,14 +116,50 @@ function App() {
         // Initialize single SSE event bus for all real-time updates
         sseEventBus.initialize();
 
+        // Load workspace roots from server
+        await useAppStore.getState().loadWorkspaceRoots();
+
+        // Set up SSE listeners for workspace root changes
+        const unsubscribeWorkspaceRoot = sseEventBus.subscribe(
+          'workspace_root_changed',
+          event => {
+            const data = event.data as { workspaceRoot: string };
+            useAppStore.getState().setWorkspaceRoot(data.workspaceRoot);
+            // Also trigger reloads when workspace root changes
+            loadThreads();
+            loadMindMaps();
+          }
+        );
+
+        const unsubscribeMusicRoot = sseEventBus.subscribe(
+          'music_root_changed',
+          event => {
+            const data = event.data as { musicRoot: string };
+            useAppStore.getState().setMusicRoot(data.musicRoot);
+          }
+        );
+
         // Fetch any existing MCP logs
         useMCPLogsStore.getState().fetchLogs();
+
+        // Set cleanup function
+        cleanup = () => {
+          unsubscribeWorkspaceRoot();
+          unsubscribeMusicRoot();
+        };
       } catch (error) {
         console.error('Failed to initialize workspace:', error);
       }
       setWorkspaceRestored(true);
     };
+
     initializeApp();
+
+    return () => {
+      if (cleanup) {
+        cleanup();
+      }
+    };
   }, []); // No dependencies - runs once on mount
 
   const {

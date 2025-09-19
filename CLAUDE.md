@@ -2,7 +2,7 @@
 
 ## Overview
 
-MindStrike is an agentic AI knowledge assistant built as a modern desktop application featuring multi-threaded conversations, interactive mind mapping, workspace management, and real-time AI agent workflows.
+MindStrike is a knowledge assistant built as a modern desktop application featuring multi-threaded conversations, interactive mind mapping, workspace management, and real-time AI agent workflows.
 
 ## Core Architecture
 
@@ -87,28 +87,6 @@ All business logic centralized in reactive stores:
 - **`useTaskStore`**: Background task and workflow tracking
 - **`useDebugStore`**: Development debugging and monitoring
 
-### SSE Integration Pattern
-
-```typescript
-// Frontend: sseEventBus singleton manages single connection
-import { sseEventBus } from '../utils/sseEventBus';
-
-// Stores subscribe to specific event types
-useEffect(() => {
-  const unsubscribe = sseEventBus.subscribe('thread_updated', event => {
-    updateThread(event.data.threadId, event.data.updates);
-  });
-  return unsubscribe;
-}, []);
-
-// Backend: sseManager broadcasts to topic-based clients
-sseManager.broadcast('general', {
-  type: 'thread_updated',
-  threadId: 'abc123',
-  updates: { title: 'New Title' },
-});
-```
-
 ## LLM Provider Integration
 
 ### Supported Providers
@@ -153,13 +131,6 @@ GET  /api/events/stream        # SSE event stream
 ```
 
 ## Agent Workflow System
-
-### Task-based Execution
-
-1. **Planning**: Break down user requests into actionable tasks
-2. **Execution**: Process tasks with appropriate tools and context
-3. **Progress Tracking**: Real-time updates via SSE
-4. **Result Integration**: Merge outputs into conversation or mind map
 
 ### Tool Integration (MCP)
 
@@ -221,13 +192,6 @@ npm run package:mac:arm64  # macOS ARM64 build
 - **Distribution**: DMG (macOS), NSIS (Windows), AppImage (Linux)
 
 ## Future Enhancements
-
-### Planned Features
-
-- **Collaborative Editing**: Multi-user mind map collaboration
-- **Plugin System**: Extensible architecture for custom tools
-- **Advanced Analytics**: Usage tracking and performance metrics
-- **Mobile Support**: React Native companion app
 
 ### Technical Improvements
 

@@ -335,20 +335,19 @@ export abstract class BaseAgent {
 
     let messages = allMessages;
     if (!includePriorConversation && allMessages.length > 0) {
-      // Only include system message and the last user message
-      const systemMessages = allMessages.filter(msg => msg.role === 'system');
+      // Only include the last user message (system message will be added dynamically)
       const userMessages = allMessages.filter(msg => msg.role === 'user');
       const lastUserMessage = userMessages.slice(-1);
 
-      // Ensure we have at least one message (prefer user message, fallback to system)
       if (lastUserMessage.length > 0) {
-        messages = [...systemMessages, ...lastUserMessage];
-      } else if (systemMessages.length > 0) {
-        messages = systemMessages;
+        messages = lastUserMessage;
       } else {
-        // Fallback to all messages if no system or user messages found
-        messages = allMessages;
+        // Fallback to all non-system messages
+        messages = allMessages.filter(msg => msg.role !== 'system');
       }
+    } else {
+      // Filter out any existing system messages from stored messages
+      messages = allMessages.filter(msg => msg.role !== 'system');
     }
 
     // Filter out messages with empty content (except final assistant message)
@@ -638,12 +637,17 @@ export abstract class BaseAgent {
       return [fallbackMessage];
     }
 
+    // Add system message at the beginning
+    const systemPromptContent = this.systemPrompt || this.createSystemPrompt();
+    const systemMessage = new SystemMessage(systemPromptContent);
+    const finalMessages = [systemMessage, ...reorderedMessages];
+
     // Special handling for Perplexity: ensure proper message alternation
-    if (isPerplexity && reorderedMessages.length > 0) {
-      return this.reorderMessagesForPerplexity(reorderedMessages);
+    if (isPerplexity && finalMessages.length > 0) {
+      return this.reorderMessagesForPerplexity(finalMessages);
     }
 
-    return reorderedMessages;
+    return finalMessages;
   }
 
   private reorderMessagesForPerplexity(messages: BaseMessage[]): BaseMessage[] {
@@ -749,37 +753,17 @@ export abstract class BaseAgent {
       threadId = thread.id;
     }
 
-    // Add system message if this is the first message in the thread
-    const threadMessages = this.conversationManager.getThreadMessages(threadId);
-    if (threadMessages.length === 0 || threadMessages[0].role !== 'system') {
-      // Ensure we have a valid system prompt
-      const systemPromptContent =
-        this.systemPrompt || this.createSystemPrompt();
+    // Ensure we have a valid system prompt but don't persist it
+    const systemPromptContent = this.systemPrompt || this.createSystemPrompt();
 
-      if (!systemPromptContent || systemPromptContent.trim() === '') {
-        throw new Error(
-          'System prompt is empty. Agent must implement createSystemPrompt() method.'
-        );
-      }
-
-      const systemMessage: ConversationMessage = {
-        id: this.generateId(),
-        role: 'system',
-        content: systemPromptContent,
-        timestamp: new Date(),
-        status: 'completed',
-      };
-      await this.conversationManager.addMessage(threadId, systemMessage);
-
-      // Send system message creation event to frontend
-      sseManager.broadcast('unified-events', {
-        type: 'create',
-        entityType: 'message',
-        entity: systemMessage,
-        threadId,
-        streamId: this.streamId,
-      });
+    if (!systemPromptContent || systemPromptContent.trim() === '') {
+      throw new Error(
+        'System prompt is empty. Agent must implement createSystemPrompt() method.'
+      );
     }
+
+    // System message is now handled dynamically in convertToLangChainMessages
+    // and not persisted to chat history
 
     // Validate user message input
     if (!userMessage || typeof userMessage !== 'string') {
@@ -788,27 +772,37 @@ export abstract class BaseAgent {
       );
     }
 
-    // Add user message to conversation manager (use client-provided ID if available)
-    const userMsg: ConversationMessage = {
-      id: userMessageId || this.generateId(),
-      role: 'user',
-      content: userMessage,
-      timestamp: new Date(),
-      status: 'completed',
-      images: images || [],
-      notes: notes || [],
-    };
+    // Check if user message already exists (it might have been added by the main handler)
+    let userMsg: ConversationMessage | undefined;
+    if (userMessageId) {
+      await this.conversationManager.load();
+      const thread = this.conversationManager.getThread(threadId);
+      userMsg = thread?.messages.find(msg => msg.id === userMessageId);
+    }
 
-    await this.conversationManager.addMessage(threadId, userMsg);
+    // Only add user message if it doesn't already exist
+    if (!userMsg) {
+      userMsg = {
+        id: userMessageId || this.generateId(),
+        role: 'user',
+        content: userMessage,
+        timestamp: new Date(),
+        status: 'completed',
+        images: images || [],
+        notes: notes || [],
+      };
 
-    // Send user message creation event to frontend
-    sseManager.broadcast('unified-events', {
-      type: 'create',
-      entityType: 'message',
-      entity: userMsg,
-      threadId,
-      streamId: this.streamId,
-    });
+      await this.conversationManager.addMessage(threadId, userMsg);
+
+      // Send user message creation event to frontend only if we created it
+      sseManager.broadcast('unified-events', {
+        type: 'create',
+        entityType: 'message',
+        entity: userMsg,
+        threadId,
+        streamId: this.streamId,
+      });
+    }
 
     // Start timing for debug logging
     const startTime = Date.now();
@@ -1517,25 +1511,7 @@ export abstract class BaseAgent {
 
   async clearConversation(threadId: string): Promise<void> {
     await this.conversationManager.clearThread(threadId);
-
-    // Add system message
-    const systemMessage: ConversationMessage = {
-      id: this.generateId(),
-      role: 'system',
-      content: this.systemPrompt,
-      timestamp: new Date(),
-      status: 'completed',
-    };
-    await this.conversationManager.addMessage(threadId, systemMessage);
-
-    // Send create event to frontend
-    sseManager.broadcast('unified-events', {
-      type: 'create',
-      entityType: 'message',
-      entity: systemMessage,
-      threadId,
-      streamId: this.streamId,
-    });
+    // System message is now handled dynamically in convertToLangChainMessages
   }
 
   async loadConversation(
@@ -1544,24 +1520,8 @@ export abstract class BaseAgent {
   ): Promise<void> {
     await this.conversationManager.clearThread(threadId);
 
-    // Find the first system message from conversation history (if any)
-    const firstSystemMessage = messages.find(
-      (msg: ConversationMessage) => msg.role === 'system'
-    );
-
-    // Add system message first (either from conversation history or default)
-    const systemMessage: ConversationMessage = {
-      id: this.generateId(),
-      role: 'system',
-      content: firstSystemMessage
-        ? firstSystemMessage.content
-        : this.systemPrompt,
-      timestamp: new Date(),
-      status: 'completed',
-    };
-    await this.conversationManager.addMessage(threadId, systemMessage);
-
     // Load all non-system messages from conversation history
+    // System messages are now handled dynamically in convertToLangChainMessages
     for (const msg of messages.filter(
       (m: ConversationMessage) => m.role !== 'system'
     )) {
@@ -1584,17 +1544,7 @@ export abstract class BaseAgent {
     this.config.customRole = customRole;
     this.systemPrompt = this.createSystemPrompt();
 
-    // Update system message in conversation
-    const messages = this.conversationManager.getThreadMessages(threadId);
-    const systemMessage = messages.find(
-      (msg: ConversationMessage) => msg.role === 'system'
-    );
-    if (systemMessage) {
-      await this.conversationManager.updateMessage(threadId, systemMessage.id, {
-        content: this.systemPrompt,
-      });
-    }
-
+    // System messages are now handled dynamically, no need to update stored messages
     // Reinitialize agent executor with new system prompt
     this.initializeAgentExecutor();
   }

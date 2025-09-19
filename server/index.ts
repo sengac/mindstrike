@@ -17,9 +17,16 @@ import { cleanContentForLLM } from './utils/content-filter.js';
 import { LLMScanner } from './llm-scanner.js';
 import { LLMConfigManager } from './llm-config-manager.js';
 import { mcpManager } from './mcp-manager.js';
-import { getHomeDirectory } from './utils/settings-directory.js';
+import {
+  getHomeDirectory,
+  getWorkspaceRoot,
+  getMusicRoot,
+} from './utils/settings-directory.js';
 import { sseManager } from './sse-manager.js';
-import { getLocalLLMManager } from './local-llm-singleton.js';
+import {
+  getLocalLLMManager,
+  cleanup as cleanupLLMWorker,
+} from './local-llm-singleton.js';
 import { LocalModelInfo } from './local-llm-manager.js';
 import localLlmRoutes from './routes/local-llm.js';
 import modelScanRoutes from './routes/model-scan.js';
@@ -223,6 +230,21 @@ let workspaceRoot = defaultWorkspaceRoot;
 const defaultMusicRoot = process.env.MUSIC_ROOT || getHomeDirectory();
 let musicRoot = defaultMusicRoot;
 let currentWorkingDirectory = workspaceRoot;
+
+// Load actual workspace/music roots from persistent storage at startup
+async function loadWorkspaceSettings() {
+  const persistedWorkspaceRoot = await getWorkspaceRoot();
+  const persistedMusicRoot = await getMusicRoot();
+
+  if (persistedWorkspaceRoot) {
+    workspaceRoot = persistedWorkspaceRoot;
+    currentWorkingDirectory = workspaceRoot;
+  }
+
+  if (persistedMusicRoot) {
+    musicRoot = persistedMusicRoot;
+  }
+}
 let currentLlmConfig = {
   baseURL: 'http://localhost:11434',
   model: '',
@@ -244,8 +266,14 @@ let currentLlmConfig = {
 // Store custom roles per thread
 const threadRoles = new Map<string, string>();
 
-// Initialize conversation manager
-const conversationManager = new ConversationManager(workspaceRoot);
+// Initialize conversation manager after loading workspace settings
+let conversationManager: ConversationManager;
+
+async function initializeConversationManager() {
+  await loadWorkspaceSettings();
+  conversationManager = new ConversationManager(workspaceRoot);
+  await conversationManager.load();
+}
 
 const getAgentConfig = (threadId?: string): AgentConfig => ({
   workspaceRoot,
@@ -466,17 +494,9 @@ initializeLLMServices().catch(error => {
   logger.error('Failed to initialize LLM services:', error);
 });
 
-// Initialize conversation manager with timeout
-Promise.race([
-  conversationManager.load(),
-  new Promise((_, reject) =>
-    setTimeout(
-      () => reject(new Error('Conversation manager load timeout')),
-      5000
-    )
-  ),
-]).catch(error => {
-  logger.error('Failed to load conversation manager:', error);
+// Initialize conversation manager and load workspace settings
+initializeConversationManager().catch(error => {
+  logger.error('Failed to initialize conversation manager:', error);
 });
 
 // API Routes
@@ -1245,7 +1265,7 @@ app.post('/api/message', async (req: Request, res: Response) => {
     });
 
     // Return immediately - streaming will happen via SSE
-    res.json({ status: 'processing', userMessage });
+    res.json({ status: 'processing' });
   } catch (error: unknown) {
     const errorMessage =
       error instanceof Error ? error.message : 'Unknown error';
@@ -2539,6 +2559,20 @@ app.post('/api/workspace/directory', (req: Request, res: Response) => {
   }
 });
 
+// Get workspace root
+app.get('/api/workspace/root', (req: Request, res: Response) => {
+  try {
+    res.json({
+      workspaceRoot: workspaceRoot,
+      currentDirectory: currentWorkingDirectory,
+    });
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
+  }
+});
+
 // Set workspace root
 app.post('/api/workspace/root', async (req: Request, res: Response) => {
   try {
@@ -2584,6 +2618,19 @@ app.post('/api/workspace/root', async (req: Request, res: Response) => {
       workspaceRoot: workspaceRoot,
       currentDirectory: currentWorkingDirectory,
       message: 'Workspace root changed successfully',
+    });
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Get music root
+app.get('/api/music/root', (req: Request, res: Response) => {
+  try {
+    res.json({
+      musicRoot: musicRoot,
     });
   } catch (error: unknown) {
     const errorMessage =
@@ -2910,11 +2957,6 @@ app.post('/api/mcp/refresh', async (req: Request, res: Response) => {
   }
 });
 
-// Serve React app for all non-API routes (SPA catch-all)
-app.get('*', (req: Request, res: Response) => {
-  res.sendFile(path.join(__dirname, '../client/index.html'));
-});
-
 // Initialize MCP manager - always needed whether run directly or imported
 mcpManager.setWorkspaceRoot(workspaceRoot);
 mcpManager
@@ -2960,27 +3002,47 @@ if (process.env.NODE_ENV !== 'development') {
 // Export the app for use in Electron or direct startup
 export default app;
 
+// Cleanup handlers
+process.on('SIGTERM', () => {
+  console.log('Received SIGTERM, cleaning up...');
+  cleanupLLMWorker();
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  console.log('Received SIGINT, cleaning up...');
+  cleanupLLMWorker();
+  process.exit(0);
+});
+
 // Only start the server if not running in Electron
 if (typeof window === 'undefined' && !process.versions.electron) {
-  app.listen(PORT, () => {
-    console.log('\n🚀 MindStrike Server Started Successfully!');
-    console.log('━'.repeat(50));
-    console.log(`📍 Server URL: http://localhost:${PORT}`);
-    console.log(`🌐 Port: ${PORT}`);
-    console.log(`📁 Workspace: ${workspaceRoot}`);
-    console.log(`📂 Working Dir: ${currentWorkingDirectory}`);
-    console.log(
-      `🧠 LLM Model: ${currentLlmConfig.displayName || currentLlmConfig.model || 'None selected'}`
-    );
-    if (currentLlmConfig.model) {
-      console.log(`🔗 LLM URL: ${currentLlmConfig.baseURL}`);
-      console.log(`⚙️  LLM Type: ${currentLlmConfig.type || 'unknown'}`);
-    }
-    console.log('━'.repeat(50));
-    console.log('✅ Server ready to accept connections\n');
+  (async () => {
+    // Load workspace settings before starting the server
+    await loadWorkspaceSettings();
 
-    logger.info(`Server running on port ${PORT}`);
-    logger.info(`Workspace: ${workspaceRoot}`);
-    logger.info(`LLM: ${currentLlmConfig.baseURL} (${currentLlmConfig.model})`);
-  });
+    app.listen(PORT, () => {
+      console.log('\n🚀 MindStrike Server Started Successfully!');
+      console.log('━'.repeat(50));
+      console.log(`📍 Server URL: http://localhost:${PORT}`);
+      console.log(`🌐 Port: ${PORT}`);
+      console.log(`📁 Workspace: ${workspaceRoot}`);
+      console.log(`📂 Working Dir: ${currentWorkingDirectory}`);
+      console.log(
+        `🧠 LLM Model: ${currentLlmConfig.displayName || currentLlmConfig.model || 'None selected'}`
+      );
+      if (currentLlmConfig.model) {
+        console.log(`🔗 LLM URL: ${currentLlmConfig.baseURL}`);
+        console.log(`⚙️  LLM Type: ${currentLlmConfig.type || 'unknown'}`);
+      }
+      console.log('━'.repeat(50));
+      console.log('✅ Server ready to accept connections\n');
+
+      logger.info(`Server running on port ${PORT}`);
+      logger.info(`Workspace: ${workspaceRoot}`);
+      logger.info(
+        `LLM: ${currentLlmConfig.baseURL} (${currentLlmConfig.model})`
+      );
+    });
+  })();
 }

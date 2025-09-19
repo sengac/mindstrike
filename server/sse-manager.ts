@@ -121,7 +121,7 @@ class SSEManager {
 
     if (typeof obj === 'string') {
       // For very large strings, store them separately and reference them
-      if (obj.length > 10000) {
+      if (obj.length > 100000000) {
         const contentId =
           Date.now().toString(36) + Math.random().toString(36).substr(2);
         this.storeLargeContent(contentId, obj);

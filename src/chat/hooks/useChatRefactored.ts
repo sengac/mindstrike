@@ -292,11 +292,29 @@ export function useChatRefactored({
       }
     );
 
+    const unsubscribeMessagesDeleted = sseEventBus.subscribe(
+      'messages-deleted',
+      async event => {
+        const data = event.data;
+        if (data && typeof data === 'object' && 'messageIds' in data) {
+          const messageIds = data.messageIds as string[];
+          if (!currentThreadId) return;
+          const chatStore = threadStore.getState();
+
+          // Remove all deleted messages from the store
+          messageIds.forEach(messageId => {
+            chatStore.removeMessage(messageId);
+          });
+        }
+      }
+    );
+
     return () => {
       unsubscribeContentChunk();
       unsubscribeMessageUpdate();
       unsubscribeCompleted();
       unsubscribeCancelled();
+      unsubscribeMessagesDeleted();
     };
   }, [currentThreadId]); // Re-subscribe when currentThreadId changes
 

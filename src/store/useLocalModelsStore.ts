@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import toast from 'react-hot-toast';
 import { modelEvents } from '../utils/modelEvents';
-import { useAppStore } from './useAppStore';
 
 export interface ModelLoadingSettings {
   gpuLayers?: number; // -1 for auto, 0 for CPU only, positive number for specific layers
@@ -105,10 +104,20 @@ export const useLocalModelsStore = create<LocalModelsState>()(
         if (modelsResponse.ok) {
           const models = await modelsResponse.json();
 
-          // Merge server-calculated settings with user settings from localStorage
-          const appStore = useAppStore.getState();
+          // Load all model settings from server
+          let allSettings: Record<string, any> = {};
+          try {
+            const settingsResponse = await fetch('/api/local-llm/settings');
+            if (settingsResponse.ok) {
+              allSettings = await settingsResponse.json();
+            }
+          } catch (error) {
+            console.error('Error loading server-side settings:', error);
+          }
+
+          // Merge server-calculated settings with user settings from server
           const modelsWithSettings = models.map((model: LocalModelInfo) => {
-            const savedSettings = appStore.getModelSettings(model.id);
+            const savedSettings = allSettings[model.id] || {};
             return {
               ...model,
               loadingSettings: {
@@ -119,10 +128,6 @@ export const useLocalModelsStore = create<LocalModelsState>()(
           });
 
           set({ localModels: modelsWithSettings });
-
-          // Cleanup localStorage - remove settings for models that no longer exist
-          const existingModelIds = models.map((m: LocalModelInfo) => m.id);
-          appStore.cleanupModelSettings(existingModelIds);
 
           // Load status for each model
           const statuses = new Map<string, ModelStatus>();
@@ -292,9 +297,6 @@ export const useLocalModelsStore = create<LocalModelsState>()(
         });
 
         if (response.ok) {
-          // Remove settings from localStorage
-          useAppStore.getState().removeModelSettings(modelId);
-
           toast.success('Model deleted successfully');
           await get().fetchModelsAndStatuses(); // Reload data
 
@@ -334,9 +336,6 @@ export const useLocalModelsStore = create<LocalModelsState>()(
       settings: ModelLoadingSettings
     ) => {
       try {
-        // Save to localStorage via useAppStore
-        useAppStore.getState().setModelSettings(modelId, settings);
-
         const response = await fetch(
           `/api/local-llm/models/${modelId}/settings`,
           {

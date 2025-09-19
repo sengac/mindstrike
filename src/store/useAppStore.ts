@@ -33,9 +33,6 @@ interface AppState {
   // LLM Configuration - simplified to only store last used model
   lastUsedModel?: LastUsedModel;
 
-  // Model Settings Storage - key: modelId, value: settings
-  modelSettings: Record<string, ModelLoadingSettings>;
-
   // Personality/Role Configuration
   defaultCustomRole?: string; // fallback custom role for new threads
 
@@ -61,17 +58,14 @@ interface AppState {
   increaseFontSize: () => void;
   decreaseFontSize: () => void;
 
-  // Model Settings Actions
-  setModelSettings: (modelId: string, settings: ModelLoadingSettings) => void;
-  getModelSettings: (modelId: string) => ModelLoadingSettings | undefined;
-  removeModelSettings: (modelId: string) => void;
-  cleanupModelSettings: (existingModelIds: string[]) => void;
-
   // Role/Personality Actions
   setDefaultCustomRole: (role?: string) => void;
 
   // MindMap Actions
   setMindMapKeyBindings: (keyBindings: Record<string, string>) => void;
+
+  // Server-side root loading
+  loadWorkspaceRoots: () => Promise<void>;
 }
 
 export const useAppStore = create<AppState>()(
@@ -89,7 +83,7 @@ export const useAppStore = create<AppState>()(
       isLoading: false,
       workspaceVersion: 0,
       lastUsedModel: undefined,
-      modelSettings: {},
+
       defaultCustomRole: undefined,
       mindMapKeyBindings: undefined,
 
@@ -130,34 +124,6 @@ export const useAppStore = create<AppState>()(
         set({ fontSize: Math.max(currentSize - 2, 10) });
       },
 
-      // Model Settings Actions
-      setModelSettings: (modelId: string, settings: ModelLoadingSettings) =>
-        set(state => ({
-          modelSettings: {
-            ...state.modelSettings,
-            [modelId]: settings,
-          },
-        })),
-      getModelSettings: (modelId: string) => get().modelSettings[modelId],
-      removeModelSettings: (modelId: string) =>
-        set(state => {
-          const { [modelId]: removed, ...rest } = state.modelSettings;
-          return { modelSettings: rest };
-        }),
-      cleanupModelSettings: (existingModelIds: string[]) =>
-        set(state => {
-          const cleaned = Object.entries(state.modelSettings)
-            .filter(([modelId]) => existingModelIds.includes(modelId))
-            .reduce(
-              (acc, [modelId, settings]) => {
-                acc[modelId] = settings;
-                return acc;
-              },
-              {} as Record<string, ModelLoadingSettings>
-            );
-          return { modelSettings: cleaned };
-        }),
-
       // Role/Personality Actions
       setDefaultCustomRole: (defaultCustomRole?: string) =>
         set({ defaultCustomRole }),
@@ -165,16 +131,35 @@ export const useAppStore = create<AppState>()(
       // MindMap Actions
       setMindMapKeyBindings: (mindMapKeyBindings: Record<string, string>) =>
         set({ mindMapKeyBindings }),
+
+      // Server-side root loading
+      loadWorkspaceRoots: async () => {
+        try {
+          const [workspaceResponse, musicResponse] = await Promise.all([
+            fetch('/api/workspace/root'),
+            fetch('/api/music/root'),
+          ]);
+
+          if (workspaceResponse.ok) {
+            const { workspaceRoot } = await workspaceResponse.json();
+            set({ workspaceRoot });
+          }
+
+          if (musicResponse.ok) {
+            const { musicRoot } = await musicResponse.json();
+            set({ musicRoot });
+          }
+        } catch (error) {
+          console.error('Failed to load workspace roots:', error);
+        }
+      },
     }),
     {
       name: 'mindstrike-preferences',
       partialize: state => ({
         fontSize: state.fontSize,
         fontScheme: state.fontScheme,
-        workspaceRoot: state.workspaceRoot,
-        musicRoot: state.musicRoot,
         lastUsedModel: state.lastUsedModel,
-        modelSettings: state.modelSettings,
         defaultCustomRole: state.defaultCustomRole,
         mindMapKeyBindings: state.mindMapKeyBindings,
       }),

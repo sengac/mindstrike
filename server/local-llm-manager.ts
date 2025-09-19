@@ -13,6 +13,7 @@ import { createHash } from 'crypto';
 import { getLocalModelsDirectory } from './utils/settings-directory.js';
 import { modelFetcher, DynamicModelInfo } from './model-fetcher.js';
 import { logger } from './logger.js';
+import { modelSettingsManager } from './utils/model-settings-manager.js';
 
 export interface ModelLoadingSettings {
   gpuLayers?: number; // -1 for auto, 0 for CPU only, positive number for specific layers
@@ -97,6 +98,9 @@ export class LocalLLMManager {
 
     // Clear any stale cache on startup to ensure fresh calculations
     this.clearContextSizeCache();
+
+    // Load model settings from persistent storage
+    this.loadModelSettingsFromDisk();
   }
 
   /**
@@ -326,7 +330,7 @@ export class LocalLLMManager {
       }
 
       // Get user settings for this model
-      const userSettings = this.getModelSettings(id);
+      const userSettings = await this.getModelSettings(id);
 
       // Always calculate safe context size based on available VRAM
       const requestedContextSize =
@@ -580,15 +584,46 @@ export class LocalLLMManager {
   /**
    * Set loading settings for a model
    */
-  setModelSettings(modelId: string, settings: ModelLoadingSettings): void {
+  async setModelSettings(
+    modelId: string,
+    settings: ModelLoadingSettings
+  ): Promise<void> {
     this.modelSettings.set(modelId, settings);
+    await modelSettingsManager.saveModelSettings(modelId, settings);
   }
 
   /**
    * Get loading settings for a model
    */
-  getModelSettings(modelId: string): ModelLoadingSettings {
-    return this.modelSettings.get(modelId) || {};
+  async getModelSettings(modelId: string): Promise<ModelLoadingSettings> {
+    // First check in-memory cache
+    const cached = this.modelSettings.get(modelId);
+    if (cached) {
+      return cached;
+    }
+
+    // Load from persistent storage
+    const persisted = await modelSettingsManager.loadModelSettings(modelId);
+    if (persisted) {
+      this.modelSettings.set(modelId, persisted);
+      return persisted;
+    }
+
+    return {};
+  }
+
+  /**
+   * Load model settings from persistent storage
+   */
+  private async loadModelSettingsFromDisk(): Promise<void> {
+    try {
+      const allSettings = await modelSettingsManager.loadAllModelSettings();
+      for (const [modelId, settings] of Object.entries(allSettings)) {
+        this.modelSettings.set(modelId, settings);
+      }
+    } catch (error) {
+      console.error('Error loading model settings from disk:', error);
+    }
   }
 
   /**
@@ -669,7 +704,7 @@ export class LocalLLMManager {
     const startTime = Date.now();
 
     // Get user settings for this model
-    const settings = this.getModelSettings(modelId);
+    const settings = await this.getModelSettings(modelId);
 
     // Configure llama for async/non-blocking operation
     const llama = await getLlama({
@@ -730,7 +765,7 @@ export class LocalLLMManager {
       console.log(
         `Updating context size from ${contextSize} to ${safeContextSize}`
       );
-      this.setModelSettings(modelId, {
+      await this.setModelSettings(modelId, {
         ...settings,
         contextSize: safeContextSize,
       });
@@ -892,6 +927,7 @@ export class LocalLLMManager {
     options?: {
       temperature?: number;
       maxTokens?: number;
+      signal?: AbortSignal;
     }
   ): AsyncGenerator<string> {
     // First try to use it as an ID
@@ -937,36 +973,54 @@ export class LocalLLMManager {
       ? `${systemMessage}\n\n${lastUserMessage}`
       : lastUserMessage;
 
-    // Generate streaming response with async yielding to prevent blocking
-    const response = await session.prompt(finalPrompt, {
-      temperature: options?.temperature || 0.7,
-      maxTokens: options?.maxTokens || 2048,
-      // Enable async processing with yielding to prevent blocking
-      onToken: async () => {
-        // Yield control to event loop during generation
-        await new Promise(resolve => setImmediate(resolve));
-      },
-    });
+    // Generate streaming response with real-time streaming
+    let resolveChunk: ((chunk: string | null) => void) | null = null;
+    let chunkQueue: Array<string | null> = [];
 
-    // Simulate streaming by yielding characters/words with small delays
-    const words = response.split(' ');
-
-    for (let i = 0; i < words.length; i++) {
-      const word = words[i];
-
-      // Yield word by word for more realistic streaming
-      yield (i === 0 ? '' : ' ') + word;
-
-      // Add a small delay to simulate real streaming and yield control (only if not the last word)
-      if (i < words.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 50)); // 50ms delay between words
+    const getNextChunk = (): Promise<string | null> => {
+      if (chunkQueue.length > 0) {
+        return Promise.resolve(chunkQueue.shift()!);
       }
+      return new Promise(resolve => {
+        resolveChunk = resolve;
+      });
+    };
 
-      // Yield control to event loop every few words to prevent blocking
-      if (i % 3 === 0) {
-        await new Promise(resolve => setImmediate(resolve));
+    const pushChunk = (chunk: string | null) => {
+      if (resolveChunk) {
+        resolveChunk(chunk);
+        resolveChunk = null;
+      } else {
+        chunkQueue.push(chunk);
       }
+    };
+
+    // Start the prompt asynchronously
+    const promptPromise = session
+      .prompt(finalPrompt, {
+        temperature: options?.temperature || 0.7,
+        maxTokens: options?.maxTokens || 2048,
+        onTextChunk: (chunk: string) => {
+          pushChunk(chunk);
+        },
+      })
+      .then(() => {
+        // Signal end of stream
+        pushChunk(null);
+      });
+
+    // Yield chunks as they arrive
+    let chunk: string | null;
+    while ((chunk = await getNextChunk()) !== null) {
+      // Check for cancellation
+      if (options?.signal?.aborted) {
+        throw new Error('Generation cancelled');
+      }
+      yield chunk;
     }
+
+    // Wait for prompt to complete
+    await promptPromise;
   }
 
   /**

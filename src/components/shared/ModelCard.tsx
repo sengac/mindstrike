@@ -9,7 +9,6 @@ import {
   Clock,
 } from 'lucide-react';
 import { useState } from 'react';
-import { useAppStore } from '../../store/useAppStore';
 
 interface ModelLoadingSettings {
   gpuLayers?: number;
@@ -75,7 +74,6 @@ export function ModelCard({
   const [validationErrors, setValidationErrors] = useState<
     Record<string, string>
   >({});
-  const { removeModelSettings } = useAppStore();
 
   const handleSaveSettings = () => {
     // Check if there are any validation errors
@@ -93,9 +91,6 @@ export function ModelCard({
   };
 
   const handleResetSettings = () => {
-    // Remove model settings from localStorage
-    removeModelSettings(model.id);
-
     // Reset to empty settings (which will use server defaults)
     const defaultSettings: ModelLoadingSettings = {};
     setTempSettings(defaultSettings);

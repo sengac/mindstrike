@@ -5,6 +5,7 @@ import os from 'os';
 import { getLocalLLMManager } from '../local-llm-singleton.js';
 import { sseManager } from '../sse-manager.js';
 import { getLocalModelsDirectory } from '../utils/settings-directory.js';
+import { modelSettingsManager } from '../utils/model-settings-manager.js';
 
 const router = Router();
 const llmManager = getLocalLLMManager();
@@ -467,11 +468,11 @@ router.post('/download', async (req, res) => {
 /**
  * Cancel a download
  */
-router.post('/download/:filename/cancel', (req, res) => {
+router.post('/download/:filename/cancel', async (req, res) => {
   const { filename } = req.params;
 
   try {
-    const cancelled = llmManager.cancelDownload(filename);
+    const cancelled = await llmManager.cancelDownload(filename);
     if (cancelled) {
       res.json({ message: 'Download cancelled', filename });
     } else {
@@ -491,6 +492,9 @@ router.delete('/models/:modelId', async (req, res) => {
 
   try {
     await llmManager.deleteModel(modelId);
+
+    // Delete associated settings file
+    await modelSettingsManager.deleteModelSettings(modelId);
 
     // Give server time to process the model deletion before broadcasting update
     setTimeout(() => {
@@ -565,7 +569,7 @@ router.get('/models/:modelId/status', async (req, res) => {
 
   try {
     const status = await llmManager.getModelStatus(modelId);
-    const runtimeInfo = llmManager.getModelRuntimeInfo(modelId);
+    const runtimeInfo = await llmManager.getModelRuntimeInfo(modelId);
     res.json({ ...status, runtimeInfo });
   } catch (error) {
     console.error('Error getting model status:', error);
@@ -584,7 +588,7 @@ router.put('/models/:modelId/settings', async (req, res) => {
   const settings = req.body;
 
   try {
-    llmManager.setModelSettings(modelId, settings);
+    await llmManager.setModelSettings(modelId, settings);
     res.json({ message: 'Model settings updated successfully' });
   } catch (error) {
     console.error('Error updating model settings:', error);
@@ -604,13 +608,31 @@ router.get('/models/:modelId/settings', async (req, res) => {
   const { modelId } = req.params;
 
   try {
-    const settings = llmManager.getModelSettings(modelId);
+    const settings = await llmManager.getModelSettings(modelId);
     res.json(settings);
   } catch (error) {
     console.error('Error getting model settings:', error);
     res.status(500).json({
       error:
         error instanceof Error ? error.message : 'Failed to get model settings',
+    });
+  }
+});
+
+/**
+ * Get all model settings
+ */
+router.get('/settings', async (req, res) => {
+  try {
+    const settings = await modelSettingsManager.loadAllModelSettings();
+    res.json(settings);
+  } catch (error) {
+    console.error('Error getting all model settings:', error);
+    res.status(500).json({
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Failed to get all model settings',
     });
   }
 });
