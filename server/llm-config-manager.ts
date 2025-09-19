@@ -530,16 +530,33 @@ export class LLMConfigManager {
       if (service.type === 'ollama') {
         models =
           data?.models
-            ?.map((m: any) => m.name || m.model || '')
+            ?.map(
+              (m: unknown) =>
+                (m as { name?: string; model?: string }).name ||
+                (m as { name?: string; model?: string }).model ||
+                ''
+            )
             .filter(Boolean) || [];
       } else if (service.type === 'anthropic') {
         models =
-          data?.data?.map((m: any) => m.id || m.name || '').filter(Boolean) ||
-          [];
+          data?.data
+            ?.map(
+              (m: unknown) =>
+                (m as { id?: string; name?: string }).id ||
+                (m as { id?: string; name?: string }).name ||
+                ''
+            )
+            .filter(Boolean) || [];
       } else {
         models =
-          data?.data?.map((m: any) => m.id || m.model || '').filter(Boolean) ||
-          [];
+          data?.data
+            ?.map(
+              (m: unknown) =>
+                (m as { id?: string; model?: string }).id ||
+                (m as { id?: string; model?: string }).model ||
+                ''
+            )
+            .filter(Boolean) || [];
       }
 
       return models;

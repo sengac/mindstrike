@@ -27,7 +27,7 @@ export async function initializeWorkspace() {
       initializeModelsEventSubscription();
       initializeLocalModelsStore();
 
-      const { workspaceRoot } = useAppStore.getState();
+      const { workspaceRoot, musicRoot } = useAppStore.getState();
 
       if (workspaceRoot) {
         // Restore saved workspace
@@ -60,6 +60,21 @@ export async function initializeWorkspace() {
             'Failed to set initial workspace:',
             await response.text()
           );
+        }
+      }
+
+      if (musicRoot) {
+        // Restore saved music root
+        const response = await fetch('/api/music/root', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ path: musicRoot }),
+        });
+
+        if (!response.ok) {
+          console.error('Failed to restore music root:', await response.text());
         }
       }
 

@@ -151,7 +151,12 @@ export class LLMScanner {
           expectedResponseStructure = data => {
             if (data?.data && Array.isArray(data.data)) {
               return data.data
-                .map((model: any) => model.id || model.name || '')
+                .map(
+                  (model: unknown) =>
+                    (model as { id?: string; name?: string }).id ||
+                    (model as { id?: string; name?: string }).name ||
+                    ''
+                )
                 .filter(Boolean);
             }
             return [];

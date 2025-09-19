@@ -1,4 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { audioAnalyzer } from '../utils/audioAnalyzer';
+import { useAudioStore } from '../store/useAudioStore';
 
 interface NetworkEffectProps {
   className?: string;
@@ -24,13 +26,107 @@ interface MusicNote {
   type: 'eighth' | 'quarter';
 }
 
-export function NetworkEffect({ className = '', onHeartClick }: NetworkEffectProps) {
+export function NetworkEffect({
+  className = '',
+  onHeartClick,
+}: NetworkEffectProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mousePos = useRef({ x: 0, y: 0 });
   const isHovering = useRef(false);
   const heartParticles = useRef<HeartParticle[]>([]);
   const musicNotes = useRef<MusicNote[]>([]);
   const noteSpawnTimer = useRef(0);
+  const [_audioData, setAudioData] = useState<{
+    frequency: Uint8Array;
+    waveform: Uint8Array;
+  } | null>(null);
+  const audioDataRef = useRef<{
+    frequency: Uint8Array;
+    waveform: Uint8Array;
+  } | null>(null);
+  const [_isConnected, setIsConnected] = useState(false);
+
+  // Beat detection state
+  const beatDetectionRef = useRef({
+    lastBeatTime: 0,
+    beatThreshold: 0,
+    beatHistory: [] as number[],
+    currentZoom: 0.75, // Base zoom level
+    targetZoom: 0.75,
+    lastKickEnergy: 0,
+    // Sine wave visualization state
+    waveAmplitude: 0,
+    targetAmplitude: 0,
+    wavePhase: 0,
+    // Waveform animation state
+    waveVisibility: 0, // 0 = hidden, 1 = fully visible
+    targetVisibility: 0,
+    slideOffset: 0, // For slide animation
+    // Music state tracking
+    musicStartTime: 0,
+    musicStopTime: 0,
+    lastMusicState: false,
+    lastFrequencySnapshot: null as Uint8Array | null,
+  });
+
+  const { howl, isPlaying } = useAudioStore();
+
+  // Connect to audio analyzer when howl is available
+  useEffect(() => {
+    if (!howl || !isPlaying) {
+      setIsConnected(false);
+      setAudioData(null);
+      audioDataRef.current = null;
+      // Reset beat detection
+      beatDetectionRef.current = {
+        lastBeatTime: 0,
+        beatThreshold: 0,
+        beatHistory: [],
+        currentZoom: 0.75,
+        targetZoom: 0.75,
+        lastKickEnergy: 0,
+        waveAmplitude: 0,
+        targetAmplitude: 0,
+        wavePhase: 0,
+        waveVisibility: 0,
+        targetVisibility: 0,
+        slideOffset: 0,
+        musicStartTime: 0,
+        musicStopTime: 0,
+        lastMusicState: false,
+        lastFrequencySnapshot: null,
+      };
+      return;
+    }
+
+    const audioElement = howl._sounds[0]?._node;
+    if (!audioElement) {
+      console.warn('NetworkEffect: No audio element found in Howler instance');
+      return;
+    }
+
+    // Subscribe to audio analyzer
+    const unsubscribe = audioAnalyzer.subscribe(data => {
+      // Update both state and ref so animation loop can access current data
+      setAudioData(data);
+      audioDataRef.current = data;
+    });
+
+    // Try to connect to the audio element
+    audioAnalyzer.connectToAudio(audioElement).then(success => {
+      setIsConnected(success);
+      if (!success) {
+        console.warn('NetworkEffect: Failed to connect to audio analyzer');
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      setIsConnected(false);
+      setAudioData(null);
+      audioDataRef.current = null;
+    };
+  }, [howl, isPlaying]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -245,7 +341,7 @@ export function NetworkEffect({ className = '', onHeartClick }: NetworkEffectPro
       const rect = canvas.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
       const clickY = e.clientY - rect.top;
-      
+
       // Create explosion particles
       const newParticles: HeartParticle[] = [];
       for (let i = 0; i < 15; i++) {
@@ -262,7 +358,7 @@ export function NetworkEffect({ className = '', onHeartClick }: NetworkEffectPro
         });
       }
       heartParticles.current = [...heartParticles.current, ...newParticles];
-      
+
       // Trigger the music player dialog
       if (onHeartClick) {
         onHeartClick();
@@ -275,9 +371,15 @@ export function NetworkEffect({ className = '', onHeartClick }: NetworkEffectPro
     canvas.addEventListener('click', handleClick);
 
     // Function to draw pixelated musical note
-    const drawPixelatedNote = (x: number, y: number, scale: number, alpha: number, type: 'eighth' | 'quarter') => {
+    const drawPixelatedNote = (
+      x: number,
+      y: number,
+      scale: number,
+      alpha: number,
+      type: 'eighth' | 'quarter'
+    ) => {
       let notePixels: number[][];
-      
+
       if (type === 'eighth') {
         // Eighth note pattern (with beam)
         notePixels = [
@@ -324,7 +426,12 @@ export function NetworkEffect({ className = '', onHeartClick }: NetworkEffectPro
     };
 
     // Function to draw pixelated heart
-    const drawPixelatedHeart = (x: number, y: number, scale: number, alpha: number) => {
+    const drawPixelatedHeart = (
+      x: number,
+      y: number,
+      scale: number,
+      alpha: number
+    ) => {
       const heartPixels = [
         [0, 1, 1, 0, 0, 0, 1, 1, 0],
         [1, 1, 1, 1, 0, 1, 1, 1, 1],
@@ -355,6 +462,181 @@ export function NetworkEffect({ className = '', onHeartClick }: NetworkEffectPro
       });
     };
 
+    // Function to detect kick drum beats and update zoom
+    const detectBeatAndUpdateZoom = (frequencyData: Uint8Array) => {
+      const beatDetection = beatDetectionRef.current;
+
+      // Calculate kick drum energy (low frequencies: bins 1-12 of 128, roughly 43-516 Hz)
+      const kickBins = 12; // Expanded range to catch more kick frequencies
+      let kickEnergy = 0;
+      for (let i = 1; i <= kickBins; i++) {
+        kickEnergy += frequencyData[i];
+      }
+      kickEnergy = kickEnergy / kickBins;
+
+      // Update beat history for threshold calculation
+      beatDetection.beatHistory.push(kickEnergy);
+      if (beatDetection.beatHistory.length > 20) {
+        beatDetection.beatHistory.shift();
+      }
+
+      // Calculate dynamic threshold (average + variance)
+      const avgEnergy =
+        beatDetection.beatHistory.reduce((a, b) => a + b, 0) /
+        beatDetection.beatHistory.length;
+      const variance =
+        beatDetection.beatHistory.reduce(
+          (sum, energy) => sum + Math.pow(energy - avgEnergy, 2),
+          0
+        ) / beatDetection.beatHistory.length;
+      const dynamicThreshold = avgEnergy + Math.sqrt(variance) * 0.5; // Very sensitive
+
+      // Detect beat: current energy is significantly higher than threshold and last energy
+      const energyIncrease = kickEnergy - beatDetection.lastKickEnergy;
+      const timeSinceLastBeat = time - beatDetection.lastBeatTime;
+      const isKick =
+        kickEnergy > dynamicThreshold &&
+        energyIncrease > 4 && // Very low threshold for energy increase
+        timeSinceLastBeat > 0.05; // Allow very fast beats (up to 1200 BPM)
+
+      if (isKick) {
+        // Trigger zoom in - subtle but noticeable
+        beatDetection.targetZoom = 1.1; // Zoom in to 110% (more subtle)
+        beatDetection.lastBeatTime = time;
+        // Trigger wave amplitude increase
+        beatDetection.targetAmplitude = Math.min(150, kickEnergy * 0.8); // Scale amplitude to kick energy
+      }
+
+      // Smooth zoom animation
+      const zoomSpeed = 0.2; // Faster animation
+      beatDetection.currentZoom +=
+        (beatDetection.targetZoom - beatDetection.currentZoom) * zoomSpeed;
+
+      // Gradually return to base zoom
+      if (timeSinceLastBeat > 0.05) {
+        // Start returning after 50ms
+        beatDetection.targetZoom += (0.75 - beatDetection.targetZoom) * 0.08; // Faster return
+      }
+
+      // Update wave amplitude with decay
+      beatDetection.waveAmplitude +=
+        (beatDetection.targetAmplitude - beatDetection.waveAmplitude) * 0.15;
+      beatDetection.targetAmplitude *= 0.92; // Gradual decay for reverberation effect
+
+      // Update wave phase for continuous animation
+      beatDetection.wavePhase += 0.1;
+
+      beatDetection.lastKickEnergy = kickEnergy;
+
+      return beatDetection.currentZoom;
+    };
+
+    // Function to draw seewav-style waveform visualization
+    const drawSoundWave = () => {
+      const beatDetection = beatDetectionRef.current;
+
+      // Only draw if visibility is above threshold (smooth fade in/out)
+      if (beatDetection.waveVisibility < 0.01) {
+        return;
+      }
+
+      // Use current waveform data or snapshot when fading out
+      const currentAudioData = audioDataRef.current;
+      let waveformData: Uint8Array;
+
+      if (currentAudioData && currentAudioData.waveform.length > 0) {
+        // Music is playing - use live waveform data
+        waveformData = currentAudioData.waveform;
+      } else if (beatDetection.lastFrequencySnapshot) {
+        // Music stopped - use snapshot for fade out
+        waveformData = beatDetection.lastFrequencySnapshot;
+      } else {
+        // No data available
+        return;
+      }
+
+      // True seewav-style visualization with thin vertical lines
+      const numBars = 120; // Many thin bars like seewav
+      const barWidth = 2; // Very thin bars
+      const barSpacing = canvas.width / numBars; // Even distribution
+      const centerY = canvas.height / 2;
+      const maxBarHeight = canvas.height * 0.6;
+
+      // Extract envelope from waveform data (not frequency data!)
+      const envelope: number[] = [];
+      const samplesPerBar = Math.floor(waveformData.length / numBars);
+
+      // Sigmoid function for compression
+      const sigmoid = (x: number) => 1 / (1 + Math.exp(-x));
+
+      for (let i = 0; i < numBars; i++) {
+        const start = i * samplesPerBar;
+        const end = Math.min(start + samplesPerBar, waveformData.length);
+
+        // Calculate RMS (root mean square) for this segment
+        let sum = 0;
+        for (let j = start; j < end; j++) {
+          const sample = (waveformData[j] - 128) / 128; // Convert to -1 to 1 range
+          sum += sample * sample;
+        }
+
+        const rms = Math.sqrt(sum / (end - start));
+        // Apply compression similar to seewav
+        const compressed = 1.9 * (sigmoid(2.5 * rms) - 0.5);
+        envelope.push(Math.max(0, compressed));
+      }
+
+      // Simple smoothing
+      const smoothedEnvelope = envelope.map((val, idx) => {
+        let sum = val;
+        let count = 1;
+
+        // Average with neighbors
+        if (idx > 0) {
+          sum += envelope[idx - 1];
+          count++;
+        }
+        if (idx < envelope.length - 1) {
+          sum += envelope[idx + 1];
+          count++;
+        }
+
+        return sum / count;
+      });
+
+      // Set drawing style
+      ctx.lineWidth = barWidth;
+      ctx.lineCap = 'round';
+      ctx.globalAlpha = beatDetection.waveVisibility;
+
+      // Draw the waveform with thin vertical lines
+      smoothedEnvelope.forEach((height, idx) => {
+        const x = (idx + 0.5) * barSpacing + beatDetection.slideOffset;
+
+        // Skip bars that are off screen
+        if (x < -barWidth || x > canvas.width + barWidth) return;
+
+        const barHeight = height * maxBarHeight;
+        const topY = centerY - barHeight / 2;
+        const bottomY = centerY + barHeight / 2;
+
+        // Create gradient for each line - lighter blue for visibility
+        const gradient = ctx.createLinearGradient(0, topY, 0, bottomY);
+        gradient.addColorStop(0, '#3b82f6');
+        gradient.addColorStop(0.5, '#3b82f6');
+        gradient.addColorStop(1, '#3b82f6');
+
+        ctx.strokeStyle = gradient;
+        ctx.beginPath();
+        ctx.moveTo(x, topY);
+        ctx.lineTo(x, bottomY);
+        ctx.stroke();
+      });
+
+      // Reset effects
+      ctx.globalAlpha = 1;
+    };
+
     const animate = () => {
       // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -376,9 +658,10 @@ export function NetworkEffect({ className = '', onHeartClick }: NetworkEffectPro
       if (isHovering.current) {
         // Spawn new notes
         noteSpawnTimer.current += 0.02;
-        if (noteSpawnTimer.current >= 0.3) { // Spawn every 0.3 seconds
+        if (noteSpawnTimer.current >= 0.3) {
+          // Spawn every 0.3 seconds
           noteSpawnTimer.current = 0;
-          
+
           // Create 2-3 notes at random positions
           const numNotes = Math.floor(Math.random() * 2) + 2;
           for (let i = 0; i < numNotes; i++) {
@@ -469,28 +752,78 @@ export function NetworkEffect({ className = '', onHeartClick }: NetworkEffectPro
       let rotX = time * 0.7 * currentSpeed;
       let rotY = time * 0.5 * currentSpeed;
       let rotZ = time * 0.3 * currentSpeed;
-      
+
       // Add mouse-controlled rotation when hovering
       if (isHovering.current) {
         const mouseInfluence = 0.005; // Sensitivity of mouse control
         const centerX = canvas.width / 2;
         const centerY = canvas.height / 2;
-        
+
         // Mouse position relative to center, normalized to -1 to 1
         const mouseX = (mousePos.current.x - centerX) / centerX;
         const mouseY = (mousePos.current.y - centerY) / centerY;
-        
+
         // Add mouse influence to rotations
         rotY += mouseX * mouseInfluence * 10; // Horizontal mouse movement affects Y rotation
         rotX += mouseY * mouseInfluence * 10; // Vertical mouse movement affects X rotation
       }
 
-      // Calculate zoom with smooth in/out effect - between 90% and 60%
-      const zoomCycle = Math.sin(time * 0.3) * 0.15 + 0.75; // Oscillates between 0.6 and 0.9
+      // Update waveform visibility transitions (always runs)
+      const beatDetection = beatDetectionRef.current;
+      const currentAudioData = audioDataRef.current;
+      const hasMusicData =
+        currentAudioData && currentAudioData.waveform.length > 0;
+
+      // Detect music state changes
+      if (hasMusicData && !beatDetection.lastMusicState) {
+        // Music just started
+        beatDetection.musicStartTime = time;
+        beatDetection.lastMusicState = true;
+      } else if (!hasMusicData && beatDetection.lastMusicState) {
+        // Music just stopped - take snapshot
+        beatDetection.musicStopTime = time;
+        beatDetection.lastMusicState = false;
+        if (currentAudioData) {
+          beatDetection.lastFrequencySnapshot = new Uint8Array(
+            currentAudioData.waveform
+          );
+        }
+      }
+
+      // Update target visibility with delays
+      const timeSinceStart = time - beatDetection.musicStartTime;
+      const timeSinceStop = time - beatDetection.musicStopTime;
+
+      if (hasMusicData && timeSinceStart > 0.3) {
+        // Show waveform 300ms after music starts
+        beatDetection.targetVisibility = 1;
+      } else if (!hasMusicData && timeSinceStop < 2.0) {
+        // Keep visible for 2 seconds after music stops (fade out snapshot)
+        beatDetection.targetVisibility = Math.max(0, 1 - timeSinceStop / 2.0);
+      } else {
+        beatDetection.targetVisibility = 0;
+      }
+
+      // Smooth visibility transition
+      beatDetection.waveVisibility +=
+        (beatDetection.targetVisibility - beatDetection.waveVisibility) * 0.08;
+
+      // Update slide offset for animation
+      beatDetection.slideOffset = (1 - beatDetection.waveVisibility) * 50; // Slide from right
+
+      // Calculate beat-responsive zoom
+      let finalZoom = 0.75; // Default zoom
+      if (currentAudioData && currentAudioData.frequency.length > 0) {
+        // Use beat detection to control zoom
+        finalZoom = detectBeatAndUpdateZoom(currentAudioData.frequency);
+      } else {
+        // Fallback to gentle oscillation when no music
+        finalZoom = Math.sin(time * 0.3) * 0.15 + 0.75; // Oscillates between 0.6 and 0.9
+      }
 
       // Project all vertices with zoom
       const projectedVertices = cubeVertices.map(vertex =>
-        project(vertex, rotX, rotY, rotZ, zoomCycle)
+        project(vertex, rotX, rotY, rotZ, finalZoom)
       );
 
       // Draw network effect in background
@@ -518,6 +851,9 @@ export function NetworkEffect({ className = '', onHeartClick }: NetworkEffectPro
         });
       }
 
+      // Draw sound wave visualization in the middle
+      drawSoundWave();
+
       // Draw wireframe edges
       ctx.strokeStyle = '#1e40af';
       ctx.lineWidth = 1;
@@ -536,18 +872,34 @@ export function NetworkEffect({ className = '', onHeartClick }: NetworkEffectPro
       // Draw hovering heart that follows mouse
       if (isHovering.current) {
         const heartBeat = 1 + Math.sin(time * 8) * 0.2; // beating animation
-        drawPixelatedHeart(mousePos.current.x, mousePos.current.y, heartBeat, 0.8);
+        drawPixelatedHeart(
+          mousePos.current.x,
+          mousePos.current.y,
+          heartBeat,
+          0.8
+        );
       }
 
       // Draw explosion particles
       heartParticles.current.forEach(particle => {
         const alpha = particle.life / particle.maxLife;
-        drawPixelatedHeart(particle.x, particle.y, particle.size * 0.3, alpha * 0.7);
+        drawPixelatedHeart(
+          particle.x,
+          particle.y,
+          particle.size * 0.3,
+          alpha * 0.7
+        );
       });
 
       // Draw floating musical notes
       musicNotes.current.forEach(note => {
-        drawPixelatedNote(note.x, note.y, note.size, note.alpha * 0.8, note.type);
+        drawPixelatedNote(
+          note.x,
+          note.y,
+          note.size,
+          note.alpha * 0.8,
+          note.type
+        );
       });
     };
 
@@ -568,9 +920,9 @@ export function NetworkEffect({ className = '', onHeartClick }: NetworkEffectPro
     <canvas
       ref={canvasRef}
       className={`absolute inset-0 w-full h-full ${className}`}
-      style={{ 
+      style={{
         background: 'transparent',
-        cursor: 'pointer'
+        cursor: 'pointer',
       }}
     />
   );

@@ -24,6 +24,7 @@ import { ChatMessage } from './ChatMessage';
 import { PersonalityModal } from '../../settings/components/PersonalityModal';
 import { ValidationStatusNotification } from '../../components/ValidationStatusNotification';
 import { LocalModelLoadDialog } from '../../components/LocalModelLoadDialog';
+import { MusicVisualization } from '../../components/MusicVisualization';
 import { useDialogAnimation } from '../../hooks/useDialogAnimation';
 import toast from 'react-hot-toast';
 
@@ -495,8 +496,10 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
             { '--dynamic-font-size': `${fontSize}px` } as React.CSSProperties
           }
         >
+          {/* Music Visualization Background */}
+          <MusicVisualization className="absolute inset-0 w-full h-full pointer-events-none" />
           {messages.length === 0 && (
-            <div className="text-center text-gray-500 mt-2">
+            <div className="text-center text-gray-500 mt-2 relative z-10">
               <div className="mb-4">
                 <div className="flex items-center justify-center mx-auto">
                   <MindStrikeIcon size={128} />
@@ -570,28 +573,33 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
           )}
 
           {messages.map(message => (
-            <ChatMessage
-              key={message.id}
-              message={message}
-              fontSize={fontSize}
-              onDelete={onDeleteMessage ? handleDeleteMessage : undefined}
-              onRegenerate={
-                message.role === 'assistant'
-                  ? handleRegenerateMessage
-                  : undefined
-              }
-              onEdit={message.role === 'user' ? handleEditMessage : undefined}
-              onCancelToolCalls={
-                message.status === 'processing' &&
-                message.toolCalls &&
-                message.toolCalls.length > 0
-                  ? handleCancelToolCalls
-                  : undefined
-              }
-              onCopyToNotes={
-                message.role === 'assistant' ? onCopyToNotes : undefined
-              }
-            />
+            <div
+              key={`message-wrapper-${message.id}`}
+              className="relative z-10"
+            >
+              <ChatMessage
+                key={message.id}
+                message={message}
+                fontSize={fontSize}
+                onDelete={onDeleteMessage ? handleDeleteMessage : undefined}
+                onRegenerate={
+                  message.role === 'assistant'
+                    ? handleRegenerateMessage
+                    : undefined
+                }
+                onEdit={message.role === 'user' ? handleEditMessage : undefined}
+                onCancelToolCalls={
+                  message.status === 'processing' &&
+                  message.toolCalls &&
+                  message.toolCalls.length > 0
+                    ? handleCancelToolCalls
+                    : undefined
+                }
+                onCopyToNotes={
+                  message.role === 'assistant' ? onCopyToNotes : undefined
+                }
+              />
+            </div>
           ))}
 
           {isLoading &&
@@ -599,7 +607,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
             !messages.some(
               msg => msg.role === 'assistant' && msg.status === 'processing'
             ) && (
-              <>
+              <div className="relative z-10">
                 {isAgentActive ? (
                   (() => {
                     // Show current workflow or most recent completed workflow (within last 10 seconds)
@@ -636,10 +644,10 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
                 ) : (
                   <TypingIndicator className="mb-4" />
                 )}
-              </>
+              </div>
             )}
 
-          <div ref={messagesEndRef} />
+          <div ref={messagesEndRef} className="relative z-10" />
         </div>
 
         {/* Input */}

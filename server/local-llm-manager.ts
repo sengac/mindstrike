@@ -293,7 +293,10 @@ export class LocalLLMManager {
       try {
         const ggufInfo = await readGgufFileInfo(fullPath);
         if (ggufInfo.metadata) {
-          const metadata = ggufInfo.metadata as any;
+          const metadata = ggufInfo.metadata as {
+            llama?: { block_count?: number; context_length?: number };
+            [key: string]: unknown;
+          };
           if (metadata.llama) {
             layerCount = metadata.llama.block_count;
             maxContextLength = metadata.llama.context_length;
@@ -301,12 +304,13 @@ export class LocalLLMManager {
             // Try other common architecture names
             const architectures = ['llama', 'mistral', 'gpt', 'qwen'];
             for (const arch of architectures) {
-              if (metadata[arch]) {
-                if (metadata[arch].block_count) {
-                  layerCount = metadata[arch].block_count;
+              const archData = metadata[arch] as { block_count?: number; context_length?: number } | undefined;
+              if (archData) {
+                if (archData.block_count) {
+                  layerCount = archData.block_count;
                 }
-                if (metadata[arch].context_length) {
-                  maxContextLength = metadata[arch].context_length;
+                if (archData.context_length) {
+                  maxContextLength = archData.context_length;
                 }
                 if (layerCount || maxContextLength) {
                   break;
@@ -597,7 +601,7 @@ export class LocalLLMManager {
    */
   async loadModel(modelIdOrName: string): Promise<void> {
     // Try to find by ID first
-    let modelInfo: any = null;
+    let modelInfo: LocalModelInfo | undefined = undefined;
     const models = await this.getLocalModels();
 
     modelInfo = models.find(m => m.id === modelIdOrName);

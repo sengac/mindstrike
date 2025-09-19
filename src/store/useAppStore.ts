@@ -23,6 +23,7 @@ interface AppState {
 
   // Workspace State
   workspaceRoot?: string;
+  musicRoot?: string;
   currentDirectory: string;
   files: string[];
   isLoading: boolean;
@@ -47,6 +48,7 @@ interface AppState {
     panel: 'chat' | 'files' | 'agents' | 'mind-maps' | 'settings'
   ) => void;
   setWorkspaceRoot: (root?: string) => void;
+  setMusicRoot: (root?: string) => void;
   setCurrentDirectory: (dir: string) => void;
   setFiles: (files: string[]) => void;
   setIsLoading: (loading: boolean) => void;
@@ -76,6 +78,7 @@ export const useAppStore = create<AppState>()(
       sidebarOpen: true,
       activePanel: 'chat',
       workspaceRoot: undefined,
+      musicRoot: undefined,
       currentDirectory: '.',
       files: [],
       isLoading: false,
@@ -96,6 +99,8 @@ export const useAppStore = create<AppState>()(
           workspaceRoot,
           workspaceVersion: state.workspaceVersion + 1,
         })),
+      setMusicRoot: (musicRoot?: string) =>
+        set({ musicRoot }),
       setCurrentDirectory: (currentDirectory: string) =>
         set({ currentDirectory }),
       setFiles: (files: string[]) => set({ files }),

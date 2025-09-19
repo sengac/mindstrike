@@ -129,9 +129,9 @@ export const useChatMessagesStore = create<ChatMessagesState>()(
     },
 
     setLoading: (isLoading: boolean, threadId?: string) => {
-      set({ 
+      set({
         isLoading,
-        loadingThreadId: isLoading ? threadId || null : null
+        loadingThreadId: isLoading ? threadId || null : null,
       });
     },
 

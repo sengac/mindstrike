@@ -2,18 +2,23 @@ import { MessageSquare, Files, Settings, Bot, Network } from 'lucide-react';
 import { clsx } from 'clsx';
 import { NetworkEffect } from './NetworkEffect';
 import { MusicPlayer } from './MusicPlayer';
-import { useState } from 'react';
+import { SidebarMusicControls } from './SidebarMusicControls';
 
 interface SidebarProps {
   activePanel: 'chat' | 'files' | 'agents' | 'mind-maps' | 'settings';
   onPanelChange: (
     panel: 'chat' | 'files' | 'agents' | 'mind-maps' | 'settings'
   ) => void;
+  isMusicPlayerOpen: boolean;
+  setIsMusicPlayerOpen: (open: boolean) => void;
 }
 
-export function Sidebar({ activePanel, onPanelChange }: SidebarProps) {
-  const [isMusicPlayerOpen, setIsMusicPlayerOpen] = useState(false);
-  
+export function Sidebar({
+  activePanel,
+  onPanelChange,
+  isMusicPlayerOpen,
+  setIsMusicPlayerOpen,
+}: SidebarProps) {
   const menuItems = [
     { id: 'chat' as const, icon: MessageSquare, label: 'Chat' },
     { id: 'mind-maps' as const, icon: Network, label: 'MindMaps' },
@@ -53,6 +58,9 @@ export function Sidebar({ activePanel, onPanelChange }: SidebarProps) {
             />
           </button>
         ))}
+
+        {/* Music Controls underneath menu items */}
+        <SidebarMusicControls isMusicPlayerVisible={isMusicPlayerOpen} />
       </nav>
 
       {/* Settings */}
@@ -77,7 +85,7 @@ export function Sidebar({ activePanel, onPanelChange }: SidebarProps) {
       </div>
 
       {/* MusicPlayer Dialog */}
-      <MusicPlayer 
+      <MusicPlayer
         isOpen={isMusicPlayerOpen}
         onClose={() => setIsMusicPlayerOpen(false)}
       />

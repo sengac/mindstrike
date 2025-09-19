@@ -1,3 +1,10 @@
+# Personal directories
+music/
+
+# MindStrike Files
+mindstrike-chats.json
+mindstrike-mindmaps.json
+
 # Dependencies
 node_modules/
 .pnpm-store/
@@ -5,6 +12,10 @@ node_modules/
 # Build outputs
 dist/
 build/
+
+# Compiled TypeScript files in src (should not be committed)
+src/**/*.js
+src/**/*.js.map
 
 # Environment variables
 .env

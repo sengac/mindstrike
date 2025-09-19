@@ -24,6 +24,7 @@ import { useAppStore } from './store/useAppStore';
 import { Source } from './types/mindMap';
 import { Menu, X, MessageSquare, Network, Cpu, FileText } from 'lucide-react';
 import { AppBar } from './components/AppBar';
+import { MiniMusicControls } from './components/MiniMusicControls';
 import { Toaster } from 'react-hot-toast';
 import { ConnectionMonitorDialog } from './components/shared/ConnectionMonitorDialog';
 import { useConnectionMonitor } from './hooks/useConnectionMonitor';
@@ -37,6 +38,7 @@ function App() {
     'debug' | 'tasks' | 'mcp'
   >('debug');
   const [showConnectionDialog, setShowConnectionDialog] = useState(false);
+  const [isMusicPlayerOpen, setIsMusicPlayerOpen] = useState(false);
   const { isConnected } = useConnectionMonitor();
 
   // Function to open debug dialog with specific tab
@@ -259,7 +261,12 @@ function App() {
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static fixed inset-y-0 left-0 z-40`}
       >
-        <Sidebar activePanel={activePanel} onPanelChange={setActivePanel} />
+        <Sidebar
+          activePanel={activePanel}
+          onPanelChange={setActivePanel}
+          isMusicPlayerOpen={isMusicPlayerOpen}
+          setIsMusicPlayerOpen={setIsMusicPlayerOpen}
+        />
       </div>
 
       {/* Main content */}

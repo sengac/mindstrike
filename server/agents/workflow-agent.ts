@@ -64,7 +64,7 @@ const DEFAULT_WORKFLOW_ROLE = `You are a sophisticated workflow agent that decom
 You have access to a comprehensive set of tools for file operations, web searches, code analysis, and more. Always provide clear reasoning for your decisions and keep the user informed of your progress.`;
 
 export class WorkflowAgent extends BaseAgent {
-  private workflowGraph: any;
+  private workflowGraph: { invoke: (state: any) => Promise<any> };
   private chatTopic?: string;
 
   constructor(config: AgentConfig, agentId?: string) {

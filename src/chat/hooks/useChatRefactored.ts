@@ -42,7 +42,7 @@ export function useChatRefactored({
   const safeThreadId = currentThreadId || 'fallback';
   const threadStore = useChatThreadStore(safeThreadId);
   const storeState = threadStore();
-  
+
   // Use the store state if we have a valid thread, otherwise provide defaults
   const {
     messages,
@@ -54,17 +54,19 @@ export function useChatRefactored({
     updateMessage,
     setMessages,
     setError,
-  } = currentThreadId ? storeState : {
-    messages: [],
-    isLoading: false,
-    isLoadingThread: false,
-    error: null,
-    loadMessages: async () => {},
-    addMessage: () => {},
-    updateMessage: () => {},
-    setMessages: () => {},
-    setError: () => {},
-  };
+  } = currentThreadId
+    ? storeState
+    : {
+        messages: [],
+        isLoading: false,
+        isLoadingThread: false,
+        error: null,
+        loadMessages: async () => {},
+        addMessage: () => {},
+        updateMessage: () => {},
+        setMessages: () => {},
+        setError: () => {},
+      };
 
   // Derive streaming state from actual message status instead of global state
   const isStreaming = messages.some(
@@ -124,10 +126,10 @@ export function useChatRefactored({
           // Handle real-time content chunks for character-by-character streaming
           if (!currentThreadId) return;
           const chatStore = threadStore.getState();
-          
+
           // Clear loading state when streaming starts (first chunk received)
           chatStore.setLoading(false);
-          
+
           const messages = chatStore.messages;
           const lastMessage = messages[messages.length - 1];
 
@@ -312,9 +314,9 @@ export function useChatRefactored({
       // Handle /clear command
       if (content.trim() === '/clear') {
         try {
-        await useThreadsStore.getState().clearThread(currentThreadId);
-        // Reload messages after clearing
-        await loadMessages();
+          await useThreadsStore.getState().clearThread(currentThreadId);
+          // Reload messages after clearing
+          await loadMessages();
         } catch {
           toast.error('Failed to clear conversation');
         }
@@ -322,7 +324,7 @@ export function useChatRefactored({
       }
 
       setError(null);
-      
+
       // Set loading state when sending message
       if (currentThreadId) {
         const chatStore = threadStore.getState();
@@ -432,9 +434,9 @@ export function useChatRefactored({
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ 
-            messageId: streamingMessage.id, 
-            threadId: currentThreadId 
+          body: JSON.stringify({
+            messageId: streamingMessage.id,
+            threadId: currentThreadId,
           }),
         });
 
@@ -471,7 +473,7 @@ export function useChatRefactored({
       }
 
       setError(null);
-      
+
       // Set loading state when regenerating message
       if (currentThreadId) {
         const chatStore = threadStore.getState();

@@ -10,6 +10,7 @@ import 'reactflow/dist/style.css';
 import { Plus, Trash2, Sparkles } from 'lucide-react';
 
 import { MindMapNode } from './MindMapNode';
+import { MusicVisualization } from '../../components/MusicVisualization';
 import { MindMapNodeData } from '../types/mindMap';
 import { Source } from '../types/mindMap';
 import { GenerateDialog } from '../../components/shared/GenerateDialog';
@@ -764,6 +765,8 @@ function MindMapInner({
       ref={containerRef}
       className="w-full h-full bg-slate-50 dark:bg-dark-bg relative"
     >
+      {/* Music Visualization Background */}
+      <MusicVisualization className="absolute inset-0 w-full h-full pointer-events-none" />
       {/* Drag Preview */}
       {draggedNodeId &&
         hasDraggedSignificantly &&

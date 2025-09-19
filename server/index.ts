@@ -2,7 +2,8 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs/promises';
-import { existsSync, statSync } from 'fs';
+import { existsSync, statSync, createReadStream, stat } from 'fs';
+import { Stats } from 'fs';
 
 import { fileURLToPath } from 'url';
 // NOTE: .js extensions are required for ES modules in Node.js/Electron
@@ -32,7 +33,7 @@ class MessageCancellationManager {
   startTask(threadId: string): AbortController {
     // Cancel any existing task for this thread
     this.cancelTask(threadId);
-    
+
     const controller = new AbortController();
     this.activeTasks.set(threadId, controller);
     return controller;
@@ -120,12 +121,88 @@ app.use('/api/model-scan', modelScanRoutes);
 // Serve static files from the built client
 app.use(express.static(path.join(__dirname, '../../client')));
 
+// Audio streaming endpoint with range request support
+app.get('/audio/*', (req: Request, res: Response) => {
+  const audioPath = req.params[0];
+  const fullPath = path.resolve(musicRoot, audioPath);
+
+  // Security check - ensure the path is within music root
+  if (!fullPath.startsWith(path.resolve(musicRoot))) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  // Check if file exists
+  stat(fullPath, (err: NodeJS.ErrnoException | null, stats: Stats) => {
+    if (err) {
+      console.error('Audio file not found:', fullPath);
+      return res.status(404).json({ error: 'Audio file not found' });
+    }
+
+    const range = req.headers.range;
+    const fileSize = stats.size;
+
+    // Set proper MIME type based on file extension
+    const ext = path.extname(fullPath).toLowerCase();
+    const mimeTypes: { [key: string]: string } = {
+      '.mp3': 'audio/mpeg',
+      '.wav': 'audio/wav',
+      '.ogg': 'audio/ogg',
+      '.m4a': 'audio/mp4',
+      '.aac': 'audio/aac',
+      '.flac': 'audio/flac',
+      '.webm': 'audio/webm',
+    };
+    const contentType = mimeTypes[ext] || 'audio/mpeg';
+
+    if (range) {
+      // Parse range header
+      const parts = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      const chunksize = end - start + 1;
+
+      // Validate range
+      if (start >= fileSize || end >= fileSize) {
+        res.status(416).set({
+          'Content-Range': `bytes */${fileSize}`,
+        });
+        return res.end();
+      }
+
+      const headers = {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunksize,
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=3600',
+      };
+
+      res.writeHead(206, headers);
+      const stream = createReadStream(fullPath, { start, end });
+      stream.pipe(res);
+    } else {
+      // No range requested, serve entire file
+      const headers = {
+        'Content-Length': fileSize,
+        'Content-Type': contentType,
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'public, max-age=3600',
+      };
+
+      res.writeHead(200, headers);
+      createReadStream(fullPath).pipe(res);
+    }
+  });
+});
+
 // Home directory function moved to utils/settings-directory.ts
 
-// Initialize workspace and agent configuration
+// Initialize workspace, music and agent configuration
 // Default to home directory if no working root is set
 const defaultWorkspaceRoot = process.env.WORKSPACE_ROOT || getHomeDirectory();
 let workspaceRoot = defaultWorkspaceRoot;
+const defaultMusicRoot = process.env.MUSIC_ROOT || getHomeDirectory();
+let musicRoot = defaultMusicRoot;
 let currentWorkingDirectory = workspaceRoot;
 let currentLlmConfig = {
   baseURL: 'http://localhost:11434',
@@ -757,6 +834,124 @@ app.get('/api/large-content/:contentId', (req: Request, res: Response) => {
 });
 
 // Generation streaming, task progress, and workflow updates now handled by unified SSE event bus
+
+// Audio files discovery endpoint
+app.get('/api/audio/files', async (req: Request, res: Response) => {
+  try {
+    const supportedExtensions = [
+      'mp3',
+      'mpeg',
+      'opus',
+      'ogg',
+      'oga',
+      'wav',
+      'aac',
+      'caf',
+      'm4a',
+      'mp4',
+      'weba',
+      'webm',
+      'flac',
+    ];
+
+    const audioFiles: Array<{
+      id: number;
+      title: string;
+      artist: string;
+      duration: string;
+      url: string;
+      path: string;
+      size: number;
+      isActive: boolean;
+    }> = [];
+
+    async function scanDirectory(dirPath: string): Promise<void> {
+      try {
+        const entries = await fs.readdir(dirPath, { withFileTypes: true });
+
+        for (const entry of entries) {
+          const fullPath = path.join(dirPath, entry.name);
+
+          if (entry.isDirectory()) {
+            const skipDirs = [
+              'node_modules',
+              '.git',
+              'dist',
+              '.vscode',
+              'electron',
+              'AppData',
+              '.cache',
+              '.npm',
+              '.config',
+              'System Volume Information',
+              '$Recycle.Bin',
+              'Recovery',
+              'ProgramData',
+              'Windows',
+              'Program Files',
+              'Program Files (x86)',
+              '.ssh',
+              '.aws',
+              '.docker',
+            ];
+
+            const shouldSkip = skipDirs.some(
+              skipDir =>
+                entry.name === skipDir || entry.name.startsWith(skipDir)
+            );
+
+            if (!shouldSkip) {
+              try {
+                await scanDirectory(fullPath);
+              } catch {
+                // Silently skip directories we can't access
+              }
+            }
+          } else if (entry.isFile()) {
+            const ext = path.extname(entry.name).toLowerCase().slice(1);
+            if (supportedExtensions.includes(ext)) {
+              try {
+                const stats = statSync(fullPath);
+                const relativePath = path.relative(musicRoot, fullPath);
+                const fileName = path.basename(
+                  entry.name,
+                  path.extname(entry.name)
+                );
+                const normalizedPath = relativePath.replace(/\\/g, '/');
+                const fileUrl = `/audio/${normalizedPath}`;
+
+                audioFiles.push({
+                  id: audioFiles.length + 1,
+                  title: fileName
+                    .replace(/[-_]/g, ' ')
+                    .replace(/\b\w/g, l => l.toUpperCase()),
+                  artist: 'Unknown Artist',
+                  duration: '0:00',
+                  url: fileUrl,
+                  path: relativePath,
+                  size: stats.size,
+                  isActive: false,
+                });
+              } catch (error) {
+                logger.warn(`Error processing audio file ${fullPath}:`, error);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        logger.warn(`Error scanning directory ${dirPath}:`, error);
+      }
+    }
+
+    await scanDirectory(musicRoot);
+    audioFiles.sort((a, b) => a.title.localeCompare(b.title));
+
+    res.json(audioFiles);
+  } catch (error) {
+    logger.error('Error scanning for audio files:', error);
+    res.status(500).json({ error: 'Failed to scan for audio files' });
+  }
+});
 
 app.get('/api/conversation/:threadId', (req: Request, res: Response) => {
   const { threadId } = req.params;
@@ -2314,6 +2509,50 @@ app.post('/api/workspace/root', async (req: Request, res: Response) => {
     const errorMessage =
       error instanceof Error ? error.message : 'Unknown error';
     res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Set music root
+app.post('/api/music/root', async (req: Request, res: Response) => {
+  try {
+    const { path: newPath } = req.body;
+    if (!newPath) {
+      return res.status(400).json({ error: 'Path is required' });
+    }
+
+    // Resolve path - can be relative to current working directory or absolute
+    let fullPath;
+    if (path.isAbsolute(newPath)) {
+      fullPath = newPath;
+    } else {
+      fullPath = path.resolve(currentWorkingDirectory, newPath);
+    }
+
+    // Check if the path exists and is a directory
+    if (!existsSync(fullPath)) {
+      return res.status(404).json({ error: 'Directory does not exist' });
+    }
+
+    const stats = statSync(fullPath);
+    if (!stats.isDirectory()) {
+      return res.status(400).json({ error: 'Path is not a directory' });
+    }
+
+    // Only update and log if music root actually changed
+    if (musicRoot !== fullPath) {
+      // Update music root
+      musicRoot = fullPath;
+      logger.info(`Music root changed to: ${musicRoot}`);
+    }
+
+    res.json({
+      musicRoot: musicRoot,
+      message: 'Music root changed successfully',
+    });
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: 'Failed to set music root' });
   }
 });
 

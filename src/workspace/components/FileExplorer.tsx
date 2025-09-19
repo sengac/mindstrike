@@ -9,6 +9,7 @@ import {
   FolderOpen,
   ArrowUp,
   Home,
+  Music,
 } from 'lucide-react';
 import { AppBar } from '../../components/AppBar';
 import { useWorkspaceStore } from '../hooks/useWorkspaceStore';
@@ -29,6 +30,7 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
     loadDirectory,
     changeDirectory,
     setWorkspaceRoot,
+    setMusicRoot,
     currentDirectory,
     getFileContent,
     isLoading,
@@ -65,9 +67,12 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
   const openDirectoryInput = () => setShowDirectoryInput(true);
 
   const [showWorkspaceConfirm, setShowWorkspaceConfirm] = useState(false);
+  const [showMusicConfirm, setShowMusicConfirm] = useState(false);
 
   const openWorkspaceConfirm = () => setShowWorkspaceConfirm(true);
   const closeWorkspaceConfirm = () => setShowWorkspaceConfirm(false);
+  const openMusicConfirm = () => setShowMusicConfirm(true);
+  const closeMusicConfirm = () => setShowMusicConfirm(false);
 
   useEffect(() => {
     loadDirectory();
@@ -291,6 +296,22 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
     }
   };
 
+  const handleSetMusicRoot = () => {
+    openMusicConfirm();
+  };
+
+  const handleMusicConfirm = async () => {
+    closeMusicConfirm();
+    const result = await setMusicRoot(currentDirectory, onDirectoryChange);
+    if (result.success) {
+      toast.success(
+        `${result.message}\n\nThe current directory is now your music root. All audio files will be served from here.`
+      );
+    } else {
+      toast.error(`Failed to set music root: ${result.error}`);
+    }
+  };
+
   return (
     <div className="h-screen flex flex-col">
       {/* Header */}
@@ -298,14 +319,24 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
         icon={Folder}
         title="Workspace"
         actions={
-          <button
-            onClick={handleSetWorkspaceRoot}
-            className="px-4 py-1 border border-gray-600 hover:bg-gray-800 rounded-lg transition-colors text-gray-400 hover:text-gray-200 flex items-center gap-1"
-            title="Set current directory as workspace root"
-          >
-            <Home size={16} className="text-gray-400" />
-            <span className="text-xs">Set workspace root</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSetMusicRoot}
+              className="px-4 py-1 border border-gray-600 hover:bg-gray-800 rounded-lg transition-colors text-gray-400 hover:text-gray-200 flex items-center gap-1"
+              title="Set current directory as music root"
+            >
+              <Music size={16} className="text-gray-400" />
+              <span className="text-xs">Set music root</span>
+            </button>
+            <button
+              onClick={handleSetWorkspaceRoot}
+              className="px-4 py-1 border border-gray-600 hover:bg-gray-800 rounded-lg transition-colors text-gray-400 hover:text-gray-200 flex items-center gap-1"
+              title="Set current directory as workspace root"
+            >
+              <Home size={16} className="text-gray-400" />
+              <span className="text-xs">Set workspace root</span>
+            </button>
+          </div>
         }
       />
 
@@ -609,6 +640,18 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
         confirmText="Set Root"
         type="info"
         icon={<Home size={20} />}
+      />
+
+      {/* Music Root Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showMusicConfirm}
+        onClose={closeMusicConfirm}
+        onConfirm={handleMusicConfirm}
+        title="Set Music Root"
+        message={`Are you sure you want to set ${currentDirectory} as your music root? All audio files will be served from here.`}
+        confirmText="Set Root"
+        type="info"
+        icon={<Music size={20} />}
       />
     </div>
   );

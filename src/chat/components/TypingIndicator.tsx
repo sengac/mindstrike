@@ -5,7 +5,9 @@ interface TypingIndicatorProps {
   className?: string;
 }
 
-export const TypingIndicator: React.FC<TypingIndicatorProps> = ({ className = '' }) => {
+export const TypingIndicator: React.FC<TypingIndicatorProps> = ({
+  className = '',
+}) => {
   return (
     <div className={`flex space-x-3 justify-start ${className}`}>
       {/* Assistant avatar - matching ChatMessage styling */}
@@ -14,7 +16,7 @@ export const TypingIndicator: React.FC<TypingIndicatorProps> = ({ className = ''
           <Bot size={16} className="text-white drop-shadow-sm" />
         </div>
       </div>
-      
+
       {/* Typing bubble */}
       <div className="max-w-[80%] min-w-[80%]">
         <div className="bg-gray-800 rounded-lg px-4 py-3 inline-block">

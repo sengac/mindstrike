@@ -11,6 +11,7 @@ export function useWorkspaceStore() {
     setIsLoading,
     setCurrentDirectory,
     setWorkspaceRoot: setStoreWorkspaceRoot,
+    setMusicRoot: setStoreMusicRoot,
   } = useAppStore();
 
   const loadDirectory = useCallback(async () => {
@@ -113,6 +114,41 @@ export function useWorkspaceStore() {
     [setCurrentDirectory, setStoreWorkspaceRoot, loadDirectory, loadFiles]
   );
 
+  const setMusicRoot = useCallback(
+    async (newPath?: string, onMusicChange?: () => void) => {
+      try {
+        // If no path provided, use current working directory
+        const pathToSet = newPath || '.';
+
+        const response = await fetch('/api/music/root', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ path: pathToSet }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setStoreMusicRoot(data.musicRoot); // Update store with absolute path from server
+
+          // Trigger music rescan if callback provided
+          if (onMusicChange) {
+            onMusicChange();
+          }
+
+          return { success: true, message: data.message };
+        } else {
+          const errorData = await response.json();
+          return { success: false, error: errorData.error };
+        }
+      } catch {
+        return { success: false, error: 'Failed to set music root' };
+      }
+    },
+    [setStoreMusicRoot]
+  );
+
   const getFileContent = useCallback(
     async (filePath: string): Promise<string> => {
       // Construct full path relative to workspace root
@@ -141,6 +177,7 @@ export function useWorkspaceStore() {
     loadDirectory,
     changeDirectory,
     setWorkspaceRoot,
+    setMusicRoot,
     getFileContent,
   };
 }

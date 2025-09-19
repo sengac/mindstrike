@@ -5,10 +5,10 @@ import { ConversationMessage } from '../types';
 export interface ChatThreadState {
   // Thread identification
   threadId: string;
-  
+
   // Core message state
   messages: ConversationMessage[];
-  
+
   // Loading states
   isLoading: boolean;
   isLoadingThread: boolean;
@@ -35,7 +35,7 @@ export interface ChatThreadState {
 // Store factory for per-thread chat stores
 const createChatThreadStore = (threadId: string) =>
   create<ChatThreadState>()(
-    subscribeWithSelector((set) => ({
+    subscribeWithSelector(set => ({
       // Initial state
       threadId,
       messages: [],
@@ -70,7 +70,10 @@ const createChatThreadStore = (threadId: string) =>
             isStreaming: false,
           });
         } catch (error: unknown) {
-          console.error(`[useChatThreadStore:${threadId}] Error loading messages:`, error);
+          console.error(
+            `[useChatThreadStore:${threadId}] Error loading messages:`,
+            error
+          );
           set({
             error: error instanceof Error ? error.message : 'Unknown error',
             isLoadingThread: false,
@@ -133,7 +136,10 @@ const createChatThreadStore = (threadId: string) =>
   );
 
 // Global registry of thread stores
-const chatThreadStores = new Map<string, ReturnType<typeof createChatThreadStore>>();
+const chatThreadStores = new Map<
+  string,
+  ReturnType<typeof createChatThreadStore>
+>();
 
 export const useChatThreadStore = (threadId: string) => {
   if (!chatThreadStores.has(threadId)) {

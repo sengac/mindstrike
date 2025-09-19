@@ -894,7 +894,7 @@ export abstract class BaseAgent {
 
       // Set up abort controller for cancellation
       const abortController = new AbortController();
-      
+
       // Connect external signal to local abort controller
       if (signal) {
         signal.addEventListener('abort', () => {

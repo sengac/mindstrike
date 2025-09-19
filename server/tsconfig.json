@@ -9,8 +9,24 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "outDir": "../dist/server"
+    "outDir": "../dist/server",
+    "rootDir": ".."
   },
-  "include": ["./**/*"],
-  "exclude": ["node_modules", "../dist", "../src"]
+  "include": [
+    "./**/*",
+    "../src/types.ts",
+    "../src/types/**/*",
+    "../src/utils/mindMapData.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "../dist",
+    "../src/components",
+    "../src/chat",
+    "../src/mindmaps",
+    "../src/settings",
+    "../src/workflows",
+    "../src/workspace",
+    "../src/store"
+  ]
 }

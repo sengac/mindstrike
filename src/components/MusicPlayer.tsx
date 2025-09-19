@@ -1,7 +1,16 @@
-import { Music, Play, Pause, SkipBack, SkipForward, Volume2, X } from 'lucide-react';
+import {
+  Music,
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
+  Volume2,
+  X,
+} from 'lucide-react';
 import { BaseDialog } from './shared/BaseDialog';
 import { useDialogAnimation } from '../hooks/useDialogAnimation';
-import { useState } from 'react';
+import { useEffect } from 'react';
+import { useAudioStore } from '../store/useAudioStore';
 
 interface MusicPlayerProps {
   isOpen: boolean;
@@ -13,11 +22,78 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
     isOpen,
     onClose
   );
-  
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(180); // 3 minutes
-  const [volume, setVolume] = useState(75);
+
+  const {
+    audioFiles,
+    currentTrack,
+    currentTrackIndex,
+    isPlaying,
+    isLoading,
+    volume,
+    currentTime,
+    duration,
+    setAudioFiles,
+    playTrack,
+    play,
+    pause,
+    setVolume,
+    seek,
+    nextTrack,
+    previousTrack,
+  } = useAudioStore();
+
+  // Fetch audio files when dialog opens
+  useEffect(() => {
+    if (shouldRender) {
+      fetchAudioFiles();
+    }
+  }, [shouldRender]);
+
+  const fetchAudioFiles = async () => {
+    try {
+      const response = await fetch('/api/audio/files');
+      if (!response.ok) {
+        throw new Error('Failed to fetch audio files');
+      }
+      const files = await response.json();
+      const audioFiles = files.map((file: any) => ({
+        id: file.id,
+        title: file.title,
+        artist: file.artist,
+        duration: file.duration,
+        url: file.url,
+        path: file.path,
+        size: file.size,
+      }));
+      setAudioFiles(audioFiles);
+    } catch (error) {
+      console.error('Error fetching audio files:', error);
+    }
+  };
+
+  const togglePlayPause = () => {
+    if (isPlaying) {
+      pause();
+    } else {
+      play();
+    }
+  };
+
+  const handleVolumeChange = (percentage: number) => {
+    setVolume(percentage / 100);
+  };
+
+  const handleSeek = (percentage: number) => {
+    const seekTime = (percentage / 100) * duration;
+    seek(seekTime);
+  };
+
+  const handleTrackSelect = (index: number) => {
+    const track = audioFiles[index];
+    if (track) {
+      playTrack(track, index);
+    }
+  };
 
   if (!shouldRender) return null;
 
@@ -27,15 +103,8 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const progressPercentage = (currentTime / duration) * 100;
-
-  const playlist = [
-    { id: 1, title: "Deep Focus", artist: "Lo-Fi Beats Collection", duration: "3:00", isActive: true },
-    { id: 2, title: "Midnight Coding", artist: "Chill Hip-Hop", duration: "4:15", isActive: false },
-    { id: 3, title: "Binary Dreams", artist: "Synthwave Collective", duration: "3:45", isActive: false },
-    { id: 4, title: "Algorithm Flow", artist: "Ambient Tech", duration: "5:22", isActive: false },
-    { id: 5, title: "Debug Mode", artist: "Electronic Vibes", duration: "2:58", isActive: false },
-  ];
+  const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const volumePercentage = volume * 100;
 
   return (
     <BaseDialog
@@ -77,8 +146,26 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
 
             {/* Track Info */}
             <div className="text-center mb-6">
-              <h4 className="text-white text-lg font-medium mb-1">Deep Focus</h4>
-              <p className="text-gray-400 text-sm">Lo-Fi Beats Collection</p>
+              <h4 className="text-white text-lg font-medium mb-1">
+                {currentTrack?.title ||
+                  (audioFiles.length === 0
+                    ? 'No audio files found'
+                    : 'Select a track')}
+              </h4>
+              <p className="text-gray-400 text-sm">
+                {currentTrack?.artist ||
+                  (audioFiles.length === 0
+                    ? 'Add audio files to your workspace'
+                    : 'Unknown Artist')}
+              </p>
+              {isLoading && (
+                <p className="text-blue-400 text-xs mt-1">Loading track...</p>
+              )}
+              {currentTrack?.path && (
+                <p className="text-gray-500 text-xs mt-1 truncate">
+                  {currentTrack.path}
+                </p>
+              )}
             </div>
 
             {/* Progress Bar */}
@@ -87,9 +174,17 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
                 <span>{formatTime(currentTime)}</span>
                 <span>{formatTime(duration)}</span>
               </div>
-              <div className="w-full bg-gray-700 rounded-full h-2">
-                <div 
-                  className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+              <div
+                className="w-full bg-gray-700 rounded-full h-2 cursor-pointer"
+                onClick={e => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const percentage =
+                    ((e.clientX - rect.left) / rect.width) * 100;
+                  handleSeek(percentage);
+                }}
+              >
+                <div
+                  className="bg-blue-500 h-2 rounded-full transition-all duration-150"
                   style={{ width: `${progressPercentage}%` }}
                 />
               </div>
@@ -97,16 +192,25 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
 
             {/* Controls */}
             <div className="flex items-center justify-center space-x-6 mb-6">
-              <button className="text-gray-400 hover:text-white transition-colors">
+              <button
+                onClick={previousTrack}
+                className="text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+                disabled={isLoading || audioFiles.length === 0}
+              >
                 <SkipBack size={24} />
               </button>
-              <button 
-                onClick={() => setIsPlaying(!isPlaying)}
-                className="w-12 h-12 bg-blue-600 hover:bg-blue-700 rounded-full flex items-center justify-center text-white transition-colors"
+              <button
+                onClick={togglePlayPause}
+                className="w-12 h-12 bg-blue-600 hover:bg-blue-700 rounded-full flex items-center justify-center text-white transition-colors disabled:opacity-50"
+                disabled={isLoading || audioFiles.length === 0 || !currentTrack}
               >
                 {isPlaying ? <Pause size={24} /> : <Play size={24} />}
               </button>
-              <button className="text-gray-400 hover:text-white transition-colors">
+              <button
+                onClick={nextTrack}
+                className="text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+                disabled={isLoading || audioFiles.length === 0}
+              >
                 <SkipForward size={24} />
               </button>
             </div>
@@ -115,52 +219,91 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
             <div className="flex items-center space-x-3">
               <Volume2 size={20} className="text-gray-400" />
               <div className="flex-1">
-                <div className="w-full bg-gray-700 rounded-full h-2">
-                  <div 
+                <div
+                  className="w-full bg-gray-700 rounded-full h-2 cursor-pointer"
+                  onClick={e => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const percentage =
+                      ((e.clientX - rect.left) / rect.width) * 100;
+                    handleVolumeChange(Math.max(0, Math.min(100, percentage)));
+                  }}
+                >
+                  <div
                     className="bg-blue-500 h-2 rounded-full"
-                    style={{ width: `${volume}%` }}
+                    style={{ width: `${volumePercentage}%` }}
                   />
                 </div>
               </div>
-              <span className="text-xs text-gray-400 w-8">{volume}</span>
+              <span className="text-xs text-gray-400 w-8">
+                {Math.round(volumePercentage)}
+              </span>
             </div>
           </div>
 
           {/* Right Side - Playlist */}
           <div className="w-80 border-l border-gray-700 pl-6">
-            <h4 className="text-white font-medium mb-4">Playlist</h4>
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-white font-medium">Playlist</h4>
+              <button
+                onClick={fetchAudioFiles}
+                className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                Refresh
+              </button>
+            </div>
             <div className="space-y-2 max-h-96 overflow-y-auto">
-              {playlist.map((track) => (
-                <div 
-                  key={track.id}
-                  className={`p-3 rounded-lg cursor-pointer transition-colors ${
-                    track.isActive 
-                      ? 'bg-blue-600/20 border border-blue-500/30' 
-                      : 'bg-gray-800/50 hover:bg-gray-700/50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <h5 className={`text-sm font-medium truncate ${
-                        track.isActive ? 'text-blue-400' : 'text-white'
-                      }`}>
-                        {track.title}
-                      </h5>
-                      <p className="text-xs text-gray-400 truncate">
-                        {track.artist}
-                      </p>
-                    </div>
-                    <div className="flex items-center space-x-2 ml-2">
-                      <span className="text-xs text-gray-400">
-                        {track.duration}
-                      </span>
-                      {track.isActive && (
-                        <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-                      )}
-                    </div>
+              {audioFiles.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="text-gray-400 text-sm mb-2">
+                    No audio files found
+                  </div>
+                  <div className="text-gray-500 text-xs">
+                    Add MP3, WAV, OGG, or other audio files to your workspace
                   </div>
                 </div>
-              ))}
+              ) : (
+                audioFiles.map((track, index) => (
+                  <div
+                    key={track.id}
+                    onClick={() => handleTrackSelect(index)}
+                    className={`p-3 rounded-lg cursor-pointer transition-colors ${
+                      index === currentTrackIndex
+                        ? 'bg-blue-600/20 border border-blue-500/30'
+                        : 'bg-gray-800/50 hover:bg-gray-700/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <h5
+                          className={`text-sm font-medium truncate ${
+                            index === currentTrackIndex
+                              ? 'text-blue-400'
+                              : 'text-white'
+                          }`}
+                        >
+                          {track.title}
+                        </h5>
+                        <p className="text-xs text-gray-400 truncate">
+                          {track.artist}
+                        </p>
+                      </div>
+                      <div className="flex items-center space-x-2 ml-2">
+                        {index === currentTrackIndex && isPlaying && (
+                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                        )}
+                        {index === currentTrackIndex &&
+                          !isPlaying &&
+                          !isLoading && (
+                            <div className="w-2 h-2 bg-blue-500 rounded-full" />
+                          )}
+                        {index === currentTrackIndex && isLoading && (
+                          <div className="w-2 h-2 bg-yellow-500 rounded-full animate-spin" />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

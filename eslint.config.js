@@ -70,11 +70,16 @@ export default [
         HTMLTextAreaElement: 'readonly',
         HTMLCanvasElement: 'readonly',
         HTMLSpanElement: 'readonly',
+        HTMLAudioElement: 'readonly',
         Element: 'readonly',
         Node: 'readonly',
         NodeList: 'readonly',
         EventListener: 'readonly',
         EventTarget: 'readonly',
+        // Audio API types
+        AudioContext: 'readonly',
+        AnalyserNode: 'readonly',
+        MediaElementAudioSourceNode: 'readonly',
         // File/Blob APIs
         File: 'readonly',
         Blob: 'readonly',
