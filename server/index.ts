@@ -2622,11 +2622,8 @@ mcpManager.on('configReloaded', async () => {
 // Export the app for use in Electron or direct startup
 export default app;
 
-// Only start the server if not imported by Electron
-if (
-  !process.env.ELECTRON_RUN_AS_NODE &&
-  process.argv[1] !== 'electron/main.js'
-) {
+// Only start the server if not running in Electron
+if (typeof window === 'undefined' && !process.versions.electron) {
   app.listen(PORT, () => {
     console.log('\n🚀 MindStrike Server Started Successfully!');
     console.log('━'.repeat(50));

@@ -32,6 +32,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { useModelsStore } from '../../store/useModelsStore';
 import { useTaskStore } from '../../store/useTaskStore';
 import { WorkflowProgress } from './WorkflowProgress';
+import { TypingIndicator } from './TypingIndicator';
 import {
   ConversationMessage,
   Thread,
@@ -91,6 +92,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
     const {
       messages,
       isLoading,
+      isLoadingThread,
       sendMessage,
       clearConversation,
       cancelStreaming,
@@ -593,6 +595,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
           ))}
 
           {isLoading &&
+            !isLoadingThread &&
             !messages.some(
               msg => msg.role === 'assistant' && msg.status === 'processing'
             ) && (
@@ -631,10 +634,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
                     );
                   })()
                 ) : (
-                  <div className="flex items-center space-x-2 text-gray-400">
-                    <Loader2 size={16} className="animate-spin" />
-                    <span className="text-sm">MindStrike is thinking...</span>
-                  </div>
+                  <TypingIndicator className="mb-4" />
                 )}
               </>
             )}
@@ -716,7 +716,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
           )}
 
           <form onSubmit={handleSubmit} className="flex items-center space-x-4">
-            <div className="flex-1 flex items-center bg-dark-hover border border-gray-600 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
+            <div className="flex-1 flex items-center bg-dark-hover rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
               <textarea
                 ref={textareaRef}
                 value={input}

@@ -321,10 +321,10 @@ export const ChatContentViewer = forwardRef<
         </div>
 
         {/* Tab Content */}
-        <div className="flex-1 min-h-0 relative">
+        <div className="flex-1 min-h-0 bg-dark-bg relative">
           {/* Floating Action Buttons - Only show when chat tab is active and thread exists */}
           {activeTab === 'chat' && threadId && (
-            <div className="absolute top-4 right-4 z-10 flex gap-2 bg-black/20 p-3 rounded-lg backdrop-blur-sm">
+            <div className="absolute top-4 left-4 z-10 flex gap-2 bg-black/20 p-3 rounded-lg backdrop-blur-sm">
               {onUnassignThread && (
                 <button
                   onClick={onUnassignThread}

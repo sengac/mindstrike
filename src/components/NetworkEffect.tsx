@@ -2,10 +2,35 @@ import { useEffect, useRef } from 'react';
 
 interface NetworkEffectProps {
   className?: string;
+  onHeartClick?: () => void;
 }
 
-export function NetworkEffect({ className = '' }: NetworkEffectProps) {
+interface HeartParticle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  size: number;
+  life: number;
+  maxLife: number;
+}
+
+interface MusicNote {
+  x: number;
+  y: number;
+  vy: number;
+  size: number;
+  alpha: number;
+  type: 'eighth' | 'quarter';
+}
+
+export function NetworkEffect({ className = '', onHeartClick }: NetworkEffectProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mousePos = useRef({ x: 0, y: 0 });
+  const isHovering = useRef(false);
+  const heartParticles = useRef<HeartParticle[]>([]);
+  const musicNotes = useRef<MusicNote[]>([]);
+  const noteSpawnTimer = useRef(0);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -76,8 +101,8 @@ export function NetworkEffect({ className = '' }: NetworkEffectProps) {
     ): Point2D => {
       const centerX = canvas.width / 2;
       const centerY = canvas.height / 2;
-      // Scale to fit within canvas bounds with margin, modified by zoom
-      const baseScale = Math.min(canvas.width, canvas.height) * 0.15;
+      // Scale so cube edges stay within viewbox boundaries at zoom = 1.0
+      const baseScale = Math.min(canvas.width, canvas.height) / 3;
       const scale = baseScale * zoom;
 
       let { x, y, z } = point;
@@ -199,11 +224,187 @@ export function NetworkEffect({ className = '' }: NetworkEffectProps) {
     // Add event listener
     window.addEventListener('keydown', handleKeyPress);
 
+    // Mouse event handlers
+    const handleMouseMove = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      mousePos.current = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      };
+    };
+
+    const handleMouseEnter = () => {
+      isHovering.current = true;
+    };
+
+    const handleMouseLeave = () => {
+      isHovering.current = false;
+    };
+
+    const handleClick = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickY = e.clientY - rect.top;
+      
+      // Create explosion particles
+      const newParticles: HeartParticle[] = [];
+      for (let i = 0; i < 15; i++) {
+        const angle = (Math.PI * 2 * i) / 15;
+        const speed = Math.random() * 3 + 2;
+        newParticles.push({
+          x: clickX,
+          y: clickY,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          size: Math.random() * 3 + 2,
+          life: 1,
+          maxLife: 1,
+        });
+      }
+      heartParticles.current = [...heartParticles.current, ...newParticles];
+      
+      // Trigger the music player dialog
+      if (onHeartClick) {
+        onHeartClick();
+      }
+    };
+
+    canvas.addEventListener('mousemove', handleMouseMove);
+    canvas.addEventListener('mouseenter', handleMouseEnter);
+    canvas.addEventListener('mouseleave', handleMouseLeave);
+    canvas.addEventListener('click', handleClick);
+
+    // Function to draw pixelated musical note
+    const drawPixelatedNote = (x: number, y: number, scale: number, alpha: number, type: 'eighth' | 'quarter') => {
+      let notePixels: number[][];
+      
+      if (type === 'eighth') {
+        // Eighth note pattern (with beam)
+        notePixels = [
+          [0, 0, 0, 1, 0],
+          [0, 0, 0, 1, 0],
+          [0, 0, 0, 1, 0],
+          [0, 0, 0, 1, 1],
+          [0, 0, 0, 1, 0],
+          [0, 0, 0, 1, 0],
+          [0, 1, 1, 1, 0],
+          [1, 1, 1, 0, 0],
+        ];
+      } else {
+        // Quarter note pattern
+        notePixels = [
+          [0, 0, 0, 1, 0],
+          [0, 0, 0, 1, 0],
+          [0, 0, 0, 1, 0],
+          [0, 0, 0, 1, 0],
+          [0, 0, 0, 1, 0],
+          [0, 0, 0, 1, 0],
+          [0, 1, 1, 1, 0],
+          [1, 1, 1, 0, 0],
+        ];
+      }
+
+      const pixelSize = 2 * scale;
+      const offsetX = x - (notePixels[0].length * pixelSize) / 2;
+      const offsetY = y - (notePixels.length * pixelSize) / 2;
+
+      ctx.fillStyle = `rgba(30, 64, 175, ${alpha})`;
+      notePixels.forEach((row, rowIndex) => {
+        row.forEach((pixel, colIndex) => {
+          if (pixel === 1) {
+            ctx.fillRect(
+              offsetX + colIndex * pixelSize,
+              offsetY + rowIndex * pixelSize,
+              pixelSize,
+              pixelSize
+            );
+          }
+        });
+      });
+    };
+
+    // Function to draw pixelated heart
+    const drawPixelatedHeart = (x: number, y: number, scale: number, alpha: number) => {
+      const heartPixels = [
+        [0, 1, 1, 0, 0, 0, 1, 1, 0],
+        [1, 1, 1, 1, 0, 1, 1, 1, 1],
+        [1, 1, 1, 1, 1, 1, 1, 1, 1],
+        [1, 1, 1, 1, 1, 1, 1, 1, 1],
+        [0, 1, 1, 1, 1, 1, 1, 1, 0],
+        [0, 0, 1, 1, 1, 1, 1, 0, 0],
+        [0, 0, 0, 1, 1, 1, 0, 0, 0],
+        [0, 0, 0, 0, 1, 0, 0, 0, 0],
+      ];
+
+      const pixelSize = 3 * scale;
+      const offsetX = x - (heartPixels[0].length * pixelSize) / 2;
+      const offsetY = y - (heartPixels.length * pixelSize) / 2;
+
+      ctx.fillStyle = `rgba(30, 64, 175, ${alpha})`; // Match cube color #1e40af
+      heartPixels.forEach((row, rowIndex) => {
+        row.forEach((pixel, colIndex) => {
+          if (pixel === 1) {
+            ctx.fillRect(
+              offsetX + colIndex * pixelSize,
+              offsetY + rowIndex * pixelSize,
+              pixelSize,
+              pixelSize
+            );
+          }
+        });
+      });
+    };
+
     const animate = () => {
       // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       time += 0.02;
+
+      // Update heart particles
+      heartParticles.current = heartParticles.current
+        .map(particle => ({
+          ...particle,
+          x: particle.x + particle.vx,
+          y: particle.y + particle.vy,
+          vy: particle.vy + 0.1, // gravity
+          life: particle.life - 0.02,
+        }))
+        .filter(particle => particle.life > 0);
+
+      // Update musical notes when hovering
+      if (isHovering.current) {
+        // Spawn new notes
+        noteSpawnTimer.current += 0.02;
+        if (noteSpawnTimer.current >= 0.3) { // Spawn every 0.3 seconds
+          noteSpawnTimer.current = 0;
+          
+          // Create 2-3 notes at random positions
+          const numNotes = Math.floor(Math.random() * 2) + 2;
+          for (let i = 0; i < numNotes; i++) {
+            musicNotes.current.push({
+              x: Math.random() * canvas.width,
+              y: canvas.height + 20, // Start below canvas
+              vy: -(Math.random() * 2 + 1), // Float upward at different speeds
+              size: Math.random() * 0.5 + 0.8, // Random size
+              alpha: Math.random() * 0.5 + 0.5, // Random opacity
+              type: Math.random() > 0.5 ? 'eighth' : 'quarter',
+            });
+          }
+        }
+      } else {
+        // Reset spawn timer when not hovering
+        noteSpawnTimer.current = 0;
+      }
+
+      // Update existing musical notes
+      musicNotes.current = musicNotes.current
+        .map(note => ({
+          ...note,
+          y: note.y + note.vy,
+          alpha: note.y < canvas.height * 0.3 ? note.alpha * 0.98 : note.alpha, // Fade out at top
+        }))
+        .filter(note => note.y > -50 && note.alpha > 0.01); // Remove notes that are off-screen or fully faded
 
       // Network effect based on typing duration
       const typingDuration = time - firstKeyTime;
@@ -264,13 +465,28 @@ export function NetworkEffect({ className = '' }: NetworkEffectProps) {
       // Smoothly interpolate to target speed
       currentSpeed += (targetSpeed - currentSpeed) * 0.02; // Slightly faster transition
 
-      // Calculate rotations with smooth variable speed
-      const rotX = time * 0.7 * currentSpeed;
-      const rotY = time * 0.5 * currentSpeed;
-      const rotZ = time * 0.3 * currentSpeed;
+      // Calculate rotations with smooth variable speed and mouse influence
+      let rotX = time * 0.7 * currentSpeed;
+      let rotY = time * 0.5 * currentSpeed;
+      let rotZ = time * 0.3 * currentSpeed;
+      
+      // Add mouse-controlled rotation when hovering
+      if (isHovering.current) {
+        const mouseInfluence = 0.005; // Sensitivity of mouse control
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        
+        // Mouse position relative to center, normalized to -1 to 1
+        const mouseX = (mousePos.current.x - centerX) / centerX;
+        const mouseY = (mousePos.current.y - centerY) / centerY;
+        
+        // Add mouse influence to rotations
+        rotY += mouseX * mouseInfluence * 10; // Horizontal mouse movement affects Y rotation
+        rotX += mouseY * mouseInfluence * 10; // Vertical mouse movement affects X rotation
+      }
 
-      // Calculate zoom with smooth in/out effect
-      const zoomCycle = Math.sin(time * 0.3) * 0.5 + 1; // Oscillates between 0.5 and 1.5
+      // Calculate zoom with smooth in/out effect - between 90% and 60%
+      const zoomCycle = Math.sin(time * 0.3) * 0.15 + 0.75; // Oscillates between 0.6 and 0.9
 
       // Project all vertices with zoom
       const projectedVertices = cubeVertices.map(vertex =>
@@ -316,6 +532,23 @@ export function NetworkEffect({ className = '' }: NetworkEffectProps) {
         ctx.lineTo(p2.x, p2.y);
         ctx.stroke();
       });
+
+      // Draw hovering heart that follows mouse
+      if (isHovering.current) {
+        const heartBeat = 1 + Math.sin(time * 8) * 0.2; // beating animation
+        drawPixelatedHeart(mousePos.current.x, mousePos.current.y, heartBeat, 0.8);
+      }
+
+      // Draw explosion particles
+      heartParticles.current.forEach(particle => {
+        const alpha = particle.life / particle.maxLife;
+        drawPixelatedHeart(particle.x, particle.y, particle.size * 0.3, alpha * 0.7);
+      });
+
+      // Draw floating musical notes
+      musicNotes.current.forEach(note => {
+        drawPixelatedNote(note.x, note.y, note.size, note.alpha * 0.8, note.type);
+      });
     };
 
     const interval = setInterval(animate, 16); // ~60fps
@@ -324,6 +557,10 @@ export function NetworkEffect({ className = '' }: NetworkEffectProps) {
       clearInterval(interval);
       window.removeEventListener('resize', resizeCanvas);
       window.removeEventListener('keydown', handleKeyPress);
+      canvas.removeEventListener('mousemove', handleMouseMove);
+      canvas.removeEventListener('mouseenter', handleMouseEnter);
+      canvas.removeEventListener('mouseleave', handleMouseLeave);
+      canvas.removeEventListener('click', handleClick);
     };
   }, []);
 
@@ -331,7 +568,10 @@ export function NetworkEffect({ className = '' }: NetworkEffectProps) {
     <canvas
       ref={canvasRef}
       className={`absolute inset-0 w-full h-full ${className}`}
-      style={{ background: 'transparent' }}
+      style={{ 
+        background: 'transparent',
+        cursor: 'pointer'
+      }}
     />
   );
 }

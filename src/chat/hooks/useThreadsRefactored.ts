@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useThreadsStore } from '../../store/useThreadsStore';
-import { useChatMessagesStore } from '../../store/useChatMessagesStore';
+import { useChatThreadStore } from '../../store/useChatThreadStore';
 
 export function useThreadsRefactored() {
   const {
@@ -18,25 +18,24 @@ export function useThreadsRefactored() {
     clearThread,
   } = useThreadsStore();
 
-  const { loadMessages, clearMessages } = useChatMessagesStore();
-
   const selectThreadAndLoadMessages = useCallback(
     async (threadId: string) => {
       selectThread(threadId);
-      await loadMessages(threadId);
+      const threadStore = useChatThreadStore(threadId);
+      await threadStore.getState().loadMessages();
     },
-    [selectThread, loadMessages]
+    [selectThread]
   );
 
   const createThreadAndSelect = useCallback(
     async (name?: string): Promise<string> => {
       const threadId = await createThread(name);
-      // Clear current messages and load new (empty) thread
-      clearMessages();
-      await loadMessages(threadId);
+      // Clear current messages and load new (empty) thread - handled by thread switching
+      const threadStore = useChatThreadStore(threadId);
+      await threadStore.getState().loadMessages();
       return threadId;
     },
-    [createThread, clearMessages, loadMessages]
+    [createThread]
   );
 
   const deleteThreadAndSelectNext = useCallback(
@@ -45,12 +44,12 @@ export function useThreadsRefactored() {
       // If the deleted thread was active, the store will auto-select the next one
       const newActiveThreadId = useThreadsStore.getState().activeThreadId;
       if (newActiveThreadId) {
-        await loadMessages(newActiveThreadId);
-      } else {
-        clearMessages();
+        const threadStore = useChatThreadStore(newActiveThreadId);
+        await threadStore.getState().loadMessages();
       }
+      // If no active thread, the UI will handle showing empty state
     },
-    [deleteThread, loadMessages, clearMessages]
+    [deleteThread]
   );
 
   const clearThreadMessages = useCallback(
@@ -58,10 +57,11 @@ export function useThreadsRefactored() {
       await clearThread(threadId);
       // Reload messages if this is the active thread
       if (threadId === activeThreadId) {
-        await loadMessages(threadId);
+        const threadStore = useChatThreadStore(threadId);
+        await threadStore.getState().loadMessages();
       }
     },
-    [clearThread, activeThreadId, loadMessages]
+    [clearThread, activeThreadId]
   );
 
   const getActiveThread = useCallback(() => {

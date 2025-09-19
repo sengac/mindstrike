@@ -577,8 +577,8 @@ function ChatMessageComponent({
           <div
             className={`rounded-lg px-4 py-2 relative group overflow-hidden ${
               isUser
-                ? 'text-white border border-gray-500 bg-gray-700'
-                : 'border border-gray-700 bg-gray-800'
+                ? 'text-white bg-gray-700'
+                : 'bg-gray-800'
             }`}
           >
             {((onDelete || onEdit) && isUser) || (onRegenerate && !isUser) ? (

@@ -9,7 +9,7 @@ import {
 import { useResponseValidation } from '../../hooks/useResponseValidation';
 // SSE decoder functions are no longer needed - using direct SSE event bus
 import { isSSEChunkEvent, isSSEMessageEvent } from '../../types/sse-events';
-import { useChatMessagesStore } from '../../store/useChatMessagesStore';
+import { useChatThreadStore } from '../../store/useChatThreadStore';
 import { useThreadsStore } from '../../store/useThreadsStore';
 import { sseEventBus } from '../../utils/sseEventBus';
 
@@ -34,32 +34,49 @@ export function useChatRefactored({
     userContent: string;
   } | null>(null);
 
-  // Get store state and actions
+  const { activeThreadId } = useThreadsStore();
+  const currentThreadId = threadId || activeThreadId;
+
+  // Get per-thread store state and actions
+  // Always use a valid threadId to avoid conditional hook calls
+  const safeThreadId = currentThreadId || 'fallback';
+  const threadStore = useChatThreadStore(safeThreadId);
+  const storeState = threadStore();
+  
+  // Use the store state if we have a valid thread, otherwise provide defaults
   const {
     messages,
     isLoading,
+    isLoadingThread,
     error,
     loadMessages,
     addMessage,
     updateMessage,
     setMessages,
     setError,
-  } = useChatMessagesStore();
+  } = currentThreadId ? storeState : {
+    messages: [],
+    isLoading: false,
+    isLoadingThread: false,
+    error: null,
+    loadMessages: async () => {},
+    addMessage: () => {},
+    updateMessage: () => {},
+    setMessages: () => {},
+    setError: () => {},
+  };
 
   // Derive streaming state from actual message status instead of global state
   const isStreaming = messages.some(
     msg => msg.role === 'assistant' && msg.status === 'processing'
   );
 
-  const { activeThreadId } = useThreadsStore();
-  const currentThreadId = threadId || activeThreadId;
-
   // Load messages when thread changes
   useEffect(() => {
     if (currentThreadId) {
-      loadMessages(currentThreadId);
+      loadMessages();
     }
-  }, [currentThreadId]); // Remove loadMessages from deps to prevent infinite loop
+  }, [currentThreadId, loadMessages]); // Include loadMessages for proper dependency tracking
 
   // Validate and potentially fix a message before displaying
   const validateAndProcessMessage = useCallback(
@@ -105,7 +122,12 @@ export function useChatRefactored({
           }
 
           // Handle real-time content chunks for character-by-character streaming
-          const chatStore = useChatMessagesStore.getState();
+          if (!currentThreadId) return;
+          const chatStore = threadStore.getState();
+          
+          // Clear loading state when streaming starts (first chunk received)
+          chatStore.setLoading(false);
+          
           const messages = chatStore.messages;
           const lastMessage = messages[messages.length - 1];
 
@@ -158,7 +180,8 @@ export function useChatRefactored({
           };
 
           // Check if message already exists
-          const chatStore = useChatMessagesStore.getState();
+          if (!currentThreadId) return;
+          const chatStore = threadStore.getState();
           const messages = chatStore.messages;
           const existingMessage = messages.find(
             msg => msg.id === assistantMessage.id
@@ -170,7 +193,8 @@ export function useChatRefactored({
           } else {
             // Add new message (first time we see this assistant message)
             chatStore.addMessage(assistantMessage);
-            // Keep streaming=true until message is completed
+            // Clear loading state when streaming begins
+            chatStore.setLoading(false);
           }
         }
       }
@@ -201,7 +225,8 @@ export function useChatRefactored({
               | undefined,
           };
 
-          const chatStore = useChatMessagesStore.getState();
+          if (!currentThreadId) return;
+          const chatStore = threadStore.getState();
           chatStore.updateMessage(completedMessage.id, completedMessage);
 
           // Generate thread title if this was the first message exchange
@@ -255,7 +280,8 @@ export function useChatRefactored({
         // Update message status to cancelled
         if (data && typeof data === 'object' && 'messageId' in data) {
           const messageId = data.messageId as string;
-          const chatStore = useChatMessagesStore.getState();
+          if (!currentThreadId) return;
+          const chatStore = threadStore.getState();
           const message = chatStore.messages.find(m => m.id === messageId);
           if (message) {
             chatStore.updateMessage(messageId, { status: 'cancelled' });
@@ -270,7 +296,7 @@ export function useChatRefactored({
       unsubscribeCompleted();
       unsubscribeCancelled();
     };
-  }, [currentThreadId]); // Include currentThreadId since event handlers filter by it
+  }, [currentThreadId]); // Re-subscribe when currentThreadId changes
 
   const sendMessage = useCallback(
     async (
@@ -286,9 +312,9 @@ export function useChatRefactored({
       // Handle /clear command
       if (content.trim() === '/clear') {
         try {
-          await useThreadsStore.getState().clearThread(currentThreadId);
-          // Reload messages after clearing
-          await loadMessages(currentThreadId);
+        await useThreadsStore.getState().clearThread(currentThreadId);
+        // Reload messages after clearing
+        await loadMessages();
         } catch {
           toast.error('Failed to clear conversation');
         }
@@ -296,6 +322,12 @@ export function useChatRefactored({
       }
 
       setError(null);
+      
+      // Set loading state when sending message
+      if (currentThreadId) {
+        const chatStore = threadStore.getState();
+        chatStore.setLoading(true);
+      }
 
       // Check if this is the first message in the thread
       const isFirstMessage = messages.length === 0;
@@ -356,7 +388,11 @@ export function useChatRefactored({
         console.error('SSE Error:', error);
         toast.error(`Failed to send message: ${error}`);
         setError(`Failed to send message: ${error}`);
-        // Streaming state derived from message status
+        // Clear loading state on error
+        if (currentThreadId) {
+          const chatStore = threadStore.getState();
+          chatStore.setLoading(false);
+        }
       }
     },
     [
@@ -376,7 +412,7 @@ export function useChatRefactored({
 
     try {
       await useThreadsStore.getState().clearThread(currentThreadId);
-      await loadMessages(currentThreadId);
+      await loadMessages();
     } catch (error) {
       console.error('Failed to clear conversation:', error);
       toast.error('Failed to clear conversation');
@@ -435,6 +471,12 @@ export function useChatRefactored({
       }
 
       setError(null);
+      
+      // Set loading state when regenerating message
+      if (currentThreadId) {
+        const chatStore = threadStore.getState();
+        chatStore.setLoading(true);
+      }
 
       // Find the message and get the previous user message to regenerate from
       const messageIndex = messages.findIndex(msg => msg.id === messageId);
@@ -487,9 +529,12 @@ export function useChatRefactored({
         console.error('SSE Error:', error);
         toast.error(`Failed to regenerate message: ${error}`);
         setError(`Failed to regenerate message: ${error}`);
-        await loadMessages(currentThreadId); // Reload from server
-      } finally {
-        // Streaming state is derived from message status
+        // Clear loading state on error
+        if (currentThreadId) {
+          const chatStore = threadStore.getState();
+          chatStore.setLoading(false);
+        }
+        await loadMessages(); // Reload from server
       }
     },
     [
@@ -561,7 +606,7 @@ export function useChatRefactored({
         console.error('SSE Error:', error);
         toast.error(`Failed to edit message: ${error}`);
         setError(`Failed to edit message: ${error}`);
-        await loadMessages(currentThreadId); // Reload from server
+        await loadMessages(); // Reload from server
       } finally {
         // Streaming state is derived from message status
       }
@@ -651,6 +696,7 @@ export function useChatRefactored({
   return {
     messages,
     isLoading: isLoading || isStreaming,
+    isLoadingThread,
     sendMessage,
     clearConversation,
     cancelStreaming,

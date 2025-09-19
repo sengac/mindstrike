@@ -13,7 +13,8 @@ import { HeaderStats } from './components/HeaderStats';
 import { LocalModelLoadDialog } from './components/LocalModelLoadDialog';
 import { ApplicationLogsDialog } from './components/ApplicationLogsDialog';
 import { useThreadsRefactored } from './chat/hooks/useThreadsRefactored';
-import { useChatMessagesStore } from './store/useChatMessagesStore';
+import { useThreadsStore } from './store/useThreadsStore';
+import { useChatThreadStore } from './store/useChatThreadStore';
 import { sseEventBus } from './utils/sseEventBus';
 import { useMCPLogsStore } from './store/useMCPLogsStore';
 
@@ -71,7 +72,14 @@ function App() {
   const { sidebarOpen, setSidebarOpen, activePanel, setActivePanel } =
     useAppStore();
   const chatPanelRef = useRef<ChatPanelRef>(null);
-  const currentMessages = useChatMessagesStore(state => state.messages);
+  const { activeThreadId } = useThreadsStore();
+  // Always call the hook with a fallback threadId to avoid conditional hook calls
+  const fallbackThreadId = activeThreadId || 'empty';
+  const threadStore = useChatThreadStore(fallbackThreadId);
+  // Always call the selector to avoid conditional hooks
+  const allMessages = threadStore(state => state.messages);
+  // Only use messages if we have an active thread, otherwise empty array
+  const currentMessages = activeThreadId ? allMessages : [];
 
   // LLM config is now managed server-side through ModelSelector
 
@@ -99,7 +107,7 @@ function App() {
 
   const {
     threads,
-    activeThreadId,
+    activeThreadId: threadsActiveThreadId,
 
     isLoaded,
     loadThreads,
@@ -290,7 +298,7 @@ function App() {
             <div className="flex flex-1 min-h-0">
               <ThreadsPanel
                 threads={threads}
-                activeThreadId={activeThreadId || undefined}
+                activeThreadId={threadsActiveThreadId || undefined}
                 onThreadSelect={selectThread}
                 onThreadCreate={handleNewThread}
                 onThreadRename={renameThread}
@@ -298,7 +306,7 @@ function App() {
               />
               <ChatPanel
                 ref={chatPanelRef}
-                threadId={activeThreadId || undefined}
+                threadId={threadsActiveThreadId || undefined}
                 onDeleteMessage={handleDeleteMessage}
                 onRoleUpdate={updateThreadRole}
                 onNavigateToWorkspaces={() => setActivePanel('files')}

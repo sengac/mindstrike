@@ -1,30 +1,15 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { ConversationMessage } from '../types';
-import { sseEventBus, SSEEvent } from '../utils/sseEventBus';
-
-// Interface for message deletion event data
-interface MessageDeletionEventData {
-  messageIds: string[];
-}
-
-// Type guard for message deletion event data
-function isMessageDeletionEventData(
-  data: unknown
-): data is MessageDeletionEventData {
-  return (
-    data !== null &&
-    typeof data === 'object' &&
-    'messageIds' in data &&
-    Array.isArray((data as MessageDeletionEventData).messageIds)
-  );
-}
+// Note: SSE event handling moved to per-thread stores
 
 export interface ChatMessagesState {
   // Display state only
   threadId: string | null;
   messages: ConversationMessage[];
   isLoading: boolean;
+  loadingThreadId: string | null; // Track which thread is currently loading
+  isLoadingThread: boolean;
   isStreaming: boolean;
   streamingThreadId: string | null; // Track which thread is currently streaming
   error: string | null;
@@ -42,6 +27,7 @@ export interface ChatMessagesState {
   removeMessage: (messageId: string) => void;
   setMessages: (messages: ConversationMessage[]) => void;
   setStreaming: (isStreaming: boolean, threadId?: string) => void;
+  setLoading: (isLoading: boolean, threadId?: string) => void;
   setError: (error: string | null) => void;
 }
 
@@ -51,13 +37,15 @@ export const useChatMessagesStore = create<ChatMessagesState>()(
     threadId: null,
     messages: [],
     isLoading: false,
+    loadingThreadId: null,
+    isLoadingThread: false,
     isStreaming: false,
     streamingThreadId: null,
     error: null,
 
     // Actions
     loadMessages: async (threadId: string) => {
-      set({ isLoading: true, error: null, threadId });
+      set({ isLoadingThread: true, error: null, threadId });
 
       try {
         const response = await fetch(`/api/threads/${threadId}/messages`);
@@ -77,7 +65,7 @@ export const useChatMessagesStore = create<ChatMessagesState>()(
 
         set({
           messages,
-          isLoading: false,
+          isLoadingThread: false,
           isStreaming: false,
           streamingThreadId: null,
         });
@@ -85,7 +73,7 @@ export const useChatMessagesStore = create<ChatMessagesState>()(
         console.error('[useChatMessagesStore] Error loading messages:', error);
         set({
           error: error instanceof Error ? error.message : 'Unknown error',
-          isLoading: false,
+          isLoadingThread: false,
           isStreaming: false,
           streamingThreadId: null,
           messages: [],
@@ -98,6 +86,8 @@ export const useChatMessagesStore = create<ChatMessagesState>()(
         threadId: null,
         messages: [],
         isLoading: false,
+        loadingThreadId: null,
+        isLoadingThread: false,
         isStreaming: false,
         error: null,
       });
@@ -138,6 +128,13 @@ export const useChatMessagesStore = create<ChatMessagesState>()(
       });
     },
 
+    setLoading: (isLoading: boolean, threadId?: string) => {
+      set({ 
+        isLoading,
+        loadingThreadId: isLoading ? threadId || null : null
+      });
+    },
+
     setError: (error: string | null) => {
       set({ error });
     },
@@ -148,35 +145,5 @@ export const useChatMessagesStore = create<ChatMessagesState>()(
 export const getCurrentThreadId = () =>
   useChatMessagesStore.getState().threadId;
 
-// Initialize message events subscription on module load
-let unsubscribeMessageEvents: (() => void) | null = null;
-
-// Subscribe to message events through the unified event bus
-function initializeMessageEventsSubscription(): void {
-  if (unsubscribeMessageEvents) {
-    return; // Already subscribed
-  }
-
-  unsubscribeMessageEvents = sseEventBus.subscribe(
-    'messages-deleted',
-    (event: SSEEvent) => {
-      // Handle message deletion events
-      const data = event.data;
-
-      // Check if data has messageIds directly (from unified-events)
-      if (isMessageDeletionEventData(data)) {
-        const store = useChatMessagesStore.getState();
-        store.setMessages(
-          store.messages.filter(msg => !data.messageIds.includes(msg.id))
-        );
-        return;
-      }
-    }
-  );
-}
-
-// Auto-initialize subscription when module loads
-if (typeof window !== 'undefined') {
-  // Small delay to ensure the event bus is ready
-  setTimeout(initializeMessageEventsSubscription, 100);
-}
+// Note: SSE subscriptions are now handled per-thread in useChatThreadStore
+// This global subscription is kept for backward compatibility but should not be used
