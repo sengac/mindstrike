@@ -118,8 +118,24 @@ app.use('/api/local-llm', localLlmRoutes);
 // Mount model scan routes
 app.use('/api/model-scan', modelScanRoutes);
 
-// Serve static files from the built client
-app.use(express.static(path.join(__dirname, '../../client')));
+// Serve static files from the built client (only when not in development mode)
+// In development, Vite serves the frontend
+if (process.env.NODE_ENV !== 'development') {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+
+  // When built, server is at dist/server/server/index.js
+  // Client files are at dist/client/
+  // So from server location: ../../client
+  const clientPath = path.join(__dirname, '../../client');
+
+  if (existsSync(clientPath)) {
+    logger.info(`Serving static files from: ${clientPath}`);
+    app.use(express.static(clientPath));
+  } else {
+    logger.error(`Client directory not found: ${clientPath}`);
+  }
+}
 
 // Audio streaming endpoint with range request support
 app.get('/audio/*', (req: Request, res: Response) => {
@@ -2857,6 +2873,25 @@ mcpManager.on('configReloaded', async () => {
   logger.info('MCP config reloaded, refreshing agent tools...');
   await agentPool.refreshAllAgentsTools();
 });
+
+// SPA catch-all route (must be AFTER all API routes)
+if (process.env.NODE_ENV !== 'development') {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const clientPath = path.join(__dirname, '../../client');
+
+  if (existsSync(clientPath)) {
+    app.get('*', (req: Request, res: Response) => {
+      // This should only catch non-API routes since all API routes are defined above
+      const indexPath = path.join(clientPath, 'index.html');
+      if (existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(404).send('Application not found');
+      }
+    });
+  }
+}
 
 // Export the app for use in Electron or direct startup
 export default app;

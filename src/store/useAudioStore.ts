@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { Howl } from 'howler';
+import toast from 'react-hot-toast';
 
 interface AudioFile {
   id: number;
@@ -85,6 +86,18 @@ export const useAudioStore = create<AudioState>((set, get) => ({
       },
       onplay: () => {
         set({ isPlaying: true });
+
+        // Show "Now Playing" toast
+        const { currentTrack } = get();
+        if (currentTrack) {
+          // Create a simple inline toast content with music icon
+          const toastContent = `${currentTrack.title}\n${currentTrack.artist || 'Unknown Artist'}`;
+          toast(toastContent, {
+            duration: 15000,
+            icon: '🎵',
+          });
+        }
+
         // Start time updates
         const updateTime = () => {
           if (get().isPlaying) {

@@ -304,7 +304,9 @@ export class LocalLLMManager {
             // Try other common architecture names
             const architectures = ['llama', 'mistral', 'gpt', 'qwen'];
             for (const arch of architectures) {
-              const archData = metadata[arch] as { block_count?: number; context_length?: number } | undefined;
+              const archData = metadata[arch] as
+                | { block_count?: number; context_length?: number }
+                | undefined;
               if (archData) {
                 if (archData.block_count) {
                   layerCount = archData.block_count;

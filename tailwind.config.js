@@ -39,6 +39,10 @@ export default {
         'ripple-delayed': 'ripple 2s ease-out infinite 1s',
         'shimmer-inset': 'shimmer-inset 2s linear infinite',
         shine: 'shine 2s ease-in-out infinite',
+        'storm-scatter': 'storm-scatter 1.5s ease-out forwards',
+        'storm-particle': 'storm-particle 1s ease-out forwards',
+        'storm-blow-away': 'storm-blow-away 2s ease-in forwards',
+        'storm-particle-blow': 'storm-particle-blow 1.5s ease-out forwards',
       },
       keyframes: {
         ripple: {
@@ -75,6 +79,85 @@ export default {
           },
           '100%': {
             backgroundPosition: '200% 0',
+          },
+        },
+        'storm-scatter': {
+          '0%': {
+            transform: 'translateX(0) translateY(0) rotate(0deg) scale(1)',
+            opacity: '1',
+          },
+          '20%': {
+            transform:
+              'translateX(-10px) translateY(-5px) rotate(-5deg) scale(1.1)',
+            opacity: '0.9',
+          },
+          '60%': {
+            transform:
+              'translateX(-100px) translateY(-20px) rotate(-15deg) scale(0.8)',
+            opacity: '0.4',
+          },
+          '100%': {
+            transform:
+              'translateX(-200px) translateY(-50px) rotate(-25deg) scale(0.3)',
+            opacity: '0',
+          },
+        },
+        'storm-particle': {
+          '0%': {
+            transform: 'translate(0, 0) scale(1)',
+            opacity: '0.8',
+          },
+          '50%': {
+            transform: 'translate(-50px, -30px) scale(0.5)',
+            opacity: '0.6',
+          },
+          '100%': {
+            transform: 'translate(-120px, -80px) scale(0)',
+            opacity: '0',
+          },
+        },
+        'storm-blow-away': {
+          '0%': {
+            transform: 'translateX(0) translateY(0) rotate(0deg) scale(1)',
+            opacity: '1',
+          },
+          '15%': {
+            transform:
+              'translateX(-30px) translateY(10px) rotate(-8deg) scale(1.05)',
+            opacity: '0.95',
+          },
+          '40%': {
+            transform:
+              'translateX(-150px) translateY(60px) rotate(-20deg) scale(0.9)',
+            opacity: '0.7',
+          },
+          '70%': {
+            transform:
+              'translateX(-350px) translateY(120px) rotate(-35deg) scale(0.6)',
+            opacity: '0.4',
+          },
+          '100%': {
+            transform:
+              'translateX(-600px) translateY(180px) rotate(-50deg) scale(0.3)',
+            opacity: '0',
+          },
+        },
+        'storm-particle-blow': {
+          '0%': {
+            transform: 'translate(0, 0) scale(1) rotate(0deg)',
+            opacity: '0.8',
+          },
+          '30%': {
+            transform: 'translate(-80px, 40px) scale(0.8) rotate(-15deg)',
+            opacity: '0.6',
+          },
+          '70%': {
+            transform: 'translate(-200px, 100px) scale(0.4) rotate(-30deg)',
+            opacity: '0.3',
+          },
+          '100%': {
+            transform: 'translate(-400px, 160px) scale(0) rotate(-45deg)',
+            opacity: '0',
           },
         },
       },

@@ -25,7 +25,7 @@ export function SidebarMusicControls({
   const [isClosing, setIsClosing] = useState(false);
   const [userClosed, setUserClosed] = useState(false);
 
-  const shouldShow = currentTrack && !isMusicPlayerVisible && !userClosed;
+  const shouldShow = currentTrack && !userClosed;
   const shouldRender = shouldShow || isClosing;
 
   // Trigger animations when controls should appear or disappear
@@ -52,12 +52,14 @@ export function SidebarMusicControls({
     }
   }, [shouldShow, isVisible, isClosing]);
 
-  // Reset userClosed when track changes or music player opens
+  // Reset userClosed when track changes or music starts playing
   useEffect(() => {
-    if (isMusicPlayerVisible || !currentTrack) {
+    if (!currentTrack) {
+      setUserClosed(false);
+    } else if (currentTrack && isPlaying) {
       setUserClosed(false);
     }
-  }, [isMusicPlayerVisible, currentTrack]);
+  }, [currentTrack, isPlaying]);
 
   // Only render controls if:
   // 1. Should show normally OR currently playing closing animation

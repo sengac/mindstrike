@@ -99,8 +99,7 @@ export const useAppStore = create<AppState>()(
           workspaceRoot,
           workspaceVersion: state.workspaceVersion + 1,
         })),
-      setMusicRoot: (musicRoot?: string) =>
-        set({ musicRoot }),
+      setMusicRoot: (musicRoot?: string) => set({ musicRoot }),
       setCurrentDirectory: (currentDirectory: string) =>
         set({ currentDirectory }),
       setFiles: (files: string[]) => set({ files }),

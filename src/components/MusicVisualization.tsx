@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { useAudioStore } from '../store/useAudioStore';
 import { audioAnalyzer } from '../utils/audioAnalyzer';
 
@@ -76,7 +76,7 @@ export function MusicVisualization({
       canvas.height = rect.height * window.devicePixelRatio;
       ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
     };
-    
+
     resizeCanvas();
 
     const draw = () => {
@@ -255,8 +255,6 @@ export function MusicVisualization({
       ctx.stroke();
     });
   };
-
-
 
   // Don't render if audio isn't playing
   if (!isPlaying || !howl) {

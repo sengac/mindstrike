@@ -101,6 +101,75 @@ body {
   }
 }
 
+/* Storm Toast Effects */
+.storm-toast {
+  position: relative !important;
+  overflow: visible !important;
+  animation: storm-slide-in 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+  transform: translateY(-120px) !important;
+}
+
+.storm-toast[data-visible='false'] {
+  animation: storm-blow-away 2s ease-in forwards !important;
+}
+
+.storm-toast::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: inherit;
+  border-radius: inherit;
+  z-index: -1;
+}
+
+/* Fade out container background when scattering */
+.storm-toast.storm-scattering {
+  animation: storm-blow-away 0.3s ease-out forwards !important;
+}
+
+/* Slide out all content inside the toast */
+.storm-toast.storm-scattering > * {
+  animation: storm-text-slide-out 0.4s ease-out forwards !important;
+}
+
+@keyframes storm-slide-in {
+  0% {
+    transform: translateX(100%) translateY(-120px);
+    opacity: 0;
+    filter: blur(8px);
+  }
+  100% {
+    transform: translateX(0) translateY(-120px);
+    opacity: 1;
+    filter: blur(0px);
+  }
+}
+
+@keyframes storm-blow-away {
+  0% {
+    opacity: 1;
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 0;
+    filter: blur(8px);
+  }
+}
+
+@keyframes storm-text-slide-out {
+  0% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-100vw);
+    opacity: 0;
+  }
+}
+
 /* Custom draggable regions for Electron */
 [data-test-id='custom-draggable-region'] {
   -webkit-app-region: drag;

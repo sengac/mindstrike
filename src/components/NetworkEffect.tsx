@@ -833,7 +833,7 @@ export function NetworkEffect({
           node.connections.forEach(connectionIndex => {
             const connectedNode = networkNodes[connectionIndex];
 
-            ctx.strokeStyle = `rgba(30, 64, 175, ${networkAlpha * 0.2})`;
+            ctx.strokeStyle = `rgba(59, 130, 246, ${networkAlpha * 0.2})`;
             ctx.lineWidth = 1;
             ctx.beginPath();
             ctx.moveTo(node.x, node.y);
@@ -844,7 +844,7 @@ export function NetworkEffect({
 
         // Draw network nodes
         networkNodes.forEach(node => {
-          ctx.fillStyle = `rgba(30, 64, 175, ${networkAlpha})`;
+          ctx.fillStyle = `rgba(59, 130, 246, ${networkAlpha})`;
           ctx.beginPath();
           ctx.arc(node.x, node.y, 2, 0, Math.PI * 2);
           ctx.fill();
@@ -855,7 +855,7 @@ export function NetworkEffect({
       drawSoundWave();
 
       // Draw wireframe edges
-      ctx.strokeStyle = '#1e40af';
+      ctx.strokeStyle = '#3b82f6';
       ctx.lineWidth = 1;
       ctx.lineCap = 'square';
 

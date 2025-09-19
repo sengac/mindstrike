@@ -25,7 +25,8 @@ import { Source } from './types/mindMap';
 import { Menu, X, MessageSquare, Network, Cpu, FileText } from 'lucide-react';
 import { AppBar } from './components/AppBar';
 import { MiniMusicControls } from './components/MiniMusicControls';
-import { Toaster } from 'react-hot-toast';
+import toast, { Toaster } from 'react-hot-toast';
+import { initStormToastEffect } from './utils/stormToastEffect';
 import { ConnectionMonitorDialog } from './components/shared/ConnectionMonitorDialog';
 import { useConnectionMonitor } from './hooks/useConnectionMonitor';
 
@@ -40,6 +41,12 @@ function App() {
   const [showConnectionDialog, setShowConnectionDialog] = useState(false);
   const [isMusicPlayerOpen, setIsMusicPlayerOpen] = useState(false);
   const { isConnected } = useConnectionMonitor();
+
+  // Initialize storm toast effect
+  useEffect(() => {
+    const cleanup = initStormToastEffect();
+    return cleanup;
+  }, []);
 
   // Function to open debug dialog with specific tab
   const openDebugDialog = (tab: 'debug' | 'tasks' | 'mcp' = 'debug') => {
@@ -410,13 +417,20 @@ function App() {
         />
       )}
       <Toaster
-        position="bottom-center"
+        position="bottom-right"
         toastOptions={{
-          duration: 3000,
+          duration: 4000,
+          className: 'storm-toast',
           style: {
-            background: '#374151',
-            color: '#fff',
-            border: '1px solid #4b5563',
+            background:
+              'linear-gradient(135deg, rgba(75, 85, 99, 0.1) 0%, rgba(75, 85, 99, 0.25) 25%, rgba(75, 85, 99, 0.25) 75%, rgba(75, 85, 99, 0.1) 100%)',
+            backdropFilter: 'blur(12px)',
+            border: '1px solid rgba(75, 85, 99, 0.4)',
+            borderRadius: '2px',
+            color: '#ffffff',
+            padding: '16px',
+            fontSize: '14px',
+            fontWeight: '500',
           },
         }}
       />
