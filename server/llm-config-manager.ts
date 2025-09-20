@@ -92,6 +92,12 @@ export class LLMConfigManager {
       await fs.mkdir(this.configDirectory, { recursive: true });
 
       const data = await fs.readFile(this.configPath, 'utf-8');
+
+      // Handle empty file
+      if (!data || data.trim() === '') {
+        throw new Error('Empty configuration file');
+      }
+
       this.configuration = JSON.parse(data);
 
       // Ensure lastUpdated is a Date object
@@ -103,8 +109,12 @@ export class LLMConfigManager {
 
       return this.configuration!;
     } catch (error: unknown) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        // Create default configuration
+      if (
+        (error as NodeJS.ErrnoException).code === 'ENOENT' ||
+        (error as Error).message === 'Empty configuration file' ||
+        error instanceof SyntaxError
+      ) {
+        // Create default configuration for missing, empty, or corrupted files
         await fs.mkdir(this.configDirectory, { recursive: true });
         this.configuration = {
           models: [],

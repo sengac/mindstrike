@@ -2,6 +2,7 @@ import { Worker } from 'worker_threads';
 import { EventEmitter } from 'events';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { existsSync } from 'fs';
 import { logger } from './logger.js';
 import {
   LocalModelInfo,
@@ -35,6 +36,21 @@ interface StreamingRequest {
   chunks: string[];
 }
 
+interface MCPToolsRequest {
+  id: string;
+  type: 'mcpToolsRequest';
+}
+
+interface MCPToolExecutionRequest {
+  id: string;
+  type: 'executeMCPTool';
+  data: {
+    serverId: string;
+    toolName: string;
+    params: Record<string, unknown>;
+  };
+}
+
 export class LLMWorkerProxy extends EventEmitter {
   private worker: Worker | null = null;
   private pendingRequests = new Map<string, PendingRequest<unknown>>();
@@ -52,7 +68,19 @@ export class LLMWorkerProxy extends EventEmitter {
 
   private initializeWorker() {
     try {
+      // Workers need JavaScript files, not TypeScript
+      // In development, we'll use the compiled version from dist if available
+      // Otherwise, skip worker initialization (local LLM features won't work)
       const workerPath = join(__dirname, 'llm-worker.js');
+
+      // Check if compiled worker exists
+      if (!existsSync(workerPath)) {
+        logger.warn(
+          'LLM worker not found, local LLM features disabled. Run "npm run build:server" to enable.'
+        );
+        return;
+      }
+
       this.worker = new Worker(workerPath);
 
       this.worker.on('message', (response: WorkerResponse) => {
@@ -62,6 +90,10 @@ export class LLMWorkerProxy extends EventEmitter {
           // Progress messages are handled by individual request handlers via event listeners
           // Don't process these as regular responses to avoid false errors
           return;
+        } else if (response.type === 'mcpToolsRequest') {
+          this.handleMCPToolsRequest(response as MCPToolsRequest);
+        } else if (response.type === 'executeMCPTool') {
+          this.handleMCPToolRequest(response as MCPToolExecutionRequest);
         } else if (response.type === 'error') {
           logger.error('Worker reported error:', response.error);
           // Just log it, don't crash
@@ -128,6 +160,51 @@ export class LLMWorkerProxy extends EventEmitter {
           new Error(response.error || 'Unknown worker error')
         );
       }
+    }
+  }
+
+  private async handleMCPToolsRequest(request: MCPToolsRequest): Promise<void> {
+    try {
+      const { mcpManager } = await import('./mcp-manager.js');
+      const tools = mcpManager.getAvailableTools();
+
+      this.worker?.postMessage({
+        id: request.id,
+        type: 'mcpToolsResponse',
+        data: tools,
+      });
+    } catch (error) {
+      this.worker?.postMessage({
+        id: request.id,
+        type: 'mcpToolsResponse',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+
+  private async handleMCPToolRequest(
+    request: MCPToolExecutionRequest
+  ): Promise<void> {
+    try {
+      const { mcpManager } = await import('./mcp-manager.js');
+
+      const result = await mcpManager.executeTool(
+        request.data.serverId,
+        request.data.toolName,
+        request.data.params
+      );
+
+      this.worker?.postMessage({
+        id: request.id,
+        type: 'mcpToolExecutionResponse',
+        data: result,
+      });
+    } catch (error) {
+      this.worker?.postMessage({
+        id: request.id,
+        type: 'mcpToolExecutionResponse',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
     }
   }
 
@@ -393,9 +470,20 @@ export class LLMWorkerProxy extends EventEmitter {
     return this.sendMessage<void>('deleteModel', { modelId });
   }
 
-  async loadModel(modelIdOrName: string): Promise<void> {
+  async loadModel(modelIdOrName: string, threadId?: string): Promise<void> {
     await this.waitForInitialization();
-    return this.sendMessage<void>('loadModel', { modelIdOrName });
+    return this.sendMessage<void>('loadModel', { modelIdOrName, threadId });
+  }
+
+  async updateSessionHistory(
+    modelIdOrName: string,
+    threadId: string
+  ): Promise<void> {
+    await this.waitForInitialization();
+    return this.sendMessage<void>('updateSessionHistory', {
+      modelIdOrName,
+      threadId,
+    });
   }
 
   async unloadModel(modelId: string): Promise<void> {
@@ -409,6 +497,7 @@ export class LLMWorkerProxy extends EventEmitter {
     options?: {
       temperature?: number;
       maxTokens?: number;
+      threadId?: string;
     }
   ): Promise<string> {
     await this.waitForInitialization();
@@ -426,6 +515,7 @@ export class LLMWorkerProxy extends EventEmitter {
       temperature?: number;
       maxTokens?: number;
       signal?: AbortSignal;
+      threadId?: string;
     }
   ): AsyncGenerator<string> {
     await this.waitForInitialization();

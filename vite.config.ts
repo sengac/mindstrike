@@ -6,4 +6,9 @@ export default defineConfig({
   build: {
     outDir: 'dist/client',
   },
+  server: {
+    proxy: {
+      '/audio': 'http://localhost:3001',
+    },
+  },
 });

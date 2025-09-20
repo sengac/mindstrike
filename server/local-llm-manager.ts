@@ -1,13 +1,13 @@
 import {
-  getLlama,
   LlamaModel,
   LlamaContext,
   LlamaChatSession,
   readGgufFileInfo,
+  ChatHistoryItem,
+  defineChatSessionFunction,
 } from 'node-llama-cpp';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { createHash } from 'crypto';
 
 import { getLocalModelsDirectory } from './utils/settings-directory.js';
@@ -17,6 +17,26 @@ import { modelSettingsManager } from './utils/model-settings-manager.js';
 import { systemInfoManager, SystemInformation } from './system-info-manager.js';
 import { LLMResourceCalculator } from './utils/system/llm-resource-calculator.js';
 import { sharedLlamaInstance } from './shared-llama-instance.js';
+import { parentPort } from 'worker_threads';
+import { MCPTool } from './mcp-manager.js';
+
+interface MCPToolsResponse {
+  id: string;
+  type: 'mcpToolsResponse';
+  data: MCPTool[];
+}
+
+interface MCPToolExecutionResponse {
+  id: string;
+  type: 'mcpToolExecutionResponse';
+  data: MCPToolResult | MCPToolResult[];
+}
+
+interface MCPToolResult {
+  type: string;
+  text?: string;
+  [key: string]: unknown;
+}
 
 export interface ModelLoadingSettings {
   gpuLayers?: number; // -1 for auto, 0 for CPU only, positive number for specific layers
@@ -76,6 +96,7 @@ export class LocalLLMManager {
       runtimeInfo: ModelRuntimeInfo;
     }
   >();
+
   private downloadingModels = new Set<string>();
   private downloadControllers = new Map<string, AbortController>();
   private downloadProgress = new Map<
@@ -104,6 +125,138 @@ export class LocalLLMManager {
 
     // Load model settings from persistent storage
     this.loadModelSettingsFromDisk();
+  }
+
+  /**
+   * Get MCP tools from main thread via postMessage
+   */
+  private async getMCPTools(): Promise<MCPTool[]> {
+    return new Promise(resolve => {
+      // Request MCP tools from main thread
+      const messageId = Date.now().toString();
+
+      const handleMessage = (message: MCPToolsResponse) => {
+        if (message.id === messageId && message.type === 'mcpToolsResponse') {
+          parentPort?.removeListener('message', handleMessage);
+          resolve(message.data);
+        }
+      };
+
+      parentPort?.on('message', handleMessage);
+
+      // Send request to main thread
+      parentPort?.postMessage({
+        id: messageId,
+        type: 'mcpToolsRequest',
+      });
+    });
+  }
+
+  /**
+   * Convert MCP tools to node-llama-cpp function format
+   */
+  private convertMCPToolsToNodeLlamaFormat(
+    mcpTools: MCPTool[]
+  ): Record<string, ReturnType<typeof defineChatSessionFunction>> {
+    const functions: Record<
+      string,
+      ReturnType<typeof defineChatSessionFunction>
+    > = {};
+
+    if (!mcpTools || !mcpTools.length) {
+      return functions;
+    }
+
+    for (const tool of mcpTools) {
+      const functionDef = defineChatSessionFunction({
+        description: tool.description || `Execute ${tool.name} tool`,
+        params: tool.inputSchema || {
+          type: 'object',
+          properties: {},
+        },
+        async handler(params: unknown) {
+          console.log(
+            '[LocalLLMManager] ⚠️  TOOL HANDLER CALLED FOR:',
+            tool.name,
+            'with params:',
+            params
+          );
+
+          // Add a safeguard to prevent automatic execution
+          if (!params || typeof params !== 'object') {
+            console.log(
+              '[LocalLLMManager] ⚠️  INVALID PARAMS, SKIPPING EXECUTION'
+            );
+            return 'Invalid parameters provided';
+          }
+
+          const validParams = params as Record<string, unknown>;
+
+          // Send tool execution request to main thread
+          return new Promise(resolve => {
+            const messageId = Date.now().toString();
+            console.log(
+              '[LocalLLMManager] Sending tool execution request with messageId:',
+              messageId
+            );
+
+            const handleMessage = (message: MCPToolExecutionResponse) => {
+              console.log(
+                '[LocalLLMManager] Received tool execution response:',
+                message
+              );
+              if (
+                message.id === messageId &&
+                message.type === 'mcpToolExecutionResponse'
+              ) {
+                console.log(
+                  '[LocalLLMManager] Got tool execution response:',
+                  message.data
+                );
+                parentPort?.removeListener('message', handleMessage);
+
+                // Convert MCP tool result to plain text format for node-llama-cpp
+                let result: string | MCPToolResult | MCPToolResult[] =
+                  message.data;
+                if (Array.isArray(result)) {
+                  // Extract text from MCP format
+                  result = result
+                    .map((item: MCPToolResult) =>
+                      item.type === 'text' ? item.text : JSON.stringify(item)
+                    )
+                    .join('\n');
+                } else if (typeof result === 'object' && result !== null) {
+                  result = JSON.stringify(result);
+                }
+
+                console.log('[LocalLLMManager] Converted result to:', result);
+                resolve(result);
+              }
+            };
+
+            parentPort?.on('message', handleMessage);
+
+            // Send tool execution request
+            parentPort?.postMessage({
+              id: messageId,
+              type: 'executeMCPTool',
+              data: {
+                serverId: tool.serverId,
+                toolName: tool.name,
+                params: validParams,
+              },
+            });
+            console.log(
+              '[LocalLLMManager] Sent executeMCPTool request to main thread'
+            );
+          });
+        },
+      });
+
+      functions[tool.name] = functionDef;
+    }
+
+    return functions;
   }
 
   /**
@@ -686,7 +839,6 @@ export class LocalLLMManager {
         console.error(
           'ERROR: LLMResourceCalculator returned -1 for numGPU - this should not happen!'
         );
-        console.log('Config object:', JSON.stringify(config, null, 2));
       }
 
       // Handle fallback to CPU if no GPU layers can be loaded
@@ -889,7 +1041,6 @@ export class LocalLLMManager {
     };
 
     // Log what we're using and why
-    const modelSizeMB = modelInfo.size / (1024 * 1024);
     if (userSettings.gpuLayers === -1) {
       console.log(
         `AUTO-CALCULATED GPU layers: ${effective.gpuLayers} (user set -1 for auto)`
@@ -949,7 +1100,7 @@ export class LocalLLMManager {
   /**
    * Load a model for inference (supports both model ID and model name)
    */
-  async loadModel(modelIdOrName: string): Promise<void> {
+  async loadModel(modelIdOrName: string, threadId?: string): Promise<void> {
     // Try to find by ID first
     let modelInfo: LocalModelInfo | undefined = undefined;
     const models = await this.getLocalModels();
@@ -984,7 +1135,7 @@ export class LocalLLMManager {
     }
 
     // Create a loading promise and store it in the lock map
-    const loadingPromise = this._doLoadModel(modelId, modelInfo);
+    const loadingPromise = this._doLoadModel(modelId, modelInfo, threadId);
     this.loadingLocks.set(modelId, loadingPromise);
 
     try {
@@ -1000,7 +1151,8 @@ export class LocalLLMManager {
    */
   private async _doLoadModel(
     modelId: string,
-    modelInfo: LocalModelInfo
+    modelInfo: LocalModelInfo,
+    threadId?: string
   ): Promise<void> {
     // Unload all other models first to free up memory
     // This ensures only one local model is loaded at a time
@@ -1070,6 +1222,11 @@ export class LocalLLMManager {
       contextSequence: context.getSequence(),
     });
 
+    // Populate session with existing conversation history if thread ID is provided
+    if (threadId) {
+      await this.populateSessionWithHistory(session, threadId);
+    }
+
     const loadingTime = Date.now() - startTime;
 
     // Create runtime info
@@ -1089,6 +1246,93 @@ export class LocalLLMManager {
     // Update system info to get accurate VRAM state
     const { systemInfoManager } = await import('./system-info-manager.js');
     await systemInfoManager.getSystemInfo();
+  }
+
+  /**
+   * Update session history for a specific thread
+   */
+  async updateSessionHistory(
+    modelIdOrName: string,
+    threadId: string
+  ): Promise<void> {
+    // First try to use it as an ID
+    let activeModel = this.activeModels.get(modelIdOrName);
+    if (!activeModel) {
+      // Try to find by name
+      const modelId = await this.findModelIdByName(modelIdOrName);
+      if (modelId) {
+        activeModel = this.activeModels.get(modelId);
+      }
+    }
+
+    if (!activeModel) {
+      // Model not loaded, silently skip session update
+      return;
+    }
+
+    await this.populateSessionWithHistory(activeModel.session, threadId);
+  }
+
+  /**
+   * Populate a LlamaChatSession with existing conversation history
+   */
+  private async populateSessionWithHistory(
+    session: LlamaChatSession,
+    threadId: string
+  ): Promise<void> {
+    try {
+      // Clear existing chat history first to ensure clean state
+      session.setChatHistory([]);
+
+      // Import ConversationManager to get thread history
+      const { ConversationManager } = await import('./conversation-manager.js');
+      const { getWorkspaceRoot } = await import(
+        './utils/settings-directory.js'
+      );
+
+      const workspaceRoot = await getWorkspaceRoot();
+      if (!workspaceRoot) {
+        logger.error('No workspace root found');
+        return;
+      }
+      const conversationManager = new ConversationManager(workspaceRoot);
+      await conversationManager.load();
+
+      const messages = conversationManager.getThreadMessages(threadId);
+
+      if (messages.length === 0) {
+        logger.info(`No existing history found for thread ${threadId}`);
+        return;
+      }
+
+      // Convert messages to the format expected by LlamaChatSession
+      const chatHistory: ChatHistoryItem[] = messages.map(msg => {
+        if (msg.role === 'user') {
+          return {
+            type: 'user' as const,
+            text: msg.content,
+          };
+        } else {
+          return {
+            type: 'model' as const,
+            response: [msg.content],
+          };
+        }
+      });
+
+      // Set the chat history in the session
+      session.setChatHistory(chatHistory);
+
+      logger.info(
+        `Populated session with ${chatHistory.length} messages from thread ${threadId}`
+      );
+    } catch (error) {
+      logger.error(
+        `Failed to populate session with history for thread ${threadId}:`,
+        error
+      );
+      // Don't throw - continue with empty session rather than failing model load
+    }
   }
 
   /**
@@ -1131,10 +1375,9 @@ export class LocalLLMManager {
     options?: {
       temperature?: number;
       maxTokens?: number;
+      threadId?: string;
     }
   ): Promise<string> {
-    // Removed verbose logging - only log errors and important events
-
     // First try to use it as an ID
     let activeModel = this.activeModels.get(modelIdOrName);
 
@@ -1147,11 +1390,25 @@ export class LocalLLMManager {
     }
 
     if (!activeModel) {
-      logger.error('Model not loaded', {
-        modelIdOrName,
-        activeModelKeys: Array.from(this.activeModels.keys()),
-      });
-      throw new Error('Model not loaded. Please load the model first.');
+      // Try to load the model with thread ID if provided
+      if (options?.threadId) {
+        await this.loadModel(modelIdOrName, options.threadId);
+        activeModel = this.activeModels.get(modelIdOrName);
+        if (!activeModel) {
+          const modelId = await this.findModelIdByName(modelIdOrName);
+          if (modelId) {
+            activeModel = this.activeModels.get(modelId);
+          }
+        }
+      }
+
+      if (!activeModel) {
+        logger.error('Model not loaded', {
+          modelIdOrName,
+          activeModelKeys: Array.from(this.activeModels.keys()),
+        });
+        throw new Error('Model not loaded. Please load the model first.');
+      }
     }
 
     // Removed verbose logging
@@ -1186,7 +1443,9 @@ export class LocalLLMManager {
       ? `${systemMessage}\n\n${lastUserMessage}`
       : lastUserMessage;
 
-    // Removed verbose logging
+    // Get MCP tools and convert them to node-llama-cpp format
+    const mcpTools = await this.getMCPTools();
+    const functions = this.convertMCPToolsToNodeLlamaFormat(mcpTools);
 
     // Mark inference start to prevent system info queries during generation
     sharedLlamaInstance.markInferenceStart();
@@ -1195,6 +1454,7 @@ export class LocalLLMManager {
       const response = await session.prompt(finalPrompt, {
         temperature: options?.temperature || 0.7,
         maxTokens: options?.maxTokens || 2048,
+        functions, // Pass MCP tools as functions
         // Enable async processing with yielding to prevent blocking
         onToken: async () => {
           // Yield control to event loop periodically during generation
@@ -1222,6 +1482,7 @@ export class LocalLLMManager {
       temperature?: number;
       maxTokens?: number;
       signal?: AbortSignal;
+      threadId?: string;
     }
   ): AsyncGenerator<string> {
     // First try to use it as an ID
@@ -1236,7 +1497,21 @@ export class LocalLLMManager {
     }
 
     if (!activeModel) {
-      throw new Error('Model not loaded. Please load the model first.');
+      // Try to load the model with thread ID if provided
+      if (options?.threadId) {
+        await this.loadModel(modelIdOrName, options.threadId);
+        activeModel = this.activeModels.get(modelIdOrName);
+        if (!activeModel) {
+          const modelId = await this.findModelIdByName(modelIdOrName);
+          if (modelId) {
+            activeModel = this.activeModels.get(modelId);
+          }
+        }
+      }
+
+      if (!activeModel) {
+        throw new Error('Model not loaded. Please load the model first.');
+      }
     }
 
     // Use proper chat session with message history
@@ -1266,6 +1541,10 @@ export class LocalLLMManager {
     const finalPrompt = systemMessage
       ? `${systemMessage}\n\n${lastUserMessage}`
       : lastUserMessage;
+
+    // Get MCP tools and convert them to node-llama-cpp format
+    const mcpTools = await this.getMCPTools();
+    const functions = this.convertMCPToolsToNodeLlamaFormat(mcpTools);
 
     // Generate streaming response with real-time streaming
     let resolveChunk: ((chunk: string | null) => void) | null = null;
@@ -1298,6 +1577,7 @@ export class LocalLLMManager {
         .prompt(finalPrompt, {
           temperature: options?.temperature || 0.7,
           maxTokens: options?.maxTokens || 2048,
+          functions, // Pass MCP tools as functions
           onTextChunk: (chunk: string) => {
             pushChunk(chunk);
           },

@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { getMindstrikeDirectory } from './utils/settings-directory.js';
 import { sseManager } from './sse-manager.js';
 import { CommandResolver } from './utils/command-resolver.js';
+import { lfsManager } from './lfs-manager.js';
 
 export interface MCPServerConfig {
   id: string;
@@ -489,19 +490,30 @@ export class MCPManager extends EventEmitter {
         arguments: args || {},
       });
 
-      // Log successful execution with full result (only to MCP logs, not console)
-      const resultContent =
-        typeof result.content === 'string'
-          ? result.content
-          : JSON.stringify(result.content);
+      // Process result content and potentially store in LFS
+      let resultContent: string;
+      if (typeof result.content === 'string') {
+        resultContent = result.content;
+      } else {
+        resultContent = JSON.stringify(result.content);
+      }
+
+      // Store in LFS if content is over 1024 bytes
+      const processedContent = lfsManager.storeContent(resultContent);
+
+      // Log successful execution with processed result (only to MCP logs, not console)
+      const logContent = lfsManager.isLFSReference(processedContent)
+        ? `${processedContent} (stored in LFS, original size: ${Buffer.byteLength(resultContent, 'utf8')} bytes)`
+        : processedContent;
+
       this.logMCP(
         serverId,
         'info',
-        `✅ Tool ${toolName} completed successfully. Result: ${resultContent}`,
+        `✅ Tool ${toolName} completed successfully. Result: ${logContent}`,
         false
       );
 
-      return result.content;
+      return processedContent;
     } catch (error: any) {
       this.logMCP(
         serverId,
@@ -541,6 +553,16 @@ export class MCPManager extends EventEmitter {
                 `LangChain tool wrapper received result from ${toolName}`,
                 false
               );
+
+              // Retrieve content from LFS if needed
+              if (
+                typeof result === 'string' &&
+                lfsManager.isLFSReference(result)
+              ) {
+                const retrievedContent = lfsManager.retrieveContent(result);
+                return retrievedContent || result;
+              }
+
               return typeof result === 'string'
                 ? result
                 : JSON.stringify(result);

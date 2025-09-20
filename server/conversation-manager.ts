@@ -217,8 +217,11 @@ export class ConversationManager {
     return false;
   }
 
-  async deleteMessageFromAllThreads(messageId: string): Promise<string[]> {
+  async deleteMessageFromAllThreads(
+    messageId: string
+  ): Promise<{ deletedMessageIds: string[]; affectedThreadIds: string[] }> {
     const deletedMessageIds: string[] = [];
+    const affectedThreadIds: string[] = [];
     let hasChanges = false;
 
     for (const thread of this.conversations.values()) {
@@ -261,6 +264,7 @@ export class ConversationManager {
       if (messagesToRemove.length > 0) {
         thread.updatedAt = new Date();
         hasChanges = true;
+        affectedThreadIds.push(thread.id);
       }
     }
 
@@ -268,7 +272,7 @@ export class ConversationManager {
       await this.save(); // Auto-save on changes
     }
 
-    return deletedMessageIds;
+    return { deletedMessageIds, affectedThreadIds };
   }
 
   // Get the most recent thread (for auto-selection)

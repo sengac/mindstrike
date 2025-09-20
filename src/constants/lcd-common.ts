@@ -8,7 +8,7 @@ export const LCD_SIZES = {
 export type LCDSize = keyof typeof LCD_SIZES;
 
 export const LCD_COLORS = {
-  lit: '#93c5fd',
+  lit: '#E3F2FD',
   unlit: 'rgba(147, 197, 253, 0.1)',
   unlitGrid: 'rgba(147, 197, 253, 0.3)',
   glow: '#3b82f6',

@@ -3,9 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import fs from 'fs/promises';
 import { existsSync, statSync, createReadStream, stat } from 'fs';
-import { parseBuffer, parseFile } from 'music-metadata';
 import { musicMetadataCache } from './music-metadata-cache.js';
-import multer from 'multer';
 import { Stats } from 'fs';
 
 import { fileURLToPath } from 'url';
@@ -17,6 +15,7 @@ import { cleanContentForLLM } from './utils/content-filter.js';
 import { LLMScanner } from './llm-scanner.js';
 import { LLMConfigManager } from './llm-config-manager.js';
 import { mcpManager } from './mcp-manager.js';
+import { lfsManager } from './lfs-manager.js';
 import {
   getHomeDirectory,
   getWorkspaceRoot,
@@ -112,6 +111,18 @@ const PORT = process.env.PORT || 3001;
 
 // Initialize cancellation manager
 const cancellationManager = new MessageCancellationManager();
+
+// Helper function to sync current agent with thread history
+async function syncCurrentAgentWithThread(threadId: string): Promise<void> {
+  const { globalSessionManager } = await import('./session-manager.js');
+  const currentAgent = agentPool.getCurrentAgent();
+
+  await globalSessionManager.switchToThread(
+    currentAgent.llmConfig.type || 'openai',
+    currentAgent.llmConfig.model || 'gpt-4',
+    threadId
+  );
+}
 
 // Increase max listeners for development
 process.setMaxListeners(200);
@@ -299,8 +310,10 @@ class AgentPool {
   private workflowAgents: Map<string, WorkflowAgent> = new Map();
   private currentThreadId: string = 'default';
 
-  setCurrentThread(threadId: string): void {
+  async setCurrentThread(threadId: string): Promise<void> {
     this.currentThreadId = threadId;
+    // Sync current agent with new thread's chat history
+    await syncCurrentAgentWithThread(threadId);
   }
 
   getCurrentAgent(): Agent {
@@ -319,13 +332,22 @@ class AgentPool {
     this.workflowAgents.clear();
   }
 
-  updateAllAgentsLLMConfig(newLlmConfig: AgentConfig['llmConfig']): void {
+  getActiveAgents(): Agent[] {
+    return Array.from(this.agents.values());
+  }
+
+  async updateAllAgentsLLMConfig(
+    newLlmConfig: AgentConfig['llmConfig']
+  ): Promise<void> {
     for (const agent of this.agents.values()) {
       agent.updateLLMConfig(newLlmConfig);
     }
     for (const workflowAgent of this.workflowAgents.values()) {
       workflowAgent.updateLLMConfig(newLlmConfig);
     }
+
+    // Sync current agent with current thread after model change
+    await syncCurrentAgentWithThread(this.currentThreadId);
   }
 
   getAgent(threadId: string): Agent {
@@ -466,7 +488,7 @@ async function refreshModelList() {
           currentLlmConfig.contextLength = defaultModel.contextLength;
 
           // Update existing agents with new LLM config
-          agentPool.updateAllAgentsLLMConfig(currentLlmConfig);
+          await agentPool.updateAllAgentsLLMConfig(currentLlmConfig);
         } else {
           // If no default model is set, try to auto-select the first available model
           const models = await llmConfigManager.getModels();
@@ -483,7 +505,7 @@ async function refreshModelList() {
             currentLlmConfig.contextLength = firstAvailableModel.contextLength;
 
             // Update existing agents with new LLM config
-            agentPool.updateAllAgentsLLMConfig(currentLlmConfig);
+            await agentPool.updateAllAgentsLLMConfig(currentLlmConfig);
           }
         }
       } catch {
@@ -722,7 +744,7 @@ app.post(
       currentLlmConfig.contextLength = defaultModel.contextLength;
 
       // Update existing agents with new LLM config
-      agentPool.updateAllAgentsLLMConfig(currentLlmConfig);
+      await agentPool.updateAllAgentsLLMConfig(currentLlmConfig);
     }
 
     res.json({ success: true });
@@ -1045,6 +1067,36 @@ app.get('/api/large-content/:contentId', (req: Request, res: Response) => {
   }
 });
 
+// Endpoint to fetch LFS content by ID
+app.get('/api/lfs/:lfsId', (req: Request, res: Response) => {
+  const { lfsId } = req.params;
+  const content = lfsManager.retrieveContent(`[LFS:${lfsId}]`);
+
+  if (content) {
+    res.json({ content });
+  } else {
+    res.status(404).json({ error: 'LFS content not found' });
+  }
+});
+
+// Endpoint to get LFS statistics
+app.get('/api/lfs/stats', (req: Request, res: Response) => {
+  const stats = lfsManager.getStats();
+  res.json(stats);
+});
+
+// Endpoint to get LFS summary by ID
+app.get('/api/lfs/:lfsId/summary', (req: Request, res: Response) => {
+  const { lfsId } = req.params;
+  const summary = lfsManager.getSummary(lfsId);
+
+  if (summary) {
+    res.json(summary);
+  } else {
+    res.status(404).json({ error: 'LFS summary not found' });
+  }
+});
+
 // Generation streaming, task progress, and workflow updates now handled by unified SSE event bus
 
 // Audio files discovery endpoint
@@ -1226,7 +1278,7 @@ app.get('/api/audio/files', async (req: Request, res: Response) => {
   }
 });
 
-app.get('/api/conversation/:threadId', (req: Request, res: Response) => {
+app.get('/api/conversation/:threadId', async (req: Request, res: Response) => {
   const { threadId } = req.params;
   if (!threadId) {
     return res.status(400).json({ error: 'Thread ID is required' });
@@ -1234,11 +1286,11 @@ app.get('/api/conversation/:threadId', (req: Request, res: Response) => {
 
   // Temporarily set the thread to get its conversation
   const previousThreadId = agentPool['currentThreadId'];
-  agentPool.setCurrentThread(threadId);
+  await agentPool.setCurrentThread(threadId);
   const conversation = agentPool.getCurrentAgent().getConversation(threadId);
 
   // Restore the previous thread
-  agentPool.setCurrentThread(previousThreadId);
+  await agentPool.setCurrentThread(previousThreadId);
 
   res.json(conversation);
 });
@@ -1261,7 +1313,7 @@ app.post('/api/message', async (req: Request, res: Response) => {
 
     // Set current thread if provided
     if (threadId) {
-      agentPool.setCurrentThread(threadId);
+      await agentPool.setCurrentThread(threadId);
     }
 
     // Persist the user message
@@ -1465,7 +1517,7 @@ app.post('/api/message/stream', async (req: Request, res: Response) => {
 
     // Set current thread if provided
     if (threadId) {
-      agentPool.setCurrentThread(threadId);
+      await agentPool.setCurrentThread(threadId);
     }
 
     // Generate unique client ID for this streaming session
@@ -1653,11 +1705,11 @@ app.post(
 
     // Temporarily set the thread to clear its conversation
     const previousThreadId = agentPool['currentThreadId'];
-    agentPool.setCurrentThread(threadId);
+    await agentPool.setCurrentThread(threadId);
     await agentPool.getCurrentAgent().clearConversation(threadId);
 
     // Restore the previous thread
-    agentPool.setCurrentThread(previousThreadId);
+    await agentPool.setCurrentThread(previousThreadId);
 
     res.json({ success: true });
   }
@@ -1828,7 +1880,7 @@ app.post('/api/load-thread/:threadId', async (req: Request, res: Response) => {
     }
 
     // Set the current thread in the agent pool
-    agentPool.setCurrentThread(threadId);
+    await agentPool.setCurrentThread(threadId);
 
     const fs = await import('fs/promises');
     const conversationsPath = path.join(workspaceRoot, 'mindstrike-chats.json');
@@ -1919,10 +1971,19 @@ app.delete('/api/message/:messageId', async (req: Request, res: Response) => {
 
   try {
     await conversationManager.load();
-    const deletedMessageIds =
+    const result =
       await conversationManager.deleteMessageFromAllThreads(messageId);
+    const { deletedMessageIds, affectedThreadIds } = result;
+
     if (deletedMessageIds.length > 0) {
       await conversationManager.save();
+
+      // Sync current agent with updated thread history after message deletion
+      for (const threadId of affectedThreadIds) {
+        if (threadId === agentPool['currentThreadId']) {
+          await syncCurrentAgentWithThread(threadId);
+        }
+      }
 
       // Broadcast update to all clients with ALL deleted message IDs
       sseManager.broadcast('unified-events', {

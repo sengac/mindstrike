@@ -57,7 +57,17 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
         return { id: message.id, success: true };
 
       case 'loadModel':
-        await llmManager.loadModel(message.data.modelIdOrName);
+        await llmManager.loadModel(
+          message.data.modelIdOrName,
+          message.data.threadId
+        );
+        return { id: message.id, success: true };
+
+      case 'updateSessionHistory':
+        await llmManager.updateSessionHistory(
+          message.data.modelIdOrName,
+          message.data.threadId
+        );
         return { id: message.id, success: true };
 
       case 'unloadModel':
@@ -201,6 +211,14 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
 
 if (parentPort) {
   parentPort.on('message', async (message: WorkerMessage) => {
+    // Skip MCP response messages - they're handled by LocalLLMManager promises
+    if (
+      message.type === 'mcpToolsResponse' ||
+      message.type === 'mcpToolExecutionResponse'
+    ) {
+      return;
+    }
+
     try {
       const response = await handleMessage(message);
       if (parentPort) {

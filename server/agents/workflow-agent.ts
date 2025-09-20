@@ -242,10 +242,6 @@ export class WorkflowAgent extends BaseAgent {
       this.createPromptDefinition(),
       '',
       this.createReActInstructions(),
-      '',
-      this.createToolDescriptions(),
-      '',
-      this.createOutputRequirements(),
     ].join('\n');
   }
 
@@ -279,17 +275,6 @@ export class WorkflowAgent extends BaseAgent {
     - Determine if the task was completed successfully
     - Identify any errors or unexpected outcomes
     - Decide on next steps or necessary adjustments`;
-  }
-
-  private createOutputRequirements(): string {
-    return `**Communication Standards:**
-
-    - Always explain your reasoning before taking action
-    - Provide clear updates on task progress
-    - Format code with proper syntax highlighting
-    - Use structured output for complex results
-    - Report both successes and failures transparently
-    - Summarize key findings and next steps`;
   }
 
   private createWorkflowGraph() {

@@ -55,7 +55,7 @@ interface PlaylistState {
     playlistId: string,
     fromIndex: number,
     toIndex: number
-  ) => void;
+  ) => Promise<void>;
   getPlaylistById: (id: string) => Playlist | undefined;
   savePlaylistsToFile: () => Promise<void>;
   loadPlaylistsFromFile: () => Promise<void>;
@@ -146,7 +146,7 @@ export const usePlaylistStore = create<PlaylistState>()((set, get) => ({
     set({ currentPlaylist: playlist });
   },
 
-  reorderPlaylistTracks: (playlistId, fromIndex, toIndex) => {
+  reorderPlaylistTracks: async (playlistId, fromIndex, toIndex) => {
     set(state => ({
       playlists: state.playlists.map(p => {
         if (p.id === playlistId) {
@@ -164,7 +164,7 @@ export const usePlaylistStore = create<PlaylistState>()((set, get) => ({
       }),
     }));
 
-    get().savePlaylistsToFile();
+    await get().savePlaylistsToFile();
   },
 
   getPlaylistById: id => {
@@ -174,13 +174,21 @@ export const usePlaylistStore = create<PlaylistState>()((set, get) => ({
   savePlaylistsToFile: async () => {
     try {
       const playlists = get().playlists;
-      await fetch('/api/playlists/save', {
+      const response = await fetch('/api/playlists/save', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(playlists),
       });
+
+      if (!response.ok) {
+        console.error(
+          'Failed to save playlists:',
+          response.status,
+          response.statusText
+        );
+      }
     } catch (error) {
       console.error('Failed to save playlists:', error);
     }
@@ -192,6 +200,12 @@ export const usePlaylistStore = create<PlaylistState>()((set, get) => ({
       if (response.ok) {
         const playlists = await response.json();
         set({ playlists });
+      } else {
+        console.error(
+          'Failed to load playlists:',
+          response.status,
+          response.statusText
+        );
       }
     } catch (error) {
       console.error('Failed to load playlists:', error);

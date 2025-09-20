@@ -13,16 +13,22 @@ import { DynamicStructuredTool } from '@langchain/core/tools';
 import { getLocalLLMManager } from '../local-llm-singleton.js';
 
 interface LocalLLMManagerInterface {
-  loadModel: (modelName: string) => Promise<void>;
+  loadModel: (modelName: string, threadId?: string) => Promise<void>;
+  updateSessionHistory: (modelName: string, threadId: string) => Promise<void>;
   generateResponse: (
     modelName: string,
     messages: { role: string; content: string }[],
-    options: { temperature: number; maxTokens: number }
+    options?: { temperature?: number; maxTokens?: number; threadId?: string }
   ) => Promise<string>;
   generateStreamResponse: (
     modelName: string,
     messages: { role: string; content: string }[],
-    options: { temperature: number; maxTokens: number }
+    options?: {
+      temperature?: number;
+      maxTokens?: number;
+      signal?: AbortSignal;
+      threadId?: string;
+    }
   ) => AsyncIterable<string>;
 }
 
@@ -30,12 +36,14 @@ export interface ChatLocalLLMInput extends BaseChatModelParams {
   modelName: string;
   temperature?: number;
   maxTokens?: number;
+  threadId?: string;
 }
 
 export class ChatLocalLLM extends BaseChatModel {
   modelName: string;
   temperature: number;
   maxTokens: number;
+  threadId?: string;
   private tools: DynamicStructuredTool[] = [];
 
   constructor(fields: ChatLocalLLMInput) {
@@ -43,6 +51,7 @@ export class ChatLocalLLM extends BaseChatModel {
     this.modelName = fields.modelName;
     this.temperature = fields.temperature ?? 0.7;
     this.maxTokens = fields.maxTokens ?? 4000;
+    this.threadId = fields.threadId;
   }
 
   _llmType(): string {
@@ -57,6 +66,7 @@ export class ChatLocalLLM extends BaseChatModel {
       modelName: this.modelName,
       temperature: this.temperature,
       maxTokens: this.maxTokens,
+      threadId: this.threadId,
     });
     bound.tools = [...tools];
     return bound;
@@ -82,6 +92,7 @@ export class ChatLocalLLM extends BaseChatModel {
         {
           temperature: this.temperature,
           maxTokens: this.maxTokens,
+          threadId: this.threadId,
         }
       );
 
@@ -120,6 +131,7 @@ export class ChatLocalLLM extends BaseChatModel {
         {
           temperature: this.temperature,
           maxTokens: this.maxTokens,
+          threadId: this.threadId,
         }
       );
 
@@ -142,7 +154,15 @@ export class ChatLocalLLM extends BaseChatModel {
     try {
       // Check if model is already loaded by attempting to get model info
       // The loadModel method automatically unloads other models and loads this one
-      await localLlmManager.loadModel(this.modelName);
+      await localLlmManager.loadModel(this.modelName, this.threadId);
+
+      // Always update session history for the current thread
+      if (this.threadId) {
+        await localLlmManager.updateSessionHistory(
+          this.modelName,
+          this.threadId
+        );
+      }
     } catch (error) {
       throw new Error(
         `Failed to load model ${this.modelName}: ${error instanceof Error ? error.message : 'Unknown error'}`

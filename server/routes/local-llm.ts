@@ -381,11 +381,6 @@ router.post('/download', async (req, res) => {
     // Start download in background
     llmManager
       .downloadModel(modelInfo, (progress, speed) => {
-        console.log('[LOCAL-LLM] Broadcasting download progress:', {
-          filename,
-          progress,
-          speed,
-        });
         // Broadcast progress via unified event bus
         sseManager.broadcast('unified-events', {
           type: 'download-progress',
@@ -409,7 +404,6 @@ router.post('/download', async (req, res) => {
             completed: true,
           },
         });
-        console.log(`Download completed: ${filename}`);
 
         // Give server time to process the new model file before broadcasting update
         setTimeout(() => {

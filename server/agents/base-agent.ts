@@ -22,6 +22,7 @@ import { serverDebugLogger } from '../debug-logger.js';
 import { sseManager } from '../sse-manager.js';
 import { ConversationManager } from '../conversation-manager.js';
 import { mcpManager } from '../mcp-manager.js';
+import { lfsManager } from '../lfs-manager.js';
 
 export interface AgentConfig {
   workspaceRoot: string;
@@ -93,6 +94,11 @@ export abstract class BaseAgent {
   protected promptTemplate: ChatPromptTemplate;
   protected streamId?: string; // For SSE filtering
 
+  // Public getter for LLM config
+  get llmConfig(): AgentConfig['llmConfig'] {
+    return this.config.llmConfig;
+  }
+
   constructor(config: AgentConfig, agentId?: string) {
     this.config = config;
     this.agentId = agentId || this.generateId();
@@ -133,62 +139,9 @@ export abstract class BaseAgent {
     this.streamId = streamId;
   }
 
-  // Helper method to create tool descriptions for system prompt
-  protected createToolDescriptions(): string {
-    if (this.langChainTools.length === 0) {
-      return '\nNo tools are currently available. You should rely on your knowledge to help the user.';
-    }
-
-    // For built-in models that rely on text parsing, provide detailed tool schemas
-    const isBuiltInModel = this.config.llmConfig.type === 'local';
-
-    if (isBuiltInModel) {
-      const toolDescriptions = this.langChainTools
-        .map(tool => {
-          // Get parameter schema information
-          let paramInfo = '';
-          if (
-            tool.schema &&
-            typeof tool.schema === 'object' &&
-            'shape' in tool.schema
-          ) {
-            const shape = (tool.schema as { shape: Record<string, unknown> })
-              .shape;
-            const params = Object.keys(shape)
-              .map(key => {
-                const param = shape[key] as {
-                  isOptional?: () => boolean;
-                  description?: string;
-                };
-                const required = !param.isOptional?.()
-                  ? ' (required)'
-                  : ' (optional)';
-                return `    - ${key}: ${param.description || 'parameter'}${required}`;
-              })
-              .join('\n');
-            if (params) {
-              paramInfo = `\n  Parameters:\n${params}`;
-            }
-          }
-          return `- ${tool.name}: ${tool.description}${paramInfo}`;
-        })
-        .join('\n');
-
-      return `\nYou have access to the following tools:\n${toolDescriptions}\n\nTo use a tool, you MUST format your response with a JSON code block using this exact format:\n\n\`\`\`json\n{"tool": "tool_name", "parameters": {"param1": "value1", "param2": "value2"}}\n\`\`\`\n\nExamples:\n\nTo read a file:\n\`\`\`json\n{"tool": "mcp_filesystem_read_file", "parameters": {"path": "/path/to/file.txt"}}\n\`\`\`\n\nTo navigate to a website:\n\`\`\`json\n{"tool": "mcp_playwright_browser_navigate", "parameters": {"url": "https://google.com"}}\n\`\`\`\n\nTo list directory contents:\n\`\`\`json\n{"tool": "mcp_filesystem_list_directory", "parameters": {"path": "/some/directory"}}\n\`\`\`\n\nIMPORTANT: You MUST use the exact tool names listed above. Always wrap tool calls in \`\`\`json code blocks.\n\nIf a tool call fails or you encounter an error:\n- Retry the operation once if appropriate.\n- If the issue persists, escalate the issue back to the user, providing a summary of actions taken and the error encountered.\n\nFor each user interaction:\n- Clearly summarize the actions you have taken.\n- Provide the outcome or next steps.\n- If a tool was used, mention which tool and the result.`;
-    } else {
-      // For models with native tool calling, use simple descriptions
-      const toolDescriptions = this.langChainTools
-        .map(tool => {
-          return `- ${tool.name}: ${tool.description}`;
-        })
-        .join('\n');
-
-      return `\nYou have access to the following tools:\n${toolDescriptions}\n\nThese tools are available through function calling. Use them when you need to perform actions to help the user.`;
-    }
-  }
-
   protected createChatModel(
-    llmConfig: AgentConfig['llmConfig']
+    llmConfig: AgentConfig['llmConfig'],
+    threadId?: string
   ): BaseChatModel {
     const baseConfig = {
       temperature: llmConfig.temperature || 0.7,
@@ -234,6 +187,7 @@ export abstract class BaseAgent {
       case 'local':
         return new ChatLocalLLM({
           modelName: llmConfig.model,
+          threadId: threadId,
           ...baseConfig,
         });
 
@@ -771,6 +725,13 @@ export abstract class BaseAgent {
         `Invalid user message: received ${typeof userMessage} instead of string`
       );
     }
+
+    // For local models, recreate the chat model with the thread ID to ensure proper history loading
+    if (this.config.llmConfig.type === 'local') {
+      this.chatModel = this.createChatModel(this.config.llmConfig, threadId);
+    }
+
+    // Session switching is handled at the AgentPool level when setCurrentThread is called
 
     // Check if user message already exists (it might have been added by the main handler)
     let userMsg: ConversationMessage | undefined;
@@ -1479,6 +1440,22 @@ export abstract class BaseAgent {
       messageId
     );
     if (deleted) {
+      // Update LLM session history for all provider types
+      try {
+        const { globalSessionManager } = await import('../session-manager.js');
+        await globalSessionManager.updateSessionHistory(
+          this.config.llmConfig.type || 'openai',
+          this.config.llmConfig.model || 'gpt-4',
+          threadId,
+          []
+        );
+      } catch (error) {
+        logger.error(
+          `Failed to update session history after message deletion:`,
+          error
+        );
+      }
+
       // Send delete event to frontend using the same format as the API endpoint
       sseManager.broadcast('unified-events', {
         type: 'messages-deleted',
@@ -1635,6 +1612,23 @@ export abstract class BaseAgent {
               content = mcpResult.text || JSON.stringify(mcpResult);
             } else {
               content = String(mcpResult);
+            }
+
+            // Handle LFS content - use summary for chat display
+            if (lfsManager.isLFSReference(content)) {
+              const summary = lfsManager.getSummaryByReference(content);
+              if (summary) {
+                // Format summary for display
+                const formattedSummary = this.formatLFSSummary(
+                  summary,
+                  content
+                );
+                content = formattedSummary;
+              } else {
+                // Fallback to original content if no summary available
+                const retrievedContent = lfsManager.retrieveContent(content);
+                content = retrievedContent || content;
+              }
             }
 
             results.push({
@@ -1802,6 +1796,17 @@ export abstract class BaseAgent {
       content: cleanContent || content,
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
     };
+  }
+
+  /**
+   * Format LFS summary for chat display
+   */
+  private formatLFSSummary(summary: any, lfsReference: string): string {
+    const keyPointsText = summary.keyPoints?.length
+      ? `\n\n**Key Points:**\n${summary.keyPoints.map((point: string) => `• ${point}`).join('\n')}`
+      : '';
+
+    return `📄 **Large Content Summary** (${summary.originalSize} characters)\n\n${summary.summary}${keyPointsText}\n\n*Full content available: ${lfsReference}*`;
   }
 
   /**

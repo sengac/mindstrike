@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { BaseDialog } from './shared/BaseDialog';
 import { useDialogAnimation } from '../hooks/useDialogAnimation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useAudioStore } from '../store/useAudioStore';
 import { usePlaylistStore } from '../store/usePlaylistStore';
 
@@ -68,6 +68,8 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
   );
   const [isDraggingForReorder, setIsDraggingForReorder] =
     useState<boolean>(false);
+  const reorderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const listRef = useRef<any>(null);
 
   const {
     audioFiles,
@@ -331,17 +333,30 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
   const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
   const volumePercentage = volume * 100;
 
-  // Filter audioFiles based on search term
-  const filteredAudioFiles = audioFiles.filter(track => {
-    if (!searchTerm.trim()) return true;
+  // Filter tracks based on search term and current view
+  const filteredAudioFiles = (() => {
+    if (!searchTerm.trim()) return audioFiles;
+
     const searchLower = searchTerm.toLowerCase();
-    return (
-      track.title.toLowerCase().includes(searchLower) ||
-      track.artist.toLowerCase().includes(searchLower) ||
-      track.album?.toLowerCase().includes(searchLower) ||
-      track.genre?.some(g => g.toLowerCase().includes(searchLower))
-    );
-  });
+    const tracksToFilter =
+      viewingPlaylist && currentPlaylist ? currentPlaylist.tracks : allTracks;
+
+    return tracksToFilter.filter(track => {
+      const title = track.title?.toLowerCase() || '';
+      const artist = track.artist?.toLowerCase() || '';
+      const album = track.album?.toLowerCase() || '';
+      const genres = Array.isArray(track.genre)
+        ? track.genre.map((g: any) => g?.toLowerCase() || '').join(' ')
+        : track.genre?.toLowerCase() || '';
+
+      return (
+        title.includes(searchLower) ||
+        artist.includes(searchLower) ||
+        album.includes(searchLower) ||
+        genres.includes(searchLower)
+      );
+    });
+  })();
 
   const clearSearch = () => {
     setSearchTerm('');
@@ -378,6 +393,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
   const handleDragStart = (e: React.DragEvent, track: any) => {
     setDraggedTrack(track);
     setIsDraggingForReorder(viewingPlaylist && currentPlaylist !== null);
+
     e.dataTransfer.effectAllowed = viewingPlaylist ? 'move' : 'copy';
     e.dataTransfer.setData('text/plain', ''); // Required for Firefox
   };
@@ -387,6 +403,12 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
     setDropTargetPlaylistId(null);
     setReorderDropPosition(null);
     setIsDraggingForReorder(false);
+
+    // Clear any pending reorder timeout
+    if (reorderTimeoutRef.current) {
+      clearTimeout(reorderTimeoutRef.current);
+      reorderTimeoutRef.current = null;
+    }
   };
 
   const handleDragOver = (e: React.DragEvent, playlistId: string) => {
@@ -432,10 +454,10 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
     setDraggedTrack(null);
   };
 
-  // Reorder handlers
+  // Reorder handlers - compatible with react-virtualized
   const handleReorderDragOver = (e: React.DragEvent, originalIndex: number) => {
     e.preventDefault();
-    if (isDraggingForReorder && draggedTrack) {
+    if (isDraggingForReorder && draggedTrack && currentPlaylist) {
       e.dataTransfer.dropEffect = 'move';
 
       // Calculate drop position based on mouse position relative to the target element
@@ -443,22 +465,11 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
       const midY = rect.top + rect.height / 2;
       let dropPosition = e.clientY < midY ? originalIndex : originalIndex + 1;
 
-      // Find the current dragged track index
-      const draggedIndex = audioFiles.findIndex(
-        track => track.id === draggedTrack.id
+      // Clamp to valid range and store for drop
+      dropPosition = Math.max(
+        0,
+        Math.min(currentPlaylist.tracks.length, dropPosition)
       );
-
-      // Don't show drop indicator if dropping in the same position
-      if (
-        draggedIndex !== -1 &&
-        (dropPosition === draggedIndex || dropPosition === draggedIndex + 1)
-      ) {
-        setReorderDropPosition(null);
-        return;
-      }
-
-      // Clamp to valid range
-      dropPosition = Math.max(0, Math.min(audioFiles.length, dropPosition));
 
       setReorderDropPosition(dropPosition);
     }
@@ -475,36 +486,56 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
       currentPlaylist &&
       reorderDropPosition !== null
     ) {
-      const draggedIndex = audioFiles.findIndex(
+      // Find the current dragged track index in the original playlist (not the UI state)
+      const draggedIndex = currentPlaylist.tracks.findIndex(
         track => track.id === draggedTrack.id
       );
 
       if (draggedIndex !== -1) {
-        // Calculate final drop position for reordering
+        // Calculate final drop position for the reorder operation
         let finalDropPosition = reorderDropPosition;
 
-        // If moving from a lower index to a higher index, adjust by -1
-        // because the splice operation removes the item first
+        // Adjust for splice operation - if moving item to a position after its current position
         if (draggedIndex < reorderDropPosition) {
           finalDropPosition = reorderDropPosition - 1;
         }
 
-        // Only perform reorder if positions are different
+        // Only reorder if the position actually changes
         if (draggedIndex !== finalDropPosition) {
-          await reorderPlaylistTracks(
-            currentPlaylist.id,
-            draggedIndex,
-            finalDropPosition
-          );
-          await loadPlaylistsFromFile();
+          try {
+            // Use playlist store to reorder tracks
+            await reorderPlaylistTracks(
+              currentPlaylist.id,
+              draggedIndex,
+              finalDropPosition
+            );
 
-          // Update the current view
-          const updatedPlaylist = playlists.find(
-            p => p.id === currentPlaylist.id
-          );
-          if (updatedPlaylist) {
-            setCurrentPlaylist(updatedPlaylist);
-            setAudioFiles(updatedPlaylist.tracks);
+            // FIRST: Empty the virtualized list completely
+            setAudioFiles([]);
+            if (listRef.current) {
+              listRef.current.forceUpdateGrid();
+            }
+
+            // SECOND: Load fresh data from API
+            await loadPlaylistsFromFile();
+
+            // THIRD: Fill the list with fresh response data
+            const freshPlaylists = usePlaylistStore.getState().playlists;
+            const updatedPlaylist = freshPlaylists.find(
+              p => p.id === currentPlaylist.id
+            );
+
+            if (updatedPlaylist) {
+              setCurrentPlaylist(updatedPlaylist);
+              setAudioFiles(updatedPlaylist.tracks);
+
+              // Force list to re-render with new data
+              if (listRef.current) {
+                listRef.current.forceUpdateGrid();
+              }
+            }
+          } catch (error) {
+            console.error('Reorder error:', error);
           }
         }
       }
@@ -547,16 +578,15 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
       // Refresh playlists and update the current view
       await loadPlaylistsFromFile();
 
-      // Use a timeout to ensure state is updated
-      setTimeout(() => {
-        const updatedPlaylist = playlists.find(
-          p => p.id === currentPlaylist.id
-        );
-        if (updatedPlaylist) {
-          setCurrentPlaylist(updatedPlaylist);
-          setAudioFiles(updatedPlaylist.tracks);
-        }
-      }, 100);
+      // Update current view with fresh data
+      const freshPlaylists = usePlaylistStore.getState().playlists;
+      const updatedPlaylist = freshPlaylists.find(
+        p => p.id === currentPlaylist.id
+      );
+      if (updatedPlaylist) {
+        setCurrentPlaylist(updatedPlaylist);
+        setAudioFiles(updatedPlaylist.tracks);
+      }
     }
   };
 
@@ -735,6 +765,11 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
               >
                 <Plus size={14} />
               </button>
+            </div>
+            {/* Instructions */}
+            <div className="mt-2 text-xs text-gray-500 leading-relaxed">
+              Drag tracks from "All Tracks" to add them to a playlist. When
+              viewing a playlist, drag tracks up/down to reorder.
             </div>
           </div>
 
@@ -964,8 +999,6 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
                 ? e => {
                     e.preventDefault();
                     e.dataTransfer.dropEffect = 'move';
-                    // If dragging over empty space, drop at end
-                    setReorderDropPosition(audioFiles.length);
                   }
                 : undefined
             }
@@ -973,22 +1006,8 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
               viewingPlaylist && isDraggingForReorder
                 ? e => {
                     e.preventDefault();
-                    if (draggedTrack && currentPlaylist) {
-                      const draggedIndex = audioFiles.findIndex(
-                        track => track.id === draggedTrack.id
-                      );
-                      if (
-                        draggedIndex !== -1 &&
-                        draggedIndex !== audioFiles.length - 1
-                      ) {
-                        reorderPlaylistTracks(
-                          currentPlaylist.id,
-                          draggedIndex,
-                          audioFiles.length
-                        );
-                        loadPlaylistsFromFile();
-                      }
-                    }
+                    // Drop handling is now done in individual track handlers
+                    // This ensures the playlist is refreshed from API after each drop
                     setReorderDropPosition(null);
                   }
                 : undefined
@@ -1000,104 +1019,116 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
               </div>
             ) : (
               <AutoSizer>
-                {({ width, height }) => (
-                  <VirtualizedList
-                    height={height}
-                    rowCount={filteredAudioFiles.length}
-                    rowHeight={Math.max(24, Math.floor(height / 15))}
-                    width={width}
-                    rowRenderer={({ index, key, style }) => {
-                      const track = filteredAudioFiles[index];
-                      const originalIndex = audioFiles.findIndex(
-                        f => f.id === track.id
-                      );
-                      const albumInfo = track.album ? ` [${track.album}]` : '';
-                      const yearInfo = track.year ? ` (${track.year})` : '';
-                      const displayText = `${String(originalIndex + 1).padStart(2, '0')}. ${track.title} - ${track.artist}${albumInfo}${yearInfo}`;
+                {({ width, height }) => {
+                  const rowHeight = Math.max(24, Math.floor(height / 15));
 
-                      return (
-                        <div key={key} style={style}>
-                          {/* Drop indicator for reordering */}
-                          {viewingPlaylist &&
-                            isDraggingForReorder &&
-                            reorderDropPosition === originalIndex && (
-                              <div className="h-0.5 bg-blue-400 mx-2 rounded-full" />
-                            )}
+                  return (
+                    <>
+                      {/* Floating drop indicator */}
+                      {isDraggingForReorder && reorderDropPosition !== null && (
+                        <div
+                          className="absolute left-0 right-0 z-50 pointer-events-none"
+                          style={{
+                            top: `${reorderDropPosition * rowHeight}px`,
+                            height: '3px',
+                            backgroundColor: '#3b82f6',
+                            boxShadow: '0 0 6px #3b82f6',
+                            borderRadius: '1px',
+                          }}
+                        />
+                      )}
 
-                          <div
-                            onClick={() => handleTrackSelect(index)}
-                            draggable={true} // Always draggable (behavior changes based on context)
-                            onDragStart={e => handleDragStart(e, track)}
-                            onDragEnd={handleDragEnd}
-                            onDragOver={
-                              viewingPlaylist
-                                ? e => handleReorderDragOver(e, originalIndex)
-                                : undefined
-                            }
-                            onDrop={
-                              viewingPlaylist
-                                ? e => handleReorderDrop(e, originalIndex)
-                                : undefined
-                            }
-                            className={`group px-2 py-1 transition-colors flex items-center ${
-                              currentTrack && track.id === currentTrack.id
-                                ? 'bg-gray-600'
-                                : ''
-                            } ${
-                              draggedTrack?.id === track.id ? 'opacity-50' : ''
-                            } ${
-                              viewingPlaylist
-                                ? 'cursor-grab hover:bg-gray-600'
-                                : 'cursor-grab hover:bg-gray-600'
-                            }`}
-                          >
-                            <div className="flex items-center flex-1 min-w-0">
-                              {/* Cover art thumbnail */}
-                              {track.coverArtUrl && (
-                                <img
-                                  src={track.coverArtUrl}
-                                  alt="Cover"
-                                  className="w-4 h-4 rounded mr-2 flex-shrink-0"
-                                />
-                              )}
-                              <span className="text-xs font-mono text-gray-400 truncate">
-                                {displayText}
-                              </span>
-                            </div>
-                            <div className="flex items-center space-x-1">
-                              {viewingPlaylist && currentPlaylist && (
-                                <button
-                                  onClick={e => {
-                                    e.stopPropagation();
-                                    handleRemoveFromPlaylist(track.id);
-                                  }}
-                                  className="p-1 hover:bg-gray-500 rounded text-gray-400 hover:text-red-400 opacity-0 group-hover:opacity-100"
-                                  title="Remove from playlist"
-                                >
-                                  <Trash2 size={10} />
-                                </button>
-                              )}
-                              {currentTrack &&
-                                track.id === currentTrack.id &&
-                                isPlaying && (
-                                  <span className="text-xs font-mono text-gray-400 ml-2 flex-shrink-0">
-                                    ♪
+                      <VirtualizedList
+                        ref={listRef}
+                        height={height}
+                        rowCount={filteredAudioFiles.length}
+                        rowHeight={rowHeight}
+                        width={width}
+                        rowRenderer={({ index, key, style }) => {
+                          const track = filteredAudioFiles[index];
+                          const originalIndex = audioFiles.findIndex(
+                            f => f.id === track.id
+                          );
+                          const albumInfo = track.album
+                            ? ` [${track.album}]`
+                            : '';
+                          const yearInfo = track.year ? ` (${track.year})` : '';
+                          const displayText = `${String(originalIndex + 1).padStart(2, '0')}. ${track.title} - ${track.artist}${albumInfo}${yearInfo}`;
+
+                          return (
+                            <div key={key} style={style}>
+                              <div
+                                onClick={() => handleTrackSelect(index)}
+                                draggable={true} // Always draggable (behavior changes based on context)
+                                onDragStart={e => handleDragStart(e, track)}
+                                onDragEnd={handleDragEnd}
+                                onDragOver={
+                                  viewingPlaylist
+                                    ? e =>
+                                        handleReorderDragOver(e, originalIndex)
+                                    : undefined
+                                }
+                                onDrop={
+                                  viewingPlaylist
+                                    ? e => handleReorderDrop(e, originalIndex)
+                                    : undefined
+                                }
+                                className={`group px-2 py-1 transition-colors flex items-center ${
+                                  currentTrack && track.id === currentTrack.id
+                                    ? 'bg-gray-600'
+                                    : ''
+                                } ${
+                                  draggedTrack?.id === track.id
+                                    ? 'opacity-50'
+                                    : ''
+                                } ${
+                                  viewingPlaylist
+                                    ? 'cursor-grab hover:bg-gray-600'
+                                    : 'cursor-grab hover:bg-gray-600'
+                                }`}
+                              >
+                                <div className="flex items-center flex-1 min-w-0">
+                                  {/* Cover art thumbnail */}
+                                  {track.coverArtUrl && (
+                                    <img
+                                      src={track.coverArtUrl}
+                                      alt="Cover"
+                                      className="w-4 h-4 rounded mr-2 flex-shrink-0"
+                                    />
+                                  )}
+                                  <span className="text-xs font-mono text-gray-400 truncate">
+                                    {displayText}
                                   </span>
-                                )}
+                                </div>
+                                <div className="flex items-center space-x-1">
+                                  {viewingPlaylist && currentPlaylist && (
+                                    <button
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        handleRemoveFromPlaylist(track.id);
+                                      }}
+                                      className="p-1 hover:bg-gray-500 rounded text-gray-400 hover:text-red-400 opacity-0 group-hover:opacity-100"
+                                      title="Remove from playlist"
+                                    >
+                                      <Trash2 size={10} />
+                                    </button>
+                                  )}
+                                  {currentTrack &&
+                                    track.id === currentTrack.id &&
+                                    isPlaying && (
+                                      <span className="text-xs font-mono text-gray-400 ml-2 flex-shrink-0">
+                                        ♪
+                                      </span>
+                                    )}
+                                </div>
+                              </div>
                             </div>
-                          </div>
-
-                          {/* Drop indicator for end position */}
-                          {viewingPlaylist &&
-                            isDraggingForReorder &&
-                            reorderDropPosition === originalIndex + 1 && (
-                              <div className="h-0.5 bg-blue-400 mx-2 rounded-full" />
-                            )}
-                        </div>
-                      );
-                    }}
-                  />
-                )}
+                          );
+                        }}
+                      />
+                    </>
+                  );
+                }}
               </AutoSizer>
             )}
           </div>
