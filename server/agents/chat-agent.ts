@@ -7,13 +7,13 @@ export class ChatAgent extends BaseAgent {
     super(config);
   }
 
-  getDefaultRole(): string {
+  getDefaultPrompt(): string {
     return DEFAULT_CHAT_ROLE;
   }
 
   createSystemPrompt(): string {
     return [
-      this.createRoleDefinition(),
+      this.createPromptDefinition(),
       '',
       this.createGoalSpecification(),
       '',
@@ -27,8 +27,8 @@ export class ChatAgent extends BaseAgent {
     ].join('\n');
   }
 
-  private createRoleDefinition(): string {
-    return this.config.customRole || DEFAULT_CHAT_ROLE;
+  private createPromptDefinition(): string {
+    return this.config.customPrompt || DEFAULT_CHAT_ROLE;
   }
 
   private createGoalSpecification(): string {

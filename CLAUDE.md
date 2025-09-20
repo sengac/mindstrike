@@ -48,7 +48,7 @@ server/
 - **Agent Modes**: Standard chat vs. workflow execution
 - **Attachments**: Image and note integration
 - **Cancellation**: Real-time message cancellation
-- **Personalities**: Custom roles per thread
+- **Custom Prompts**: Custom prompts per thread
 
 ### 2. Interactive Mind Maps
 

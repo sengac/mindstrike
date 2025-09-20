@@ -21,6 +21,8 @@ import {
   getHomeDirectory,
   getWorkspaceRoot,
   getMusicRoot,
+  setWorkspaceRoot,
+  setMusicRoot,
 } from './utils/settings-directory.js';
 import { sseManager } from './sse-manager.js';
 import {
@@ -35,6 +37,7 @@ import { WorkflowAgent } from './agents/workflow-agent.js';
 import { ConversationManager } from './conversation-manager.js';
 import { asyncHandler } from './utils/async-handler.js';
 import { ImageAttachment, NotesAttachment } from '../src/types.js';
+import { systemInfoManager } from './system-info-manager.js';
 
 // Cancellation system for ongoing message processing
 class MessageCancellationManager {
@@ -127,6 +130,15 @@ app.use('/api/local-llm', localLlmRoutes);
 
 // Mount model scan routes
 app.use('/api/model-scan', modelScanRoutes);
+
+// System information endpoint
+app.get(
+  '/api/system/info',
+  asyncHandler(async (req: Request, res: Response) => {
+    const systemInfo = await systemInfoManager.getSystemInfo();
+    res.json(systemInfo);
+  })
+);
 
 // Serve static files from the built client (only when not in development mode)
 // In development, Vite serves the frontend
@@ -263,8 +275,8 @@ let currentLlmConfig = {
   contextLength: undefined as number | undefined,
 };
 
-// Store custom roles per thread
-const threadRoles = new Map<string, string>();
+// Store custom prompts per thread
+const threadPrompts = new Map<string, string>();
 
 // Initialize conversation manager after loading workspace settings
 let conversationManager: ConversationManager;
@@ -278,7 +290,7 @@ async function initializeConversationManager() {
 const getAgentConfig = (threadId?: string): AgentConfig => ({
   workspaceRoot,
   llmConfig: currentLlmConfig,
-  customRole: threadId ? threadRoles.get(threadId) : undefined,
+  customPrompt: threadId ? threadPrompts.get(threadId) : undefined,
 });
 
 // Thread-aware agent pool
@@ -508,6 +520,167 @@ setInterval(() => {
     timestamp: Date.now(),
   });
 }, 30000); // Every 30 seconds
+
+// Playlist file operation queue to prevent race conditions
+class PlaylistFileQueue {
+  private queue: Array<() => Promise<void>> = [];
+  private isProcessing = false;
+
+  async add<T>(operation: () => Promise<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      this.queue.push(async () => {
+        try {
+          const result = await operation();
+          resolve(result);
+        } catch (error) {
+          reject(error);
+        }
+      });
+      this.process();
+    });
+  }
+
+  private async process() {
+    if (this.isProcessing || this.queue.length === 0) return;
+
+    this.isProcessing = true;
+
+    while (this.queue.length > 0) {
+      const operation = this.queue.shift()!;
+      await operation();
+    }
+
+    this.isProcessing = false;
+  }
+}
+
+const playlistFileQueue = new PlaylistFileQueue();
+
+// Playlist API endpoints
+app.post('/api/playlists/save', async (req: Request, res: Response) => {
+  try {
+    const result = await playlistFileQueue.add(async () => {
+      const { getMindstrikeDirectory } = await import(
+        './utils/settings-directory.js'
+      );
+      const playlists = req.body;
+
+      const playlistsDir = path.join(getMindstrikeDirectory(), 'playlists');
+      await fs.mkdir(playlistsDir, { recursive: true });
+
+      const playlistsFile = path.join(playlistsDir, 'playlists.json');
+      await fs.writeFile(playlistsFile, JSON.stringify(playlists, null, 2));
+
+      return { success: true };
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error saving playlists:', error);
+    res.status(500).json({ error: 'Failed to save playlists' });
+  }
+});
+
+app.get('/api/playlists/load', async (req: Request, res: Response) => {
+  try {
+    const result = await playlistFileQueue.add(async () => {
+      const { getMindstrikeDirectory } = await import(
+        './utils/settings-directory.js'
+      );
+      const playlistsDir = path.join(getMindstrikeDirectory(), 'playlists');
+      const playlistsFile = path.join(playlistsDir, 'playlists.json');
+
+      try {
+        const data = await fs.readFile(playlistsFile, 'utf8');
+        try {
+          const playlists = JSON.parse(data);
+          return playlists;
+        } catch (parseError) {
+          // Invalid JSON, create empty playlists file and return empty array
+          console.warn(
+            'Invalid JSON in playlists file, creating new empty playlists file'
+          );
+          await fs.mkdir(playlistsDir, { recursive: true });
+          await fs.writeFile(playlistsFile, JSON.stringify([], null, 2));
+          return [];
+        }
+      } catch (error) {
+        // File doesn't exist, create empty playlists file and return empty array
+        console.log(
+          'Playlists file does not exist, creating new empty playlists file'
+        );
+        await fs.mkdir(playlistsDir, { recursive: true });
+        await fs.writeFile(playlistsFile, JSON.stringify([], null, 2));
+        return [];
+      }
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error loading playlists:', error);
+    res.status(500).json({ error: 'Failed to load playlists' });
+  }
+});
+
+app.get('/api/playlists/:id', async (req: Request, res: Response) => {
+  try {
+    const { getMindstrikeDirectory } = await import(
+      './utils/settings-directory.js'
+    );
+    const playlistsDir = path.join(getMindstrikeDirectory(), 'playlists');
+    const playlistsFile = path.join(playlistsDir, 'playlists.json');
+
+    const data = await fs.readFile(playlistsFile, 'utf8');
+    let playlists;
+    try {
+      playlists = JSON.parse(data);
+    } catch (parseError) {
+      console.warn('Invalid JSON in playlists file');
+      return res.status(500).json({ error: 'Invalid playlists file format' });
+    }
+    const playlist = playlists.find((p: any) => p.id === req.params.id);
+
+    if (!playlist) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    res.json(playlist);
+  } catch (error) {
+    console.error('Error loading playlist:', error);
+    res.status(500).json({ error: 'Failed to load playlist' });
+  }
+});
+
+app.delete('/api/playlists/:id', async (req: Request, res: Response) => {
+  try {
+    const { getMindstrikeDirectory } = await import(
+      './utils/settings-directory.js'
+    );
+    const playlistsDir = path.join(getMindstrikeDirectory(), 'playlists');
+    const playlistsFile = path.join(playlistsDir, 'playlists.json');
+
+    const data = await fs.readFile(playlistsFile, 'utf8');
+    let playlists;
+    try {
+      playlists = JSON.parse(data);
+    } catch (parseError) {
+      console.warn('Invalid JSON in playlists file');
+      return res.status(500).json({ error: 'Invalid playlists file format' });
+    }
+    const filteredPlaylists = playlists.filter(
+      (p: any) => p.id !== req.params.id
+    );
+
+    await fs.writeFile(
+      playlistsFile,
+      JSON.stringify(filteredPlaylists, null, 2)
+    );
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting playlist:', error);
+    res.status(500).json({ error: 'Failed to delete playlist' });
+  }
+});
 
 // Get all available models from server-side configuration
 app.get(
@@ -1676,15 +1849,15 @@ app.post('/api/load-thread/:threadId', async (req: Request, res: Response) => {
         .getCurrentAgent()
         .loadConversation(threadId, thread.messages);
 
-      // Set the custom role if it exists in the thread
-      if (thread.customRole) {
-        threadRoles.set(threadId, thread.customRole);
+      // Set the custom prompt if it exists in the thread
+      if (thread.customPrompt) {
+        threadPrompts.set(threadId, thread.customPrompt);
         await agentPool
           .getCurrentAgent()
-          .updateRole(threadId, thread.customRole);
+          .updatePrompt(threadId, thread.customPrompt);
       } else {
-        threadRoles.delete(threadId);
-        await agentPool.getCurrentAgent().updateRole(threadId, undefined);
+        threadPrompts.delete(threadId);
+        await agentPool.getCurrentAgent().updatePrompt(threadId, undefined);
       }
       res.json({ success: true });
     } catch {
@@ -1885,15 +2058,19 @@ app.delete('/api/threads/:threadId', async (req: Request, res: Response) => {
 app.put('/api/threads/:threadId', async (req: Request, res: Response) => {
   try {
     const { threadId } = req.params;
-    const { name, customRole } = req.body;
+    const { name, customPrompt } = req.body;
     await conversationManager.load();
 
     if (name !== undefined) {
       await conversationManager.renameThread(threadId, name);
     }
-    if (customRole !== undefined) {
-      await conversationManager.updateThreadRole(threadId, customRole);
-      threadRoles.set(threadId, customRole);
+    if ('customPrompt' in req.body) {
+      await conversationManager.updateThreadPrompt(threadId, customPrompt);
+      if (customPrompt && customPrompt !== null) {
+        threadPrompts.set(threadId, customPrompt);
+      } else {
+        threadPrompts.delete(threadId);
+      }
     }
 
     res.json({ success: true });
@@ -2411,14 +2588,12 @@ Respond with only the title, no other text.`;
   }
 });
 
-app.post('/api/generate-role', async (req: Request, res: Response) => {
+app.post('/api/generate-prompt', async (req: Request, res: Response) => {
   try {
     const { personality } = req.body;
 
     if (!personality) {
-      return res
-        .status(400)
-        .json({ error: 'Personality description is required' });
+      return res.status(400).json({ error: 'Prompt description is required' });
     }
 
     // Check if LLM model is configured
@@ -2429,8 +2604,8 @@ app.post('/api/generate-role', async (req: Request, res: Response) => {
       });
     }
 
-    // Create a prompt to generate a role definition based on the personality description
-    const prompt = `Create a role definition for an AI assistant based on the user's description. Use their exact words and phrasing as much as possible while making it a proper role definition.
+    // Create a prompt to generate a role definition based on the prompt description
+    const systemPrompt = `Create a role definition for an AI assistant based on the user's description. Use their exact words and phrasing as much as possible while making it a proper role definition.
 
 User's Description: "${personality}"
 
@@ -2451,12 +2626,12 @@ Generate only the role definition using the user's words as the foundation.`;
     const roleThreadId = `role-${Date.now()}`;
     const response = await agentPool
       .getCurrentAgent()
-      .processMessage(roleThreadId, prompt);
-    const role = cleanContentForLLM(response.content).trim();
+      .processMessage(roleThreadId, systemPrompt);
+    const generatedPrompt = cleanContentForLLM(response.content).trim();
 
-    res.json({ role });
+    res.json({ prompt: generatedPrompt });
   } catch (error: unknown) {
-    console.error('Error generating role:', error);
+    console.error('Error generating prompt:', error);
     const errorMessage =
       error instanceof Error ? error.message : 'Unknown error';
     res.status(500).json({ error: errorMessage });
@@ -2469,13 +2644,13 @@ app.get('/api/role/:threadId?', (req: Request, res: Response) => {
     const agent = agentPool.getAgent(threadId);
 
     res.json({
-      currentRole: agent.getCurrentRole(),
-      defaultRole: agent.getDefaultRole(),
-      isDefault: agent.getCurrentRole() === agent.getDefaultRole(),
-      hasCustomRole: threadRoles.has(threadId),
+      currentPrompt: agent.getCurrentPrompt(),
+      defaultPrompt: agent.getDefaultPrompt(),
+      isDefault: agent.getCurrentPrompt() === agent.getDefaultPrompt(),
+      hasCustomPrompt: threadPrompts.has(threadId),
     });
   } catch (error: unknown) {
-    console.error('Error getting role:', error);
+    console.error('Error getting prompt:', error);
     const errorMessage =
       error instanceof Error ? error.message : 'Unknown error';
     res.status(500).json({ error: errorMessage });
@@ -2485,22 +2660,22 @@ app.get('/api/role/:threadId?', (req: Request, res: Response) => {
 app.post('/api/role/:threadId?', (req: Request, res: Response) => {
   try {
     const threadId = req.params.threadId || 'default';
-    const { customRole } = req.body;
+    const { customPrompt } = req.body;
 
-    // Store the custom role for the thread
-    if (customRole) {
-      threadRoles.set(threadId, customRole);
+    // Store the custom prompt for the thread
+    if (customPrompt) {
+      threadPrompts.set(threadId, customPrompt);
     } else {
-      threadRoles.delete(threadId);
+      threadPrompts.delete(threadId);
     }
 
-    // Update the agent's role
+    // Update the agent's prompt
     const agent = agentPool.getAgent(threadId);
-    agent.updateRole(customRole);
+    agent.updatePrompt(customPrompt);
 
     res.json({ success: true });
   } catch (error: unknown) {
-    console.error('Error updating role:', error);
+    console.error('Error updating prompt:', error);
     const errorMessage =
       error instanceof Error ? error.message : 'Unknown error';
     res.status(500).json({ error: errorMessage });
@@ -2611,6 +2786,9 @@ app.post('/api/workspace/root', async (req: Request, res: Response) => {
       // Update conversation manager workspace
       conversationManager.updateWorkspaceRoot(workspaceRoot);
 
+      // Save workspace root to persistent storage
+      await setWorkspaceRoot(workspaceRoot);
+
       logger.info(`Workspace root changed to: ${workspaceRoot}`);
     }
 
@@ -2669,6 +2847,10 @@ app.post('/api/music/root', async (req: Request, res: Response) => {
     if (musicRoot !== fullPath) {
       // Update music root
       musicRoot = fullPath;
+
+      // Save music root to persistent storage
+      await setMusicRoot(musicRoot);
+
       logger.info(`Music root changed to: ${musicRoot}`);
     }
 

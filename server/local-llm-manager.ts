@@ -14,6 +14,9 @@ import { getLocalModelsDirectory } from './utils/settings-directory.js';
 import { modelFetcher, DynamicModelInfo } from './model-fetcher.js';
 import { logger } from './logger.js';
 import { modelSettingsManager } from './utils/model-settings-manager.js';
+import { systemInfoManager, SystemInformation } from './system-info-manager.js';
+import { LLMResourceCalculator } from './utils/system/llm-resource-calculator.js';
+import { sharedLlamaInstance } from './shared-llama-instance.js';
 
 export interface ModelLoadingSettings {
   gpuLayers?: number; // -1 for auto, 0 for CPU only, positive number for specific layers
@@ -123,7 +126,7 @@ export class LocalLLMManager {
     }
 
     try {
-      const llama = await getLlama({ gpu: 'auto' });
+      const llama = await sharedLlamaInstance.getLlama();
       const vramState = await llama.getVramState();
 
       // Get model metadata to use the proper VRAM calculation formulas
@@ -231,28 +234,6 @@ export class LocalLLMManager {
       throw new Error(
         `Cannot determine safe context size: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
-    }
-  }
-
-  private calculateOptimalBatchSize(
-    contextSize: number,
-    _modelSizeBytes: number
-  ): number {
-    // Based on KV cache memory formula: 2 * contextSize * n_layers * n_heads * d_head * precision_bytes * batchSize
-    // For a typical 9B model: ~48 layers, 32 heads, 128 d_head, 2 bytes (FP16)
-    // Per-token KV cache = 2 * 48 * 32 * 128 * 2 = ~786KB per token
-
-    // Conservative approach: limit batch to ensure total KV cache doesn't exceed context memory
-    // Rule of thumb: batch size should be small enough that KV cache scales gracefully
-    if (contextSize <= 2048) {
-      return Math.min(512, Math.max(32, Math.floor(2048 / contextSize) * 32));
-    } else if (contextSize <= 4096) {
-      return Math.min(256, Math.max(16, Math.floor(4096 / contextSize) * 16));
-    } else if (contextSize <= 8192) {
-      return Math.min(128, Math.max(8, Math.floor(8192 / contextSize) * 8));
-    } else {
-      // For very large context, use minimal batch size
-      return Math.min(64, Math.max(4, Math.floor(16384 / contextSize) * 4));
     }
   }
 
@@ -593,6 +574,338 @@ export class LocalLLMManager {
   }
 
   /**
+   * Convert SystemInformation to LLMResourceCalculator format
+   */
+  private convertToCalculatorFormat(systemInfo: SystemInformation): {
+    cpus: Array<{ coreCount: number; efficiencyCoreCount: number }>;
+    gpus: Array<{
+      id: string;
+      library: string;
+      totalMemory: number;
+      freeMemory: number;
+      minimumMemory: number;
+      driverMajor: number;
+      driverMinor: number;
+      compute: string;
+      name: string;
+      variant: string;
+    }>;
+  } {
+    const cpus = [
+      {
+        coreCount: systemInfo.cpuThreads,
+        efficiencyCoreCount: 0, // We don't have efficiency core info, so assume all are performance cores
+      },
+    ];
+
+    const gpus = [];
+    if (
+      systemInfo.hasGpu &&
+      systemInfo.vramState &&
+      systemInfo.vramState.total > 0
+    ) {
+      gpus.push({
+        id: '0',
+        library:
+          systemInfo.gpuType === 'NVIDIA'
+            ? 'cuda'
+            : systemInfo.gpuType === 'AMD'
+              ? 'rocm'
+              : systemInfo.gpuType === 'Apple'
+                ? 'metal'
+                : 'cpu',
+        totalMemory: systemInfo.vramState.total,
+        freeMemory: systemInfo.vramState.free,
+        minimumMemory: 1024 * 1024 * 1024, // 1GB minimum
+        driverMajor: 12, // Assume modern driver
+        driverMinor: 0,
+        compute: '8.0', // Assume modern compute capability
+        name: systemInfo.gpuType || 'Unknown GPU',
+        variant: '',
+      });
+    }
+
+    return { cpus, gpus };
+  }
+
+  /**
+   * Create model info for the calculator from our model data
+   */
+  private createModelInfo(modelInfo: LocalModelInfo): {
+    blockCount: number;
+    trainCtx: number;
+    headCountMax: number;
+    headCountKVMin: number;
+    supportsFlashAttention: boolean;
+    supportsKVCacheType: (type: string) => boolean;
+    modelSize?: number;
+  } {
+    // Estimate model layers based on size if not available
+    const modelSizeGB = modelInfo.size / (1024 * 1024 * 1024);
+    const estimatedLayers =
+      modelInfo.layerCount ||
+      Math.max(32, Math.min(80, Math.floor(modelSizeGB * 8)));
+
+    return {
+      blockCount: estimatedLayers,
+      trainCtx: modelInfo.maxContextLength || modelInfo.contextLength || 4096,
+      headCountMax: 32, // Common default
+      headCountKVMin: 8, // Common GQA ratio
+      supportsFlashAttention: true, // Assume modern architecture
+      supportsKVCacheType: (type: string) => type === 'f16',
+      modelSize: modelInfo.size, // Pass actual model size in bytes
+    };
+  }
+
+  /**
+   * Calculate optimal GPU layers AND batch size using LLMResourceCalculator
+   */
+  private async calculateOptimalGpuAndBatchSettings(
+    modelInfo: LocalModelInfo,
+    contextSize: number,
+    systemInfo: SystemInformation
+  ): Promise<{ optimalGpuLayers: number; optimalBatchSize: number }> {
+    try {
+      // Convert to calculator format
+      const { cpus, gpus } = this.convertToCalculatorFormat(systemInfo);
+      const calcModelInfo = this.createModelInfo(modelInfo);
+
+      // Use LLMResourceCalculator to get optimal configuration
+      const config = LLMResourceCalculator.calculateOptimalConfig(
+        cpus,
+        gpus,
+        calcModelInfo,
+        {
+          numCtx: contextSize,
+          numBatch: 512, // Default batch size
+          numGPU: -1, // Always use auto-calculation for optimal GPU layers
+        }
+      );
+
+      if (config.numGPU === -1) {
+        console.error(
+          'ERROR: LLMResourceCalculator returned -1 for numGPU - this should not happen!'
+        );
+        console.log('Config object:', JSON.stringify(config, null, 2));
+      }
+
+      // Handle fallback to CPU if no GPU layers can be loaded
+      if (config.numGPU === 0 || !systemInfo.hasGpu) {
+        console.log('Falling back to CPU-only mode');
+        return {
+          optimalGpuLayers: 0,
+          optimalBatchSize: await this.calculateCpuBatchSize(
+            modelInfo,
+            contextSize,
+            systemInfo
+          ),
+        };
+      }
+
+      return {
+        optimalGpuLayers: config.numGPU,
+        optimalBatchSize: config.numBatch,
+      };
+    } catch (error) {
+      console.warn('Failed to calculate optimal GPU/batch settings:', error);
+      return {
+        optimalGpuLayers: this.getFallbackGpuLayers(),
+        optimalBatchSize: this.getFallbackBatchSize(modelInfo, contextSize),
+      };
+    }
+  }
+
+  private async calculateCpuBatchSize(
+    modelInfo: LocalModelInfo,
+    contextSize: number,
+    systemInfo: SystemInformation
+  ): Promise<number> {
+    const modelSizeGB = modelInfo.size / (1024 * 1024) / 1024;
+    const estimatedParams = modelSizeGB * 0.5; // Rough param estimation
+
+    // Calculate context memory requirements
+    const bytesPerParam = 2; // FP16
+    const contextMemoryGB =
+      (contextSize * estimatedParams * bytesPerParam) / (1024 * 1024 * 1024);
+
+    // Calculate available memory for batch processing
+    let availableForBatch = systemInfo.freeRAM - modelSizeGB - contextMemoryGB;
+
+    // If we have VRAM, we can use some of that for batch processing
+    if (systemInfo.hasGpu && systemInfo.vramState) {
+      const vramFreeGB = systemInfo.vramState.free / (1024 * 1024 * 1024);
+      // Use a portion of available VRAM for batch processing
+      availableForBatch += vramFreeGB * 0.3;
+    }
+
+    // Reserve some memory for system operations
+    availableForBatch = Math.max(0, availableForBatch - 1.0); // Reserve 1GB
+
+    // Calculate batch size based on available memory
+    const memoryPerTokenBatch =
+      (estimatedParams * bytesPerParam) / (1024 * 1024); // MB per token in batch
+    const maxBatchSize = Math.floor(
+      (availableForBatch * 1024) / memoryPerTokenBatch
+    );
+
+    // CPU-specific constraints
+    const cpuOptimalBatch = Math.min(maxBatchSize, 512); // CPU doesn't benefit from huge batches
+    const finalBatchSize = Math.max(1, cpuOptimalBatch);
+
+    console.log(`CPU Batch Size Calculation:
+      Model Size: ${modelSizeGB.toFixed(1)}GB
+      Context Size: ${contextSize} tokens
+      Context Memory: ${contextMemoryGB.toFixed(2)}GB
+      Free RAM: ${systemInfo.freeRAM.toFixed(1)}GB
+      VRAM Available: ${systemInfo.vramState ? (systemInfo.vramState.free / (1024 * 1024 * 1024)).toFixed(1) : 0}GB
+      Available for Batch: ${availableForBatch.toFixed(1)}GB
+      Memory per Token (batch): ${memoryPerTokenBatch.toFixed(2)}MB
+      Max Batch Size: ${maxBatchSize}
+      Final Batch Size: ${finalBatchSize}`);
+
+    return finalBatchSize;
+  }
+
+  private getFallbackGpuLayers(): number {
+    // Don't return -1 as fallback - calculate a reasonable estimate
+    // This is used when the advanced calculation fails
+    return 0; // Safe fallback: use CPU-only mode
+  }
+
+  private getFallbackBatchSize(
+    modelInfo: LocalModelInfo,
+    contextSize: number
+  ): number {
+    const modelSizeMB = modelInfo.size / (1024 * 1024);
+
+    // More reasonable fallback batch sizes based on model size and context
+    if (modelSizeMB > 15000) {
+      // Very large models (>15GB)
+      return contextSize > 8192 ? 1024 : 2048;
+    } else if (modelSizeMB > 8000) {
+      // Large models (8-15GB)
+      return contextSize > 8192 ? 2048 : 4096;
+    } else if (modelSizeMB > 4000) {
+      // Medium models (4-8GB)
+      return contextSize > 8192 ? 4096 : 8192;
+    } else {
+      // Small models (<4GB)
+      return contextSize > 8192 ? 8192 : 16384;
+    }
+  }
+
+  /**
+   * Calculate optimal context size based on available memory and model characteristics
+   */
+  private async calculateOptimalContextSize(
+    modelInfo: LocalModelInfo,
+    systemInfo: SystemInformation
+  ): Promise<number> {
+    const modelMaxContext = modelInfo.contextLength;
+
+    // Convert to calculator format
+    const { cpus, gpus } = this.convertToCalculatorFormat(systemInfo);
+    const calcModelInfo = this.createModelInfo(modelInfo);
+
+    // Get default options to start with reasonable context
+    const defaultOptions = LLMResourceCalculator.getDefaultOptions();
+
+    // Use model's max context if available, otherwise use a reasonable default
+    const requestedContext = modelMaxContext || defaultOptions.numCtx;
+
+    // Validate context size using LLMResourceCalculator
+    const validatedContext = LLMResourceCalculator.validateContextSize(
+      requestedContext,
+      calcModelInfo.trainCtx
+    );
+
+    // Ensure minimum viable context
+    const optimalContext = Math.max(512, validatedContext);
+
+    return optimalContext;
+  }
+
+  /**
+   * Calculate optimal settings for a model (used by reset button)
+   */
+  async calculateOptimalSettings(
+    modelId: string
+  ): Promise<ModelLoadingSettings> {
+    const models = await this.getLocalModels();
+    const modelInfo = models.find(m => m.id === modelId);
+
+    if (!modelInfo) {
+      throw new Error(`Model not found: ${modelId}`);
+    }
+
+    // Use the same logic as mergeSettingsWithDefaults but with empty user settings
+    const emptyUserSettings: ModelLoadingSettings = {};
+    return await this.mergeSettingsWithDefaults(emptyUserSettings, modelInfo);
+  }
+
+  /**
+   * Merge user settings with intelligent defaults
+   * USER SETTINGS ALWAYS TAKE PRECEDENCE
+   */
+  private async mergeSettingsWithDefaults(
+    userSettings: ModelLoadingSettings,
+    modelInfo: LocalModelInfo
+  ): Promise<ModelLoadingSettings> {
+    // Get system information once for all calculations
+    const systemInfo = await systemInfoManager.getSystemInfo();
+
+    // Calculate optimal context size based on available memory and model characteristics
+    const defaultContextSize = await this.calculateOptimalContextSize(
+      modelInfo,
+      systemInfo
+    );
+
+    const { optimalGpuLayers, optimalBatchSize } =
+      await this.calculateOptimalGpuAndBatchSettings(
+        modelInfo,
+        defaultContextSize,
+        systemInfo
+      );
+
+    const defaults = {
+      gpuLayers: optimalGpuLayers,
+      contextSize: defaultContextSize,
+      batchSize: optimalBatchSize,
+      threads: systemInfo.cpuThreads,
+      temperature: 0.7,
+    };
+
+    // User settings override defaults completely - NEVER auto-override user choices
+    // Special case: if user set gpuLayers to -1, use the calculated optimal value
+    const effective = {
+      gpuLayers:
+        userSettings.gpuLayers === -1
+          ? defaults.gpuLayers
+          : (userSettings.gpuLayers ?? defaults.gpuLayers),
+      contextSize: userSettings.contextSize ?? defaults.contextSize,
+      batchSize: userSettings.batchSize ?? defaults.batchSize,
+      threads: userSettings.threads ?? defaults.threads,
+      temperature: userSettings.temperature ?? defaults.temperature,
+    };
+
+    // Log what we're using and why
+    const modelSizeMB = modelInfo.size / (1024 * 1024);
+    if (userSettings.gpuLayers === -1) {
+      console.log(
+        `AUTO-CALCULATED GPU layers: ${effective.gpuLayers} (user set -1 for auto)`
+      );
+    } else if (userSettings.gpuLayers !== undefined) {
+      logger.info(`Using USER-SET GPU layers: ${effective.gpuLayers}`);
+    }
+
+    if (userSettings.contextSize !== undefined) {
+      logger.info(`Using USER-SET context size: ${effective.contextSize}`);
+    }
+
+    return effective;
+  }
+
+  /**
    * Get loading settings for a model
    */
   async getModelSettings(modelId: string): Promise<ModelLoadingSettings> {
@@ -685,7 +998,10 @@ export class LocalLLMManager {
   /**
    * Internal method that does the actual model loading
    */
-  private async _doLoadModel(modelId: string, modelInfo: any): Promise<void> {
+  private async _doLoadModel(
+    modelId: string,
+    modelInfo: LocalModelInfo
+  ): Promise<void> {
     // Unload all other models first to free up memory
     // This ensures only one local model is loaded at a time
     const otherModelIds = Array.from(this.activeModels.keys()).filter(
@@ -696,89 +1012,53 @@ export class LocalLLMManager {
       await this.unloadModel(otherModelId);
     }
 
-    console.log(`Loading model: ${modelInfo.name}`);
-    console.log(
+    logger.info(`Loading model: ${modelInfo.name}`);
+    logger.info(
       `Model file size: ${(modelInfo.size / (1024 * 1024)).toFixed(2)} MB`
     );
 
     const startTime = Date.now();
 
-    // Get user settings for this model
-    const settings = await this.getModelSettings(modelId);
+    // Use shared llama instance
+    const llama = await sharedLlamaInstance.getLlama();
 
-    // Configure llama for async/non-blocking operation
-    const llama = await getLlama({
-      // Enable GPU acceleration if available
-      gpu: 'auto',
-    });
-
-    console.log(`Available GPU: ${llama.gpu}`);
+    logger.info(`Available GPU: ${llama.gpu}`);
     if (modelInfo.layerCount) {
       console.log(`Model has ${modelInfo.layerCount} layers`);
     }
 
-    // Determine GPU layers to use
-    let gpuLayers = -1; // Default: use all layers
+    // PROPER SETTINGS LOGIC:
+    // 1. Load existing settings to see what user has explicitly set
+    const existingSettings = await this.getModelSettings(modelId);
 
-    if (settings.gpuLayers !== undefined) {
-      // Use user-specified setting
-      gpuLayers = settings.gpuLayers;
-      console.log(`Using user-specified GPU layers: ${gpuLayers}`);
-    } else {
-      // Auto-detect based on model size
-      const modelSizeMB = modelInfo.size / (1024 * 1024);
-      if (modelSizeMB > 8000) {
-        // Models larger than 8GB
-        gpuLayers = 32; // Use only 32 layers on GPU
-        console.log(
-          `Large model detected (${modelSizeMB.toFixed(0)}MB), using ${gpuLayers} GPU layers for better performance`
-        );
-      } else if (modelSizeMB > 4000) {
-        // Models larger than 4GB
-        gpuLayers = 40; // Use 40 layers on GPU
-        console.log(
-          `Medium model detected (${modelSizeMB.toFixed(0)}MB), using ${gpuLayers} GPU layers`
-        );
-      } else {
-        console.log(
-          `Small model detected (${modelSizeMB.toFixed(0)}MB), using all GPU layers (-1)`
-        );
-      }
-    }
-
-    const model = await llama.loadModel({
-      modelPath: modelInfo.path,
-      gpuLayers: gpuLayers,
-    });
-
-    // Calculate safe context size based on current VRAM state
-    let contextSize = settings.contextSize || modelInfo.contextLength || 4096;
-    // Always validate context size against available VRAM
-    const safeContextSize = await this.calculateSafeContextSize(
-      modelInfo.size,
-      contextSize,
-      modelInfo.filename
+    // 2. Determine effective values - user settings take absolute precedence
+    const effectiveSettings = await this.mergeSettingsWithDefaults(
+      existingSettings,
+      modelInfo
     );
 
-    // Update settings if we had to reduce the context size
-    if (safeContextSize !== contextSize) {
-      console.log(
-        `Updating context size from ${contextSize} to ${safeContextSize}`
+    logger.info(`Existing settings for ${modelId}:`, existingSettings);
+    logger.info(`Effective settings:`, effectiveSettings);
+
+    // 3. Load the model with effective settings
+    const model = await llama.loadModel({
+      modelPath: modelInfo.path,
+      gpuLayers: effectiveSettings.gpuLayers,
+    });
+
+    // 4. Use effective settings for context creation
+    const contextSize = effectiveSettings.contextSize!; // guaranteed to have value from defaults
+
+    // 5. NEVER override user-set values, only warn if potentially problematic
+    if (existingSettings.contextSize && contextSize > 8192) {
+      console.warn(
+        `User set high context size ${contextSize} - may cause VRAM issues`
       );
-      await this.setModelSettings(modelId, {
-        ...settings,
-        contextSize: safeContextSize,
-      });
     }
 
-    contextSize = safeContextSize;
-
-    // Calculate appropriate batch size based on context and available memory
-    const batchSize =
-      settings.batchSize ||
-      this.calculateOptimalBatchSize(contextSize, modelInfo.size);
-    const threads =
-      settings.threads || Math.max(1, Math.floor(os.cpus().length / 2));
+    // Use effective settings for all parameters
+    const batchSize = effectiveSettings.batchSize;
+    const threads = effectiveSettings.threads;
     const context = await model.createContext({
       contextSize: contextSize,
       // Configure for better async performance
@@ -794,17 +1074,21 @@ export class LocalLLMManager {
 
     // Create runtime info
     const runtimeInfo: ModelRuntimeInfo = {
-      actualGpuLayers: gpuLayers,
+      actualGpuLayers: effectiveSettings.gpuLayers,
       gpuType: llama.gpu || 'none',
       loadingTime: loadingTime,
     };
 
     this.activeModels.set(modelId, { model, context, session, runtimeInfo });
 
-    console.log(`Model loaded successfully: ${modelInfo.name}`);
-    console.log(
-      `Loading took ${loadingTime}ms with ${gpuLayers === -1 ? 'all' : gpuLayers} GPU layers`
+    logger.info(`Model loaded successfully: ${modelInfo.name}`);
+    logger.info(
+      `Loading took ${loadingTime}ms with ${effectiveSettings.gpuLayers === -1 ? 'all' : effectiveSettings.gpuLayers} GPU layers`
     );
+
+    // Update system info to get accurate VRAM state
+    const { systemInfoManager } = await import('./system-info-manager.js');
+    await systemInfoManager.getSystemInfo();
   }
 
   /**
@@ -819,6 +1103,12 @@ export class LocalLLMManager {
     activeModel.context.dispose();
     this.activeModels.delete(modelId);
     console.log(`Model unloaded: ${modelId}`);
+
+    // Force system info refresh after model unloading to update VRAM state
+    const { systemInfoManager } = await import('./system-info-manager.js');
+    systemInfoManager.invalidateCache();
+    // Get fresh system info to update VRAM state
+    await systemInfoManager.getSystemInfo();
   }
 
   /**
@@ -898,24 +1188,28 @@ export class LocalLLMManager {
 
     // Removed verbose logging
 
-    // Removed verbose logging
+    // Mark inference start to prevent system info queries during generation
+    sharedLlamaInstance.markInferenceStart();
 
-    const response = await session.prompt(finalPrompt, {
-      temperature: options?.temperature || 0.7,
-      maxTokens: options?.maxTokens || 2048,
-      // Enable async processing with yielding to prevent blocking
-      onToken: async () => {
-        // Yield control to event loop periodically during generation
-        if (Math.random() < 0.1) {
-          // 10% chance to yield control
-          await new Promise(resolve => setImmediate(resolve));
-        }
-      },
-    });
+    try {
+      const response = await session.prompt(finalPrompt, {
+        temperature: options?.temperature || 0.7,
+        maxTokens: options?.maxTokens || 2048,
+        // Enable async processing with yielding to prevent blocking
+        onToken: async () => {
+          // Yield control to event loop periodically during generation
+          if (Math.random() < 0.1) {
+            // 10% chance to yield control
+            await new Promise(resolve => setImmediate(resolve));
+          }
+        },
+      });
 
-    // Removed verbose logging
-
-    return response;
+      return response;
+    } finally {
+      // Mark inference end to process any queued system info requests
+      sharedLlamaInstance.markInferenceEnd();
+    }
   }
 
   /**
@@ -995,32 +1289,40 @@ export class LocalLLMManager {
       }
     };
 
-    // Start the prompt asynchronously
-    const promptPromise = session
-      .prompt(finalPrompt, {
-        temperature: options?.temperature || 0.7,
-        maxTokens: options?.maxTokens || 2048,
-        onTextChunk: (chunk: string) => {
-          pushChunk(chunk);
-        },
-      })
-      .then(() => {
-        // Signal end of stream
-        pushChunk(null);
-      });
+    // Mark inference start to prevent system info queries during generation
+    sharedLlamaInstance.markInferenceStart();
 
-    // Yield chunks as they arrive
-    let chunk: string | null;
-    while ((chunk = await getNextChunk()) !== null) {
-      // Check for cancellation
-      if (options?.signal?.aborted) {
-        throw new Error('Generation cancelled');
+    try {
+      // Start the prompt asynchronously
+      const promptPromise = session
+        .prompt(finalPrompt, {
+          temperature: options?.temperature || 0.7,
+          maxTokens: options?.maxTokens || 2048,
+          onTextChunk: (chunk: string) => {
+            pushChunk(chunk);
+          },
+        })
+        .then(() => {
+          // Signal end of stream
+          pushChunk(null);
+        });
+
+      // Yield chunks as they arrive
+      let chunk: string | null;
+      while ((chunk = await getNextChunk()) !== null) {
+        // Check for cancellation
+        if (options?.signal?.aborted) {
+          throw new Error('Generation cancelled');
+        }
+        yield chunk;
       }
-      yield chunk;
-    }
 
-    // Wait for prompt to complete
-    await promptPromise;
+      // Wait for prompt to complete
+      await promptPromise;
+    } finally {
+      // Mark inference end to process any queued system info requests
+      sharedLlamaInstance.markInferenceEnd();
+    }
   }
 
   /**

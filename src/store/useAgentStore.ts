@@ -56,7 +56,7 @@ export interface AgentState {
       | 'google'
       | 'local';
   };
-  customRole?: string;
+  customPrompt?: string;
 
   // Conversation State
   messages: StreamingMessage[];
@@ -84,7 +84,7 @@ export interface AgentState {
 
   // Configuration Updates
   updateLLMConfig: (config: AgentState['llmConfig']) => void;
-  updateCustomRole: (role?: string) => void;
+  updateCustomPrompt: (prompt?: string) => void;
 }
 
 // Store factory for per-agent stores
@@ -218,8 +218,8 @@ const createAgentStore = (
         set({ llmConfig: config });
       },
 
-      updateCustomRole: customRole => {
-        set({ customRole });
+      updateCustomPrompt: customPrompt => {
+        set({ customPrompt });
       },
     }))
   );

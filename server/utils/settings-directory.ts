@@ -148,3 +148,38 @@ export async function setMusicRoot(
   config = { ...config, musicRoot };
   await fs.writeFile(configPath, JSON.stringify(config, null, 2));
 }
+
+/**
+ * Get the workspace roots array
+ */
+export async function getWorkspaceRoots(): Promise<string[]> {
+  try {
+    const configPath = getWorkspaceRootsConfigPath();
+    const configData = await fs.readFile(configPath, 'utf8');
+    const config = JSON.parse(configData);
+    return config.workspaceRoots || [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Set the workspace roots array
+ */
+export async function setWorkspaceRoots(
+  workspaceRoots: string[]
+): Promise<void> {
+  await ensureMindstrikeDirectory();
+  const configPath = getWorkspaceRootsConfigPath();
+
+  let config = {};
+  try {
+    const configData = await fs.readFile(configPath, 'utf8');
+    config = JSON.parse(configData);
+  } catch {
+    // File doesn't exist or invalid JSON, use empty config
+  }
+
+  config = { ...config, workspaceRoots };
+  await fs.writeFile(configPath, JSON.stringify(config, null, 2));
+}

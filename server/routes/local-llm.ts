@@ -620,6 +620,26 @@ router.get('/models/:modelId/settings', async (req, res) => {
 });
 
 /**
+ * Get optimal settings calculated for this model
+ */
+router.get('/models/:modelId/optimal-settings', async (req, res) => {
+  const { modelId } = req.params;
+
+  try {
+    const optimalSettings = await llmManager.calculateOptimalSettings(modelId);
+    res.json(optimalSettings);
+  } catch (error) {
+    console.error('Error calculating optimal settings:', error);
+    res.status(500).json({
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Failed to calculate optimal settings',
+    });
+  }
+});
+
+/**
  * Get all model settings
  */
 router.get('/settings', async (req, res) => {

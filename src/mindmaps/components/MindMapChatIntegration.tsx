@@ -26,7 +26,7 @@ interface MindMapChatIntegrationProps {
   onDeleteMessage?: (messageId: string) => void;
   onMessagesUpdate?: (messages: ConversationMessage[]) => void;
   onFirstMessage?: () => void;
-  onRoleUpdate?: (threadId: string, customRole?: string) => void;
+  onPromptUpdate?: (threadId: string, customPrompt?: string) => void;
   onNotesUpdate?: (nodeId: string, notes: string) => Promise<void>;
   onSourcesUpdate?: (nodeId: string, sources: Source[]) => Promise<void>;
   onNodeAdd?: (parentId: string, text: string) => Promise<void>;
@@ -55,7 +55,7 @@ export function MindMapChatIntegration({
   onNavigateToChat,
   onDeleteMessage,
   onMessagesUpdate,
-  onRoleUpdate,
+  onPromptUpdate,
   onNotesUpdate,
   onSourcesUpdate,
   onNodeAdd: _onNodeAdd,
@@ -92,9 +92,9 @@ export function MindMapChatIntegration({
     }
   };
 
-  const handleRoleUpdateForThread = (customRole?: string) => {
-    if (onRoleUpdate && chatId) {
-      onRoleUpdate(chatId, customRole);
+  const handlePromptUpdateForThread = (customPrompt?: string) => {
+    if (onPromptUpdate && chatId) {
+      onPromptUpdate(chatId, customPrompt);
     }
   };
 
@@ -122,7 +122,7 @@ export function MindMapChatIntegration({
       onClose={onClose}
       onDeleteMessage={handleDeleteMessageForThread}
       onMessagesUpdate={handleMessagesUpdateForThread}
-      onRoleUpdate={handleRoleUpdateForThread}
+      onPromptUpdate={handlePromptUpdateForThread}
       onNotesUpdate={async notes => {
         if (onNotesUpdate) {
           await onNotesUpdate(nodeId, notes);

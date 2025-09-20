@@ -42,7 +42,7 @@ export interface AgentConfig {
     temperature?: number;
     maxTokens?: number;
   };
-  customRole?: string;
+  customPrompt?: string;
 }
 
 export interface ImageAttachment {
@@ -126,7 +126,7 @@ export abstract class BaseAgent {
 
   // Abstract methods that must be implemented by derived classes
   abstract createSystemPrompt(): string;
-  abstract getDefaultRole(): string;
+  abstract getDefaultPrompt(): string;
 
   // Set stream ID for SSE filtering
   setStreamId(streamId: string): void {
@@ -1540,8 +1540,8 @@ export abstract class BaseAgent {
     this.conversationManager.updateWorkspaceRoot(newWorkspaceRoot);
   }
 
-  async updateRole(threadId: string, customRole?: string): Promise<void> {
-    this.config.customRole = customRole;
+  async updatePrompt(threadId: string, customPrompt?: string): Promise<void> {
+    this.config.customPrompt = customPrompt;
     this.systemPrompt = this.createSystemPrompt();
 
     // System messages are now handled dynamically, no need to update stored messages
@@ -1549,8 +1549,8 @@ export abstract class BaseAgent {
     this.initializeAgentExecutor();
   }
 
-  getCurrentRole(): string {
-    return this.config.customRole || this.getDefaultRole();
+  getCurrentPrompt(): string {
+    return this.config.customPrompt || this.getDefaultPrompt();
   }
 
   protected generateId(): string {

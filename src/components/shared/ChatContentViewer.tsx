@@ -40,7 +40,7 @@ interface ChatContentViewerProps {
   onClose?: () => void;
   onDeleteMessage?: (messageId: string) => void;
   onMessagesUpdate?: (messages: ConversationMessage[]) => void;
-  onRoleUpdate?: (threadId: string, customRole?: string) => void;
+  onPromptUpdate?: (threadId: string, customPrompt?: string) => void;
   onNotesUpdate?: (notes: string) => Promise<void>;
   onSourcesUpdate?: (sources: Source[]) => Promise<void>;
   onThreadSelect?: (threadId: string) => void;
@@ -71,7 +71,7 @@ export const ChatContentViewer = forwardRef<
       onClose,
       onDeleteMessage,
       onMessagesUpdate,
-      onRoleUpdate,
+      onPromptUpdate,
       onNotesUpdate,
       onSourcesUpdate,
       onThreadSelect,
@@ -360,7 +360,7 @@ export const ChatContentViewer = forwardRef<
                     onDeleteMessage(messageId);
                   }
                 }}
-                onRoleUpdate={onRoleUpdate}
+                onPromptUpdate={onPromptUpdate}
                 onCopyToNotes={handleCopyToNotes}
                 inMindMapContext={true}
               />

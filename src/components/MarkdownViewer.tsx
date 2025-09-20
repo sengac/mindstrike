@@ -179,7 +179,6 @@ export function MarkdownViewer({ content }: MarkdownViewerProps) {
           title="Copy code"
         >
           <Copy size={14} />
-          <span>Copy</span>
         </button>
         {language && code.includes('\n') && (
           <div className="absolute bottom-2 right-2 bg-gray-800/90 backdrop-blur-sm border border-gray-600 px-2 py-1 rounded text-xs text-gray-300 font-mono opacity-80 transition-opacity z-10">

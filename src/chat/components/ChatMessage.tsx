@@ -275,7 +275,6 @@ function ChatMessageComponent({
             title="Copy code"
           >
             <Copy size={14} />
-            <span>Copy</span>
           </button>
         )}
         {language && code.includes('\n') && (

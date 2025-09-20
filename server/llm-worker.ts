@@ -40,7 +40,15 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
       case 'downloadModel':
         const downloadPath = await llmManager.downloadModel(
           message.data.modelInfo,
-          message.data.onProgress
+          (progress: number, speed?: string) => {
+            // Send progress updates back to proxy
+            parentPort?.postMessage({
+              id: message.id,
+              type: 'downloadProgress',
+              progress,
+              speed,
+            });
+          }
         );
         return { id: message.id, success: true, data: downloadPath };
 
@@ -147,6 +155,12 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
           message.data.modelId
         );
         return { id: message.id, success: true, data: settings };
+
+      case 'calculateOptimalSettings':
+        const optimalSettings = await llmManager.calculateOptimalSettings(
+          message.data.modelId
+        );
+        return { id: message.id, success: true, data: optimalSettings };
 
       case 'getModelRuntimeInfo':
         const runtimeInfo = llmManager.getModelRuntimeInfo(

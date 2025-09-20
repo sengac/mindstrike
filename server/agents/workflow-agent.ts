@@ -233,13 +233,13 @@ export class WorkflowAgent extends BaseAgent {
     }
   }
 
-  getDefaultRole(): string {
+  getDefaultPrompt(): string {
     return DEFAULT_WORKFLOW_ROLE;
   }
 
   createSystemPrompt(): string {
     return [
-      this.createRoleDefinition(),
+      this.createPromptDefinition(),
       '',
       this.createReActInstructions(),
       '',
@@ -249,8 +249,8 @@ export class WorkflowAgent extends BaseAgent {
     ].join('\n');
   }
 
-  private createRoleDefinition(): string {
-    return this.config.customRole || DEFAULT_WORKFLOW_ROLE;
+  private createPromptDefinition(): string {
+    return this.config.customPrompt || DEFAULT_WORKFLOW_ROLE;
   }
 
   private createReActInstructions(): string {

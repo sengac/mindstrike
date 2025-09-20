@@ -9,6 +9,7 @@ import { FileExplorer } from './workspace/components/FileExplorer';
 import { AgentsPanel } from './components/AgentsPanel';
 import { SettingsPanel } from './settings/components/SettingsPanel';
 import { ModelSelector } from './settings/components/ModelSelector';
+import { PromptsModal } from './settings/components/PromptsModal';
 import { HeaderStats } from './components/HeaderStats';
 import { LocalModelLoadDialog } from './components/LocalModelLoadDialog';
 import { ApplicationLogsDialog } from './components/ApplicationLogsDialog';
@@ -23,7 +24,16 @@ import { useAppStore } from './store/useAppStore';
 import { loadFontScheme } from './utils/fontSchemes';
 
 import { Source } from './types/mindMap';
-import { Menu, X, MessageSquare, Network, Cpu, FileText } from 'lucide-react';
+import {
+  Menu,
+  X,
+  MessageSquare,
+  Network,
+  Cpu,
+  FileText,
+  Terminal,
+  Bot,
+} from 'lucide-react';
 import { AppBar } from './components/AppBar';
 import { Toaster } from 'react-hot-toast';
 import { initStormToastEffect } from './utils/stormToastEffect';
@@ -40,6 +50,7 @@ function App() {
   >('debug');
   const [showConnectionDialog, setShowConnectionDialog] = useState(false);
   const [isMusicPlayerOpen, setIsMusicPlayerOpen] = useState(false);
+  const [showPromptsModal, setShowPromptsModal] = useState(false);
   const { isConnected } = useConnectionMonitor();
 
   // Initialize storm toast effect
@@ -84,9 +95,10 @@ function App() {
     activePanel,
     setActivePanel,
     fontScheme,
+    defaultCustomPrompt,
   } = useAppStore();
   const chatPanelRef = useRef<ChatPanelRef>(null);
-  const { activeThreadId } = useThreadsStore();
+  const { activeThreadId, toggleAgentMode } = useThreadsStore();
   // Always call the hook with a fallback threadId to avoid conditional hook calls
   const fallbackThreadId = activeThreadId || 'empty';
   const threadStore = useChatThreadStore(fallbackThreadId);
@@ -115,6 +127,12 @@ function App() {
 
         // Initialize single SSE event bus for all real-time updates
         sseEventBus.initialize();
+
+        // Initialize system information store
+        const { useSystemInformationStore } = await import(
+          './store/use-system-information-store'
+        );
+        await useSystemInformationStore.getState().initialize();
 
         // Load workspace roots from server
         await useAppStore.getState().loadWorkspaceRoots();
@@ -171,9 +189,14 @@ function App() {
     createThread,
     deleteThread,
     renameThread,
-    updateThreadRole,
+    updateThreadPrompt,
     selectThread,
   } = useThreadsRefactored();
+
+  // Get active thread from threads array
+  const activeThread = threads.find(
+    thread => thread.id === threadsActiveThreadId
+  );
 
   const {
     mindMaps,
@@ -338,6 +361,45 @@ function App() {
                   <div className="flex items-center gap-2">
                     <ModelSelector />
                     <button
+                      onClick={() => setShowPromptsModal(true)}
+                      className="relative p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
+                      title="Customize prompts"
+                    >
+                      <Terminal size={16} />
+                      {activeThread?.customPrompt && (
+                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></div>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (activeThread) {
+                          toggleAgentMode(activeThread.id);
+                        }
+                      }}
+                      className={`relative p-2 rounded transition-all duration-300 ${
+                        activeThread?.isAgentActive
+                          ? 'bg-blue-900/30 text-blue-300'
+                          : 'hover:bg-gray-800 text-gray-400 hover:text-gray-200'
+                      }`}
+                      title="Agent Mode"
+                    >
+                      <div
+                        className={`transition-all duration-300 ${activeThread?.isAgentActive ? 'scale-110' : 'scale-100'}`}
+                      >
+                        <Bot
+                          size={16}
+                          className={`transition-all duration-300 ${
+                            activeThread?.isAgentActive
+                              ? 'text-blue-300 animate-pulse'
+                              : 'text-gray-400'
+                          }`}
+                        />
+                      </div>
+                      {activeThread?.isAgentActive && (
+                        <div className="absolute inset-0 rounded bg-blue-400/20 animate-ping"></div>
+                      )}
+                    </button>
+                    <button
                       onClick={() => setShowLocalModelDialog(true)}
                       className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
                       title="Manage Local Models"
@@ -370,7 +432,7 @@ function App() {
                 ref={chatPanelRef}
                 threadId={threadsActiveThreadId || undefined}
                 onDeleteMessage={handleDeleteMessage}
-                onRoleUpdate={updateThreadRole}
+                onPromptUpdate={updateThreadPrompt}
                 onNavigateToWorkspaces={() => setActivePanel('files')}
               />
             </div>
@@ -438,7 +500,7 @@ function App() {
                   // TODO: Implement update messages functionality
                 }}
                 onFirstMessage={() => {}}
-                onRoleUpdate={updateThreadRole}
+                onPromptUpdate={updateThreadPrompt}
                 onNodeNotesUpdate={updateNodeNotes}
                 onNodeSourcesUpdate={updateNodeSources}
               />
@@ -510,6 +572,24 @@ function App() {
         onClose={() => setShowConnectionDialog(false)}
         isConnected={isConnected}
       />
+
+      {/* Prompts Modal */}
+      {showPromptsModal && (
+        <PromptsModal
+          isOpen={showPromptsModal}
+          onClose={() => setShowPromptsModal(false)}
+          currentPrompt={
+            activeThread?.customPrompt ||
+            defaultCustomPrompt ||
+            'You are a helpful AI assistant.'
+          }
+          defaultPrompt="You are a helpful AI assistant."
+          onPromptChange={async (customPrompt?: string) => {
+            const currentThreadId = threadsActiveThreadId || 'default';
+            await updateThreadPrompt(currentThreadId, customPrompt);
+          }}
+        />
+      )}
     </div>
   );
 }

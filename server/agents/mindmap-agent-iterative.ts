@@ -109,13 +109,13 @@ export class MindmapAgentIterative extends BaseAgent {
     super(config);
   }
 
-  getDefaultRole(): string {
+  getDefaultPrompt(): string {
     return DEFAULT_MINDMAP_ROLE;
   }
 
   createSystemPrompt(): string {
     const basePrompt = [
-      this.getDefaultRole(),
+      this.getDefaultPrompt(),
       '',
       'You modify mindmaps by creating, updating, or deleting nodes. Return ONLY valid JSON with changes array.',
       '',

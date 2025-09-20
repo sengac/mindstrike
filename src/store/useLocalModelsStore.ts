@@ -11,6 +11,24 @@ export interface ModelLoadingSettings {
   temperature?: number; // 0.0 to 2.0, controls randomness of generation
 }
 
+// Enhanced settings that track what user has explicitly set
+export interface ModelSettingsState {
+  // User-specified values (sacred - never auto-override)
+  userSettings: ModelLoadingSettings;
+  // Auto-calculated fallbacks for unset values
+  autoSettings: ModelLoadingSettings;
+  // Merged effective settings for actual use
+  effectiveSettings: ModelLoadingSettings;
+  // Track which values were explicitly set by user
+  userSetFlags: {
+    gpuLayers?: boolean;
+    contextSize?: boolean;
+    batchSize?: boolean;
+    threads?: boolean;
+    temperature?: boolean;
+  };
+}
+
 export interface ModelRuntimeInfo {
   actualGpuLayers?: number;
   gpuType?: string;
@@ -234,6 +252,12 @@ export const useLocalModelsStore = create<LocalModelsState>()(
           // Refresh model status
           await get().fetchModelsAndStatuses();
 
+          // Update system info after model load
+          const { useSystemInformationStore } = await import(
+            './use-system-information-store'
+          );
+          useSystemInformationStore.getState().updateSystemInfo();
+
           // Emit event to trigger global model rescan since local model state changed
           modelEvents.emit('models-changed');
         } else {
@@ -276,6 +300,12 @@ export const useLocalModelsStore = create<LocalModelsState>()(
 
           // Refresh model status
           await get().fetchModelsAndStatuses();
+
+          // Update system info after model unload
+          const { useSystemInformationStore } = await import(
+            './use-system-information-store'
+          );
+          useSystemInformationStore.getState().updateSystemInfo();
 
           // Emit event to trigger global model rescan since local model state changed
           modelEvents.emit('models-changed');

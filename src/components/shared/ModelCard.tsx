@@ -90,15 +90,35 @@ export function ModelCard({
     setShowSettings(false);
   };
 
-  const handleResetSettings = () => {
-    // Reset to empty settings (which will use server defaults)
-    const defaultSettings: ModelLoadingSettings = {};
-    setTempSettings(defaultSettings);
-    setValidationErrors({});
+  const handleResetSettings = async () => {
+    try {
+      // Fetch calculated optimal settings from server
+      const response = await fetch(
+        `/api/local-llm/models/${model.id}/optimal-settings`
+      );
+      if (!response.ok) {
+        throw new Error('Failed to fetch optimal settings');
+      }
 
-    // Trigger save to apply the reset
-    if (onUpdateSettings) {
-      onUpdateSettings(model.id, defaultSettings);
+      const optimalSettings: ModelLoadingSettings = await response.json();
+
+      // Show user the calculated optimal settings
+      setTempSettings(optimalSettings);
+      setValidationErrors({});
+
+      // Apply the optimal settings
+      if (onUpdateSettings) {
+        onUpdateSettings(model.id, optimalSettings);
+      }
+    } catch (error) {
+      console.error('Error fetching optimal settings:', error);
+      // Fallback to clearing settings if API fails
+      const defaultSettings: ModelLoadingSettings = {};
+      setTempSettings(defaultSettings);
+      setValidationErrors({});
+      if (onUpdateSettings) {
+        onUpdateSettings(model.id, defaultSettings);
+      }
     }
   };
 

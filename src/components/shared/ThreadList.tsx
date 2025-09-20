@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MessageSquare, Plus, Edit2, Trash2, UserCheck } from 'lucide-react';
+import { MessageSquare, Plus, Edit2, Trash2, Terminal } from 'lucide-react';
 
 import { ThreadMetadata } from '../../store/useThreadsStore';
 
@@ -109,9 +109,9 @@ export function ThreadList({
                         <h4 className="text-sm font-medium text-gray-200 truncate">
                           {thread.name}
                         </h4>
-                        {thread.customRole && (
-                          <div title="Custom personality applied">
-                            <UserCheck
+                        {thread.customPrompt && (
+                          <div title="Custom prompt applied">
+                            <Terminal
                               size={14}
                               className="text-purple-400 flex-shrink-0"
                             />

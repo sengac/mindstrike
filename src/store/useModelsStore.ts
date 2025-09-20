@@ -114,6 +114,12 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
       // Store in global app store
       const { useAppStore } = await import('./useAppStore');
       useAppStore.getState().setLastUsedModel(modelId);
+
+      // Update system info after model change
+      const { useSystemInformationStore } = await import(
+        './use-system-information-store'
+      );
+      useSystemInformationStore.getState().updateSystemInfo();
     } catch (error) {
       console.error('Failed to set default model:', error);
       set({

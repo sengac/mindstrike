@@ -28,7 +28,7 @@ interface MindMapsPanelProps {
     messages: ConversationMessage[]
   ) => void;
   onFirstMessage?: () => void;
-  onRoleUpdate?: (threadId: string, customRole?: string) => void;
+  onPromptUpdate?: (threadId: string, customPrompt?: string) => void;
   onNodeNotesUpdate?: (nodeId: string, notes: string) => Promise<void>;
   onNodeSourcesUpdate?: (nodeId: string, sources: Source[]) => Promise<void>;
   // MindMap node operations
@@ -54,7 +54,7 @@ export function MindMapsPanel({
   onDeleteMessage,
   onMessagesUpdate,
   onFirstMessage,
-  onRoleUpdate,
+  onPromptUpdate,
   onNodeNotesUpdate,
   onNodeSourcesUpdate,
   onNodeAdd,
@@ -362,7 +362,7 @@ export function MindMapsPanel({
             onDeleteMessage={handleDeleteMessage}
             onMessagesUpdate={handleMessagesUpdate}
             onFirstMessage={onFirstMessage}
-            onRoleUpdate={onRoleUpdate}
+            onPromptUpdate={onPromptUpdate}
             onThreadCreate={onThreadCreate}
             onThreadRename={onThreadRename}
             onThreadDelete={onThreadDelete}

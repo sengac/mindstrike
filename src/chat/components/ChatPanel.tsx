@@ -12,7 +12,6 @@ import {
   Github,
   Youtube,
   Trash2,
-  User,
   X,
   Square,
   Bot,
@@ -21,11 +20,12 @@ import {
 import { MindStrikeIcon } from '../../components/MindStrikeIcon';
 import { DiscordIcon } from '../../components/DiscordIcon';
 import { ChatMessage } from './ChatMessage';
-import { PersonalityModal } from '../../settings/components/PersonalityModal';
+
 import { ValidationStatusNotification } from '../../components/ValidationStatusNotification';
 import { LocalModelLoadDialog } from '../../components/LocalModelLoadDialog';
 import { MusicVisualization } from '../../components/MusicVisualization';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog';
+import { SystemInfo } from '../../components/SystemInfo';
 
 import toast from 'react-hot-toast';
 
@@ -33,6 +33,7 @@ import { useChatRefactored } from '../hooks/useChatRefactored';
 import { useAppStore } from '../../store/useAppStore';
 import { useModelsStore } from '../../store/useModelsStore';
 import { useTaskStore } from '../../store/useTaskStore';
+import { useThreadsStore } from '../../store/useThreadsStore';
 import { WorkflowProgress } from './WorkflowProgress';
 import { TypingIndicator } from './TypingIndicator';
 import {
@@ -48,7 +49,7 @@ interface ChatPanelProps {
   onMessagesUpdate?: (messages: ConversationMessage[]) => void;
   onDeleteMessage?: (messageId: string) => void;
   activeThread?: Thread | null;
-  onRoleUpdate?: (threadId: string, customRole?: string) => void;
+  onPromptUpdate?: (threadId: string, customPrompt?: string) => void;
   onNavigateToWorkspaces?: () => void;
   onCopyToNotes?: (content: string) => void;
   inMindMapContext?: boolean;
@@ -66,8 +67,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
       messages: _initialMessages = [],
       onMessagesUpdate: _onMessagesUpdate,
       onDeleteMessage,
-      activeThread,
-      onRoleUpdate,
+
       onNavigateToWorkspaces,
       onCopyToNotes,
       inMindMapContext = false,
@@ -76,17 +76,20 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
   ) => {
     const [input, setInput] = useState('');
     const [showClearConfirm, setShowClearConfirm] = useState(false);
-    const [showPersonalityModal, setShowPersonalityModal] = useState(false);
-    const [defaultRole, setDefaultRole] = useState('');
+
     const [attachedImages, setAttachedImages] = useState<ImageAttachment[]>([]);
     const [attachedNotes, setAttachedNotes] = useState<NotesAttachment[]>([]);
     const [chatLoadTime, setChatLoadTime] = useState<number>(0);
-    const [isAgentActive, setIsAgentActive] = useState(false);
-    const { fontSize, workspaceRoot, defaultCustomRole } = useAppStore();
+    const { fontSize, workspaceRoot } = useAppStore();
     const { getDefaultModel } = useModelsStore();
     const { currentWorkflow, workflows } = useTaskStore();
+    const { threads } = useThreadsStore();
     const currentModel = getDefaultModel();
     const isLocalModel = currentModel?.type === 'local';
+
+    // Get the current thread's agent mode state
+    const currentThread = threads.find(t => t.id === threadId);
+    const isAgentActive = currentThread?.isAgentActive || false;
 
     const {
       messages,
@@ -421,53 +424,6 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
       adjustTextareaHeight();
     }, [input]);
 
-    // Fetch default role when component mounts or thread changes
-    useEffect(() => {
-      const fetchDefaultRole = async () => {
-        try {
-          const response = await fetch(`/api/role/${threadId || 'default'}`);
-          if (response.ok) {
-            const data = await response.json();
-            setDefaultRole(data.defaultRole);
-          }
-        } catch (error) {
-          console.error('Failed to fetch default role:', error);
-        }
-      };
-
-      fetchDefaultRole();
-    }, [threadId]);
-
-    // Get current role from activeThread or fallback to default
-    const currentRole =
-      activeThread?.customRole || defaultCustomRole || defaultRole;
-
-    const handleRoleChange = async (customRole?: string) => {
-      const currentThreadId = threadId || 'default';
-
-      // Update thread data through parent callback
-      if (onRoleUpdate) {
-        await onRoleUpdate(currentThreadId, customRole);
-      }
-
-      // Update server agent
-      try {
-        const response = await fetch(`/api/role/${currentThreadId}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ customRole }),
-        });
-
-        if (!response.ok) {
-          console.error('Failed to update role on server');
-        }
-      } catch (error) {
-        console.error('Failed to update role:', error);
-      }
-    };
-
     return (
       <div className="flex flex-col h-full flex-1">
         <div
@@ -666,17 +622,6 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
             type="danger"
           />
 
-          {/* Personality Modal */}
-          {showPersonalityModal && (
-            <PersonalityModal
-              isOpen={showPersonalityModal}
-              onClose={() => setShowPersonalityModal(false)}
-              currentRole={currentRole}
-              defaultRole={defaultRole}
-              onRoleChange={handleRoleChange}
-            />
-          )}
-
           {/* Local Model Load Dialog */}
           {localModelError && (
             <LocalModelLoadDialog
@@ -809,33 +754,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
               onChange={handleImageUpload}
               className="hidden"
             />
-            <button
-              type="button"
-              onClick={() => setIsAgentActive(!isAgentActive)}
-              className={`relative p-2 border rounded-lg transition-all duration-300 ${
-                isAgentActive
-                  ? 'border-blue-400 bg-blue-900/30 shadow-lg shadow-blue-500/30 text-blue-300'
-                  : 'border-gray-600 hover:bg-gray-800 text-gray-400 hover:text-gray-200'
-              }`}
-              title="Agent Mode"
-              data-test-id="agent-mode-button"
-            >
-              <div
-                className={`transition-all duration-300 ${isAgentActive ? 'scale-110' : 'scale-100'}`}
-              >
-                <Bot
-                  size={16}
-                  className={`transition-all duration-300 ${
-                    isAgentActive
-                      ? 'text-blue-300 animate-pulse'
-                      : 'text-gray-400'
-                  }`}
-                />
-              </div>
-              {isAgentActive && (
-                <div className="absolute inset-0 rounded-lg bg-blue-400/20 animate-ping"></div>
-              )}
-            </button>
+
             <div className="relative group">
               <button
                 type="button"
@@ -858,17 +777,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
                 </div>
               )}
             </div>
-            <button
-              type="button"
-              onClick={() => setShowPersonalityModal(true)}
-              className="relative p-2 border border-gray-600 hover:bg-gray-800 rounded-lg transition-colors text-gray-400 hover:text-gray-200"
-              title="Change personality"
-            >
-              <User size={16} />
-              {activeThread?.customRole && (
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></div>
-              )}
-            </button>
+
             <button
               type="button"
               onClick={() => setShowClearConfirm(true)}
@@ -879,9 +788,12 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
               <Trash2 size={16} />
             </button>
           </form>
-          <p className="text-xs text-gray-500 mt-2">
-            Press Enter to send, Shift+Enter for new line
-          </p>
+          <div className="flex justify-between items-start mt-2">
+            <p className="text-xs text-gray-500">
+              Press Enter to send, Shift+Enter for new line
+            </p>
+            <SystemInfo />
+          </div>
         </div>
       </div>
     );

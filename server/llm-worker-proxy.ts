@@ -14,16 +14,31 @@ import { DynamicModelInfo } from './model-fetcher.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+interface WorkerResponse {
+  id: string;
+  type: string;
+  success?: boolean;
+  data?: unknown;
+  error?: string;
+  progress?: number;
+  speed?: string;
+}
+
+interface PendingRequest<T = unknown> {
+  resolve: (value: T) => void;
+  reject: (reason?: unknown) => void;
+}
+
+interface StreamingRequest {
+  resolve: (value: string[]) => void;
+  reject: (reason?: unknown) => void;
+  chunks: string[];
+}
+
 export class LLMWorkerProxy extends EventEmitter {
   private worker: Worker | null = null;
-  private pendingRequests = new Map<
-    string,
-    { resolve: Function; reject: Function }
-  >();
-  private streamingRequests = new Map<
-    string,
-    { resolve: Function; reject: Function; chunks: string[] }
-  >();
+  private pendingRequests = new Map<string, PendingRequest<unknown>>();
+  private streamingRequests = new Map<string, StreamingRequest>();
   private requestId = 0;
   private isInitialized = false;
   private restartCount = 0;
@@ -31,7 +46,8 @@ export class LLMWorkerProxy extends EventEmitter {
 
   constructor() {
     super();
-    this.initializeWorker();
+    // Initialize worker asynchronously to not block server startup
+    setTimeout(() => this.initializeWorker(), 0);
   }
 
   private initializeWorker() {
@@ -39,9 +55,13 @@ export class LLMWorkerProxy extends EventEmitter {
       const workerPath = join(__dirname, 'llm-worker.js');
       this.worker = new Worker(workerPath);
 
-      this.worker.on('message', (response: any) => {
+      this.worker.on('message', (response: WorkerResponse) => {
         if (response.type === 'streamChunk') {
           this.handleStreamChunk(response);
+        } else if (response.type === 'downloadProgress') {
+          // Progress messages are handled by individual request handlers via event listeners
+          // Don't process these as regular responses to avoid false errors
+          return;
         } else if (response.type === 'error') {
           logger.error('Worker reported error:', response.error);
           // Just log it, don't crash
@@ -52,14 +72,17 @@ export class LLMWorkerProxy extends EventEmitter {
 
       this.worker.on('error', error => {
         logger.error('Worker error:', error);
-        this.handleWorkerCrash(error);
+        // Don't crash the server if worker has errors
+        this.worker = null;
+        this.isInitialized = false;
       });
 
       this.worker.on('exit', code => {
         logger.info(`Worker exited with code ${code}`);
         this.worker = null;
         this.isInitialized = false;
-        this.handleWorkerCrash(new Error(`Worker exited with code ${code}`));
+        // Don't crash the server if worker exits
+        logger.error(`Worker exited with code ${code}`);
       });
 
       // Initialize the worker
@@ -77,14 +100,14 @@ export class LLMWorkerProxy extends EventEmitter {
     }
   }
 
-  private handleStreamChunk(response: any) {
+  private handleStreamChunk(response: WorkerResponse) {
     const streamRequest = this.streamingRequests.get(response.id);
-    if (streamRequest) {
+    if (streamRequest && response.data && typeof response.data === 'string') {
       streamRequest.chunks.push(response.data);
     }
   }
 
-  private handleResponse(response: any) {
+  private handleResponse(response: WorkerResponse) {
     const pendingRequest = this.pendingRequests.get(response.id);
     if (pendingRequest) {
       this.pendingRequests.delete(response.id);
@@ -146,7 +169,10 @@ export class LLMWorkerProxy extends EventEmitter {
     }
   }
 
-  private async sendMessage(type: string, data?: any): Promise<any> {
+  private async sendMessage<T = unknown>(
+    type: string,
+    data?: unknown
+  ): Promise<T> {
     if (!this.worker) {
       throw new Error('Worker not available');
     }
@@ -154,8 +180,11 @@ export class LLMWorkerProxy extends EventEmitter {
     const id = (++this.requestId).toString();
     const message = { id, type, data };
 
-    return new Promise((resolve, reject) => {
-      this.pendingRequests.set(id, { resolve, reject });
+    return new Promise<T>((resolve, reject) => {
+      this.pendingRequests.set(id, {
+        resolve: (result: unknown) => resolve(result as T),
+        reject,
+      });
 
       // Set timeout for requests
       const timeout = setTimeout(() => {
@@ -169,11 +198,11 @@ export class LLMWorkerProxy extends EventEmitter {
       const originalReject = reject;
 
       this.pendingRequests.set(id, {
-        resolve: (result: any) => {
+        resolve: (result: unknown) => {
           clearTimeout(timeout);
-          originalResolve(result);
+          originalResolve(result as T);
         },
-        reject: (error: any) => {
+        reject: (error: unknown) => {
           clearTimeout(timeout);
           originalReject(error);
         },
@@ -185,7 +214,7 @@ export class LLMWorkerProxy extends EventEmitter {
 
   private async sendStreamMessage(
     type: string,
-    data?: any
+    data?: unknown
   ): Promise<AsyncGenerator<string>> {
     if (!this.worker) {
       throw new Error('Worker not available');
@@ -194,9 +223,17 @@ export class LLMWorkerProxy extends EventEmitter {
     const id = (++this.requestId).toString();
     const message = { id, type, data };
 
-    return new Promise((resolve, reject) => {
-      this.streamingRequests.set(id, { resolve, reject, chunks: [] });
-      this.pendingRequests.set(id, { resolve, reject });
+    return new Promise<AsyncGenerator<string>>((resolve, reject) => {
+      this.streamingRequests.set(id, {
+        resolve: (chunks: string[]) =>
+          resolve(this.createAsyncGenerator(chunks)),
+        reject,
+        chunks: [],
+      });
+      this.pendingRequests.set(id, {
+        resolve: (result: unknown) => resolve(result as AsyncGenerator<string>),
+        reject,
+      });
 
       // Set timeout for requests
       const timeout = setTimeout(() => {
@@ -211,11 +248,11 @@ export class LLMWorkerProxy extends EventEmitter {
       const originalReject = reject;
 
       this.pendingRequests.set(id, {
-        resolve: (result: any) => {
+        resolve: (result: unknown) => {
           clearTimeout(timeout);
-          originalResolve(result);
+          originalResolve(result as AsyncGenerator<string>);
         },
-        reject: (error: any) => {
+        reject: (error: unknown) => {
           clearTimeout(timeout);
           originalReject(error);
         },
@@ -244,21 +281,26 @@ export class LLMWorkerProxy extends EventEmitter {
 
   async getLocalModels(): Promise<LocalModelInfo[]> {
     await this.waitForInitialization();
-    return this.sendMessage('getLocalModels');
+    return this.sendMessage<LocalModelInfo[]>('getLocalModels');
   }
 
   async getAvailableModels(): Promise<
     (ModelDownloadInfo | DynamicModelInfo)[]
   > {
     await this.waitForInitialization();
-    return this.sendMessage('getAvailableModels');
+    return this.sendMessage<(ModelDownloadInfo | DynamicModelInfo)[]>(
+      'getAvailableModels'
+    );
   }
 
   async searchModels(
     query: string
   ): Promise<(ModelDownloadInfo | DynamicModelInfo)[]> {
     await this.waitForInitialization();
-    return this.sendMessage('searchModels', { query });
+    return this.sendMessage<(ModelDownloadInfo | DynamicModelInfo)[]>(
+      'searchModels',
+      { query }
+    );
   }
 
   async downloadModel(
@@ -266,22 +308,99 @@ export class LLMWorkerProxy extends EventEmitter {
     onProgress?: (progress: number, speed?: string) => void
   ): Promise<string> {
     await this.waitForInitialization();
-    return this.sendMessage('downloadModel', { modelInfo, onProgress });
+
+    // Store the callback and pass only the request ID to worker
+    const id = (++this.requestId).toString();
+    const progressCallbacks = new Map<
+      string,
+      (progress: number, speed?: string) => void
+    >();
+
+    if (onProgress) {
+      progressCallbacks.set(id, onProgress);
+    }
+
+    const message = { id, type: 'downloadModel', data: { modelInfo } };
+
+    return new Promise<string>((resolve, reject) => {
+      this.pendingRequests.set(id, {
+        resolve: (result: unknown) => resolve(result as string),
+        reject,
+      });
+
+      // Set timeout for requests
+      const timeout = setTimeout(() => {
+        if (this.pendingRequests.has(id)) {
+          this.pendingRequests.delete(id);
+          progressCallbacks.delete(id);
+          reject(new Error('Worker request timeout'));
+        }
+      }, 600000); // 10 minute timeout for downloads
+
+      const originalResolve = resolve;
+      const originalReject = reject;
+
+      this.pendingRequests.set(id, {
+        resolve: (result: unknown) => {
+          clearTimeout(timeout);
+          progressCallbacks.delete(id);
+          originalResolve(result as string);
+        },
+        reject: (error: unknown) => {
+          clearTimeout(timeout);
+          progressCallbacks.delete(id);
+          originalReject(error);
+        },
+      });
+
+      // Handle progress messages from worker
+      const progressHandler = (response: WorkerResponse) => {
+        if (response.id === id && response.type === 'downloadProgress') {
+          const callback = progressCallbacks.get(id);
+          if (callback && typeof response.progress === 'number') {
+            callback(response.progress, response.speed);
+          }
+        }
+      };
+
+      this.worker!.on('message', progressHandler);
+
+      // Clean up the progress handler when done
+      const cleanup = () => {
+        this.worker?.removeListener('message', progressHandler);
+        progressCallbacks.delete(id);
+      };
+
+      this.pendingRequests.set(id, {
+        resolve: (result: unknown) => {
+          clearTimeout(timeout);
+          cleanup();
+          originalResolve(result as string);
+        },
+        reject: (error: unknown) => {
+          clearTimeout(timeout);
+          cleanup();
+          originalReject(error);
+        },
+      });
+
+      this.worker!.postMessage(message);
+    });
   }
 
   async deleteModel(modelId: string): Promise<void> {
     await this.waitForInitialization();
-    return this.sendMessage('deleteModel', { modelId });
+    return this.sendMessage<void>('deleteModel', { modelId });
   }
 
   async loadModel(modelIdOrName: string): Promise<void> {
     await this.waitForInitialization();
-    return this.sendMessage('loadModel', { modelIdOrName });
+    return this.sendMessage<void>('loadModel', { modelIdOrName });
   }
 
   async unloadModel(modelId: string): Promise<void> {
     await this.waitForInitialization();
-    return this.sendMessage('unloadModel', { modelId });
+    return this.sendMessage<void>('unloadModel', { modelId });
   }
 
   async generateResponse(
@@ -293,7 +412,7 @@ export class LLMWorkerProxy extends EventEmitter {
     }
   ): Promise<string> {
     await this.waitForInitialization();
-    return this.sendMessage('generateResponse', {
+    return this.sendMessage<string>('generateResponse', {
       modelIdOrName,
       messages,
       options,
@@ -327,8 +446,8 @@ export class LLMWorkerProxy extends EventEmitter {
       resolve: () => {
         streamComplete = true;
       },
-      reject: (error: Error) => {
-        streamError = error;
+      reject: (error: unknown) => {
+        streamError = error instanceof Error ? error : new Error(String(error));
         streamComplete = true;
       },
       chunks,
@@ -338,8 +457,8 @@ export class LLMWorkerProxy extends EventEmitter {
       resolve: () => {
         streamComplete = true;
       },
-      reject: (error: Error) => {
-        streamError = error;
+      reject: (error: unknown) => {
+        streamError = error instanceof Error ? error : new Error(String(error));
         streamComplete = true;
       },
     });
@@ -401,20 +520,34 @@ export class LLMWorkerProxy extends EventEmitter {
     settings: ModelLoadingSettings
   ): Promise<void> {
     await this.waitForInitialization();
-    return this.sendMessage('setModelSettings', { modelId, settings });
+    return this.sendMessage<void>('setModelSettings', { modelId, settings });
   }
 
   async getModelSettings(modelId: string): Promise<ModelLoadingSettings> {
     await this.waitForInitialization();
-    return this.sendMessage('getModelSettings', { modelId });
+    return this.sendMessage<ModelLoadingSettings>('getModelSettings', {
+      modelId,
+    });
+  }
+
+  async calculateOptimalSettings(
+    modelId: string
+  ): Promise<ModelLoadingSettings> {
+    await this.waitForInitialization();
+    return this.sendMessage<ModelLoadingSettings>('calculateOptimalSettings', {
+      modelId,
+    });
   }
 
   getModelRuntimeInfo(modelId: string): Promise<ModelRuntimeInfo | undefined> {
-    return this.sendMessage('getModelRuntimeInfo', { modelId });
+    return this.sendMessage<ModelRuntimeInfo | undefined>(
+      'getModelRuntimeInfo',
+      { modelId }
+    );
   }
 
   clearContextSizeCache(): Promise<void> {
-    return this.sendMessage('clearContextSizeCache');
+    return this.sendMessage<void>('clearContextSizeCache');
   }
 
   async getModelStatus(modelId: string): Promise<{
@@ -422,11 +555,14 @@ export class LLMWorkerProxy extends EventEmitter {
     info?: LocalModelInfo;
   }> {
     await this.waitForInitialization();
-    return this.sendMessage('getModelStatus', { modelId });
+    return this.sendMessage<{ loaded: boolean; info?: LocalModelInfo }>(
+      'getModelStatus',
+      { modelId }
+    );
   }
 
   cancelDownload(filename: string): Promise<boolean> {
-    return this.sendMessage('cancelDownload', { filename });
+    return this.sendMessage<boolean>('cancelDownload', { filename });
   }
 
   getDownloadProgress(filename: string): Promise<{
@@ -434,7 +570,11 @@ export class LLMWorkerProxy extends EventEmitter {
     progress: number;
     speed?: string;
   }> {
-    return this.sendMessage('getDownloadProgress', { filename });
+    return this.sendMessage<{
+      isDownloading: boolean;
+      progress: number;
+      speed?: string;
+    }>('getDownloadProgress', { filename });
   }
 
   terminate(): void {

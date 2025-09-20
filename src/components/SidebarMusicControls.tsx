@@ -59,12 +59,6 @@ export function SidebarMusicControls({}: SidebarMusicControlsProps) {
     }
   }, [currentTrack, isPlaying]);
 
-  // Only render controls if:
-  // 1. Should show normally OR currently playing closing animation
-  if (!shouldRender) {
-    return null;
-  }
-
   const togglePlayPause = () => {
     if (isPlaying) {
       pause();
@@ -72,6 +66,48 @@ export function SidebarMusicControls({}: SidebarMusicControlsProps) {
       play();
     }
   };
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Only respond to keyboard shortcuts if music controls are visible
+      if (!shouldShow) return;
+
+      switch (event.key) {
+        case 'MediaTrackPrevious':
+          event.preventDefault();
+          previousTrack();
+          break;
+        case 'MediaTrackNext':
+          event.preventDefault();
+          nextTrack();
+          break;
+        case 'MediaPlayPause':
+          event.preventDefault();
+          togglePlayPause();
+          break;
+        case 'Play':
+          event.preventDefault();
+          play();
+          break;
+        case 'Pause':
+          event.preventDefault();
+          pause();
+          break;
+        default:
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [shouldShow, previousTrack, nextTrack, togglePlayPause]);
+
+  // Only render controls if:
+  // 1. Should show normally OR currently playing closing animation
+  if (!shouldRender) {
+    return null;
+  }
 
   const handleClose = () => {
     // Stop music playback immediately

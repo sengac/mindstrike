@@ -83,7 +83,7 @@ export class ConversationManager {
     createdAt: Date;
     updatedAt: Date;
     messageCount: number;
-    customRole?: string;
+    customPrompt?: string;
   }> {
     return Array.from(this.conversations.values())
       .map(thread => ({
@@ -92,7 +92,7 @@ export class ConversationManager {
         createdAt: thread.createdAt,
         updatedAt: thread.updatedAt,
         messageCount: thread.messages.length,
-        customRole: thread.customRole,
+        customPrompt: thread.customPrompt,
       }))
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
   }
@@ -140,13 +140,13 @@ export class ConversationManager {
     return false;
   }
 
-  async updateThreadRole(
+  async updateThreadPrompt(
     threadId: string,
-    customRole?: string
+    customPrompt?: string | null
   ): Promise<boolean> {
     const thread = this.conversations.get(threadId);
     if (thread) {
-      thread.customRole = customRole;
+      thread.customPrompt = customPrompt || undefined;
       thread.updatedAt = new Date();
       await this.save(); // Auto-save on changes
       return true;

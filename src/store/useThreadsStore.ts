@@ -7,7 +7,8 @@ export interface ThreadMetadata {
   createdAt: Date;
   updatedAt: Date;
   messageCount: number;
-  customRole?: string;
+  customPrompt?: string;
+  isAgentActive?: boolean;
   [key: string]: unknown; // Allow additional properties for ListItem compatibility
 }
 
@@ -25,8 +26,12 @@ export interface ThreadsState {
   selectThread: (threadId: string) => void;
   deleteThread: (threadId: string) => Promise<void>;
   renameThread: (threadId: string, newName: string) => Promise<void>;
-  updateThreadRole: (threadId: string, customRole?: string) => Promise<void>;
+  updateThreadPrompt: (
+    threadId: string,
+    customPrompt?: string
+  ) => Promise<void>;
   clearThread: (threadId: string) => Promise<void>;
+  toggleAgentMode: (threadId: string) => void;
 
   // Internal state updates
   setThreads: (threads: ThreadMetadata[]) => void;
@@ -184,21 +189,28 @@ export const useThreadsStore = create<ThreadsState>()(
       }
     },
 
-    updateThreadRole: async (threadId: string, customRole?: string) => {
+    updateThreadPrompt: async (threadId: string, customPrompt?: string) => {
       try {
         const response = await fetch(`/api/threads/${threadId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ customRole }),
+          body: JSON.stringify({ customPrompt: customPrompt ?? null }),
         });
 
         if (!response.ok) {
-          throw new Error(`Failed to update thread role: ${response.status}`);
+          throw new Error(`Failed to update thread prompt: ${response.status}`);
         }
 
-        // No local state update needed for custom role
+        // Update local thread state to reflect the new custom prompt
+        set(state => ({
+          threads: state.threads.map(thread =>
+            thread.id === threadId
+              ? { ...thread, customPrompt, updatedAt: new Date() }
+              : thread
+          ),
+        }));
       } catch (error: unknown) {
-        console.error('Failed to update thread role:', error);
+        console.error('Failed to update thread prompt:', error);
         const errorMessage =
           error instanceof Error ? error.message : 'Unknown error';
         set({ error: errorMessage });
@@ -228,6 +240,16 @@ export const useThreadsStore = create<ThreadsState>()(
           error instanceof Error ? error.message : 'Unknown error';
         set({ error: errorMessage });
       }
+    },
+
+    toggleAgentMode: (threadId: string) => {
+      set(state => ({
+        threads: state.threads.map(thread =>
+          thread.id === threadId
+            ? { ...thread, isAgentActive: !thread.isAgentActive }
+            : thread
+        ),
+      }));
     },
 
     // Internal state setters

@@ -342,13 +342,13 @@ export function LCDCanvas({
   // Render when content changes (removed scrollOffset dependency)
   useEffect(() => {
     render();
-  }, [text, showFullGrid, effectiveWidth, charRows]);
+  }, [text, showFullGrid, effectiveWidth, charRows, containerSize]);
 
   return (
     <div
       ref={containerRef}
       className={dynamicSize ? 'w-full h-full' : ''}
-      style={dynamicSize ? { width: '100%', height: '100%' } : {}}
+      style={dynamicSize ? { height: '100%' } : {}}
     >
       <canvas
         ref={canvasRef}
@@ -358,6 +358,8 @@ export function LCDCanvas({
         style={{
           display: 'block',
           backgroundColor: 'transparent',
+          maxWidth: '100%',
+          maxHeight: '100%',
         }}
       />
     </div>

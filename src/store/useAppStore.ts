@@ -33,8 +33,8 @@ interface AppState {
   // LLM Configuration - simplified to only store last used model
   lastUsedModel?: LastUsedModel;
 
-  // Personality/Role Configuration
-  defaultCustomRole?: string; // fallback custom role for new threads
+  // Prompts Configuration
+  defaultCustomPrompt?: string; // fallback custom prompt for new threads
 
   // MindMap Preferences
   mindMapKeyBindings?: Record<string, string>;
@@ -58,8 +58,8 @@ interface AppState {
   increaseFontSize: () => void;
   decreaseFontSize: () => void;
 
-  // Role/Personality Actions
-  setDefaultCustomRole: (role?: string) => void;
+  // Prompts Actions
+  setDefaultCustomPrompt: (prompt?: string) => void;
 
   // MindMap Actions
   setMindMapKeyBindings: (keyBindings: Record<string, string>) => void;
@@ -84,7 +84,7 @@ export const useAppStore = create<AppState>()(
       workspaceVersion: 0,
       lastUsedModel: undefined,
 
-      defaultCustomRole: undefined,
+      defaultCustomPrompt: undefined,
       mindMapKeyBindings: undefined,
 
       // Actions
@@ -124,9 +124,9 @@ export const useAppStore = create<AppState>()(
         set({ fontSize: Math.max(currentSize - 2, 10) });
       },
 
-      // Role/Personality Actions
-      setDefaultCustomRole: (defaultCustomRole?: string) =>
-        set({ defaultCustomRole }),
+      // Prompts Actions
+      setDefaultCustomPrompt: (defaultCustomPrompt?: string) =>
+        set({ defaultCustomPrompt }),
 
       // MindMap Actions
       setMindMapKeyBindings: (mindMapKeyBindings: Record<string, string>) =>
@@ -160,7 +160,7 @@ export const useAppStore = create<AppState>()(
         fontSize: state.fontSize,
         fontScheme: state.fontScheme,
         lastUsedModel: state.lastUsedModel,
-        defaultCustomRole: state.defaultCustomRole,
+        defaultCustomPrompt: state.defaultCustomPrompt,
         mindMapKeyBindings: state.mindMapKeyBindings,
       }),
     }

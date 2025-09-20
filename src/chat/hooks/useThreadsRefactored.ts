@@ -14,7 +14,7 @@ export function useThreadsRefactored() {
     selectThread,
     deleteThread,
     renameThread,
-    updateThreadRole,
+    updateThreadPrompt,
     clearThread,
   } = useThreadsStore();
 
@@ -80,7 +80,7 @@ export function useThreadsRefactored() {
     selectThread: selectThreadAndLoadMessages,
     deleteThread: deleteThreadAndSelectNext,
     renameThread,
-    updateThreadRole,
+    updateThreadPrompt,
     clearThread: clearThreadMessages,
   };
 }

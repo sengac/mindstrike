@@ -39,6 +39,10 @@ interface AudioState {
   currentTrack: AudioFile | null;
   currentTrackIndex: number;
 
+  // Playlist context
+  activePlaylistId: string | null;
+  isPlayingFromPlaylist: boolean;
+
   // Playback state
   isPlaying: boolean;
   isLoading: boolean;
@@ -54,7 +58,15 @@ interface AudioState {
 
   // Actions
   setAudioFiles: (files: AudioFile[]) => void;
-  playTrack: (track: AudioFile, index: number) => void;
+  playTrack: (
+    track: AudioFile,
+    index: number,
+    playlistId?: string | null
+  ) => void;
+  setPlaylistContext: (
+    playlistId: string | null,
+    isFromPlaylist: boolean
+  ) => void;
   play: () => void;
   pause: () => void;
   stop: () => void;
@@ -72,6 +84,8 @@ export const useAudioStore = create<AudioState>((set, get) => ({
   audioFiles: [],
   currentTrack: null,
   currentTrackIndex: -1,
+  activePlaylistId: null,
+  isPlayingFromPlaylist: false,
   isPlaying: false,
   isLoading: false,
   volume: 0.7,
@@ -83,7 +97,14 @@ export const useAudioStore = create<AudioState>((set, get) => ({
   // Actions
   setAudioFiles: files => set({ audioFiles: files }),
 
-  playTrack: (track, index) => {
+  setPlaylistContext: (playlistId, isFromPlaylist) => {
+    set({
+      activePlaylistId: playlistId,
+      isPlayingFromPlaylist: isFromPlaylist,
+    });
+  },
+
+  playTrack: (track, index, playlistId = null) => {
     const state = get();
 
     // Stop current track if playing
@@ -98,6 +119,8 @@ export const useAudioStore = create<AudioState>((set, get) => ({
       currentTrackIndex: index,
       currentTime: 0,
       duration: 0,
+      activePlaylistId: playlistId,
+      isPlayingFromPlaylist: playlistId !== null,
     });
 
     const howl = new Howl({

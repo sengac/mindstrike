@@ -1,4 +1,4 @@
-import { MessageSquare, UserCheck } from 'lucide-react';
+import { MessageSquare, Terminal } from 'lucide-react';
 import { ThreadMetadata } from '../../store/useThreadsStore';
 import { ListPanel } from '../../components/shared/ListPanel';
 
@@ -37,9 +37,9 @@ export function ThreadsPanel({
       deleteButtonTitle="Delete conversation"
       testId="chat-slider"
       renderItemContent={thread =>
-        thread.customRole ? (
-          <div title="Custom personality applied">
-            <UserCheck size={14} className="text-purple-400 flex-shrink-0" />
+        thread.customPrompt ? (
+          <div title="Custom prompt applied">
+            <Terminal size={14} className="text-purple-400 flex-shrink-0" />
           </div>
         ) : null
       }

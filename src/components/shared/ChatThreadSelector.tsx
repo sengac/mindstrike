@@ -1,4 +1,4 @@
-import { MessageSquare, UserCheck, X } from 'lucide-react';
+import { MessageSquare, Terminal, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { Thread } from '../../types';
 
@@ -68,9 +68,9 @@ export function ChatThreadSelector({
                       <h4 className="text-sm font-medium text-gray-200 truncate">
                         {thread.name}
                       </h4>
-                      {thread.customRole && (
-                        <div title="Custom personality applied">
-                          <UserCheck
+                      {thread.customPrompt && (
+                        <div title="Custom prompt applied">
+                          <Terminal
                             size={14}
                             className="text-purple-400 flex-shrink-0"
                           />
