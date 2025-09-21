@@ -44,6 +44,8 @@ export interface AgentConfig {
     maxTokens?: number;
   };
   customPrompt?: string;
+  disableFunctions?: boolean;
+  disableChatHistory?: boolean;
 }
 
 export interface ImageAttachment {
@@ -188,6 +190,8 @@ export abstract class BaseAgent {
         return new ChatLocalLLM({
           modelName: llmConfig.model,
           threadId: threadId,
+          disableFunctions: this.config.disableFunctions,
+          disableChatHistory: this.config.disableChatHistory,
           ...baseConfig,
         });
 

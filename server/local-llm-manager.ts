@@ -153,10 +153,11 @@ export class LocalLLMManager {
   }
 
   /**
-   * Convert MCP tools to node-llama-cpp function format
+   * Convert MCP tools to node-llama-cpp function format with Anthropic-style tool call returns
    */
   private convertMCPToolsToNodeLlamaFormat(
-    mcpTools: MCPTool[]
+    mcpTools: MCPTool[],
+    pushChunk?: Function
   ): Record<string, ReturnType<typeof defineChatSessionFunction>> {
     const functions: Record<
       string,
@@ -176,80 +177,28 @@ export class LocalLLMManager {
         },
         async handler(params: unknown) {
           console.log(
-            '[LocalLLMManager] ⚠️  TOOL HANDLER CALLED FOR:',
+            '[LocalLLMManager] Tool call requested for:',
             tool.name,
             'with params:',
             params
           );
 
-          // Add a safeguard to prevent automatic execution
-          if (!params || typeof params !== 'object') {
-            console.log(
-              '[LocalLLMManager] ⚠️  INVALID PARAMS, SKIPPING EXECUTION'
-            );
-            return 'Invalid parameters provided';
-          }
+          // Return tool call in Anthropic format (DO NOT EXECUTE)
+          const toolCall = {
+            type: 'tool_use',
+            id: Date.now().toString(),
+            name: tool.name,
+            input: params || {},
+          };
 
-          const validParams = params as Record<string, unknown>;
-
-          // Send tool execution request to main thread
-          return new Promise(resolve => {
-            const messageId = Date.now().toString();
-            console.log(
-              '[LocalLLMManager] Sending tool execution request with messageId:',
-              messageId
-            );
-
-            const handleMessage = (message: MCPToolExecutionResponse) => {
-              console.log(
-                '[LocalLLMManager] Received tool execution response:',
-                message
-              );
-              if (
-                message.id === messageId &&
-                message.type === 'mcpToolExecutionResponse'
-              ) {
-                console.log(
-                  '[LocalLLMManager] Got tool execution response:',
-                  message.data
-                );
-                parentPort?.removeListener('message', handleMessage);
-
-                // Convert MCP tool result to plain text format for node-llama-cpp
-                let result: string | MCPToolResult | MCPToolResult[] =
-                  message.data;
-                if (Array.isArray(result)) {
-                  // Extract text from MCP format
-                  result = result
-                    .map((item: MCPToolResult) =>
-                      item.type === 'text' ? item.text : JSON.stringify(item)
-                    )
-                    .join('\n');
-                } else if (typeof result === 'object' && result !== null) {
-                  result = JSON.stringify(result);
-                }
-
-                console.log('[LocalLLMManager] Converted result to:', result);
-                resolve(result);
-              }
-            };
-
-            parentPort?.on('message', handleMessage);
-
-            // Send tool execution request
-            parentPort?.postMessage({
-              id: messageId,
-              type: 'executeMCPTool',
-              data: {
-                serverId: tool.serverId,
-                toolName: tool.name,
-                params: validParams,
-              },
-            });
-            console.log(
-              '[LocalLLMManager] Sent executeMCPTool request to main thread'
-            );
-          });
+          console.log(
+            '[LocalLLMManager] Returning tool call in Anthropic format:',
+            toolCall
+          );
+          // if (typeof pushChunk === 'function') {
+          //   pushChunk('```json\n' + JSON.stringify(toolCall) + '\n```');
+          // }
+          return JSON.stringify(toolCall);
         },
       });
 
@@ -1275,6 +1224,8 @@ export class LocalLLMManager {
 
   /**
    * Populate a LlamaChatSession with existing conversation history
+   * Only includes messages that have been fully processed (status: 'completed')
+   * Excludes any unprocessed messages to prevent LLM confusion
    */
   private async populateSessionWithHistory(
     session: LlamaChatSession,
@@ -1298,15 +1249,26 @@ export class LocalLLMManager {
       const conversationManager = new ConversationManager(workspaceRoot);
       await conversationManager.load();
 
-      const messages = conversationManager.getThreadMessages(threadId);
+      const allMessages = conversationManager.getThreadMessages(threadId);
 
-      if (messages.length === 0) {
+      if (allMessages.length === 0) {
         logger.info(`No existing history found for thread ${threadId}`);
         return;
       }
 
-      // Convert messages to the format expected by LlamaChatSession
-      const chatHistory: ChatHistoryItem[] = messages.map(msg => {
+      // Filter to only include completed messages to avoid LLM confusion
+      // This excludes any messages with status 'processing' or 'cancelled'
+      const completedMessages = allMessages.filter(
+        msg => msg.status === 'completed'
+      );
+
+      if (completedMessages.length === 0) {
+        logger.info(`No completed messages found for thread ${threadId}`);
+        return;
+      }
+
+      // Convert completed messages to the format expected by LlamaChatSession
+      const chatHistory: ChatHistoryItem[] = completedMessages.map(msg => {
         if (msg.role === 'user') {
           return {
             type: 'user' as const,
@@ -1324,7 +1286,7 @@ export class LocalLLMManager {
       session.setChatHistory(chatHistory);
 
       logger.info(
-        `Populated session with ${chatHistory.length} messages from thread ${threadId}`
+        `Populated session with ${chatHistory.length} completed messages from thread ${threadId} (filtered ${allMessages.length - completedMessages.length} unprocessed messages)`
       );
     } catch (error) {
       logger.error(
@@ -1376,6 +1338,8 @@ export class LocalLLMManager {
       temperature?: number;
       maxTokens?: number;
       threadId?: string;
+      disableFunctions?: boolean;
+      disableChatHistory?: boolean;
     }
   ): Promise<string> {
     // First try to use it as an ID
@@ -1443,12 +1407,23 @@ export class LocalLLMManager {
       ? `${systemMessage}\n\n${lastUserMessage}`
       : lastUserMessage;
 
-    // Get MCP tools and convert them to node-llama-cpp format
-    const mcpTools = await this.getMCPTools();
-    const functions = this.convertMCPToolsToNodeLlamaFormat(mcpTools);
+    // Get MCP tools and convert them to node-llama-cpp format only if functions are enabled
+    let functions = {};
+    if (!options?.disableFunctions) {
+      const mcpTools = await this.getMCPTools();
+      functions = this.convertMCPToolsToNodeLlamaFormat(mcpTools);
+    }
 
     // Mark inference start to prevent system info queries during generation
     sharedLlamaInstance.markInferenceStart();
+
+    console.log('CURRENT CHAT HISTORY (NO STREAM)', session.getChatHistory());
+
+    // Save current chat history if disableChatHistory is true
+    let initialChatHistory: ChatHistoryItem[] | undefined;
+    if (options?.disableChatHistory) {
+      initialChatHistory = session.getChatHistory();
+    }
 
     try {
       const response = await session.prompt(finalPrompt, {
@@ -1464,6 +1439,11 @@ export class LocalLLMManager {
           }
         },
       });
+
+      // Reset chat history to before the prompt if disableChatHistory is true
+      if (options?.disableChatHistory && initialChatHistory) {
+        session.setChatHistory(initialChatHistory);
+      }
 
       return response;
     } finally {
@@ -1483,6 +1463,8 @@ export class LocalLLMManager {
       maxTokens?: number;
       signal?: AbortSignal;
       threadId?: string;
+      disableFunctions?: boolean;
+      disableChatHistory?: boolean;
     }
   ): AsyncGenerator<string> {
     // First try to use it as an ID
@@ -1542,10 +1524,6 @@ export class LocalLLMManager {
       ? `${systemMessage}\n\n${lastUserMessage}`
       : lastUserMessage;
 
-    // Get MCP tools and convert them to node-llama-cpp format
-    const mcpTools = await this.getMCPTools();
-    const functions = this.convertMCPToolsToNodeLlamaFormat(mcpTools);
-
     // Generate streaming response with real-time streaming
     let resolveChunk: ((chunk: string | null) => void) | null = null;
     let chunkQueue: Array<string | null> = [];
@@ -1568,8 +1546,23 @@ export class LocalLLMManager {
       }
     };
 
+    // Get MCP tools and convert them to node-llama-cpp format only if functions are enabled
+    let functions = {};
+    if (!options?.disableFunctions) {
+      const mcpTools = await this.getMCPTools();
+      functions = this.convertMCPToolsToNodeLlamaFormat(mcpTools, pushChunk);
+    }
+
     // Mark inference start to prevent system info queries during generation
     sharedLlamaInstance.markInferenceStart();
+
+    // Save current chat history if disableChatHistory is true
+    let initialChatHistory: ChatHistoryItem[] | undefined;
+    if (options?.disableChatHistory) {
+      initialChatHistory = session.getChatHistory();
+    }
+
+    console.log('CURRENT CHAT HISTORY (STREAMING)', session.getChatHistory());
 
     try {
       // Start the prompt asynchronously
@@ -1583,6 +1576,10 @@ export class LocalLLMManager {
           },
         })
         .then(() => {
+          // Reset chat history to before the prompt if disableChatHistory is true
+          if (options?.disableChatHistory && initialChatHistory) {
+            session.setChatHistory(initialChatHistory);
+          }
           // Signal end of stream
           pushChunk(null);
         });

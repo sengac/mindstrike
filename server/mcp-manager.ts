@@ -499,7 +499,7 @@ export class MCPManager extends EventEmitter {
       }
 
       // Store in LFS if content is over 1024 bytes
-      const processedContent = lfsManager.storeContent(resultContent);
+      const processedContent = await lfsManager.storeContent(resultContent);
 
       // Log successful execution with processed result (only to MCP logs, not console)
       const logContent = lfsManager.isLFSReference(processedContent)

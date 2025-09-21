@@ -37,6 +37,7 @@ import { ConversationManager } from './conversation-manager.js';
 import { asyncHandler } from './utils/async-handler.js';
 import { ImageAttachment, NotesAttachment } from '../src/types.js';
 import { systemInfoManager } from './system-info-manager.js';
+import { ChatAgent } from './agents/chat-agent.js';
 
 // Cancellation system for ongoing message processing
 class MessageCancellationManager {
@@ -1325,6 +1326,7 @@ app.post('/api/message', async (req: Request, res: Response) => {
       role: 'user' as const,
       content: message,
       timestamp: new Date(),
+      status: 'completed' as const,
       images: images || [],
       notes: notes || [],
     };
@@ -1542,6 +1544,7 @@ app.post('/api/message/stream', async (req: Request, res: Response) => {
       role: 'user' as const,
       content: message,
       timestamp: new Date(),
+      status: 'completed' as const,
       images: images || [],
       notes: notes || [],
     };
@@ -2633,12 +2636,18 @@ ${cleanContext}
 
 Respond with only the title, no other text.`;
 
-    // Create a temporary thread for title generation
-    const titleThreadId = Date.now().toString();
-    const response = await agentPool
-      .getCurrentAgent()
-      .processMessage(titleThreadId, prompt);
-    const title = cleanContentForLLM(response.content).trim();
+    // Create a clean agent instance with no chat history, no system prompt, and no tools
+    const titleAgent = new ChatAgent({
+      workspaceRoot,
+      llmConfig: currentLlmConfig,
+      customPrompt: undefined, // No custom system prompt
+      disableFunctions: true,
+      disableChatHistory: true,
+    });
+
+    // Use direct LLM call without chat history or tools
+    const response = await titleAgent.getChatModel().invoke(prompt);
+    const title = cleanContentForLLM(response.content as string).trim();
 
     res.json({ title });
   } catch (error: unknown) {

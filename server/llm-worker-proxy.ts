@@ -498,6 +498,8 @@ export class LLMWorkerProxy extends EventEmitter {
       temperature?: number;
       maxTokens?: number;
       threadId?: string;
+      disableFunctions?: boolean;
+      disableChatHistory?: boolean;
     }
   ): Promise<string> {
     await this.waitForInitialization();
@@ -516,6 +518,8 @@ export class LLMWorkerProxy extends EventEmitter {
       maxTokens?: number;
       signal?: AbortSignal;
       threadId?: string;
+      disableFunctions?: boolean;
+      disableChatHistory?: boolean;
     }
   ): AsyncGenerator<string> {
     await this.waitForInitialization();

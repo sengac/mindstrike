@@ -34,7 +34,7 @@ class LFSManager {
    * @param content - The content to potentially store
    * @returns Either the original content (if under threshold) or an LFS reference
    */
-  storeContent(content: string): string {
+  async storeContent(content: string): Promise<string> {
     const contentSize = Buffer.byteLength(content, 'utf8');
 
     // Only store if content is over threshold
@@ -57,7 +57,7 @@ class LFSManager {
     };
 
     this.entries[id] = entry;
-    this.saveToFile();
+    await this.saveToFile();
 
     // Generate summary asynchronously
     this.generateSummaryAsync(id, content, contentType);
@@ -99,17 +99,17 @@ class LFSManager {
   /**
    * Remove an entry by ID
    */
-  removeEntry(id: string): void {
+  async removeEntry(id: string): Promise<void> {
     delete this.entries[id];
-    this.saveToFile();
+    await this.saveToFile();
   }
 
   /**
    * Clear all entries
    */
-  clearAll(): void {
+  async clearAll(): Promise<void> {
     this.entries = {};
-    this.saveToFile();
+    await this.saveToFile();
   }
 
   /**
@@ -132,7 +132,7 @@ class LFSManager {
       if (entry) {
         entry.summary = processedDoc.summary;
         entry.processedAt = Date.now();
-        this.saveToFile();
+        await this.saveToFile();
         console.log(`[LFS] Generated summary for ${id}`);
       }
     } catch (error) {
@@ -197,9 +197,12 @@ class LFSManager {
   /**
    * Save entries to file
    */
-  private saveToFile(): void {
+  private async saveToFile(): Promise<void> {
     try {
-      fs.writeFileSync(this.filePath, JSON.stringify(this.entries, null, 2));
+      await fs.promises.writeFile(
+        this.filePath,
+        JSON.stringify(this.entries, null, 2)
+      );
     } catch (error) {
       console.error('[LFS] Failed to save entries to file:', error);
     }

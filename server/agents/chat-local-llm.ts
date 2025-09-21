@@ -18,7 +18,12 @@ interface LocalLLMManagerInterface {
   generateResponse: (
     modelName: string,
     messages: { role: string; content: string }[],
-    options?: { temperature?: number; maxTokens?: number; threadId?: string }
+    options?: {
+      temperature?: number;
+      maxTokens?: number;
+      threadId?: string;
+      disableFunctions?: boolean;
+    }
   ) => Promise<string>;
   generateStreamResponse: (
     modelName: string,
@@ -28,6 +33,8 @@ interface LocalLLMManagerInterface {
       maxTokens?: number;
       signal?: AbortSignal;
       threadId?: string;
+      disableFunctions?: boolean;
+      disableChatHistory?: boolean;
     }
   ) => AsyncIterable<string>;
 }
@@ -37,6 +44,8 @@ export interface ChatLocalLLMInput extends BaseChatModelParams {
   temperature?: number;
   maxTokens?: number;
   threadId?: string;
+  disableFunctions?: boolean;
+  disableChatHistory?: boolean;
 }
 
 export class ChatLocalLLM extends BaseChatModel {
@@ -44,6 +53,8 @@ export class ChatLocalLLM extends BaseChatModel {
   temperature: number;
   maxTokens: number;
   threadId?: string;
+  disableFunctions?: boolean;
+  disableChatHistory?: boolean;
   private tools: DynamicStructuredTool[] = [];
 
   constructor(fields: ChatLocalLLMInput) {
@@ -52,6 +63,8 @@ export class ChatLocalLLM extends BaseChatModel {
     this.temperature = fields.temperature ?? 0.7;
     this.maxTokens = fields.maxTokens ?? 4000;
     this.threadId = fields.threadId;
+    this.disableFunctions = fields.disableFunctions;
+    this.disableChatHistory = fields.disableChatHistory;
   }
 
   _llmType(): string {
@@ -67,6 +80,8 @@ export class ChatLocalLLM extends BaseChatModel {
       temperature: this.temperature,
       maxTokens: this.maxTokens,
       threadId: this.threadId,
+      disableFunctions: this.disableFunctions,
+      disableChatHistory: this.disableChatHistory,
     });
     bound.tools = [...tools];
     return bound;
@@ -93,6 +108,8 @@ export class ChatLocalLLM extends BaseChatModel {
           temperature: this.temperature,
           maxTokens: this.maxTokens,
           threadId: this.threadId,
+          disableFunctions: this.disableFunctions,
+          disableChatHistory: this.disableChatHistory,
         }
       );
 
@@ -132,6 +149,8 @@ export class ChatLocalLLM extends BaseChatModel {
           temperature: this.temperature,
           maxTokens: this.maxTokens,
           threadId: this.threadId,
+          disableFunctions: this.disableFunctions,
+          disableChatHistory: this.disableChatHistory,
         }
       );
 
