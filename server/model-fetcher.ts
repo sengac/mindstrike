@@ -873,7 +873,7 @@ export class ModelFetcher {
     return {
       name: this.formatModelName(model.id, parameterCount, quantization),
       url: downloadUrl,
-      filename: selectedFile.rfilename,
+      filename: selectedFile.rfilename.replace(/[\/\\]/g, '_'),
       size: selectedFile.size,
       description: this.generateDescription(
         model.id,

@@ -1,6 +1,7 @@
 import { logger } from './logger.js';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
 import { getMindstrikeDirectory } from './utils/settings-directory.js';
 import { parseFile } from 'music-metadata';
 
@@ -14,14 +15,16 @@ interface CachedMusicMetadata {
   genre?: string[];
   year?: number;
   duration?: string;
-  coverArtUrl?: string;
+  coverArtHash?: string; // Store image hash instead of full data URL
   cachedAt: number;
 }
 
 export class MusicMetadataCache {
   private cache: Map<string, CachedMusicMetadata> = new Map();
+  private imageCache: Map<string, string> = new Map(); // hash -> base64
   private cacheDir: string;
   private cacheFile: string;
+  private imageCacheDir: string;
 
   /**
    * Clean metadata object by removing all binary data
@@ -29,41 +32,50 @@ export class MusicMetadataCache {
   private cleanMetadata(metadata: any): any {
     if (!metadata) return metadata;
 
-    const cleaned = JSON.parse(JSON.stringify(metadata));
+    // Deep clone without binary data
+    const cleaned = this.deepCleanObject(metadata);
+    return cleaned;
+  }
 
-    // Remove picture data from common
-    if (cleaned.common?.picture) {
-      cleaned.common.picture = undefined;
+  /**
+   * Recursively clean an object, removing binary data and large arrays
+   */
+  private deepCleanObject(obj: any): any {
+    if (obj === null || obj === undefined) return obj;
+
+    // Handle primitives
+    if (typeof obj !== 'object') return obj;
+
+    // Handle arrays
+    if (Array.isArray(obj)) {
+      return obj.map(item => this.deepCleanObject(item));
     }
 
-    // Remove binary data from native tags
-    if (cleaned.native) {
-      Object.keys(cleaned.native).forEach(format => {
-        if (Array.isArray(cleaned.native[format])) {
-          cleaned.native[format] = cleaned.native[format].map((tag: any) => {
-            if (
-              tag.id === 'APIC' ||
-              tag.id === 'PIC' ||
-              tag.id === 'coverart'
-            ) {
-              // Remove binary data but keep metadata about the image
-              return {
-                ...tag,
-                value: tag.value
-                  ? {
-                      format: tag.value.format,
-                      type: tag.value.type,
-                      description: tag.value.description,
-                      // Remove the actual binary data
-                      data: undefined,
-                    }
-                  : undefined,
-              };
-            }
-            return tag;
-          });
-        }
-      });
+    // Handle Buffer/Uint8Array (binary data)
+    if (obj instanceof Buffer || obj instanceof Uint8Array) {
+      return `[Binary data: ${obj.length} bytes]`;
+    }
+
+    // Handle objects
+    const cleaned: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      // Skip known binary data fields
+      if (
+        key === 'data' &&
+        (value instanceof Buffer || value instanceof Uint8Array)
+      ) {
+        cleaned[key] = `[Binary data: ${value.length} bytes]`;
+        continue;
+      }
+
+      // Skip picture arrays entirely
+      if (key === 'picture' && Array.isArray(value)) {
+        cleaned[key] = `[${value.length} pictures removed]`;
+        continue;
+      }
+
+      // Clean recursively
+      cleaned[key] = this.deepCleanObject(value);
     }
 
     return cleaned;
@@ -72,13 +84,18 @@ export class MusicMetadataCache {
   constructor() {
     this.cacheDir = path.join(getMindstrikeDirectory(), 'cache');
     this.cacheFile = path.join(this.cacheDir, 'music-metadata.json');
+    this.imageCacheDir = path.join(this.cacheDir, 'images');
     this.ensureCacheDirectory();
     this.loadCacheFromFile();
+    this.loadImageCache();
   }
 
   private ensureCacheDirectory() {
     if (!fs.existsSync(this.cacheDir)) {
       fs.mkdirSync(this.cacheDir, { recursive: true });
+    }
+    if (!fs.existsSync(this.imageCacheDir)) {
+      fs.mkdirSync(this.imageCacheDir, { recursive: true });
     }
   }
 
@@ -88,19 +105,59 @@ export class MusicMetadataCache {
         const cacheData = fs.readFileSync(this.cacheFile, 'utf-8');
         const data = JSON.parse(cacheData);
 
-        // Convert array to Map for faster lookups
-        const metadataArray = data.metadata || [];
         this.cache = new Map();
-        metadataArray.forEach((item: CachedMusicMetadata) => {
-          this.cache.set(item.filePath, item);
-        });
 
-        logger.debug(
-          `Loaded music metadata cache with ${this.cache.size} entries`
-        );
+        // Check if this is chunked data
+        if (data.chunks && data.totalEntries) {
+          // Load from chunks
+          for (let i = 0; i < data.chunks; i++) {
+            const chunkFile = path.join(
+              this.cacheDir,
+              `music-metadata-chunk-${i}.json`
+            );
+            if (fs.existsSync(chunkFile)) {
+              const chunkData = fs.readFileSync(chunkFile, 'utf-8');
+              const chunk = JSON.parse(chunkData);
+              chunk.metadata.forEach((item: CachedMusicMetadata) => {
+                this.cache.set(item.filePath, item);
+              });
+            }
+          }
+          logger.debug(
+            `Loaded music metadata cache with ${this.cache.size} entries from ${data.chunks} chunks`
+          );
+        } else {
+          // Legacy format - single file
+          const metadataArray = data.metadata || [];
+          metadataArray.forEach((item: CachedMusicMetadata) => {
+            this.cache.set(item.filePath, item);
+          });
+          logger.debug(
+            `Loaded music metadata cache with ${this.cache.size} entries`
+          );
+        }
       }
     } catch (error) {
       logger.warn('Failed to load music metadata cache:', error);
+    }
+  }
+
+  private loadImageCache() {
+    try {
+      const files = fs.readdirSync(this.imageCacheDir);
+      for (const file of files) {
+        if (file.endsWith('.jpg') || file.endsWith('.png')) {
+          const hash = path.basename(file, path.extname(file));
+          const imagePath = path.join(this.imageCacheDir, file);
+          const imageData = fs.readFileSync(imagePath);
+          const base64 = imageData.toString('base64');
+          const format = file.endsWith('.jpg') ? 'image/jpeg' : 'image/png';
+          this.imageCache.set(hash, `data:${format};base64,${base64}`);
+        }
+      }
+      logger.debug(`Loaded ${this.imageCache.size} cached images`);
+    } catch (error) {
+      logger.warn('Failed to load image cache:', error);
     }
   }
 
@@ -111,13 +168,54 @@ export class MusicMetadataCache {
         lastUpdated: new Date().toISOString(),
       };
 
-      await fs.promises.writeFile(
-        this.cacheFile,
-        JSON.stringify(data, null, 2)
-      );
-      logger.debug(
-        `Saved music metadata cache with ${this.cache.size} entries`
-      );
+      // Check if data is too large for JSON.stringify
+      const jsonString = JSON.stringify(data);
+      if (jsonString.length > 268435456) {
+        // 256MB limit
+        logger.warn(
+          `Cache data too large (${jsonString.length} chars), splitting into chunks`
+        );
+
+        // Save in chunks
+        const chunks = [];
+        const chunkSize = 1000; // entries per chunk
+        const entries = Array.from(this.cache.values());
+
+        for (let i = 0; i < entries.length; i += chunkSize) {
+          chunks.push(entries.slice(i, i + chunkSize));
+        }
+
+        // Save chunk info
+        const chunkData = {
+          chunks: chunks.length,
+          totalEntries: entries.length,
+          lastUpdated: new Date().toISOString(),
+        };
+
+        await fs.promises.writeFile(
+          this.cacheFile,
+          JSON.stringify(chunkData, null, 2)
+        );
+
+        // Save each chunk
+        for (let i = 0; i < chunks.length; i++) {
+          const chunkFile = path.join(
+            this.cacheDir,
+            `music-metadata-chunk-${i}.json`
+          );
+          await fs.promises.writeFile(
+            chunkFile,
+            JSON.stringify({ metadata: chunks[i] }, null, 2)
+          );
+        }
+
+        logger.debug(`Saved music metadata cache in ${chunks.length} chunks`);
+      } else {
+        await fs.promises.writeFile(this.cacheFile, jsonString);
+        logger.debug(
+          `Saved music metadata cache with ${this.cache.size} entries`
+        );
+      }
     } catch (error) {
       logger.warn('Failed to save music metadata cache:', error);
     }
@@ -143,6 +241,44 @@ export class MusicMetadataCache {
     // Check if we have valid cached data
     if (cached && cached.mtime === mtime) {
       logger.debug(`Using cached metadata for ${filePath}`);
+
+      // Reconstruct coverArtUrl from hash if available
+      let coverArtUrl: string | undefined;
+      if (cached.coverArtHash) {
+        if (this.imageCache.has(cached.coverArtHash)) {
+          coverArtUrl = this.imageCache.get(cached.coverArtHash);
+        } else {
+          // Try to load from disk
+          const jpgPath = path.join(
+            this.imageCacheDir,
+            `${cached.coverArtHash}.jpg`
+          );
+          const pngPath = path.join(
+            this.imageCacheDir,
+            `${cached.coverArtHash}.png`
+          );
+
+          try {
+            if (fs.existsSync(jpgPath)) {
+              const imageData = fs.readFileSync(jpgPath);
+              const base64 = imageData.toString('base64');
+              coverArtUrl = `data:image/jpeg;base64,${base64}`;
+              this.imageCache.set(cached.coverArtHash, coverArtUrl);
+            } else if (fs.existsSync(pngPath)) {
+              const imageData = fs.readFileSync(pngPath);
+              const base64 = imageData.toString('base64');
+              coverArtUrl = `data:image/png;base64,${base64}`;
+              this.imageCache.set(cached.coverArtHash, coverArtUrl);
+            }
+          } catch (error) {
+            logger.warn(
+              `Failed to load cached image ${cached.coverArtHash}:`,
+              error
+            );
+          }
+        }
+      }
+
       return {
         metadata: cached.metadata,
         title: cached.title || path.basename(filePath, path.extname(filePath)),
@@ -151,7 +287,7 @@ export class MusicMetadataCache {
         genre: cached.genre,
         year: cached.year,
         duration: cached.duration || '0:00',
-        coverArtUrl: cached.coverArtUrl,
+        coverArtUrl,
       };
     }
 
@@ -167,14 +303,33 @@ export class MusicMetadataCache {
     let genre: string[] | undefined;
     let year: number | undefined;
     let coverArtUrl: string | undefined;
+    let coverArtHash: string | undefined;
     let duration = '0:00';
     let metadata: any = undefined;
 
     try {
       const metadataResult = await parseFile(filePath);
 
-      // Clean metadata to remove all binary data
-      metadata = this.cleanMetadata(metadataResult);
+      // Store only essential metadata, no binary data
+      metadata = {
+        format: {
+          duration: metadataResult.format?.duration,
+          bitrate: metadataResult.format?.bitrate,
+          sampleRate: metadataResult.format?.sampleRate,
+          numberOfChannels: metadataResult.format?.numberOfChannels,
+          codec: metadataResult.format?.codec,
+          container: metadataResult.format?.container,
+        },
+        common: {
+          title: metadataResult.common?.title,
+          artist: metadataResult.common?.artist,
+          album: metadataResult.common?.album,
+          year: metadataResult.common?.year,
+          genre: metadataResult.common?.genre,
+          track: metadataResult.common?.track,
+          disk: metadataResult.common?.disk,
+        },
+      };
 
       // Extract basic info
       if (metadataResult.common.title) title = metadataResult.common.title;
@@ -190,14 +345,36 @@ export class MusicMetadataCache {
         duration = `${mins}:${secs.toString().padStart(2, '0')}`;
       }
 
-      // Extract cover art and store as base64 string
+      // Extract cover art and store efficiently
       if (
         metadataResult.common.picture &&
         metadataResult.common.picture.length > 0
       ) {
         const picture = metadataResult.common.picture[0];
-        const base64 = Buffer.from(picture.data).toString('base64');
-        coverArtUrl = `data:${picture.format};base64,${base64}`;
+        const imageBuffer = Buffer.from(picture.data);
+        coverArtHash = crypto
+          .createHash('md5')
+          .update(imageBuffer)
+          .digest('hex');
+
+        // Check if we already have this image cached
+        if (this.imageCache.has(coverArtHash)) {
+          coverArtUrl = this.imageCache.get(coverArtHash);
+        } else {
+          // Save image to disk and cache the reference
+          const ext = picture.format === 'image/jpeg' ? 'jpg' : 'png';
+          const imagePath = path.join(
+            this.imageCacheDir,
+            `${coverArtHash}.${ext}`
+          );
+
+          await fs.promises.writeFile(imagePath, imageBuffer);
+          const base64 = imageBuffer.toString('base64');
+          coverArtUrl = `data:${picture.format};base64,${base64}`;
+
+          // Cache the data URL for quick access
+          this.imageCache.set(coverArtHash, coverArtUrl);
+        }
       }
     } catch (error) {
       logger.warn(`Failed to extract metadata for ${filePath}:`, error);
@@ -214,7 +391,7 @@ export class MusicMetadataCache {
       genre,
       year,
       duration,
-      coverArtUrl,
+      coverArtHash, // Store only the hash, not the full data URL
       cachedAt: Date.now(),
     };
 
@@ -245,6 +422,22 @@ export class MusicMetadataCache {
    */
   async clearCache() {
     this.cache.clear();
+    this.imageCache.clear();
+
+    // Remove chunk files
+    const files = fs.readdirSync(this.cacheDir);
+    for (const file of files) {
+      if (file.startsWith('music-metadata-chunk-')) {
+        fs.unlinkSync(path.join(this.cacheDir, file));
+      }
+    }
+
+    // Remove image files
+    const imageFiles = fs.readdirSync(this.imageCacheDir);
+    for (const file of imageFiles) {
+      fs.unlinkSync(path.join(this.imageCacheDir, file));
+    }
+
     await this.saveCacheToFile();
     logger.info('Music metadata cache cleared');
   }
@@ -255,7 +448,9 @@ export class MusicMetadataCache {
   getCacheStats() {
     return {
       totalEntries: this.cache.size,
+      cachedImages: this.imageCache.size,
       cacheFile: this.cacheFile,
+      imageCacheDir: this.imageCacheDir,
       lastUpdated: new Date().toISOString(),
     };
   }

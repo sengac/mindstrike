@@ -50,6 +50,10 @@ interface AudioState {
   currentTime: number;
   duration: number;
 
+  // Shuffle state
+  isShuffled: boolean;
+  shuffleOrder: number[];
+
   // Visualizations
   visualizationsEnabled: boolean;
 
@@ -77,6 +81,7 @@ interface AudioState {
   updateCurrentTime: () => void;
   cleanup: () => void;
   toggleVisualizations: () => void;
+  toggleShuffle: () => void;
 }
 
 export const useAudioStore = create<AudioState>((set, get) => ({
@@ -91,11 +96,25 @@ export const useAudioStore = create<AudioState>((set, get) => ({
   volume: 0.7,
   currentTime: 0,
   duration: 0,
+  isShuffled: false,
+  shuffleOrder: [],
   visualizationsEnabled: true,
   howl: null,
 
   // Actions
-  setAudioFiles: files => set({ audioFiles: files }),
+  setAudioFiles: files => {
+    const { isShuffled } = get();
+    let shuffleOrder: number[] = [];
+    if (isShuffled) {
+      // Regenerate shuffle order when audio files change
+      shuffleOrder = [...Array(files.length)].map((_, i) => i);
+      for (let i = shuffleOrder.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffleOrder[i], shuffleOrder[j]] = [shuffleOrder[j], shuffleOrder[i]];
+      }
+    }
+    set({ audioFiles: files, shuffleOrder });
+  },
 
   setPlaylistContext: (playlistId, isFromPlaylist) => {
     set({
@@ -205,7 +224,16 @@ export const useAudioStore = create<AudioState>((set, get) => ({
     const { howl } = get();
     if (howl) {
       howl.stop();
+      howl.unload();
     }
+    set({
+      currentTrack: null,
+      currentTrackIndex: -1,
+      isPlaying: false,
+      currentTime: 0,
+      duration: 0,
+      howl: null,
+    });
   },
 
   setVolume: volume => {
@@ -225,18 +253,42 @@ export const useAudioStore = create<AudioState>((set, get) => ({
   },
 
   nextTrack: () => {
-    const { audioFiles, currentTrackIndex } = get();
+    const { audioFiles, currentTrackIndex, isShuffled, shuffleOrder } = get();
     if (audioFiles.length > 0) {
-      const nextIndex = (currentTrackIndex + 1) % audioFiles.length;
+      let nextIndex;
+      if (isShuffled && shuffleOrder.length > 0) {
+        const currentShuffleIndex = shuffleOrder.findIndex(
+          idx => idx === currentTrackIndex
+        );
+        const nextShuffleIndex =
+          (currentShuffleIndex + 1) % shuffleOrder.length;
+        nextIndex = shuffleOrder[nextShuffleIndex];
+      } else {
+        nextIndex = (currentTrackIndex + 1) % audioFiles.length;
+      }
       get().playTrack(audioFiles[nextIndex], nextIndex);
     }
   },
 
   previousTrack: () => {
-    const { audioFiles, currentTrackIndex } = get();
+    const { audioFiles, currentTrackIndex, isShuffled, shuffleOrder } = get();
     if (audioFiles.length > 0) {
-      const prevIndex =
-        currentTrackIndex <= 0 ? audioFiles.length - 1 : currentTrackIndex - 1;
+      let prevIndex;
+      if (isShuffled && shuffleOrder.length > 0) {
+        const currentShuffleIndex = shuffleOrder.findIndex(
+          idx => idx === currentTrackIndex
+        );
+        const prevShuffleIndex =
+          currentShuffleIndex <= 0
+            ? shuffleOrder.length - 1
+            : currentShuffleIndex - 1;
+        prevIndex = shuffleOrder[prevShuffleIndex];
+      } else {
+        prevIndex =
+          currentTrackIndex <= 0
+            ? audioFiles.length - 1
+            : currentTrackIndex - 1;
+      }
       get().playTrack(audioFiles[prevIndex], prevIndex);
     }
   },
@@ -265,5 +317,21 @@ export const useAudioStore = create<AudioState>((set, get) => ({
 
   toggleVisualizations: () => {
     set(state => ({ visualizationsEnabled: !state.visualizationsEnabled }));
+  },
+
+  toggleShuffle: () => {
+    const { audioFiles, isShuffled } = get();
+    if (!isShuffled) {
+      // Enable shuffle: create a randomized order
+      const shuffleOrder = [...Array(audioFiles.length)].map((_, i) => i);
+      for (let i = shuffleOrder.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffleOrder[i], shuffleOrder[j]] = [shuffleOrder[j], shuffleOrder[i]];
+      }
+      set({ isShuffled: true, shuffleOrder });
+    } else {
+      // Disable shuffle: clear the shuffle order
+      set({ isShuffled: false, shuffleOrder: [] });
+    }
   },
 }));

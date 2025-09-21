@@ -1,5 +1,6 @@
 import React from 'react';
 import { ExtractedMetadata } from '../services/metadata-extractor';
+import { useImageCache } from '../hooks/useImageCache';
 import {
   Music,
   Clock,
@@ -47,15 +48,27 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({
     return `data:${coverArt.format};base64,${base64}`;
   };
 
+  // Use image cache for cover art
+  const { cachedUrl: cachedCoverArt, isLoading: coverArtLoading } =
+    useImageCache(getCoverArtUrl() || undefined);
+
   if (compact) {
     return (
       <div className={`flex items-center gap-3 ${className}`}>
         {showCoverArt && metadata.coverArt?.length && (
-          <img
-            src={getCoverArtUrl() || ''}
-            alt="Cover art"
-            className="w-12 h-12 rounded object-cover"
-          />
+          <div className="w-12 h-12 rounded flex items-center justify-center bg-gray-100">
+            {coverArtLoading ? (
+              <Music className="w-6 h-6 text-gray-400 animate-pulse" />
+            ) : cachedCoverArt ? (
+              <img
+                src={cachedCoverArt}
+                alt="Cover art"
+                className="w-12 h-12 rounded object-cover"
+              />
+            ) : (
+              <Music className="w-6 h-6 text-gray-400" />
+            )}
+          </div>
         )}
         <div className="flex-1 min-w-0">
           <div className="font-medium text-gray-900 truncate">
@@ -81,12 +94,18 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({
       <div className="flex gap-6">
         {/* Cover Art */}
         {showCoverArt && metadata.coverArt?.length && (
-          <div className="flex-shrink-0">
-            <img
-              src={getCoverArtUrl() || ''}
-              alt="Album cover"
-              className="w-32 h-32 rounded-lg object-cover shadow-md"
-            />
+          <div className="flex-shrink-0 w-32 h-32 rounded-lg flex items-center justify-center bg-gray-100 shadow-md">
+            {coverArtLoading ? (
+              <Music className="w-16 h-16 text-gray-400 animate-pulse" />
+            ) : cachedCoverArt ? (
+              <img
+                src={cachedCoverArt}
+                alt="Album cover"
+                className="w-32 h-32 rounded-lg object-cover shadow-md"
+              />
+            ) : (
+              <Music className="w-16 h-16 text-gray-400" />
+            )}
           </div>
         )}
 

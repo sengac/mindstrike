@@ -31,11 +31,16 @@ interface AudioFile {
   coverArtUrl?: string;
 }
 
+interface PlaylistTrackReference {
+  trackId: number;
+  path: string; // backup identifier in case ID changes
+}
+
 interface Playlist {
   id: string;
   name: string;
   description?: string;
-  tracks: AudioFile[];
+  trackRefs: PlaylistTrackReference[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -43,6 +48,7 @@ interface Playlist {
 interface PlaylistState {
   playlists: Playlist[];
   currentPlaylist: Playlist | null;
+  allTracks: AudioFile[]; // cache of all available tracks
 
   // Actions
   createPlaylist: (name: string, description?: string) => void;
@@ -57,6 +63,8 @@ interface PlaylistState {
     toIndex: number
   ) => Promise<void>;
   getPlaylistById: (id: string) => Playlist | undefined;
+  getPlaylistTracks: (playlistId: string) => AudioFile[];
+  setAllTracks: (tracks: AudioFile[]) => void;
   savePlaylistsToFile: () => Promise<void>;
   loadPlaylistsFromFile: () => Promise<void>;
   initializePlaylistStore: () => Promise<void>;
@@ -65,13 +73,14 @@ interface PlaylistState {
 export const usePlaylistStore = create<PlaylistState>()((set, get) => ({
   playlists: [],
   currentPlaylist: null,
+  allTracks: [],
 
   createPlaylist: (name, description) => {
     const newPlaylist: Playlist = {
       id: crypto.randomUUID(),
       name,
       description,
-      tracks: [],
+      trackRefs: [],
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -106,17 +115,22 @@ export const usePlaylistStore = create<PlaylistState>()((set, get) => ({
   addTrackToPlaylist: (playlistId, track) => {
     // Check if track is already in the playlist
     const playlist = get().playlists.find(p => p.id === playlistId);
-    if (playlist && playlist.tracks.some(t => t.id === track.id)) {
+    if (playlist && playlist.trackRefs.some(ref => ref.trackId === track.id)) {
       console.log('Track already in playlist');
       return;
     }
+
+    const trackRef: PlaylistTrackReference = {
+      trackId: track.id,
+      path: track.path,
+    };
 
     set(state => ({
       playlists: state.playlists.map(p =>
         p.id === playlistId
           ? {
               ...p,
-              tracks: [...p.tracks, track],
+              trackRefs: [...p.trackRefs, trackRef],
               updatedAt: new Date(),
             }
           : p
@@ -132,7 +146,7 @@ export const usePlaylistStore = create<PlaylistState>()((set, get) => ({
         p.id === playlistId
           ? {
               ...p,
-              tracks: p.tracks.filter(t => t.id !== trackId),
+              trackRefs: p.trackRefs.filter(ref => ref.trackId !== trackId),
               updatedAt: new Date(),
             }
           : p
@@ -150,13 +164,13 @@ export const usePlaylistStore = create<PlaylistState>()((set, get) => ({
     set(state => ({
       playlists: state.playlists.map(p => {
         if (p.id === playlistId) {
-          const newTracks = [...p.tracks];
-          const [movedTrack] = newTracks.splice(fromIndex, 1);
-          newTracks.splice(toIndex, 0, movedTrack);
+          const newTrackRefs = [...p.trackRefs];
+          const [movedTrackRef] = newTrackRefs.splice(fromIndex, 1);
+          newTrackRefs.splice(toIndex, 0, movedTrackRef);
 
           return {
             ...p,
-            tracks: newTracks,
+            trackRefs: newTrackRefs,
             updatedAt: new Date(),
           };
         }
@@ -169,6 +183,28 @@ export const usePlaylistStore = create<PlaylistState>()((set, get) => ({
 
   getPlaylistById: id => {
     return get().playlists.find(p => p.id === id);
+  },
+
+  getPlaylistTracks: playlistId => {
+    const playlist = get().playlists.find(p => p.id === playlistId);
+    if (!playlist) return [];
+
+    const { allTracks } = get();
+    return playlist.trackRefs
+      .map(ref => {
+        // First try to find by trackId
+        let track = allTracks.find(t => t.id === ref.trackId);
+        // Fallback to finding by path if trackId doesn't match
+        if (!track) {
+          track = allTracks.find(t => t.path === ref.path);
+        }
+        return track;
+      })
+      .filter(track => track !== undefined) as AudioFile[];
+  },
+
+  setAllTracks: tracks => {
+    set({ allTracks: tracks });
   },
 
   savePlaylistsToFile: async () => {

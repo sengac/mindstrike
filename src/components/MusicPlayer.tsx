@@ -15,14 +15,18 @@ import {
   Music,
   Trash2,
   Edit3,
+  Shuffle,
+  Square,
 } from 'lucide-react';
 import { BaseDialog } from './shared/BaseDialog';
 import { useDialogAnimation } from '../hooks/useDialogAnimation';
 import { useEffect, useState, useRef } from 'react';
 import { useAudioStore } from '../store/useAudioStore';
 import { usePlaylistStore } from '../store/usePlaylistStore';
+import { useImageCache } from '../hooks/useImageCache';
 
 import { LCDDisplay } from './LCDDisplay';
+import { CachedAlbumArt } from './CachedAlbumArt';
 import { List as VirtualizedList, AutoSizer } from 'react-virtualized';
 
 interface MusicPlayerProps {
@@ -39,6 +43,8 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
       setEditingPlaylistId(null);
       setDraggedTrack(null);
       setDropTargetPlaylistId(null);
+      setSelectedTracks(new Set());
+      setLastClickedIndex(null);
       onClose();
     }
   );
@@ -56,7 +62,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
   );
   const [editingPlaylistName, setEditingPlaylistName] = useState<string>('');
   const [viewingPlaylist, setViewingPlaylist] = useState<boolean>(false);
-  const [allTracks, setAllTracks] = useState<any[]>([]);
+  const [allTracks, setAllTracksLocal] = useState<any[]>([]);
   const [draggedTrack, setDraggedTrack] = useState<any>(null);
   const [dropTargetPlaylistId, setDropTargetPlaylistId] = useState<
     string | null
@@ -70,6 +76,11 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
     useState<boolean>(false);
   const reorderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const listRef = useRef<any>(null);
+  const hasScrolledToCurrentTrack = useRef<boolean>(false);
+
+  // Multi-selection state
+  const [selectedTracks, setSelectedTracks] = useState<Set<number>>(new Set());
+  const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
 
   const {
     audioFiles,
@@ -82,17 +93,25 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
     currentTime,
     duration,
     visualizationsEnabled,
+    isShuffled,
     setAudioFiles,
     playTrack,
     setPlaylistContext,
     play,
     pause,
+    stop,
     setVolume,
     seek,
     nextTrack,
     previousTrack,
     toggleVisualizations,
+    toggleShuffle,
   } = useAudioStore();
+
+  // Use image cache for current track cover art
+  const { cachedUrl: currentTrackCoverArt } = useImageCache(
+    currentTrack?.coverArtUrl
+  );
 
   const {
     playlists,
@@ -104,6 +123,8 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
     removeTrackFromPlaylist,
     reorderPlaylistTracks,
     setCurrentPlaylist,
+    getPlaylistTracks,
+    setAllTracks,
     loadPlaylistsFromFile,
     initializePlaylistStore,
   } = usePlaylistStore();
@@ -128,7 +149,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
 
         if (activePlaylist) {
           setCurrentPlaylist(activePlaylist);
-          setAudioFiles(activePlaylist.tracks);
+          setAudioFiles(getPlaylistTracks(activePlaylist.id));
           setViewingPlaylist(true);
         } else {
           // Playlist not found, fallback to "All Tracks"
@@ -175,7 +196,8 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
         metadata: file.metadata,
         coverArtUrl: file.coverArtUrl,
       }));
-      setAllTracks(audioFiles); // Store the full track list
+      setAllTracksLocal(audioFiles); // Store the full track list locally
+      setAllTracks(audioFiles); // Store in playlist store
       // Set audioFiles immediately to show tracks if not in a playlist
       if (!isPlayingFromPlaylist) {
         setAudioFiles(audioFiles);
@@ -191,7 +213,14 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
     if (isPlaying) {
       pause();
     } else {
-      play();
+      // If no track is selected, automatically select the first track
+      if (!currentTrack && audioFiles.length > 0) {
+        const firstTrack = audioFiles[0];
+        const playlistId = viewingPlaylist ? currentPlaylist?.id || null : null;
+        playTrack(firstTrack, 0, playlistId);
+      } else {
+        play();
+      }
     }
   };
 
@@ -204,14 +233,64 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
     seek(seekTime);
   };
 
-  const handleTrackSelect = (filteredIndex: number) => {
+  const handleTrackSelect = (
+    filteredIndex: number,
+    event?: React.MouseEvent
+  ) => {
     const track = filteredAudioFiles[filteredIndex];
     if (track) {
+      // Handle multi-selection
+      if (event && (event.shiftKey || event.metaKey || event.ctrlKey)) {
+        handleTrackMultiSelect(filteredIndex, event);
+        return;
+      }
+
+      // Clear selection on normal click
+      setSelectedTracks(new Set());
+      setLastClickedIndex(null);
+
       // Find the original index in the full audioFiles array
       const originalIndex = audioFiles.findIndex(f => f.id === track.id);
       // Pass current playlist context
       const playlistId = viewingPlaylist ? currentPlaylist?.id || null : null;
       playTrack(track, originalIndex, playlistId);
+    }
+  };
+
+  const handleTrackMultiSelect = (
+    filteredIndex: number,
+    event: React.MouseEvent
+  ) => {
+    const track = filteredAudioFiles[filteredIndex];
+    if (!track) return;
+
+    const isMetaOrCtrl = event.metaKey || event.ctrlKey;
+    const isShift = event.shiftKey;
+
+    if (isShift && lastClickedIndex !== null) {
+      // Range selection
+      const start = Math.min(lastClickedIndex, filteredIndex);
+      const end = Math.max(lastClickedIndex, filteredIndex);
+      const newSelected = new Set(selectedTracks);
+
+      for (let i = start; i <= end; i++) {
+        const rangeTrack = filteredAudioFiles[i];
+        if (rangeTrack) {
+          newSelected.add(rangeTrack.id);
+        }
+      }
+
+      setSelectedTracks(newSelected);
+    } else if (isMetaOrCtrl) {
+      // Individual selection toggle
+      const newSelected = new Set(selectedTracks);
+      if (newSelected.has(track.id)) {
+        newSelected.delete(track.id);
+      } else {
+        newSelected.add(track.id);
+      }
+      setSelectedTracks(newSelected);
+      setLastClickedIndex(filteredIndex);
     }
   };
 
@@ -277,6 +356,60 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
     };
   }, [isDraggingProgress, isDraggingVolume]);
 
+  // Auto-scroll to currently playing track when song changes
+  useEffect(() => {
+    if (currentTrack && listRef.current && audioFiles.length > 0) {
+      // Calculate filtered files within the effect to avoid dependency issues
+      const searchLower = searchTerm.toLowerCase();
+      const tracksToFilter =
+        viewingPlaylist && currentPlaylist
+          ? getPlaylistTracks(currentPlaylist.id)
+          : allTracks;
+
+      const filteredFiles = searchTerm.trim()
+        ? tracksToFilter.filter(track => {
+            const title = track.title?.toLowerCase() || '';
+            const artist = track.artist?.toLowerCase() || '';
+            const album = track.album?.toLowerCase() || '';
+            const genres = Array.isArray(track.genre)
+              ? track.genre.map((g: any) => g?.toLowerCase() || '').join(' ')
+              : track.genre?.toLowerCase() || '';
+
+            return (
+              title.includes(searchLower) ||
+              artist.includes(searchLower) ||
+              album.includes(searchLower) ||
+              genres.includes(searchLower)
+            );
+          })
+        : audioFiles;
+
+      const currentTrackIndex = filteredFiles.findIndex(
+        track => track.id === currentTrack.id
+      );
+
+      if (currentTrackIndex !== -1) {
+        // Reset the scroll flag when a new track starts playing
+        hasScrolledToCurrentTrack.current = false;
+
+        // Small delay to ensure the list is rendered
+        setTimeout(() => {
+          if (listRef.current && !hasScrolledToCurrentTrack.current) {
+            listRef.current.scrollToRow(currentTrackIndex);
+            hasScrolledToCurrentTrack.current = true;
+          }
+        }, 100);
+      }
+    }
+  }, [
+    currentTrack,
+    audioFiles,
+    searchTerm,
+    viewingPlaylist,
+    currentPlaylist,
+    allTracks,
+  ]);
+
   if (!shouldRender) return null;
 
   const formatTime = (seconds: number) => {
@@ -339,7 +472,9 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
 
     const searchLower = searchTerm.toLowerCase();
     const tracksToFilter =
-      viewingPlaylist && currentPlaylist ? currentPlaylist.tracks : allTracks;
+      viewingPlaylist && currentPlaylist
+        ? getPlaylistTracks(currentPlaylist.id)
+        : allTracks;
 
     return tracksToFilter.filter(track => {
       const title = track.title?.toLowerCase() || '';
@@ -360,6 +495,19 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
 
   const clearSearch = () => {
     setSearchTerm('');
+  };
+
+  const getSelectedTracksInfo = () => {
+    const selectedCount = selectedTracks.size;
+    if (selectedCount === 0) return null;
+
+    const selectedList = filteredAudioFiles.filter(t =>
+      selectedTracks.has(t.id)
+    );
+    return {
+      count: selectedCount,
+      tracks: selectedList,
+    };
   };
 
   const handleCreatePlaylist = () => {
@@ -391,7 +539,18 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
 
   // Drag and Drop handlers
   const handleDragStart = (e: React.DragEvent, track: any) => {
-    setDraggedTrack(track);
+    // If the track being dragged is not in the selection, clear selection and drag just this track
+    if (!selectedTracks.has(track.id)) {
+      setSelectedTracks(new Set());
+      setDraggedTrack(track);
+    } else {
+      // If dragging a selected track, drag all selected tracks
+      const tracksToMove = filteredAudioFiles.filter(t =>
+        selectedTracks.has(t.id)
+      );
+      setDraggedTrack(tracksToMove.length > 1 ? tracksToMove : track);
+    }
+
     setIsDraggingForReorder(viewingPlaylist && currentPlaylist !== null);
 
     e.dataTransfer.effectAllowed = viewingPlaylist ? 'move' : 'copy';
@@ -403,6 +562,9 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
     setDropTargetPlaylistId(null);
     setReorderDropPosition(null);
     setIsDraggingForReorder(false);
+
+    // Clear selection only if drag was successful (will be handled by drop handler)
+    // For cancelled drags, keep selection
 
     // Clear any pending reorder timeout
     if (reorderTimeoutRef.current) {
@@ -447,11 +609,19 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
   const handleDrop = async (e: React.DragEvent, playlistId: string) => {
     e.preventDefault();
     if (draggedTrack) {
-      addTrackToPlaylist(playlistId, draggedTrack);
+      // Handle multiple tracks
+      if (Array.isArray(draggedTrack)) {
+        for (const track of draggedTrack) {
+          addTrackToPlaylist(playlistId, track);
+        }
+      } else {
+        addTrackToPlaylist(playlistId, draggedTrack);
+      }
       await loadPlaylistsFromFile();
     }
     setDropTargetPlaylistId(null);
     setDraggedTrack(null);
+    setSelectedTracks(new Set()); // Clear selection after drop
   };
 
   // Reorder handlers - compatible with react-virtualized
@@ -468,7 +638,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
       // Clamp to valid range and store for drop
       dropPosition = Math.max(
         0,
-        Math.min(currentPlaylist.tracks.length, dropPosition)
+        Math.min(getPlaylistTracks(currentPlaylist.id).length, dropPosition)
       );
 
       setReorderDropPosition(dropPosition);
@@ -487,7 +657,8 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
       reorderDropPosition !== null
     ) {
       // Find the current dragged track index in the original playlist (not the UI state)
-      const draggedIndex = currentPlaylist.tracks.findIndex(
+      const playlistTracks = getPlaylistTracks(currentPlaylist.id);
+      const draggedIndex = playlistTracks.findIndex(
         track => track.id === draggedTrack.id
       );
 
@@ -527,7 +698,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
 
             if (updatedPlaylist) {
               setCurrentPlaylist(updatedPlaylist);
-              setAudioFiles(updatedPlaylist.tracks);
+              setAudioFiles(getPlaylistTracks(updatedPlaylist.id));
 
               // Force list to re-render with new data
               if (listRef.current) {
@@ -545,18 +716,22 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
 
   const handleViewPlaylist = (playlist: any) => {
     setCurrentPlaylist(playlist);
-    setAudioFiles(playlist.tracks);
+    const playlistTracks = getPlaylistTracks(playlist.id);
+    setAudioFiles(playlistTracks);
     setViewingPlaylist(true);
     setShowPlaylists(false);
+    setSelectedTracks(new Set()); // Clear selection when changing views
+    setLastClickedIndex(null);
     // Set playlist context immediately when viewing playlist
     setPlaylistContext(playlist.id, true);
   };
 
   const handlePlayPlaylist = (playlist: any) => {
-    if (playlist.tracks.length > 0) {
+    const playlistTracks = getPlaylistTracks(playlist.id);
+    if (playlistTracks.length > 0) {
       setCurrentPlaylist(playlist);
-      setAudioFiles(playlist.tracks);
-      playTrack(playlist.tracks[0], 0, playlist.id);
+      setAudioFiles(playlistTracks);
+      playTrack(playlistTracks[0], 0, playlist.id);
       setViewingPlaylist(true);
       setShowPlaylists(false);
     }
@@ -566,6 +741,8 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
     setViewingPlaylist(false);
     setCurrentPlaylist(null);
     setAudioFiles(allTracks); // Use stored full track list instead of refetching
+    setSelectedTracks(new Set()); // Clear selection when changing views
+    setLastClickedIndex(null);
     // Clear playlist context so future tracks play from "All Tracks"
     if (isPlayingFromPlaylist) {
       setPlaylistContext(null, false);
@@ -585,7 +762,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
       );
       if (updatedPlaylist) {
         setCurrentPlaylist(updatedPlaylist);
-        setAudioFiles(updatedPlaylist.tracks);
+        setAudioFiles(getPlaylistTracks(updatedPlaylist.id));
       }
     }
   };
@@ -649,6 +826,21 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
             )}
           </button>
           <button
+            onClick={toggleShuffle}
+            className={`p-2 hover:bg-gray-700 rounded transition-colors ${
+              isShuffled ? 'bg-gray-600' : ''
+            }`}
+            disabled={isLoading || audioFiles.length === 0}
+            title={isShuffled ? 'Disable shuffle' : 'Enable shuffle'}
+          >
+            <Shuffle
+              size={16}
+              className={`${
+                isShuffled ? 'text-blue-400' : 'text-gray-400 hover:text-white'
+              }`}
+            />
+          </button>
+          <button
             onClick={previousTrack}
             className="p-2 hover:bg-gray-700 rounded transition-colors"
             disabled={isLoading || audioFiles.length === 0}
@@ -659,7 +851,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
           <button
             onClick={togglePlayPause}
             className="p-2 hover:bg-gray-700 rounded transition-colors"
-            disabled={isLoading || audioFiles.length === 0 || !currentTrack}
+            disabled={isLoading || audioFiles.length === 0}
             title={isPlaying ? 'Pause' : 'Play'}
           >
             {isPlaying ? (
@@ -667,6 +859,14 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
             ) : (
               <Play size={16} className="text-gray-400 hover:text-white" />
             )}
+          </button>
+          <button
+            onClick={stop}
+            className="p-2 hover:bg-gray-700 rounded transition-colors"
+            disabled={isLoading || !currentTrack}
+            title="Stop"
+          >
+            <Square size={16} className="text-gray-400 hover:text-white" />
           </button>
           <button
             onClick={nextTrack}
@@ -713,7 +913,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
                         {playlist.name}
                       </div>
                       <div className="text-xs text-gray-500">
-                        {playlist.tracks.length} tracks
+                        {getPlaylistTracks(playlist.id).length} tracks
                       </div>
                     </div>
                   </div>
@@ -892,7 +1092,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
                         {playlist.name}
                       </div>
                       <div className="text-xs opacity-70">
-                        {playlist.tracks.length} tracks
+                        {getPlaylistTracks(playlist.id).length} tracks
                       </div>
                     </div>
                     <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100">
@@ -940,10 +1140,10 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
           {/* Main track LCD display */}
           <div className="flex">
             {/* Cover art */}
-            {currentTrack?.coverArtUrl && (
+            {currentTrackCoverArt && (
               <div className="w-24 h-24 flex-shrink-0">
                 <img
-                  src={currentTrack.coverArtUrl}
+                  src={currentTrackCoverArt}
                   alt="Album cover"
                   className="w-full h-full object-cover"
                 />
@@ -993,7 +1193,8 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
 
           {/* Playlist section - flex to fill remaining space */}
           <div
-            className="flex-1 relative"
+            className="flex-1 relative focus:outline-none"
+            style={{ outline: 'none' }}
             onDragOver={
               viewingPlaylist && isDraggingForReorder
                 ? e => {
@@ -1023,7 +1224,10 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
                   const rowHeight = Math.max(24, Math.floor(height / 15));
 
                   return (
-                    <>
+                    <div
+                      style={{ outline: 'none' }}
+                      className="focus:outline-none"
+                    >
                       {/* Floating drop indicator */}
                       {isDraggingForReorder && reorderDropPosition !== null && (
                         <div
@@ -1044,6 +1248,8 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
                         rowCount={filteredAudioFiles.length}
                         rowHeight={rowHeight}
                         width={width}
+                        tabIndex={-1}
+                        style={{ outline: 'none' }}
                         rowRenderer={({ index, key, style }) => {
                           const track = filteredAudioFiles[index];
                           const originalIndex = audioFiles.findIndex(
@@ -1058,7 +1264,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
                           return (
                             <div key={key} style={style}>
                               <div
-                                onClick={() => handleTrackSelect(index)}
+                                onClick={e => handleTrackSelect(index, e)}
                                 draggable={true} // Always draggable (behavior changes based on context)
                                 onDragStart={e => handleDragStart(e, track)}
                                 onDragEnd={handleDragEnd}
@@ -1078,7 +1284,13 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
                                     ? 'bg-gray-600'
                                     : ''
                                 } ${
-                                  draggedTrack?.id === track.id
+                                  selectedTracks.has(track.id)
+                                    ? 'bg-blue-600 bg-opacity-50'
+                                    : ''
+                                } ${
+                                  draggedTrack?.id === track.id ||
+                                  (Array.isArray(draggedTrack) &&
+                                    draggedTrack.some(t => t.id === track.id))
                                     ? 'opacity-50'
                                     : ''
                                 } ${
@@ -1089,13 +1301,12 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
                               >
                                 <div className="flex items-center flex-1 min-w-0">
                                   {/* Cover art thumbnail */}
-                                  {track.coverArtUrl && (
-                                    <img
-                                      src={track.coverArtUrl}
-                                      alt="Cover"
-                                      className="w-4 h-4 rounded mr-2 flex-shrink-0"
-                                    />
-                                  )}
+                                  <CachedAlbumArt
+                                    imageUrl={track.coverArtUrl}
+                                    alt="Cover"
+                                    className="w-4 h-4 rounded mr-2 flex-shrink-0"
+                                    fallbackIcon={false}
+                                  />
                                   <span className="text-xs font-mono text-gray-400 truncate">
                                     {displayText}
                                   </span>
@@ -1126,12 +1337,63 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
                           );
                         }}
                       />
-                    </>
+                    </div>
                   );
                 }}
               </AutoSizer>
             )}
           </div>
+
+          {/* Selection status bar */}
+          {getSelectedTracksInfo() && (
+            <div className="px-2 py-1 bg-blue-600 bg-opacity-20 border-t border-blue-500 border-opacity-30">
+              <div className="flex items-center justify-between">
+                <div className="text-xs text-blue-200">
+                  {getSelectedTracksInfo()?.count} track
+                  {getSelectedTracksInfo()?.count !== 1 ? 's' : ''} selected
+                </div>
+                <div className="flex items-center space-x-3">
+                  {viewingPlaylist && currentPlaylist && (
+                    <button
+                      onClick={async () => {
+                        const selectedList = filteredAudioFiles.filter(t =>
+                          selectedTracks.has(t.id)
+                        );
+                        for (const track of selectedList) {
+                          removeTrackFromPlaylist(currentPlaylist.id, track.id);
+                        }
+                        await loadPlaylistsFromFile();
+
+                        // Update current view with fresh data
+                        const freshPlaylists =
+                          usePlaylistStore.getState().playlists;
+                        const updatedPlaylist = freshPlaylists.find(
+                          p => p.id === currentPlaylist.id
+                        );
+                        if (updatedPlaylist) {
+                          setCurrentPlaylist(updatedPlaylist);
+                          setAudioFiles(getPlaylistTracks(updatedPlaylist.id));
+                        }
+
+                        // Clear selection after removal
+                        setSelectedTracks(new Set());
+                        setLastClickedIndex(null);
+                      }}
+                      className="text-xs text-red-200 hover:text-red-100 underline"
+                    >
+                      Remove from playlist
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setSelectedTracks(new Set())}
+                    className="text-xs text-blue-200 hover:text-white underline"
+                  >
+                    Clear selection
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Volume control - pinned to bottom */}
           <div

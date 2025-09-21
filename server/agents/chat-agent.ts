@@ -1,6 +1,6 @@
 import { BaseAgent, AgentConfig } from './base-agent.js';
 
-const DEFAULT_CHAT_ROLE = `You are an autonomous support agent responsible for resolving user requests by independently determining the necessary steps and invoking appropriate tools when required.`;
+const DEFAULT_CHAT_ROLE = `You are a helpful assistant.`;
 
 export class ChatAgent extends BaseAgent {
   constructor(config: AgentConfig) {

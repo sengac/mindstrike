@@ -51,6 +51,7 @@ function App() {
   const [showConnectionDialog, setShowConnectionDialog] = useState(false);
   const [isMusicPlayerOpen, setIsMusicPlayerOpen] = useState(false);
   const [showPromptsModal, setShowPromptsModal] = useState(false);
+
   const { isConnected } = useConnectionMonitor();
 
   // Initialize storm toast effect
@@ -322,6 +323,20 @@ function App() {
       return () => clearTimeout(timeout);
     }
   }, [pendingNodeUpdate]);
+
+  // Navigation confirmation handler
+  useEffect(() => {
+    const originalHandler = window.onbeforeunload;
+
+    window.onbeforeunload = event => {
+      event.preventDefault();
+      return 'Leave MindStrike?';
+    };
+
+    return () => {
+      window.onbeforeunload = originalHandler;
+    };
+  }, []);
 
   return (
     <div className="flex h-screen bg-dark-bg text-dark-text-primary">

@@ -1160,16 +1160,14 @@ export class LocalLLMManager {
     // Use effective settings for all parameters
     const batchSize = effectiveSettings.batchSize;
     const threads = effectiveSettings.threads;
-    const context = await model.createContext({
-      contextSize: contextSize,
-      // Configure for better async performance
-      batchSize: batchSize, // Smaller batches for better responsiveness
-      threads: threads, // Use half CPU cores to leave room for main thread
-    });
 
-    const session = new LlamaChatSession({
-      contextSequence: context.getSequence(),
-    });
+    // Create context and session using shared method
+    const { context, session } = await this.createSessionForModel(
+      model,
+      contextSize,
+      batchSize!,
+      threads!
+    );
 
     // Populate session with existing conversation history if thread ID is provided
     if (threadId) {
@@ -1283,6 +1281,13 @@ export class LocalLLMManager {
       });
 
       // Set the chat history in the session
+      // Remove the last user message if it has no model response to prevent duplication
+      if (
+        chatHistory.length > 0 &&
+        chatHistory[chatHistory.length - 1].type === 'user'
+      ) {
+        chatHistory.pop();
+      }
       session.setChatHistory(chatHistory);
 
       logger.info(
@@ -1329,11 +1334,102 @@ export class LocalLLMManager {
   }
 
   /**
+   * Create a new session for an existing model
+   */
+  private async createSessionForModel(
+    model: LlamaModel,
+    contextSize: number,
+    batchSize: number,
+    threads?: number,
+    systemPrompt?: string
+  ): Promise<{ context: LlamaContext; session: LlamaChatSession }> {
+    const context = await model.createContext({
+      contextSize: contextSize,
+      batchSize: batchSize,
+      threads: threads,
+    });
+
+    const session = new LlamaChatSession({
+      contextSequence: context.getSequence(),
+      systemPrompt: systemPrompt,
+    });
+
+    return { context, session };
+  }
+
+  /**
+   * Recreate llama session and reload chat history
+   */
+  private async recreateSession(
+    modelIdOrName: string,
+    threadId?: string
+  ): Promise<void> {
+    console.log(`Recreating session for model: ${modelIdOrName}`);
+
+    // First try to use it as an ID
+    let activeModel = this.activeModels.get(modelIdOrName);
+    let actualModelId = modelIdOrName;
+
+    // If not found, try to find by name
+    if (!activeModel) {
+      const modelId = await this.findModelIdByName(modelIdOrName);
+      if (modelId) {
+        activeModel = this.activeModels.get(modelId);
+        actualModelId = modelId;
+      }
+    }
+
+    if (!activeModel) {
+      throw new Error('Model not found for session recreation');
+    }
+
+    // Save current chat history
+    const currentHistory = activeModel.session.getChatHistory();
+    console.log(`Saved ${currentHistory.length} chat history items`);
+
+    // Get current context settings
+    const contextSize = activeModel.context.contextSize;
+    const batchSize = activeModel.context.batchSize;
+    const threads = activeModel.context.currentThreads;
+
+    // Dispose old session and context
+    activeModel.session.dispose();
+    activeModel.context.dispose();
+
+    // Create new context and session using shared method
+    const { context: newContext, session: newSession } =
+      await this.createSessionForModel(
+        activeModel.model,
+        contextSize,
+        batchSize,
+        threads // preserve threads configuration from model settings
+      );
+
+    // Populate session with thread history if threadId is provided
+    if (threadId) {
+      await this.populateSessionWithHistory(newSession, threadId);
+    }
+
+    // Update active model with new context and session
+    this.activeModels.set(actualModelId, {
+      model: activeModel.model,
+      context: newContext,
+      session: newSession,
+      runtimeInfo: activeModel.runtimeInfo,
+    });
+
+    // Note: No need to manually reload chat history here since populateSessionWithHistory
+    // already loaded the thread history into the new session
+
+    console.log(`Session recreated successfully for model: ${modelIdOrName}`);
+  }
+
+  /**
    * Generate response using a loaded model (supports both model ID and model name)
    */
   async generateResponse(
     modelIdOrName: string,
-    messages: Array<{ role: string; content: string }>,
+    previousMessages: Array<{ role: string; content: string }>,
     options?: {
       temperature?: number;
       maxTokens?: number;
@@ -1375,37 +1471,21 @@ export class LocalLLMManager {
       }
     }
 
-    // Removed verbose logging
-
     // Use proper chat session with message history
-    const { session } = activeModel;
+    let { session } = activeModel;
 
-    // Process messages in order to build conversation context
-    let systemMessage = '';
-    let lastUserMessage = '';
+    // Extract user message
+    let message = '';
 
-    for (const message of messages) {
-      if (message.role === 'system') {
-        systemMessage = message.content;
-      } else if (message.role === 'user') {
-        lastUserMessage = message.content;
-      } else if (message.role === 'assistant') {
-        // Previous assistant responses are part of conversation history
-        // The session should maintain this context automatically
-        continue;
+    for (const messagePrevious of previousMessages) {
+      if (messagePrevious.role === 'user') {
+        message = messagePrevious.content;
       }
     }
 
-    if (!lastUserMessage) {
-      logger.error('No user message found in messages', { messages });
+    if (!message) {
       throw new Error('No user message found');
     }
-
-    // For LlamaChatSession, combine system and user message without chat formatting
-    // The session.prompt() method handles chat formatting internally
-    const finalPrompt = systemMessage
-      ? `${systemMessage}\n\n${lastUserMessage}`
-      : lastUserMessage;
 
     // Get MCP tools and convert them to node-llama-cpp format only if functions are enabled
     let functions = {};
@@ -1426,7 +1506,7 @@ export class LocalLLMManager {
     }
 
     try {
-      const response = await session.prompt(finalPrompt, {
+      const response = await session.prompt(message, {
         temperature: options?.temperature || 0.7,
         maxTokens: options?.maxTokens || 2048,
         functions, // Pass MCP tools as functions
@@ -1446,6 +1526,22 @@ export class LocalLLMManager {
       }
 
       return response;
+    } catch (error) {
+      console.error(
+        'Error during generateResponse, recreating session for next time:',
+        error
+      );
+
+      // Recreate session and reload chat history to ensure clean state for next chat
+      try {
+        await this.recreateSession(modelIdOrName, options?.threadId);
+        console.log('Session recreated successfully for future chats');
+      } catch (recreateError) {
+        console.error('Failed to recreate session:', recreateError);
+      }
+
+      // Re-throw the original error
+      throw error;
     } finally {
       // Mark inference end to process any queued system info requests
       sharedLlamaInstance.markInferenceEnd();
@@ -1457,7 +1553,7 @@ export class LocalLLMManager {
    */
   async *generateStreamResponse(
     modelIdOrName: string,
-    messages: Array<{ role: string; content: string }>,
+    previousMessages: Array<{ role: string; content: string }>,
     options?: {
       temperature?: number;
       maxTokens?: number;
@@ -1497,32 +1593,20 @@ export class LocalLLMManager {
     }
 
     // Use proper chat session with message history
-    const { session } = activeModel;
+    let { session } = activeModel;
 
-    // Process messages to build conversation context (same as non-streaming method)
-    let systemMessage = '';
-    let lastUserMessage = '';
+    // Extract last user message
+    let message = '';
 
-    for (const message of messages) {
-      if (message.role === 'system') {
-        systemMessage = message.content;
-      } else if (message.role === 'user') {
-        lastUserMessage = message.content;
-      } else if (message.role === 'assistant') {
-        // Previous assistant responses are part of conversation history
-        // The session should maintain this context automatically
-        continue;
+    for (const previousMessage of previousMessages) {
+      if (previousMessage.role === 'user') {
+        message = previousMessage.content;
       }
     }
 
-    if (!lastUserMessage) {
+    if (!message) {
       throw new Error('No user message found');
     }
-
-    // For LlamaChatSession, combine system and user message (same as non-streaming method)
-    const finalPrompt = systemMessage
-      ? `${systemMessage}\n\n${lastUserMessage}`
-      : lastUserMessage;
 
     // Generate streaming response with real-time streaming
     let resolveChunk: ((chunk: string | null) => void) | null = null;
@@ -1567,7 +1651,7 @@ export class LocalLLMManager {
     try {
       // Start the prompt asynchronously
       const promptPromise = session
-        .prompt(finalPrompt, {
+        .prompt(message, {
           temperature: options?.temperature || 0.7,
           maxTokens: options?.maxTokens || 2048,
           functions, // Pass MCP tools as functions
@@ -1582,6 +1666,24 @@ export class LocalLLMManager {
           }
           // Signal end of stream
           pushChunk(null);
+        })
+        .catch(async error => {
+          console.error(
+            'Error during generateStreamResponse, recreating session for next time:',
+            error
+          );
+
+          // Recreate session and reload chat history to ensure clean state for next chat
+          try {
+            await this.recreateSession(modelIdOrName, options?.threadId);
+            console.log('Session recreated successfully for future chats');
+          } catch (recreateError) {
+            console.error('Failed to recreate session:', recreateError);
+          }
+
+          // Signal end of stream and re-throw the original error
+          pushChunk(null);
+          throw error;
         });
 
       // Yield chunks as they arrive
