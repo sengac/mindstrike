@@ -133,11 +133,13 @@
       "dist/server/**/*",
       "public/favicon.ico",
       "public/web-app-manifest-512x512.png",
+      "public/favicon-square.icns",
+      "public/favicon-square.iconset/icon_512x512.png",
       "node_modules/**/*"
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
-      "icon": "public/web-app-manifest-512x512.png",
+      "icon": "public/favicon-square.icns",
       "target": [
         {
           "target": "dmg",
@@ -151,7 +153,7 @@
       "writeUpdateInfo": false
     },
     "win": {
-      "icon": "public/web-app-manifest-512x512.png",
+      "icon": "public/favicon-square.iconset/icon_512x512.png",
       "target": [
         {
           "target": "nsis",

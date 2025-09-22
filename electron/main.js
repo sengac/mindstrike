@@ -64,7 +64,10 @@ function createWindow() {
       webSecurity: true,
       preload: path.join(__dirname, 'preload.js'),
     },
-    icon: path.join(__dirname, '../public/web-app-manifest-512x512.png'),
+    icon: path.join(
+      __dirname,
+      '../public/favicon-square.iconset/icon_512x512.png'
+    ),
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
     frame: process.platform !== 'win32',
     show: false,

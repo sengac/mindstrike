@@ -324,20 +324,6 @@ function App() {
     }
   }, [pendingNodeUpdate]);
 
-  // Navigation confirmation handler
-  useEffect(() => {
-    const originalHandler = window.onbeforeunload;
-
-    window.onbeforeunload = event => {
-      event.preventDefault();
-      return 'Leave MindStrike?';
-    };
-
-    return () => {
-      window.onbeforeunload = originalHandler;
-    };
-  }, []);
-
   return (
     <div className="flex h-screen bg-dark-bg text-dark-text-primary">
       {/* Mobile menu button */}

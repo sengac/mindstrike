@@ -459,8 +459,8 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
             {messages.length === 0 && (
               <div className="text-center text-gray-500 mt-2 relative z-10">
                 <div className="mb-4">
-                  <div className="flex items-center justify-center mx-auto">
-                    <MindStrikeIcon size={128} />
+                  <div className="flex justify-center mt-24 mb-4">
+                    <MindStrikeIcon size={148} />
                   </div>
                   <h3 className="text-lg font-medium mb-2">
                     Welcome to{' '}
@@ -474,6 +474,19 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
                     </a>
                     &trade;
                   </h3>
+                  <div className="flex items-center justify-center gap-3 pb-4">
+                    <p className="text-xs font-mono text-gray-400">
+                      Workspace Root: {workspaceRoot || 'No workspace selected'}
+                    </p>
+                    {onNavigateToWorkspaces && (
+                      <button
+                        onClick={onNavigateToWorkspaces}
+                        className="text-xs text-blue-400 hover:text-blue-300 transition-colors underline"
+                      >
+                        Change
+                      </button>
+                    )}
+                  </div>
                   <div className="flex justify-center space-x-4 mb-4">
                     <a
                       href="https://mindstrike.ai/link/github"
@@ -502,29 +515,6 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
                     >
                       <DiscordIcon size={24} />
                     </a>
-                  </div>
-                  <p className="text-sm mt-8">
-                    Use Agent Mode{' '}
-                    <span className="inline-flex items-center mx-1 p-1 border border-gray-600 rounded bg-gray-800">
-                      <Bot size={12} className="text-gray-400" />
-                    </span>{' '}
-                    for complex tasks that need tools and workflows.
-                  </p>
-                  <p className="text-sm mt-4">
-                    Start a conversation with your current workspace:
-                  </p>
-                  <div className="flex items-center justify-center gap-3 mt-1">
-                    <p className="text-xs font-mono text-gray-400">
-                      {workspaceRoot || 'No workspace selected'}
-                    </p>
-                    {onNavigateToWorkspaces && (
-                      <button
-                        onClick={onNavigateToWorkspaces}
-                        className="text-xs text-blue-400 hover:text-blue-300 transition-colors underline"
-                      >
-                        Change
-                      </button>
-                    )}
                   </div>
                 </div>
               </div>

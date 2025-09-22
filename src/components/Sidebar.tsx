@@ -30,7 +30,11 @@ export function Sidebar({
     <div className="w-16 bg-dark-panel border-r border-dark-border flex flex-col h-screen">
       {/* Logo */}
       <div
-        className="h-16 flex items-center justify-center border-b border-dark-border bg-blue-600 relative overflow-hidden"
+        className={`h-16 flex items-center justify-center border-b border-dark-border bg-blue-600 relative overflow-hidden ${
+          window.electronAPI && navigator.platform.includes('Mac')
+            ? 'h-[142px] items-end'
+            : ''
+        }`}
         data-test-id="sidebar-logo"
       >
         <NetworkEffect onHeartClick={() => setIsMusicPlayerOpen(true)} />
