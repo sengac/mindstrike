@@ -35,7 +35,11 @@ import { MindmapAgentIterative } from './agents/mindmap-agent-iterative.js';
 import { WorkflowAgent } from './agents/workflow-agent.js';
 import { ConversationManager } from './conversation-manager.js';
 import { asyncHandler } from './utils/async-handler.js';
-import { ImageAttachment, NotesAttachment } from '../src/types.js';
+import {
+  ImageAttachment,
+  NotesAttachment,
+  SSEEventType,
+} from '../src/types.js';
 import { systemInfoManager } from './system-info-manager.js';
 import { ChatAgent } from './agents/chat-agent.js';
 
@@ -516,7 +520,7 @@ async function refreshModelList() {
 
     // Broadcast model updates to connected clients
     sseManager.broadcast('unified-events', {
-      type: 'models-updated',
+      type: SSEEventType.MODELS_UPDATED,
       timestamp: Date.now(),
     });
   } catch (error) {
@@ -824,7 +828,7 @@ app.post('/api/llm/rescan', async (req: Request, res: Response) => {
 
     // Broadcast model updates to connected clients
     sseManager.broadcast('unified-events', {
-      type: 'models-updated',
+      type: SSEEventType.MODELS_UPDATED,
       timestamp: Date.now(),
     });
 
@@ -1357,7 +1361,7 @@ app.post('/api/message', async (req: Request, res: Response) => {
         });
 
         sseManager.broadcast('unified-events', {
-          type: 'message-update',
+          type: SSEEventType.MESSAGE_UPDATE,
           message: updatedMessage,
         });
         lastContentLength = updatedMessage.content.length;
@@ -1370,7 +1374,7 @@ app.post('/api/message', async (req: Request, res: Response) => {
         if (newContent) {
           // Send the new content as a chunk
           sseManager.broadcast('unified-events', {
-            type: 'content-chunk',
+            type: SSEEventType.CONTENT_CHUNK,
             chunk: newContent,
             threadId: threadId || 'default',
           });
@@ -1397,7 +1401,7 @@ app.post('/api/message', async (req: Request, res: Response) => {
       );
 
       sseManager.broadcast('unified-events', {
-        type: 'message-update',
+        type: SSEEventType.MESSAGE_UPDATE,
         message: updatedMessage,
         threadId: threadId || 'default',
       });
@@ -1443,7 +1447,7 @@ app.post('/api/message', async (req: Request, res: Response) => {
 
         // Send final completion event
         sseManager.broadcast('unified-events', {
-          type: 'completed',
+          type: SSEEventType.COMPLETED,
           message: response,
           threadId: threadId || 'default',
         });
@@ -1471,7 +1475,7 @@ app.post('/api/message', async (req: Request, res: Response) => {
           processingError.message === 'LOCAL_MODEL_NOT_LOADED'
         ) {
           sseManager.broadcast('unified-events', {
-            type: 'local-model-not-loaded',
+            type: SSEEventType.LOCAL_MODEL_NOT_LOADED,
             error:
               (processingError as Error & { originalMessage?: string })
                 .originalMessage ||
@@ -1484,7 +1488,7 @@ app.post('/api/message', async (req: Request, res: Response) => {
               ? processingError.message
               : 'Unknown error';
           sseManager.broadcast('unified-events', {
-            type: 'error',
+            type: SSEEventType.ERROR,
             error: errorMessage,
           });
         }
@@ -1575,7 +1579,7 @@ app.post('/api/message/stream', async (req: Request, res: Response) => {
         });
 
         sseManager.broadcast('unified-events', {
-          type: 'message-update',
+          type: SSEEventType.MESSAGE_UPDATE,
           message: updatedMessage,
         });
         lastContentLength = updatedMessage.content.length;
@@ -1588,7 +1592,7 @@ app.post('/api/message/stream', async (req: Request, res: Response) => {
         if (newContent) {
           // Send the new content as a chunk
           sseManager.broadcast('unified-events', {
-            type: 'content-chunk',
+            type: SSEEventType.CONTENT_CHUNK,
             chunk: newContent,
             threadId: threadId || 'default',
           });
@@ -1615,7 +1619,7 @@ app.post('/api/message/stream', async (req: Request, res: Response) => {
       );
 
       sseManager.broadcast('unified-events', {
-        type: 'message-update',
+        type: SSEEventType.MESSAGE_UPDATE,
         message: updatedMessage,
         threadId: threadId || 'default',
       });
@@ -1651,7 +1655,7 @@ app.post('/api/message/stream', async (req: Request, res: Response) => {
 
       // Send final completion event
       sseManager.broadcast('unified-events', {
-        type: 'completed',
+        type: SSEEventType.COMPLETED,
         message: response,
       });
 
@@ -1667,7 +1671,7 @@ app.post('/api/message/stream', async (req: Request, res: Response) => {
         processingError.message === 'LOCAL_MODEL_NOT_LOADED'
       ) {
         sseManager.broadcast('unified-events', {
-          type: 'local-model-not-loaded',
+          type: SSEEventType.LOCAL_MODEL_NOT_LOADED,
           error:
             (processingError as Error & { originalMessage?: string })
               .originalMessage ||
@@ -1680,7 +1684,7 @@ app.post('/api/message/stream', async (req: Request, res: Response) => {
             ? processingError.message
             : 'Unknown error';
         sseManager.broadcast('unified-events', {
-          type: 'error',
+          type: SSEEventType.ERROR,
           error: errorMessage,
         });
       }
@@ -2489,7 +2493,7 @@ app.post(
 
             // Broadcast completion
             sseManager.broadcast('unified-events', {
-              type: 'complete',
+              type: SSEEventType.COMPLETE,
               streamId: streamId,
               result: {
                 success: true,
@@ -2507,7 +2511,7 @@ app.post(
             const errorMessage =
               error instanceof Error ? error.message : 'Unknown error';
             sseManager.broadcast('unified-events', {
-              type: 'error',
+              type: SSEEventType.ERROR,
               streamId: streamId,
               error: errorMessage,
             });
@@ -3127,6 +3131,30 @@ app.post('/api/mcp/refresh-cache', async (req: Request, res: Response) => {
   try {
     mcpManager.refreshCommandCache();
     res.json({ success: true, message: 'Command cache refreshed' });
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
+  }
+});
+
+app.get('/api/mcp/processes', async (req: Request, res: Response) => {
+  try {
+    const processInfo = mcpManager.getServerProcessInfo();
+    res.json({ processes: processInfo });
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
+  }
+});
+
+app.get('/api/mcp/server-logs', async (req: Request, res: Response) => {
+  try {
+    const serverId = req.query.serverId as string | undefined;
+    const stderrOnly = req.query.stderrOnly === 'true';
+    const logs = mcpManager.getServerLogs(serverId, stderrOnly);
+    res.json({ logs });
   } catch (error: unknown) {
     const errorMessage =
       error instanceof Error ? error.message : 'Unknown error';

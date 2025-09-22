@@ -1,6 +1,7 @@
 import { parentPort } from 'worker_threads';
 import { LocalLLMManager } from './local-llm-manager.js';
 import { logger } from './logger.js';
+import { SSEEventType } from '../src/types.js';
 
 // Worker thread for local LLM operations to prevent main thread crashes
 let llmManager: LocalLLMManager;
@@ -242,7 +243,7 @@ if (parentPort) {
     // Send error to parent but DON'T exit
     if (parentPort) {
       parentPort.postMessage({
-        type: 'error',
+        type: SSEEventType.ERROR,
         error: reason instanceof Error ? reason.message : 'Unhandled rejection',
       });
     }
@@ -254,7 +255,7 @@ if (parentPort) {
     // Send error to parent but DON'T exit
     if (parentPort) {
       parentPort.postMessage({
-        type: 'error',
+        type: SSEEventType.ERROR,
         error: error.message,
       });
     }

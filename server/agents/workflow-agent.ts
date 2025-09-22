@@ -15,6 +15,7 @@ import { StateGraph, Annotation, START, END } from '@langchain/langgraph';
 import { logger } from '../logger.js';
 import { sseManager } from '../sse-manager.js';
 import { serverDebugLogger } from '../debug-logger.js';
+import { SSEEventType } from '../../src/types.js';
 
 // Define the workflow state using LangGraph Annotations
 const WorkflowState = Annotation.Root({
@@ -206,7 +207,7 @@ export class WorkflowAgent extends BaseAgent {
 
       // Broadcast workflow failure
       this.broadcastWorkflowEvent({
-        type: 'workflow_failed',
+        type: SSEEventType.WORKFLOW_FAILED,
         workflowId,
         error: errorMessage,
       });
@@ -319,7 +320,7 @@ export class WorkflowAgent extends BaseAgent {
           ?.content || '';
 
       this.broadcastWorkflowEvent({
-        type: 'workflow_started',
+        type: SSEEventType.WORKFLOW_STARTED,
         workflowId: state.workflowId,
         originalQuery: lastUserMessage,
       });
@@ -327,7 +328,7 @@ export class WorkflowAgent extends BaseAgent {
 
     // Broadcast reasoning start
     this.broadcastWorkflowEvent({
-      type: 'task_progress',
+      type: SSEEventType.TASK_PROGRESS,
       workflowId: state.workflowId,
       task: {
         id: 'reasoning',
@@ -409,7 +410,7 @@ export class WorkflowAgent extends BaseAgent {
     // Broadcast tasks planned if we have a plan
     if (plan.length > 0) {
       this.broadcastWorkflowEvent({
-        type: 'tasks_planned',
+        type: SSEEventType.TASKS_PLANNED,
         workflowId: state.workflowId,
         tasks: plan.map((task: string, index: number) => ({
           id: `task-${index + 1}`,
@@ -422,7 +423,7 @@ export class WorkflowAgent extends BaseAgent {
 
     // Broadcast reasoning completion
     this.broadcastWorkflowEvent({
-      type: 'task_completed',
+      type: SSEEventType.TASK_COMPLETED,
       workflowId: state.workflowId,
       task: {
         id: 'reasoning',
@@ -445,7 +446,7 @@ export class WorkflowAgent extends BaseAgent {
 
     // Broadcast planning start
     this.broadcastWorkflowEvent({
-      type: 'task_progress',
+      type: SSEEventType.TASK_PROGRESS,
       workflowId: state.workflowId,
       task: {
         id: 'planning',
@@ -537,7 +538,7 @@ export class WorkflowAgent extends BaseAgent {
 
     // Broadcast tasks planned
     this.broadcastWorkflowEvent({
-      type: 'tasks_planned',
+      type: SSEEventType.TASKS_PLANNED,
       workflowId: state.workflowId,
       tasks: plan.map((task: string, index: number) => ({
         id: `task-${index + 1}`,
@@ -549,7 +550,7 @@ export class WorkflowAgent extends BaseAgent {
 
     // Broadcast planning completion
     this.broadcastWorkflowEvent({
-      type: 'task_completed',
+      type: SSEEventType.TASK_COMPLETED,
       workflowId: state.workflowId,
       task: {
         id: 'planning',
@@ -577,7 +578,7 @@ export class WorkflowAgent extends BaseAgent {
 
     // Broadcast task start
     this.broadcastWorkflowEvent({
-      type: 'task_progress',
+      type: SSEEventType.TASK_PROGRESS,
       workflowId: state.workflowId,
       task: {
         id: `task-${currentTaskIndex + 1}`,
@@ -654,7 +655,7 @@ export class WorkflowAgent extends BaseAgent {
 
     // Broadcast task completion
     this.broadcastWorkflowEvent({
-      type: 'task_completed',
+      type: SSEEventType.TASK_COMPLETED,
       workflowId: state.workflowId,
       task: {
         id: taskKey,
@@ -736,7 +737,7 @@ export class WorkflowAgent extends BaseAgent {
   ): Promise<Partial<WorkflowStateType>> {
     // Broadcast finalization start
     this.broadcastWorkflowEvent({
-      type: 'task_progress',
+      type: SSEEventType.TASK_PROGRESS,
       workflowId: state.workflowId,
       task: {
         id: 'finalization',
@@ -793,7 +794,7 @@ export class WorkflowAgent extends BaseAgent {
 
     // Broadcast finalization completion
     this.broadcastWorkflowEvent({
-      type: 'task_completed',
+      type: SSEEventType.TASK_COMPLETED,
       workflowId: state.workflowId,
       task: {
         id: 'finalization',
@@ -806,7 +807,7 @@ export class WorkflowAgent extends BaseAgent {
 
     // Broadcast workflow completion
     this.broadcastWorkflowEvent({
-      type: 'workflow_completed',
+      type: SSEEventType.WORKFLOW_COMPLETED,
       workflowId: state.workflowId,
       totalChanges: Object.keys(state.taskResults).length,
     });

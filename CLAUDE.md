@@ -139,6 +139,11 @@ GET  /api/events/stream        # SSE event stream
 - **Web Search**: External information retrieval
 - **Code Analysis**: Syntax checking and diagnostics
 - **Custom Tools**: Extensible tool system
+- **Stdio Monitoring**: Real-time stderr/stdout capture from MCP servers
+  - Process monitoring with PID tracking
+  - Stderr output capture for debugging and startup monitoring
+  - Special handling for npx-based servers to show download progress
+  - API endpoints: `/api/mcp/processes`, `/api/mcp/server-logs`
 
 ## Development Workflow
 

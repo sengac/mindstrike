@@ -12,6 +12,10 @@ import { useState, useEffect } from 'react';
 import { CodeEditor } from './CodeEditor';
 import MCPIcon from './MCPIcon';
 import { LucideProps } from 'lucide-react';
+import { BaseDialog } from './shared/BaseDialog';
+import { useDialogAnimation } from '../hooks/useDialogAnimation';
+import { MusicVisualization } from './MusicVisualization';
+import { MCPMonitoringPanel } from './MCPMonitoringPanel';
 
 interface MCPServer {
   id: string;
@@ -43,7 +47,7 @@ const MCPIconWrapper: React.FC<LucideProps> = props => (
   />
 );
 
-export function AgentsPanel() {
+export function AgentsView() {
   const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
   const [mcpTools, setMcpTools] = useState<MCPTool[]>([]);
   const [mcpStatus, setMcpStatus] = useState<MCPStatus | null>(null);
@@ -52,6 +56,13 @@ export function AgentsPanel() {
   const [showConfigEditor, setShowConfigEditor] = useState(false);
   const [configContent, setConfigContent] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Dialog animation
+  const {
+    shouldRender: shouldRenderConfigDialog,
+    isVisible: isConfigDialogVisible,
+    handleClose: handleCloseConfigDialog,
+  } = useDialogAnimation(showConfigEditor, () => setShowConfigEditor(false));
 
   useEffect(() => {
     fetchMCPData();
@@ -125,7 +136,7 @@ export function AgentsPanel() {
       });
 
       if (response.ok) {
-        setShowConfigEditor(false);
+        handleCloseConfigDialog();
         await fetchMCPData(); // Refresh the MCP data
       } else {
         const error = await response.json();
@@ -147,45 +158,20 @@ export function AgentsPanel() {
         title="MCP Agents"
         iconColor="text-blue-400"
         actions={
-          mcpStatus && (
-            <div className="flex items-center gap-4 text-sm">
-              <div className="flex items-center gap-2">
-                <CheckCircle size={16} className="text-green-400" />
-                <span className="text-gray-300">
-                  {mcpStatus.connectedServers}/{mcpStatus.totalServers} servers
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <MCPIcon size={16} className="text-blue-400" />
-                <span className="text-gray-300">
-                  {mcpStatus.totalTools} tools
-                </span>
-              </div>
-            </div>
-          )
+          <button
+            onClick={loadConfigContent}
+            className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
+          >
+            <Edit size={16} />
+            Edit MCP Config
+          </button>
         }
       />
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-8">
-        {/* MCP Servers Section */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <MCPIcon size={20} className="text-blue-400" />
-              <h2 className="text-lg font-semibold text-white">MCP Servers</h2>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={loadConfigContent}
-                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
-              >
-                <Edit size={16} />
-                Edit Config
-              </button>
-            </div>
-          </div>
-
+      <div className="relative flex-1 overflow-y-auto p-6">
+        <MusicVisualization className="absolute inset-0 w-full h-full pointer-events-none z-0" />
+        <div className="relative z-10">
           {loading ? (
             <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
               <div className="text-center text-gray-400">
@@ -204,6 +190,9 @@ export function AgentsPanel() {
             </div>
           ) : (
             <div className="space-y-3">
+              {/* MCP Monitoring Panel */}
+              <MCPMonitoringPanel />
+
               {mcpServers.map(server => {
                 const isConnected = mcpStatus?.servers.includes(server.id);
                 const serverTools = mcpTools.filter(
@@ -291,56 +280,58 @@ export function AgentsPanel() {
       </div>
 
       {/* MCP Config Editor Modal */}
-      {showConfigEditor && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-4xl max-h-[90vh] flex flex-col">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-700">
-              <div className="flex items-center gap-3">
-                <MCPIcon size={20} className="text-blue-400" />
-                <h2 className="text-lg font-semibold text-white">
-                  MCP Configuration Editor
-                </h2>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={saveConfigContent}
-                  disabled={saving}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-green-600/50 text-white text-sm rounded-lg transition-colors"
-                >
-                  <Save size={16} />
-                  {saving ? 'Saving...' : 'Save'}
-                </button>
-                <button
-                  onClick={() => setShowConfigEditor(false)}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded-lg transition-colors"
-                >
-                  <X size={16} />
-                  Close
-                </button>
-              </div>
-            </div>
-
-            {/* Modal Content */}
-            <div className="flex-1 p-4 overflow-hidden">
-              <div className="mb-3">
-                <p className="text-sm text-gray-400">
-                  Edit the MCP server configuration. This JSON file defines
-                  which MCP servers to connect to and their settings.
-                </p>
-              </div>
-              <div className="h-96">
-                <CodeEditor
-                  value={configContent}
-                  onChange={setConfigContent}
-                  language="json"
-                  height="100%"
-                />
-              </div>
-            </div>
+      <BaseDialog
+        isOpen={shouldRenderConfigDialog}
+        onClose={handleCloseConfigDialog}
+        isVisible={isConfigDialogVisible}
+        maxWidth="max-w-4xl"
+        className="max-h-[90vh] flex flex-col"
+      >
+        {/* Modal Header */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-700">
+          <div className="flex items-center gap-3">
+            <MCPIcon size={20} className="text-blue-400" />
+            <h2 className="text-lg font-semibold text-white">
+              MCP Configuration Editor
+            </h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={saveConfigContent}
+              disabled={saving}
+              className="flex items-center gap-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-green-600/50 text-white text-sm rounded-lg transition-colors"
+            >
+              <Save size={16} />
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+            <button
+              onClick={handleCloseConfigDialog}
+              className="flex items-center gap-2 px-3 py-1.5 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded-lg transition-colors"
+            >
+              <X size={16} />
+              Close
+            </button>
           </div>
         </div>
-      )}
+
+        {/* Modal Content */}
+        <div className="flex-1 p-4 overflow-hidden">
+          <div className="mb-3">
+            <p className="text-sm text-gray-400">
+              Edit the MCP server configuration. This JSON file defines which
+              MCP servers to connect to and their settings.
+            </p>
+          </div>
+          <div className="h-96">
+            <CodeEditor
+              value={configContent}
+              onChange={setConfigContent}
+              language="json"
+              height="100%"
+            />
+          </div>
+        </div>
+      </BaseDialog>
     </div>
   );
 }

@@ -1,3 +1,75 @@
+// App view types
+export type AppView =
+  | 'chat'
+  | 'workspace'
+  | 'agents'
+  | 'mindmaps'
+  | 'settings'
+  | 'application-logs';
+
+// Font scheme types
+export type FontScheme =
+  | 'system'
+  | 'inter'
+  | 'serif'
+  | 'monospace'
+  | 'academic';
+
+// SSE Event types
+export enum SSEEventType {
+  // Connection events
+  CONNECTED = 'connected',
+
+  // Chat/messaging events
+  CONTENT_CHUNK = 'content-chunk',
+  MESSAGE_UPDATE = 'message-update',
+  COMPLETED = 'completed',
+  COMPLETE = 'complete',
+
+  // Tool events
+  TOOL_CALL = 'tool-call',
+  TOOL_RESULT = 'tool-result',
+
+  // Error events
+  ERROR = 'error',
+  LOCAL_MODEL_NOT_LOADED = 'local-model-not-loaded',
+
+  // Workflow events
+  WORKFLOW_STARTED = 'workflow_started',
+  TASKS_PLANNED = 'tasks_planned',
+  TASK_PROGRESS = 'task_progress',
+  TASK_COMPLETED = 'task_completed',
+  WORKFLOW_COMPLETED = 'workflow_completed',
+  WORKFLOW_FAILED = 'workflow_failed',
+
+  // Debug events
+  DEBUG_ENTRY = 'debug-entry',
+  TOKEN_STATS = 'token-stats',
+  GENERATION_STATUS = 'generation-status',
+
+  // MCP events
+  MCP_LOG = 'mcp-log',
+  MCP_PROCESS_INFO = 'mcp-process-info',
+  MCP_STDOUT_LOG = 'mcp-stdout-log',
+  MCP_STDERR_LOG = 'mcp-stderr-log',
+  MCP_SERVER_CONNECTED = 'mcp-server-connected',
+  MCP_SERVER_DISCONNECTED = 'mcp-server-disconnected',
+
+  // Mindmap events
+  MINDMAP_CHANGE = 'mindmap_change',
+
+  // Model events
+  MODELS_UPDATED = 'models-updated',
+  SCAN_PROGRESS = 'scan-progress',
+
+  // Workspace events
+  WORKSPACE_ROOT_CHANGED = 'workspace_root_changed',
+  MUSIC_ROOT_CHANGED = 'music_root_changed',
+
+  // Special events
+  ALL = '*',
+}
+
 export interface ConversationMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';

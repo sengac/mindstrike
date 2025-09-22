@@ -1,5 +1,6 @@
 import { BaseAgent, AgentConfig } from './base-agent.js';
 import { MindMapData, MindMapNode } from '../../src/utils/mindMapData';
+import { SSEEventType } from '../../src/types.js';
 import { logger } from '../logger.js';
 import { sseManager } from '../sse-manager.js';
 import * as path from 'path';
@@ -345,7 +346,7 @@ export class MindmapAgentIterative extends BaseAgent {
 
       // Broadcast workflow start
       broadcastUpdate(finalWorkflowId, {
-        type: 'workflow_started',
+        type: SSEEventType.WORKFLOW_STARTED,
         workflowId: finalWorkflowId,
         originalQuery: userMessage,
         parentTopic: this.workflowState.parentTopic,
@@ -354,7 +355,7 @@ export class MindmapAgentIterative extends BaseAgent {
 
       // Broadcast initial tasks planned
       broadcastUpdate(finalWorkflowId, {
-        type: 'tasks_planned',
+        type: SSEEventType.TASKS_PLANNED,
         workflowId: finalWorkflowId,
         tasks: Array.from({ length: this.workflowState.maxSteps }, (_, i) => ({
           id: `reasoning-step-${i + 1}`,
@@ -383,7 +384,7 @@ export class MindmapAgentIterative extends BaseAgent {
         // Broadcast task progress start - USE STREAMID FOR MINDMAP FILTERING
         if (streamId) {
           broadcastUpdate(streamId, {
-            type: 'task_progress',
+            type: SSEEventType.TASK_PROGRESS,
             workflowId: finalWorkflowId,
             task: {
               id: `reasoning-step-${this.workflowState.currentStep}`,
@@ -410,7 +411,7 @@ export class MindmapAgentIterative extends BaseAgent {
         // Broadcast task progress completion - USE STREAMID FOR MINDMAP FILTERING
         if (streamId) {
           broadcastUpdate(streamId, {
-            type: 'task_progress',
+            type: SSEEventType.TASK_PROGRESS,
             workflowId: finalWorkflowId,
             task: {
               id: `reasoning-step-${this.workflowState.currentStep}`,
@@ -425,7 +426,7 @@ export class MindmapAgentIterative extends BaseAgent {
         if (streamId && stepResult.changes.length > 0) {
           stepResult.changes.forEach(change => {
             const changeEvent = {
-              type: 'mindmap_change',
+              type: SSEEventType.MINDMAP_CHANGE,
               action: change.action, // CREATE/UPDATE/DELETE
               nodeId: change.nodeId,
               text: change.text,
@@ -482,7 +483,7 @@ export class MindmapAgentIterative extends BaseAgent {
 
       // Broadcast workflow completion
       broadcastUpdate(finalWorkflowId, {
-        type: 'workflow_completed',
+        type: SSEEventType.WORKFLOW_COMPLETED,
         workflowId: finalWorkflowId,
         stepsCompleted: this.workflowState.currentStep,
         totalChanges: this.workflowState.allChanges.length,
@@ -517,7 +518,7 @@ export class MindmapAgentIterative extends BaseAgent {
 
       // Broadcast workflow failure
       broadcastUpdate(finalWorkflowId, {
-        type: 'workflow_failed',
+        type: SSEEventType.WORKFLOW_FAILED,
         workflowId: finalWorkflowId,
         error: error instanceof Error ? error.message : String(error),
       });

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { modelEvents } from '../utils/modelEvents';
 import { sseEventBus } from '../utils/sseEventBus';
+import { SSEEventType } from '../types';
 
 export interface LLMModel {
   id: string;
@@ -167,11 +168,14 @@ export function useModels() {
 
   // Server-Sent Events for real-time model updates via unified event bus
   useEffect(() => {
-    const unsubscribe = sseEventBus.subscribe('models-updated', () => {
-      if (!isLoading) {
-        fetchModels();
+    const unsubscribe = sseEventBus.subscribe(
+      SSEEventType.MODELS_UPDATED,
+      () => {
+        if (!isLoading) {
+          fetchModels();
+        }
       }
-    });
+    );
 
     return unsubscribe;
   }, [fetchModels, isLoading]);

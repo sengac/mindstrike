@@ -2,6 +2,7 @@ import { logger } from './logger.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getMindstrikeDirectory } from './utils/settings-directory.js';
+import { SSEEventType } from '../src/types.js';
 
 export interface DynamicModelInfo {
   name: string;
@@ -62,8 +63,8 @@ export class ModelFetcher {
       | 'fetching-models'
       | 'checking-model'
       | 'model-checked'
-      | 'completed'
-      | 'error';
+      | typeof SSEEventType.COMPLETED
+      | typeof SSEEventType.ERROR;
     message: string;
     modelName?: string;
     modelId?: string;
@@ -299,8 +300,8 @@ export class ModelFetcher {
         | 'fetching-models'
         | 'checking-model'
         | 'model-checked'
-        | 'completed'
-        | 'error';
+        | typeof SSEEventType.COMPLETED
+        | typeof SSEEventType.ERROR;
       message: string;
       modelName?: string;
       modelId?: string;
@@ -328,7 +329,7 @@ export class ModelFetcher {
           (a, b) => b.downloads - a.downloads
         );
         this.progressCallback({
-          type: 'completed',
+          type: SSEEventType.COMPLETED,
           message: `Search completed! Found ${models.length} models.`,
           total: models.length,
         });
@@ -354,7 +355,7 @@ export class ModelFetcher {
             `Returning ${results.length} cached models for query: ${normalizedQuery}`
           );
           this.progressCallback({
-            type: 'completed',
+            type: SSEEventType.COMPLETED,
             message: `Search completed! Found ${results.length} cached models.`,
             total: results.length,
           });
@@ -401,7 +402,7 @@ export class ModelFetcher {
         (a, b) => b.downloads - a.downloads
       );
       this.progressCallback({
-        type: 'completed',
+        type: SSEEventType.COMPLETED,
         message: `Search completed! Found ${sortedResults.length} models.`,
         total: sortedResults.length,
       });
@@ -410,7 +411,7 @@ export class ModelFetcher {
     } catch (error) {
       logger.error(`Failed to search models for: ${normalizedQuery}`, error);
       this.progressCallback({
-        type: 'error',
+        type: SSEEventType.ERROR,
         message: `Search failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
       });
       throw error;
@@ -427,8 +428,8 @@ export class ModelFetcher {
         | 'fetching-models'
         | 'checking-model'
         | 'model-checked'
-        | 'completed'
-        | 'error';
+        | typeof SSEEventType.COMPLETED
+        | typeof SSEEventType.ERROR;
       message: string;
       modelName?: string;
       modelId?: string;
@@ -451,7 +452,7 @@ export class ModelFetcher {
       );
 
       this.progressCallback({
-        type: 'completed',
+        type: SSEEventType.COMPLETED,
         message: `Scan completed! Found ${models.length} models in cache.`,
         total: models.length,
       });
@@ -459,7 +460,7 @@ export class ModelFetcher {
       return models;
     } catch (error) {
       this.progressCallback({
-        type: 'error',
+        type: SSEEventType.ERROR,
         message: `Failed to fetch models: ${error instanceof Error ? error.message : 'Unknown error'}`,
       });
       logger.error(

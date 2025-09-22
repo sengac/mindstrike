@@ -1,14 +1,20 @@
-import { MessageSquare, Files, Settings, Bot, Network } from 'lucide-react';
+import {
+  MessageSquare,
+  Files,
+  Settings,
+  Network,
+  FileText,
+} from 'lucide-react';
 import { clsx } from 'clsx';
 import { NetworkEffect } from './NetworkEffect';
 import { MusicPlayer } from './MusicPlayer';
 import { SidebarMusicControls } from './SidebarMusicControls';
+import { AppView } from '../types';
+import MCPIcon from './MCPIcon';
 
 interface SidebarProps {
-  activePanel: 'chat' | 'files' | 'agents' | 'mind-maps' | 'settings';
-  onPanelChange: (
-    panel: 'chat' | 'files' | 'agents' | 'mind-maps' | 'settings'
-  ) => void;
+  activePanel: AppView;
+  onPanelChange: (view: AppView) => void;
   isMusicPlayerOpen: boolean;
   setIsMusicPlayerOpen: (open: boolean) => void;
 }
@@ -21,9 +27,9 @@ export function Sidebar({
 }: SidebarProps) {
   const menuItems = [
     { id: 'chat' as const, icon: MessageSquare, label: 'Chat' },
-    { id: 'mind-maps' as const, icon: Network, label: 'MindMaps' },
-    { id: 'files' as const, icon: Files, label: 'Workspace' },
-    { id: 'agents' as const, icon: Bot, label: 'Agents' },
+    { id: 'mindmaps' as const, icon: Network, label: 'MindMaps' },
+    { id: 'workspace' as const, icon: Files, label: 'Workspace' },
+    { id: 'agents' as const, icon: MCPIcon, label: 'Agents' },
   ];
 
   return (
@@ -67,8 +73,27 @@ export function Sidebar({
         <SidebarMusicControls isMusicPlayerVisible={isMusicPlayerOpen} />
       </nav>
 
-      {/* Settings */}
-      <div className="pb-4 px-2">
+      {/* Application Logs and Settings */}
+      <div className="pb-4 px-2 space-y-2">
+        <button
+          onClick={() => onPanelChange('application-logs')}
+          className={clsx(
+            'w-full h-12 flex items-center justify-center hover:bg-dark-hover transition-colors',
+            'border-r-2 border-transparent',
+            activePanel === 'application-logs' &&
+              'bg-dark-hover border-blue-500'
+          )}
+          title="Application Logs"
+        >
+          <FileText
+            size={20}
+            className={clsx(
+              'text-gray-400',
+              activePanel === 'application-logs' && 'text-blue-400'
+            )}
+          />
+        </button>
+
         <button
           onClick={() => onPanelChange('settings')}
           className={clsx(

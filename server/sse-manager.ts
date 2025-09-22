@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import { logger } from './logger.js';
+import { SSEEventType } from '../src/types.js';
 
 interface SSEClient {
   id: string;
@@ -24,7 +25,7 @@ class SSEManager {
 
     // Send initial connection message
     response.write(
-      `data: ${JSON.stringify({ type: 'connected', timestamp: Date.now() })}\n\n`
+      `data: ${JSON.stringify({ type: SSEEventType.CONNECTED, timestamp: Date.now() })}\n\n`
     );
 
     const client: SSEClient = { id, response, topic };

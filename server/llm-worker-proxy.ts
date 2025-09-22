@@ -71,7 +71,14 @@ export class LLMWorkerProxy extends EventEmitter {
       // Workers need JavaScript files, not TypeScript
       // In development, we'll use the compiled version from dist if available
       // Otherwise, skip worker initialization (local LLM features won't work)
-      const workerPath = join(__dirname, 'llm-worker.js');
+
+      // Try development path first (when running via tsx)
+      let workerPath = join(__dirname, '../dist/server/server/llm-worker.js');
+
+      // If that doesn't exist, try the production path (when running compiled)
+      if (!existsSync(workerPath)) {
+        workerPath = join(__dirname, 'llm-worker.js');
+      }
 
       // Check if compiled worker exists
       if (!existsSync(workerPath)) {

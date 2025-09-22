@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { sseManager } from '../sse-manager.js';
 import { modelFetcher } from '../model-fetcher.js';
 import { logger } from '../logger.js';
+import { SSEEventType } from '../../src/types.js';
 
 const router = Router();
 
@@ -20,7 +21,7 @@ const activeScanSessions = new Map<
 // Progress update helper
 function broadcastProgress(scanId: string, progress: any) {
   sseManager.broadcast('unified-events', {
-    type: 'scan-progress',
+    type: SSEEventType.SCAN_PROGRESS,
     scanId,
     progress,
     timestamp: Date.now(),

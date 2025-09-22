@@ -1,5 +1,6 @@
 import { sseManager } from './sse-manager.js';
 import { logger } from './logger.js';
+import { SSEEventType } from '../src/types.js';
 
 interface DebugEntry {
   entryType: 'request' | 'response' | 'error';
@@ -16,7 +17,7 @@ class ServerDebugLogger {
   private broadcastDebugEntry(entry: DebugEntry) {
     try {
       const debugData = {
-        type: 'debug-entry',
+        type: SSEEventType.DEBUG_ENTRY,
         timestamp: Date.now(),
         ...entry,
       };

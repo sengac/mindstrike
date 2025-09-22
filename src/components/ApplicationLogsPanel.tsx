@@ -1,36 +1,33 @@
 import { useState } from 'react';
 import {
-  X,
   FileText,
   Trash2,
   Copy,
   ChevronDown,
   ChevronRight,
-  Server,
+  MessageSquare,
+  Workflow,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useDebugStore, LLMDebugEntry } from '../store/useDebugStore';
 import { useTaskStore } from '../store/useTaskStore';
 import { useMCPLogsStore } from '../store/useMCPLogsStore';
 import { JSONViewer } from './JSONViewer';
-import { BaseDialog } from './shared/BaseDialog';
-import { useDialogAnimation } from '../hooks/useDialogAnimation';
+import { AppBar } from './AppBar';
+import MCPIcon from './MCPIcon';
 
-interface ApplicationLogsDialogProps {
-  isOpen: boolean;
-  onClose: () => void;
+interface ApplicationLogsPanelProps {
   initialTab?: 'debug' | 'tasks' | 'mcp';
 }
 
-export function ApplicationLogsDialog({
-  isOpen,
-  onClose,
+// Wrapper component to make MCPIcon compatible with the tab structure
+const MCPIconWrapper: React.FC<{ size?: number }> = ({ size = 16 }) => (
+  <MCPIcon size={size} />
+);
+
+export function ApplicationLogsPanel({
   initialTab = 'debug',
-}: ApplicationLogsDialogProps) {
-  const { shouldRender, isVisible, handleClose } = useDialogAnimation(
-    isOpen,
-    onClose
-  );
+}: ApplicationLogsPanelProps) {
   const { entries, clearEntries } = useDebugStore();
   const { currentWorkflow, workflows, getWorkflowProgress, getActiveTask } =
     useTaskStore();
@@ -267,77 +264,64 @@ export function ApplicationLogsDialog({
     }
   };
 
-  if (!shouldRender) return null;
-
   return (
-    <BaseDialog
-      isOpen={shouldRender}
-      onClose={handleClose}
-      isVisible={isVisible}
-      fullScreen={true}
-      className="bg-gray-800 flex flex-col"
-    >
+    <div className="flex flex-col h-full bg-dark-bg">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-700">
-        <div className="flex items-center gap-3">
-          <FileText className="text-yellow-400" size={20} />
-          <h2 className="text-xl font-semibold text-white">Application Logs</h2>
-        </div>
-        <button
-          onClick={handleClose}
-          className="p-2 hover:bg-gray-700 rounded transition-colors"
-        >
-          <X size={20} />
-        </button>
-      </div>
+      <AppBar icon={FileText} title="Application Logs" />
 
-      {/* Tabs */}
-      <div className="flex border-b border-gray-700">
-        <button
-          onClick={() => setActiveTab('debug')}
-          className={`px-4 py-2 font-medium transition-colors ${
-            activeTab === 'debug'
-              ? 'text-blue-400 border-b-2 border-blue-400 bg-gray-800/50'
-              : 'text-gray-400 hover:text-gray-200'
-          }`}
-        >
-          LLM Logs
-          {entries.length > 0 && (
-            <span className="ml-2 px-2 py-1 text-xs bg-blue-600 text-white rounded-full">
-              {entries.length}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('tasks')}
-          className={`px-4 py-2 font-medium transition-colors ${
-            activeTab === 'tasks'
-              ? 'text-blue-400 border-b-2 border-blue-400 bg-gray-800/50'
-              : 'text-gray-400 hover:text-gray-200'
-          }`}
-        >
-          Task Workflows
-          {(currentWorkflow || workflows.length > 0) && (
-            <span className="ml-2 px-2 py-1 text-xs bg-blue-600 text-white rounded-full">
-              {currentWorkflow ? 'ACTIVE' : workflows.length}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('mcp')}
-          className={`px-4 py-2 font-medium transition-colors ${
-            activeTab === 'mcp'
-              ? 'text-blue-400 border-b-2 border-blue-400 bg-gray-800/50'
-              : 'text-gray-400 hover:text-gray-200'
-          }`}
-        >
-          MCP Logs
-          {logs.length > 0 && (
-            <span className="ml-2 px-2 py-1 text-xs bg-blue-600 text-white rounded-full">
-              {logs.length}
-            </span>
-          )}
-        </button>
+      {/* Tab Navigation */}
+      <div className="border-b border-gray-700">
+        <div className="px-6">
+          <nav className="flex space-x-8">
+            {[
+              {
+                id: 'debug',
+                label: 'LLM Logs',
+                icon: MessageSquare,
+                count: entries.length > 0 ? entries.length : null,
+              },
+              {
+                id: 'tasks',
+                label: 'Task Workflows',
+                icon: Workflow,
+                count: currentWorkflow
+                  ? 'ACTIVE'
+                  : workflows.length > 0
+                    ? workflows.length
+                    : null,
+              },
+              {
+                id: 'mcp',
+                label: 'MCP Logs',
+                icon: MCPIconWrapper,
+                count: logs.length > 0 ? logs.length : null,
+              },
+            ].map(tab => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() =>
+                    setActiveTab(tab.id as 'debug' | 'tasks' | 'mcp')
+                  }
+                  className={`flex items-center gap-2 py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
+                    activeTab === tab.id
+                      ? 'border-blue-500 text-blue-400'
+                      : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                  }`}
+                >
+                  <Icon size={16} />
+                  {tab.label}
+                  {tab.count && (
+                    <span className="ml-2 px-2 py-1 text-xs bg-blue-600 text-white rounded-full">
+                      {tab.count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
       </div>
 
       {/* Controls - Show for debug and mcp tabs */}
@@ -408,7 +392,7 @@ export function ApplicationLogsDialog({
       )}
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-4">
+      <div className="flex-1 overflow-y-auto p-6">
         {activeTab === 'debug' ? (
           // LLM Logs Tab
           filteredEntries.length === 0 ? (
@@ -911,7 +895,9 @@ export function ApplicationLogsDialog({
           // MCP Logs Tab
           filteredMCPLogs.length === 0 ? (
             <div className="text-center text-gray-400 py-8">
-              <Server size={48} className="mx-auto mb-4 opacity-50" />
+              <div className="mx-auto mb-4 opacity-50">
+                <MCPIcon size={48} className="mx-auto" />
+              </div>
               <p>
                 {logs.length === 0
                   ? 'No MCP logs yet'
@@ -999,6 +985,6 @@ export function ApplicationLogsDialog({
           )
         ) : null}
       </div>
-    </BaseDialog>
+    </div>
   );
 }

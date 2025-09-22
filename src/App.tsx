@@ -1,21 +1,19 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar';
-import { ChatPanel, ChatPanelRef } from './chat/components/ChatPanel';
-import { ThreadsPanel } from './chat/components/ThreadsPanel';
-
-import { MindMapsPanel } from './mindmaps/components/MindMapsPanel';
+import { ChatPanelRef } from './chat/components/ChatPanel';
+import { ChatView } from './chat/components/ChatView';
 import { MindMapsView } from './mindmaps/components/MindMapsView';
-import { FileExplorer } from './workspace/components/FileExplorer';
-import { AgentsPanel } from './components/AgentsPanel';
-import { SettingsPanel } from './settings/components/SettingsPanel';
-import { ModelSelector } from './settings/components/ModelSelector';
+import { WorkspaceView } from './workspace/components/WorkspaceView';
+import { AgentsView } from './components/AgentsView';
+import { SettingsView } from './settings/components/SettingsView';
 import { PromptsModal } from './settings/components/PromptsModal';
-import { HeaderStats } from './components/HeaderStats';
 import { LocalModelLoadDialog } from './components/LocalModelLoadDialog';
-import { ApplicationLogsDialog } from './components/ApplicationLogsDialog';
+import { ApplicationLogsView } from './components/ApplicationLogsView';
 import { useThreadsRefactored } from './chat/hooks/useThreadsRefactored';
 import { useThreadsStore } from './store/useThreadsStore';
-import { useChatThreadStore } from './store/useChatThreadStore';
+import { SSEEventType } from './types';
+import { LogsTabType } from './types/logs';
+
 import { sseEventBus } from './utils/sseEventBus';
 import { useMCPLogsStore } from './store/useMCPLogsStore';
 
@@ -24,17 +22,7 @@ import { useAppStore } from './store/useAppStore';
 import { loadFontScheme } from './utils/fontSchemes';
 
 import { Source } from './types/mindMap';
-import {
-  Menu,
-  X,
-  MessageSquare,
-  Network,
-  Cpu,
-  FileText,
-  Terminal,
-  Bot,
-} from 'lucide-react';
-import { AppBar } from './components/AppBar';
+import { Menu, X } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 import { initStormToastEffect } from './utils/stormToastEffect';
 import { ConnectionMonitorDialog } from './components/shared/ConnectionMonitorDialog';
@@ -42,12 +30,7 @@ import { useConnectionMonitor } from './hooks/useConnectionMonitor';
 
 function App() {
   const [, setWorkspaceRestored] = useState(false);
-  const [showLocalModelDialog, setShowLocalModelDialog] = useState(false);
-  const [showApplicationLogsDialog, setShowApplicationLogsDialog] =
-    useState(false);
-  const [debugDialogInitialTab, setDebugDialogInitialTab] = useState<
-    'debug' | 'tasks' | 'mcp'
-  >('debug');
+  const [initialLogsTab, setInitialLogsTab] = useState<LogsTabType>('llm');
   const [showConnectionDialog, setShowConnectionDialog] = useState(false);
   const [isMusicPlayerOpen, setIsMusicPlayerOpen] = useState(false);
   const [showPromptsModal, setShowPromptsModal] = useState(false);
@@ -61,9 +44,9 @@ function App() {
   }, []);
 
   // Function to open debug dialog with specific tab
-  const openDebugDialog = (tab: 'debug' | 'tasks' | 'mcp' = 'debug') => {
-    setDebugDialogInitialTab(tab);
-    setShowApplicationLogsDialog(true);
+  const openDebugDialog = (tab: LogsTabType = 'llm') => {
+    setInitialLogsTab(tab);
+    setActiveView('application-logs');
   };
 
   // Make it available globally
@@ -93,20 +76,15 @@ function App() {
   const {
     sidebarOpen,
     setSidebarOpen,
-    activePanel,
-    setActivePanel,
+    activeView,
+    setActiveView,
     fontScheme,
     defaultCustomPrompt,
+    showLocalModelDialog,
+    setShowLocalModelDialog,
   } = useAppStore();
   const chatPanelRef = useRef<ChatPanelRef>(null);
-  const { activeThreadId, toggleAgentMode } = useThreadsStore();
-  // Always call the hook with a fallback threadId to avoid conditional hook calls
-  const fallbackThreadId = activeThreadId || 'empty';
-  const threadStore = useChatThreadStore(fallbackThreadId);
-  // Always call the selector to avoid conditional hooks
-  const allMessages = threadStore(state => state.messages);
-  // Only use messages if we have an active thread, otherwise empty array
-  const currentMessages = activeThreadId ? allMessages : [];
+  const { toggleAgentMode } = useThreadsStore();
 
   // LLM config is now managed server-side through ModelSelector
 
@@ -140,7 +118,7 @@ function App() {
 
         // Set up SSE listeners for workspace root changes
         const unsubscribeWorkspaceRoot = sseEventBus.subscribe(
-          'workspace_root_changed',
+          SSEEventType.WORKSPACE_ROOT_CHANGED,
           event => {
             const data = event.data as { workspaceRoot: string };
             useAppStore.getState().setWorkspaceRoot(data.workspaceRoot);
@@ -151,7 +129,7 @@ function App() {
         );
 
         const unsubscribeMusicRoot = sseEventBus.subscribe(
-          'music_root_changed',
+          SSEEventType.MUSIC_ROOT_CHANGED,
           event => {
             const data = event.data as { musicRoot: string };
             useAppStore.getState().setMusicRoot(data.musicRoot);
@@ -213,10 +191,10 @@ function App() {
 
   // Create a default thread if none exist (only after data is loaded)
   useEffect(() => {
-    if (isLoaded && threads.length === 0 && activePanel === 'chat') {
+    if (isLoaded && threads.length === 0 && activeView === 'chat') {
       createThread();
     }
-  }, [isLoaded, threads.length, activePanel, createThread]);
+  }, [isLoaded, threads.length, activeView, createThread]);
 
   const handleNewThread = async () => {
     await createThread();
@@ -341,8 +319,8 @@ function App() {
         } transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static fixed inset-y-0 left-0 z-40`}
       >
         <Sidebar
-          activePanel={activePanel}
-          onPanelChange={setActivePanel}
+          activePanel={activeView}
+          onPanelChange={setActiveView}
           isMusicPlayerOpen={isMusicPlayerOpen}
           setIsMusicPlayerOpen={setIsMusicPlayerOpen}
         />
@@ -350,174 +328,68 @@ function App() {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {activePanel === 'chat' && (
-          <div className="flex flex-col h-full">
-            {/* Chat Header spanning across threads and messages */}
-            <AppBar
-              icon={MessageSquare}
-              title="Chat"
-              actions={
-                <>
-                  <HeaderStats messages={currentMessages} />
-                  <div className="flex items-center gap-2">
-                    <ModelSelector />
-                    <button
-                      onClick={() => setShowPromptsModal(true)}
-                      className="relative p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
-                      title="Customize prompts"
-                    >
-                      <Terminal size={16} />
-                      {activeThread?.customPrompt && (
-                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></div>
-                      )}
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (activeThread) {
-                          toggleAgentMode(activeThread.id);
-                        }
-                      }}
-                      className={`relative p-2 rounded transition-all duration-300 ${
-                        activeThread?.isAgentActive
-                          ? 'bg-blue-900/30 text-blue-300'
-                          : 'hover:bg-gray-800 text-gray-400 hover:text-gray-200'
-                      }`}
-                      title="Agent Mode"
-                    >
-                      <div
-                        className={`transition-all duration-300 ${activeThread?.isAgentActive ? 'scale-110' : 'scale-100'}`}
-                      >
-                        <Bot
-                          size={16}
-                          className={`transition-all duration-300 ${
-                            activeThread?.isAgentActive
-                              ? 'text-blue-300 animate-pulse'
-                              : 'text-gray-400'
-                          }`}
-                        />
-                      </div>
-                      {activeThread?.isAgentActive && (
-                        <div className="absolute inset-0 rounded bg-blue-400/20 animate-ping"></div>
-                      )}
-                    </button>
-                    <button
-                      onClick={() => setShowLocalModelDialog(true)}
-                      className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
-                      title="Manage Local Models"
-                    >
-                      <Cpu size={16} />
-                    </button>
-                    <button
-                      onClick={() => setShowApplicationLogsDialog(true)}
-                      className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
-                      title="Application Logs"
-                    >
-                      <FileText size={16} />
-                    </button>
-                  </div>
-                </>
+        {activeView === 'chat' && (
+          <ChatView
+            ref={chatPanelRef}
+            threads={threads}
+            activeThreadId={threadsActiveThreadId || undefined}
+            onThreadSelect={selectThread}
+            onThreadCreate={handleNewThread}
+            onThreadRename={renameThread}
+            onThreadDelete={deleteThread}
+            onDeleteMessage={handleDeleteMessage}
+            onPromptUpdate={updateThreadPrompt}
+            onNavigateToWorkspaces={() => setActiveView('workspace')}
+            onCustomizePrompts={() => setShowPromptsModal(true)}
+            onToggleAgentMode={() => {
+              if (activeThread) {
+                toggleAgentMode(activeThread.id);
               }
-            />
-
-            {/* Chat content area */}
-            <div className="flex flex-1 min-h-0">
-              <ThreadsPanel
-                threads={threads}
-                activeThreadId={threadsActiveThreadId || undefined}
-                onThreadSelect={selectThread}
-                onThreadCreate={handleNewThread}
-                onThreadRename={renameThread}
-                onThreadDelete={deleteThread}
-              />
-              <ChatPanel
-                ref={chatPanelRef}
-                threadId={threadsActiveThreadId || undefined}
-                onDeleteMessage={handleDeleteMessage}
-                onPromptUpdate={updateThreadPrompt}
-                onNavigateToWorkspaces={() => setActivePanel('files')}
-              />
-            </div>
-          </div>
+            }}
+          />
         )}
 
-        {activePanel === 'mind-maps' && (
-          <div className="flex flex-col h-full">
-            {/* MindMaps Header */}
-            <AppBar
-              icon={Network}
-              title="MindMaps"
-              actions={
-                <>
-                  <div className="flex items-center gap-2">
-                    <ModelSelector />
-                    <button
-                      onClick={() => setShowLocalModelDialog(true)}
-                      className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
-                      title="Manage Local Models"
-                    >
-                      <Cpu size={16} />
-                    </button>
-                    <button
-                      onClick={() => setShowApplicationLogsDialog(true)}
-                      className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
-                      title="Application Logs"
-                    >
-                      <FileText size={16} />
-                    </button>
-                  </div>
-                </>
+        {activeView === 'mindmaps' && (
+          <MindMapsView
+            mindMaps={mindMaps}
+            activeMindMapId={activeMindMapId || undefined}
+            activeMindMap={activeMindMap || null}
+            threads={threads}
+            onMindMapSelect={selectMindMap}
+            onMindMapCreate={handleNewMindMap}
+            onMindMapRename={renameMindMap}
+            onMindMapDelete={deleteMindMap}
+            onThreadAssociate={(nodeId: string, threadId: string) => {
+              updateNodeChatId(nodeId, threadId);
+            }}
+            onThreadUnassign={(nodeId: string) => {
+              updateNodeChatId(nodeId, null);
+            }}
+            onThreadCreate={handleNewThread}
+            onThreadRename={renameThread}
+            onThreadDelete={deleteThread}
+            onNavigateToChat={(threadId?: string) => {
+              if (threadId) {
+                selectThread(threadId);
               }
-            />
-
-            {/* MindMaps content area */}
-            <div className="flex flex-1 min-h-0">
-              <MindMapsPanel
-                mindMaps={mindMaps}
-                activeMindMapId={activeMindMapId || undefined}
-                onMindMapSelect={selectMindMap}
-                onMindMapCreate={handleNewMindMap}
-                onMindMapRename={renameMindMap}
-                onMindMapDelete={deleteMindMap}
-                threads={threads}
-                onThreadAssociate={(nodeId: string, threadId: string) => {
-                  updateNodeChatId(nodeId, threadId);
-                }}
-                onThreadUnassign={(nodeId: string) => {
-                  updateNodeChatId(nodeId, null);
-                }}
-                onThreadCreate={handleNewThread}
-                onThreadRename={renameThread}
-                onThreadDelete={deleteThread}
-                onNavigateToChat={(threadId?: string) => {
-                  if (threadId) {
-                    selectThread(threadId);
-                  }
-                  setActivePanel('chat');
-                }}
-                onDeleteMessage={(_threadId: string, _messageId: string) => {
-                  // TODO: Implement delete message functionality
-                }}
-                onMessagesUpdate={(_threadId: string, _messages) => {
-                  // TODO: Implement update messages functionality
-                }}
-                onFirstMessage={() => {}}
-                onPromptUpdate={updateThreadPrompt}
-                onNodeNotesUpdate={updateNodeNotes}
-                onNodeSourcesUpdate={updateNodeSources}
-              />
-              <MindMapsView
-                activeMindMap={activeMindMap}
-                loadMindMaps={loadMindMaps}
-                pendingNodeUpdate={pendingNodeUpdate}
-              />
-            </div>
-          </div>
+              setActiveView('chat');
+            }}
+            onPromptUpdate={updateThreadPrompt}
+            onCustomizePrompts={() => setShowPromptsModal(true)}
+            onNodeNotesUpdate={updateNodeNotes}
+            onNodeSourcesUpdate={updateNodeSources}
+            loadMindMaps={loadMindMaps}
+            pendingNodeUpdate={pendingNodeUpdate}
+          />
         )}
-        {activePanel === 'files' && (
-          <FileExplorer onDirectoryChange={loadThreads} />
+        {activeView === 'workspace' && (
+          <WorkspaceView onDirectoryChange={loadThreads} />
         )}
-        {activePanel === 'agents' && <AgentsPanel />}
-        {activePanel === 'settings' && <SettingsPanel />}
+        {activeView === 'agents' && <AgentsView />}
+        {activeView === 'settings' && <SettingsView />}
+        {activeView === 'application-logs' && (
+          <ApplicationLogsView initialTab={initialLogsTab} />
+        )}
       </div>
 
       {/* Overlay for mobile */}
@@ -555,15 +427,6 @@ function App() {
           onModelLoaded={() => {
             setShowLocalModelDialog(false);
           }}
-        />
-      )}
-
-      {/* Application Logs Dialog */}
-      {showApplicationLogsDialog && (
-        <ApplicationLogsDialog
-          isOpen={showApplicationLogsDialog}
-          onClose={() => setShowApplicationLogsDialog(false)}
-          initialTab={debugDialogInitialTab}
         />
       )}
 

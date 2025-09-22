@@ -34,6 +34,7 @@ interface MindMapChatIntegrationProps {
   onNodeDelete?: (nodeId: string) => Promise<void>;
   onNavigateToPrevNode?: () => void;
   onNavigateToNextNode?: () => void;
+  onCustomizePrompts?: () => void;
 }
 
 export function MindMapChatIntegration({
@@ -63,6 +64,7 @@ export function MindMapChatIntegration({
   onNodeDelete: _onNodeDelete,
   onNavigateToPrevNode,
   onNavigateToNextNode,
+  onCustomizePrompts,
 }: MindMapChatIntegrationProps) {
   const chatPanelRef = useRef<ChatPanelRef>(null);
 
@@ -140,6 +142,7 @@ export function MindMapChatIntegration({
       onCopyNotesToChat={handleCopyNotesToChat}
       onNavigateToPrevNode={onNavigateToPrevNode}
       onNavigateToNextNode={onNavigateToNextNode}
+      onCustomizePrompts={onCustomizePrompts}
     />
   );
 }

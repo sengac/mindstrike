@@ -6,17 +6,10 @@ import React, {
   forwardRef,
   useCallback,
 } from 'react';
-import {
-  Send,
-  Loader2,
-  Github,
-  Youtube,
-  Trash2,
-  X,
-  Square,
-  Bot,
-  ImageIcon,
-} from 'lucide-react';
+import { Send, Loader2, Github, Youtube, X, Square } from 'lucide-react';
+import ChatOptionsPopup from './ChatOptionsPopup';
+import AttachmentsPopup from './AttachmentsPopup';
+import ModelSelectionPopup from './ModelSelectionPopup';
 import { MindStrikeIcon } from '../../components/MindStrikeIcon';
 import { DiscordIcon } from '../../components/DiscordIcon';
 import { ChatMessage } from './ChatMessage';
@@ -25,7 +18,6 @@ import { ValidationStatusNotification } from '../../components/ValidationStatusN
 import { LocalModelLoadDialog } from '../../components/LocalModelLoadDialog';
 import { MusicVisualization } from '../../components/MusicVisualization';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog';
-import { SystemInfo } from '../../components/SystemInfo';
 
 import toast from 'react-hot-toast';
 
@@ -53,6 +45,8 @@ interface ChatPanelProps {
   onNavigateToWorkspaces?: () => void;
   onCopyToNotes?: (content: string) => void;
   inMindMapContext?: boolean;
+  onCustomizePrompts?: () => void;
+  onToggleAgentMode?: () => void;
 }
 
 export interface ChatPanelRef {
@@ -71,6 +65,8 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
       onNavigateToWorkspaces,
       onCopyToNotes,
       inMindMapContext = false,
+      onCustomizePrompts,
+      onToggleAgentMode,
     },
     ref
   ) => {
@@ -114,7 +110,6 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -291,11 +286,6 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
           console.error('Error processing image:', error);
           toast.error('Error processing image. Please try again.');
         }
-      }
-
-      // Clear the file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
       }
     };
 
@@ -702,13 +692,35 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
 
           <form onSubmit={handleSubmit} className="flex items-center space-x-4">
             <div className="flex-1 flex items-center bg-dark-hover rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
+              <div className="pl-2 pr-2 flex items-center gap-2">
+                <AttachmentsPopup
+                  onImageUpload={files => {
+                    // Convert FileList to the format expected by handleImageUpload
+                    const mockEvent = {
+                      target: { files },
+                    } as React.ChangeEvent<HTMLInputElement>;
+                    handleImageUpload(mockEvent);
+                  }}
+                  isLoading={isLoading}
+                  isLocalModel={isLocalModel}
+                />
+                <ChatOptionsPopup
+                  onClearConversation={() => setShowClearConfirm(true)}
+                  messagesLength={messages.length}
+                  onCustomizePrompts={onCustomizePrompts}
+                  onToggleAgentMode={onToggleAgentMode}
+                  hasCustomPrompt={!!currentThread?.customPrompt}
+                  isAgentActive={isAgentActive}
+                />
+                <ModelSelectionPopup />
+              </div>
               <textarea
                 ref={textareaRef}
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Ask MindStrike anything..."
-                className="flex-1 bg-transparent px-4 py-3 text-sm resize-none focus:outline-none overflow-y-auto"
+                className="flex-1 bg-transparent px-2 py-3 text-sm resize-none focus:outline-none overflow-y-auto"
                 style={{ overflowY: input.includes('\n') ? 'auto' : 'hidden' }}
                 rows={1}
                 disabled={isLoading}
@@ -736,53 +748,18 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
                 </button>
               )}
             </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleImageUpload}
-              className="hidden"
-            />
-
-            <div className="relative group">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isLoading || isLocalModel}
-                className="p-2 border border-gray-600 hover:bg-gray-800 disabled:bg-gray-900 disabled:border-gray-700 disabled:cursor-not-allowed rounded-lg transition-colors text-gray-400 hover:text-gray-200 disabled:text-gray-600"
-                title={!isLocalModel ? 'Attach images' : undefined}
-              >
-                <ImageIcon size={16} />
-              </button>
-              {isLocalModel && (
-                <div className="absolute bottom-full right-0 mb-2 px-3 py-2 bg-gray-900 text-yellow-300 text-sm rounded-lg shadow-lg border border-gray-600 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
-                  <div className="flex items-center gap-2">
-                    <ImageIcon size={12} className="text-yellow-400" />
-                    <span>
-                      Multimodal support is not available for built-in models
-                    </span>
-                  </div>
-                  <div className="absolute top-full right-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
-                </div>
-              )}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setShowClearConfirm(true)}
-              disabled={messages.length === 0}
-              className="p-2 border border-gray-600 hover:bg-gray-800 disabled:bg-gray-900 disabled:border-gray-700 disabled:cursor-not-allowed rounded-lg transition-colors text-gray-400 hover:text-gray-200 disabled:text-gray-600"
-              title="Clear conversation"
-            >
-              <Trash2 size={16} />
-            </button>
           </form>
           <div className="flex justify-between items-start mt-2">
             <p className="text-xs text-gray-500">
               Press Enter to send, Shift+Enter for new line
             </p>
-            <SystemInfo />
+            <div className="text-xs text-gray-500 flex items-center gap-1">
+              <span>Model:</span>
+              <span className="font-medium text-gray-400">
+                {currentModel?.displayName?.split(' | ')[0] ||
+                  'No model selected'}
+              </span>
+            </div>
           </div>
         </div>
       </div>

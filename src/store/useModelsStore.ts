@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { LLMModel } from '../hooks/useModels';
 import { modelEvents } from '../utils/modelEvents';
 import { sseEventBus } from '../utils/sseEventBus';
+import { SSEEventType } from '../types';
 
 interface ModelsState {
   models: LLMModel[];
@@ -200,12 +201,15 @@ export function initializeModelsEventSubscription(): void {
     return; // Already subscribed
   }
 
-  modelsUnsubscribe = sseEventBus.subscribe('models-updated', _event => {
-    const { isLoading, fetchModels } = useModelsStore.getState();
-    if (!isLoading) {
-      fetchModels().catch(console.error);
+  modelsUnsubscribe = sseEventBus.subscribe(
+    SSEEventType.MODELS_UPDATED,
+    _event => {
+      const { isLoading, fetchModels } = useModelsStore.getState();
+      if (!isLoading) {
+        fetchModels().catch(console.error);
+      }
     }
-  });
+  );
 }
 
 // Auto-initialize subscription and model events when module loads

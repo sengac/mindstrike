@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { AppView, FontScheme } from '../types';
 
 // Simplified - only store the last used model ID
 export interface LastUsedModel {
@@ -18,9 +19,9 @@ export interface ModelLoadingSettings {
 interface AppState {
   // UI State
   fontSize: number;
-  fontScheme: 'system' | 'inter' | 'serif' | 'monospace' | 'academic';
+  fontScheme: FontScheme;
   sidebarOpen: boolean;
-  activePanel: 'chat' | 'files' | 'agents' | 'mind-maps' | 'settings';
+  activeView: AppView;
 
   // Workspace State
   workspaceRoot?: string;
@@ -39,15 +40,14 @@ interface AppState {
   // MindMap Preferences
   mindMapKeyBindings?: Record<string, string>;
 
+  // Dialog State
+  showLocalModelDialog: boolean;
+
   // Actions
   setFontSize: (fontSize: number) => void;
-  setFontScheme: (
-    fontScheme: 'system' | 'inter' | 'serif' | 'monospace' | 'academic'
-  ) => void;
+  setFontScheme: (fontScheme: FontScheme) => void;
   setSidebarOpen: (open: boolean) => void;
-  setActivePanel: (
-    panel: 'chat' | 'files' | 'agents' | 'mind-maps' | 'settings'
-  ) => void;
+  setActiveView: (view: AppView) => void;
   setWorkspaceRoot: (root?: string) => void;
   setMusicRoot: (root?: string) => void;
   setCurrentDirectory: (dir: string) => void;
@@ -64,6 +64,9 @@ interface AppState {
   // MindMap Actions
   setMindMapKeyBindings: (keyBindings: Record<string, string>) => void;
 
+  // Dialog Actions
+  setShowLocalModelDialog: (show: boolean) => void;
+
   // Server-side root loading
   loadWorkspaceRoots: () => Promise<void>;
 }
@@ -75,7 +78,7 @@ export const useAppStore = create<AppState>()(
       fontSize: 14,
       fontScheme: 'system',
       sidebarOpen: true,
-      activePanel: 'chat',
+      activeView: 'chat',
       workspaceRoot: undefined,
       musicRoot: undefined,
       currentDirectory: '.',
@@ -86,16 +89,13 @@ export const useAppStore = create<AppState>()(
 
       defaultCustomPrompt: undefined,
       mindMapKeyBindings: undefined,
+      showLocalModelDialog: false,
 
       // Actions
       setFontSize: (fontSize: number) => set({ fontSize }),
-      setFontScheme: (
-        fontScheme: 'system' | 'inter' | 'serif' | 'monospace' | 'academic'
-      ) => set({ fontScheme }),
+      setFontScheme: (fontScheme: FontScheme) => set({ fontScheme }),
       setSidebarOpen: (sidebarOpen: boolean) => set({ sidebarOpen }),
-      setActivePanel: (
-        activePanel: 'chat' | 'files' | 'agents' | 'mind-maps' | 'settings'
-      ) => set({ activePanel }),
+      setActiveView: (activeView: AppView) => set({ activeView }),
       setWorkspaceRoot: (workspaceRoot?: string) =>
         set(state => ({
           workspaceRoot,
@@ -131,6 +131,10 @@ export const useAppStore = create<AppState>()(
       // MindMap Actions
       setMindMapKeyBindings: (mindMapKeyBindings: Record<string, string>) =>
         set({ mindMapKeyBindings }),
+
+      // Dialog Actions
+      setShowLocalModelDialog: (showLocalModelDialog: boolean) =>
+        set({ showLocalModelDialog }),
 
       // Server-side root loading
       loadWorkspaceRoots: async () => {

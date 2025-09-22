@@ -1,6 +1,8 @@
 import React, { ReactNode } from 'react';
-import { LucideProps } from 'lucide-react';
+import { LucideProps, Cpu } from 'lucide-react';
 import { WindowControls } from './WindowControls';
+import { SystemInfo } from './SystemInfo';
+import { useAppStore } from '../store/useAppStore';
 
 export interface AppBarProps {
   /** Icon component (from lucide-react) */
@@ -26,6 +28,7 @@ export const AppBar: React.FC<AppBarProps> = ({
   actions,
   className = '',
 }) => {
+  const { setShowLocalModelDialog, activeView } = useAppStore();
   return (
     <div
       className={`flex-shrink-0 px-6 border-b border-gray-700 flex items-center ${className}`}
@@ -38,6 +41,16 @@ export const AppBar: React.FC<AppBarProps> = ({
           <h1 className="text-xl font-semibold text-white">{title}</h1>
         </div>
         <div className="flex items-center space-x-4">
+          <SystemInfo />
+          {activeView !== 'settings' && (
+            <button
+              onClick={() => setShowLocalModelDialog(true)}
+              className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
+              title="Manage Local Models"
+            >
+              <Cpu size={16} />
+            </button>
+          )}
           {actions}
           <WindowControls />
         </div>

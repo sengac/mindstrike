@@ -92,6 +92,42 @@ export interface SSECancelledEvent {
   messageId?: string;
 }
 
+export interface SSEMCPProcessInfoEvent {
+  processes: Array<{
+    serverId: string;
+    pid: number | null;
+    hasStderr: boolean;
+    isConnected: boolean;
+  }>;
+  timestamp: number;
+}
+
+export interface SSEMCPStdoutLogEvent {
+  id: string;
+  timestamp: number;
+  serverId: string;
+  message: string;
+}
+
+export interface SSEMCPStderrLogEvent {
+  id: string;
+  timestamp: number;
+  serverId: string;
+  message: string;
+}
+
+export interface SSEMCPServerConnectedEvent {
+  serverId: string;
+  pid: number | null;
+  toolsCount: number;
+  timestamp: number;
+}
+
+export interface SSEMCPServerDisconnectedEvent {
+  serverId: string;
+  timestamp: number;
+}
+
 // Union type for all SSE events
 export type SSEEventData =
   | SSEChunkEvent
@@ -106,7 +142,12 @@ export type SSEEventData =
   | SSEDownloadEvent
   | SSELogEvent
   | SSEModelScanEvent
-  | SSECancelledEvent;
+  | SSECancelledEvent
+  | SSEMCPProcessInfoEvent
+  | SSEMCPStdoutLogEvent
+  | SSEMCPStderrLogEvent
+  | SSEMCPServerConnectedEvent
+  | SSEMCPServerDisconnectedEvent;
 
 // Type guards for SSE events
 export function isSSEChunkEvent(data: unknown): data is SSEChunkEvent {
@@ -189,5 +230,66 @@ export function isSSECancelledEvent(data: unknown): data is SSECancelledEvent {
     typeof data === 'object' &&
     data !== null &&
     ('threadId' in data || 'messageId' in data)
+  );
+}
+
+export function isSSEMCPProcessInfoEvent(
+  data: unknown
+): data is SSEMCPProcessInfoEvent {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'processes' in data &&
+    Array.isArray((data as any).processes) &&
+    'timestamp' in data
+  );
+}
+
+export function isSSEMCPStdoutLogEvent(
+  data: unknown
+): data is SSEMCPStdoutLogEvent {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'id' in data &&
+    'serverId' in data &&
+    'message' in data &&
+    'timestamp' in data
+  );
+}
+
+export function isSSEMCPStderrLogEvent(
+  data: unknown
+): data is SSEMCPStderrLogEvent {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'id' in data &&
+    'serverId' in data &&
+    'message' in data &&
+    'timestamp' in data
+  );
+}
+
+export function isSSEMCPServerConnectedEvent(
+  data: unknown
+): data is SSEMCPServerConnectedEvent {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'serverId' in data &&
+    'timestamp' in data &&
+    'toolsCount' in data
+  );
+}
+
+export function isSSEMCPServerDisconnectedEvent(
+  data: unknown
+): data is SSEMCPServerDisconnectedEvent {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'serverId' in data &&
+    'timestamp' in data
   );
 }

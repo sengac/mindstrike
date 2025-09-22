@@ -29,6 +29,7 @@ interface MindMapsPanelProps {
   ) => void;
   onFirstMessage?: () => void;
   onPromptUpdate?: (threadId: string, customPrompt?: string) => void;
+  onCustomizePrompts?: () => void;
   onNodeNotesUpdate?: (nodeId: string, notes: string) => Promise<void>;
   onNodeSourcesUpdate?: (nodeId: string, sources: Source[]) => Promise<void>;
   // MindMap node operations
@@ -55,6 +56,7 @@ export function MindMapsPanel({
   onMessagesUpdate,
   onFirstMessage,
   onPromptUpdate,
+  onCustomizePrompts,
   onNodeNotesUpdate,
   onNodeSourcesUpdate,
   onNodeAdd,
@@ -381,6 +383,7 @@ export function MindMapsPanel({
             onNodeDelete={onNodeDelete}
             onNavigateToPrevNode={handleNavigateToPrevNode}
             onNavigateToNextNode={handleNavigateToNextNode}
+            onCustomizePrompts={onCustomizePrompts}
           />
         ) : null
       }

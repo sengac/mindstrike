@@ -7,6 +7,7 @@ import {
   isSseTaskCompletedData,
 } from '../utils/sseDecoder';
 import { sseEventBus } from '../utils/sseEventBus';
+import { SSEEventType } from '../types';
 
 export interface Task {
   id: string;
@@ -487,37 +488,37 @@ async function initializeTaskEventSubscriptions() {
 
   // Subscribe to task-related events via event bus
   const unsubscribeWorkflowStarted = sseEventBus.subscribe(
-    'workflow_started',
+    SSEEventType.WORKFLOW_STARTED,
     handleTaskEvent
   );
   taskUnsubscribeFunctions.push(unsubscribeWorkflowStarted);
 
   const unsubscribeTasksPlanned = sseEventBus.subscribe(
-    'tasks_planned',
+    SSEEventType.TASKS_PLANNED,
     handleTaskEvent
   );
   taskUnsubscribeFunctions.push(unsubscribeTasksPlanned);
 
   const unsubscribeTaskProgress = sseEventBus.subscribe(
-    'task_progress',
+    SSEEventType.TASK_PROGRESS,
     handleTaskEvent
   );
   taskUnsubscribeFunctions.push(unsubscribeTaskProgress);
 
   const unsubscribeTaskCompleted = sseEventBus.subscribe(
-    'task_completed',
+    SSEEventType.TASK_COMPLETED,
     handleTaskEvent
   );
   taskUnsubscribeFunctions.push(unsubscribeTaskCompleted);
 
   const unsubscribeWorkflowCompleted = sseEventBus.subscribe(
-    'workflow_completed',
+    SSEEventType.WORKFLOW_COMPLETED,
     handleTaskEvent
   );
   taskUnsubscribeFunctions.push(unsubscribeWorkflowCompleted);
 
   const unsubscribeWorkflowFailed = sseEventBus.subscribe(
-    'workflow_failed',
+    SSEEventType.WORKFLOW_FAILED,
     handleTaskEvent
   );
   taskUnsubscribeFunctions.push(unsubscribeWorkflowFailed);

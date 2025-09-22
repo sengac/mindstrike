@@ -50,6 +50,7 @@ interface ChatContentViewerProps {
   onCopyNotesToChat?: (notes: NotesAttachment) => void;
   onNavigateToPrevNode?: () => void;
   onNavigateToNextNode?: () => void;
+  onCustomizePrompts?: () => void;
 }
 
 export const ChatContentViewer = forwardRef<
@@ -81,6 +82,7 @@ export const ChatContentViewer = forwardRef<
       onCopyNotesToChat: _onCopyNotesToChat,
       onNavigateToPrevNode,
       onNavigateToNextNode,
+      onCustomizePrompts,
     },
     ref
   ) => {
@@ -362,6 +364,7 @@ export const ChatContentViewer = forwardRef<
                 }}
                 onPromptUpdate={onPromptUpdate}
                 onCopyToNotes={handleCopyToNotes}
+                onCustomizePrompts={onCustomizePrompts}
                 inMindMapContext={true}
               />
             ) : (

@@ -6,6 +6,7 @@ import { getLocalLLMManager } from '../local-llm-singleton.js';
 import { sseManager } from '../sse-manager.js';
 import { getLocalModelsDirectory } from '../utils/settings-directory.js';
 import { modelSettingsManager } from '../utils/model-settings-manager.js';
+import { SSEEventType } from '../../src/types.js';
 
 const router = Router();
 const llmManager = getLocalLLMManager();
@@ -210,7 +211,7 @@ router.get('/update-models-stream', async (req: any, res: any) => {
 
     // Send initial connection event
     res.write(
-      'data: {"type": "connected", "message": "Connected to model update stream"}\n\n'
+      `data: {"type": "${SSEEventType.CONNECTED}", "message": "Connected to model update stream"}\n\n`
     );
     if (res.flush) res.flush();
 
@@ -242,7 +243,7 @@ router.get('/update-models-stream', async (req: any, res: any) => {
       // Send final success event
       res.write(
         `data: ${JSON.stringify({
-          type: 'completed',
+          type: SSEEventType.COMPLETED,
           message: `✅ Model update completed! Found ${models.length} models.`,
           models: updatedModels,
         })}\n\n`
@@ -251,7 +252,7 @@ router.get('/update-models-stream', async (req: any, res: any) => {
       // Send error event
       res.write(
         `data: ${JSON.stringify({
-          type: 'error',
+          type: SSEEventType.ERROR,
           message: `❌ Failed to update models: ${error instanceof Error ? error.message : 'Unknown error'}`,
         })}\n\n`
       );
@@ -408,7 +409,7 @@ router.post('/download', async (req, res) => {
         // Give server time to process the new model file before broadcasting update
         setTimeout(() => {
           sseManager.broadcast('unified-events', {
-            type: 'models-updated',
+            type: SSEEventType.MODELS_UPDATED,
             timestamp: Date.now(),
           });
         }, 2000);
@@ -493,7 +494,7 @@ router.delete('/models/:modelId', async (req, res) => {
     // Give server time to process the model deletion before broadcasting update
     setTimeout(() => {
       sseManager.broadcast('unified-events', {
-        type: 'models-updated',
+        type: SSEEventType.MODELS_UPDATED,
         timestamp: Date.now(),
       });
     }, 2000);
@@ -518,7 +519,7 @@ router.post('/models/:modelId/load', async (req, res) => {
 
     // Broadcast model updates to connected clients
     sseManager.broadcast('unified-events', {
-      type: 'models-updated',
+      type: SSEEventType.MODELS_UPDATED,
       timestamp: Date.now(),
     });
 
@@ -542,7 +543,7 @@ router.post('/models/:modelId/unload', async (req, res) => {
 
     // Broadcast model updates to connected clients
     sseManager.broadcast('unified-events', {
-      type: 'models-updated',
+      type: SSEEventType.MODELS_UPDATED,
       timestamp: Date.now(),
     });
 

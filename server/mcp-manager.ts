@@ -1,5 +1,8 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import {
+  StdioClientTransport,
+  type StdioServerParameters,
+} from '@modelcontextprotocol/sdk/client/stdio.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 
 import path from 'path';
@@ -12,6 +15,7 @@ import { getMindstrikeDirectory } from './utils/settings-directory.js';
 import { sseManager } from './sse-manager.js';
 import { CommandResolver } from './utils/command-resolver.js';
 import { lfsManager } from './lfs-manager.js';
+import { SSEEventType } from '../src/types.js';
 
 export interface MCPServerConfig {
   id: string;
@@ -36,6 +40,8 @@ export class MCPManager extends EventEmitter {
   private clients: Map<string, Client> = new Map();
   private servers: Map<string, MCPServerConfig> = new Map();
   private tools: Map<string, MCPTool> = new Map();
+  private transports: Map<string, StdioClientTransport> = new Map();
+  private processInfoInterval: NodeJS.Timeout | null = null;
   private configPath: string;
   private workspaceRoot: string;
   private logs: Array<{
@@ -51,6 +57,9 @@ export class MCPManager extends EventEmitter {
     const mindstrikeDir = getMindstrikeDirectory();
     this.configPath = configPath || path.join(mindstrikeDir, 'mcp-config.json');
     this.workspaceRoot = workspaceRoot || process.cwd();
+
+    // Set up periodic process info broadcasting
+    this.startProcessInfoBroadcasting();
   }
 
   private logMCP(
@@ -75,7 +84,7 @@ export class MCPManager extends EventEmitter {
 
     // Broadcast to clients via SSE
     sseManager.broadcast('unified-events', {
-      type: 'mcp-log',
+      type: SSEEventType.MCP_LOG,
       ...logEntry,
     });
 
@@ -336,6 +345,8 @@ export class MCPManager extends EventEmitter {
       }
     );
 
+    let transport: StdioClientTransport | SSEClientTransport | null = null;
+
     try {
       if (processedConfig.transport === 'sse' && processedConfig.url) {
         // SSE transport
@@ -344,7 +355,7 @@ export class MCPManager extends EventEmitter {
           'info',
           `Using SSE transport: ${processedConfig.url}`
         );
-        const transport = new SSEClientTransport(new URL(processedConfig.url));
+        transport = new SSEClientTransport(new URL(processedConfig.url));
         await client.connect(transport);
       } else {
         // Default to stdio transport - resolve command first
@@ -391,13 +402,91 @@ export class MCPManager extends EventEmitter {
           )
         ) as Record<string, string>;
 
-        const transport = new StdioClientTransport({
+        const transportParams: StdioServerParameters = {
           command: commandResolution.command,
           args: commandResolution.args,
           env: { ...filteredEnv, ...processedConfig.env },
-        });
+          stderr: 'pipe', // Pipe stderr so we can monitor it
+        };
+
+        transport = new StdioClientTransport(transportParams);
+
+        // Set up stderr monitoring before connecting
+        const stderrStream = transport.stderr;
+        if (stderrStream) {
+          stderrStream.on('data', (chunk: Buffer) => {
+            const output = chunk.toString('utf-8').trim();
+            if (output) {
+              this.logMCP(
+                serverConfig.id,
+                'info',
+                `[stderr] ${output}`,
+                false // Don't log to console, only to MCP logs
+              );
+
+              // Broadcast stderr log via SSE
+              sseManager.broadcast('unified-events', {
+                type: SSEEventType.MCP_STDERR_LOG,
+                id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                timestamp: Date.now(),
+                serverId: serverConfig.id,
+                message: output,
+              });
+            }
+          });
+
+          stderrStream.on('error', (error: Error) => {
+            this.logMCP(
+              serverConfig.id,
+              'error',
+              `[stderr error] ${error.message}`
+            );
+          });
+        }
+
+        // Set up protocol message monitoring (intercept MCP messages)
+        const originalOnMessage = transport.onmessage;
+        transport.onmessage = message => {
+          // Only log non-routine messages to avoid spam
+          const shouldLog =
+            message &&
+            typeof message === 'object' &&
+            ('error' in message ||
+              ('method' in message && message.method !== 'ping') ||
+              ('result' in message &&
+                Object.keys(message.result || {}).length > 0));
+
+          if (shouldLog) {
+            const messageStr = JSON.stringify(message, null, 2);
+            this.logMCP(
+              serverConfig.id,
+              'info',
+              `[protocol] ${messageStr}`,
+              false // Don't log to console, only to MCP logs
+            );
+
+            // Broadcast protocol message via SSE
+            sseManager.broadcast('unified-events', {
+              type: SSEEventType.MCP_STDOUT_LOG,
+              id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              timestamp: Date.now(),
+              serverId: serverConfig.id,
+              message: `Protocol: ${messageStr}`,
+            });
+          }
+
+          // Call original handler
+          if (originalOnMessage) {
+            originalOnMessage.call(transport, message);
+          }
+        };
 
         await client.connect(transport);
+
+        // Store the transport for process monitoring if it's stdio
+        if (transport instanceof StdioClientTransport) {
+          this.transports.set(serverConfig.id, transport);
+        }
       }
 
       // Get available tools from the server
@@ -423,6 +512,15 @@ export class MCPManager extends EventEmitter {
         `Connected successfully with ${listResult.tools?.length || 0} tools`
       );
 
+      // Broadcast server connected event via SSE
+      sseManager.broadcast('unified-events', {
+        type: SSEEventType.MCP_SERVER_CONNECTED,
+        serverId: serverConfig.id,
+        pid: transport instanceof StdioClientTransport ? transport.pid : null,
+        toolsCount: listResult.tools?.length || 0,
+        timestamp: Date.now(),
+      });
+
       this.emit('serverConnected', serverConfig.id);
       this.emit('toolsChanged');
     } catch (error: any) {
@@ -442,6 +540,9 @@ export class MCPManager extends EventEmitter {
         await client.close();
         this.clients.delete(serverId);
 
+        // Remove transport if it exists
+        this.transports.delete(serverId);
+
         // Remove tools from this server
         const toolsToRemove = Array.from(this.tools.keys()).filter(key =>
           key.startsWith(`${serverId}:`)
@@ -451,6 +552,14 @@ export class MCPManager extends EventEmitter {
         }
 
         this.logMCP(serverId, 'info', 'Disconnected from server');
+
+        // Broadcast server disconnected event via SSE
+        sseManager.broadcast('unified-events', {
+          type: SSEEventType.MCP_SERVER_DISCONNECTED,
+          serverId,
+          timestamp: Date.now(),
+        });
+
         this.emit('serverDisconnected', serverId);
         this.emit('toolsChanged');
       } catch (error: any) {
@@ -795,6 +904,9 @@ export class MCPManager extends EventEmitter {
   }
 
   async shutdown(): Promise<void> {
+    // Stop process info broadcasting
+    this.stopProcessInfoBroadcasting();
+
     for (const [serverId] of this.clients) {
       await this.disconnectFromServer(serverId);
     }
@@ -885,6 +997,98 @@ export class MCPManager extends EventEmitter {
   refreshCommandCache(): void {
     CommandResolver.clearCache();
     this.logMCP('manager', 'info', 'Command cache refreshed');
+  }
+
+  /**
+   * Start periodic broadcasting of process information
+   */
+  private startProcessInfoBroadcasting(): void {
+    // Broadcast immediately
+    this.broadcastProcessInfo();
+
+    // Then broadcast every 10 seconds
+    this.processInfoInterval = setInterval(() => {
+      this.broadcastProcessInfo();
+    }, 10000);
+  }
+
+  /**
+   * Broadcast current process information via SSE
+   */
+  private broadcastProcessInfo(): void {
+    const processInfo = this.getServerProcessInfo();
+
+    sseManager.broadcast('unified-events', {
+      type: SSEEventType.MCP_PROCESS_INFO,
+      processes: processInfo,
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Stop process info broadcasting
+   */
+  private stopProcessInfoBroadcasting(): void {
+    if (this.processInfoInterval) {
+      clearInterval(this.processInfoInterval);
+      this.processInfoInterval = null;
+    }
+  }
+
+  /**
+   * Get information about running MCP server processes
+   */
+  getServerProcessInfo(): Array<{
+    serverId: string;
+    pid: number | null;
+    hasStderr: boolean;
+    isConnected: boolean;
+  }> {
+    const processInfo: Array<{
+      serverId: string;
+      pid: number | null;
+      hasStderr: boolean;
+      isConnected: boolean;
+    }> = [];
+
+    for (const [serverId, transport] of this.transports.entries()) {
+      processInfo.push({
+        serverId,
+        pid: transport.pid,
+        hasStderr: transport.stderr !== null,
+        isConnected: this.clients.has(serverId),
+      });
+    }
+
+    return processInfo;
+  }
+
+  /**
+   * Get filtered logs for a specific server, optionally filtering by stderr messages
+   */
+  getServerLogs(
+    serverId?: string,
+    stderrOnly: boolean = false
+  ): Array<{
+    id: string;
+    timestamp: number;
+    serverId: string;
+    level: 'info' | 'error' | 'warn';
+    message: string;
+  }> {
+    let filteredLogs = this.logs;
+
+    if (serverId) {
+      filteredLogs = filteredLogs.filter(log => log.serverId === serverId);
+    }
+
+    if (stderrOnly) {
+      filteredLogs = filteredLogs.filter(log =>
+        log.message.includes('[stderr]')
+      );
+    }
+
+    return filteredLogs;
   }
 }
 

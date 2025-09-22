@@ -1170,7 +1170,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
 
           {/* Progress bar */}
           <div
-            className="w-full h-2 cursor-pointer bg-gray-800 select-none"
+            className="w-full h-4 cursor-pointer bg-gray-800 select-none"
             data-progress-bar
             onMouseDown={handleProgressMouseDown}
             onContextMenu={e => e.preventDefault()}

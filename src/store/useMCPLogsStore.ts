@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { sseEventBus } from '../utils/sseEventBus';
+import { SSEEventType } from '../types';
 import { isSSELogEvent } from '../types/sse-events';
 
 export interface MCPLogEntry {
@@ -61,7 +62,7 @@ function initializeMCPLogsEventSubscription(): void {
     return; // Already subscribed
   }
 
-  mcpLogsUnsubscribe = sseEventBus.subscribe('mcp-log', event => {
+  mcpLogsUnsubscribe = sseEventBus.subscribe(SSEEventType.MCP_LOG, event => {
     const { addLog } = useMCPLogsStore.getState();
     // Handle nested data structure from unified SSE
     if (!isSSELogEvent(event.data)) return;

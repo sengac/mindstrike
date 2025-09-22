@@ -25,7 +25,7 @@ export function LocalModelLoadDialog({
     isOpen,
     onClose
   );
-  const { setActivePanel } = useAppStore();
+  const { setActiveView } = useAppStore();
 
   // Store state and actions
   const {
@@ -133,7 +133,7 @@ export function LocalModelLoadDialog({
           {!loading && localModels.length > 0 && (
             <button
               onClick={() => {
-                setActivePanel('settings');
+                setActiveView('settings');
                 handleClose();
                 // Scroll to Available Models section after a brief delay
                 setTimeout(() => {
@@ -184,7 +184,7 @@ export function LocalModelLoadDialog({
             emptyStateAction={
               <button
                 onClick={() => {
-                  setActivePanel('settings');
+                  setActiveView('settings');
                   handleClose();
                   // Scroll to Available Models section after a brief delay
                   setTimeout(() => {
