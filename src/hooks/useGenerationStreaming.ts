@@ -136,7 +136,9 @@ export function useGenerationStreaming() {
         updateStats(0, 'Generating...');
 
         const unsubscribe = sseEventBus.subscribe('*', event => {
-          if (event.streamId !== streamId) return;
+          if (event.streamId !== streamId) {
+            return;
+          }
 
           try {
             const data = event.data;

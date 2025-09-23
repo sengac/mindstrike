@@ -61,12 +61,16 @@ export function MindMapRefactor({
   };
 
   const handleDeleteNode = () => {
-    if (!onNodeDelete) return;
+    if (!onNodeDelete) {
+      return;
+    }
     setShowDeleteConfirm(true);
   };
 
   const confirmDeleteNode = async () => {
-    if (!onNodeDelete) return;
+    if (!onNodeDelete) {
+      return;
+    }
 
     setIsLoading(true);
     try {

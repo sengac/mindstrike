@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
-import {
+import type {
   ConversationMessage,
   ImageAttachment,
   NotesAttachment,
@@ -105,7 +105,9 @@ export function useChatRefactored({
 
   // Subscribe to unified event bus for real-time streaming events
   useEffect(() => {
-    if (!currentThreadId) return;
+    if (!currentThreadId) {
+      return;
+    }
 
     const subscriptionThreadId = currentThreadId; // Capture thread ID at subscription time
 
@@ -124,7 +126,9 @@ export function useChatRefactored({
           }
 
           // Handle real-time content chunks for character-by-character streaming
-          if (!currentThreadId) return;
+          if (!currentThreadId) {
+            return;
+          }
           const chatStore = threadStore.getState();
 
           // Clear loading state when streaming starts (first chunk received)
@@ -182,7 +186,9 @@ export function useChatRefactored({
           };
 
           // Check if message already exists
-          if (!currentThreadId) return;
+          if (!currentThreadId) {
+            return;
+          }
           const chatStore = threadStore.getState();
           const messages = chatStore.messages;
           const existingMessage = messages.find(
@@ -227,7 +233,9 @@ export function useChatRefactored({
               | undefined,
           };
 
-          if (!currentThreadId) return;
+          if (!currentThreadId) {
+            return;
+          }
           const chatStore = threadStore.getState();
           chatStore.updateMessage(completedMessage.id, completedMessage);
 
@@ -282,7 +290,9 @@ export function useChatRefactored({
         // Update message status to cancelled
         if (data && typeof data === 'object' && 'messageId' in data) {
           const messageId = data.messageId as string;
-          if (!currentThreadId) return;
+          if (!currentThreadId) {
+            return;
+          }
           const chatStore = threadStore.getState();
           const message = chatStore.messages.find(m => m.id === messageId);
           if (message) {
@@ -298,7 +308,9 @@ export function useChatRefactored({
         const data = event.data;
         if (data && typeof data === 'object' && 'messageIds' in data) {
           const messageIds = data.messageIds as string[];
-          if (!currentThreadId) return;
+          if (!currentThreadId) {
+            return;
+          }
           const chatStore = threadStore.getState();
 
           // Remove all deleted messages from the store
@@ -428,7 +440,9 @@ export function useChatRefactored({
   );
 
   const clearConversation = useCallback(async () => {
-    if (!currentThreadId) return;
+    if (!currentThreadId) {
+      return;
+    }
 
     try {
       await useThreadsStore.getState().clearThread(currentThreadId);
@@ -666,10 +680,14 @@ export function useChatRefactored({
   );
 
   const retryLastMessage = useCallback(async () => {
-    if (messages.length === 0) return;
+    if (messages.length === 0) {
+      return;
+    }
 
     const lastMessage = messages[messages.length - 1];
-    if (lastMessage.role !== 'user') return;
+    if (lastMessage.role !== 'user') {
+      return;
+    }
 
     setError(null);
 

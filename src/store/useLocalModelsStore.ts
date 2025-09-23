@@ -433,7 +433,9 @@ export const useLocalModelsStore = create<LocalModelsState>()(
 let localModelsInitialized = false;
 
 export function initializeLocalModelsStore() {
-  if (localModelsInitialized) return;
+  if (localModelsInitialized) {
+    return;
+  }
   localModelsInitialized = true;
 
   // Listen for model download completion to refresh the downloaded models list

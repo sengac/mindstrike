@@ -129,9 +129,15 @@ export function ModelCard({
   };
 
   const formatGpuLayers = (layers?: number) => {
-    if (layers === undefined) return 'Auto';
-    if (layers === -1) return 'Auto';
-    if (layers === 0) return 'CPU Only';
+    if (layers === undefined) {
+      return 'Auto';
+    }
+    if (layers === -1) {
+      return 'Auto';
+    }
+    if (layers === 0) {
+      return 'CPU Only';
+    }
     return layers.toString();
   };
 

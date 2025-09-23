@@ -2,8 +2,9 @@ import { forwardRef } from 'react';
 import { MessageSquare } from 'lucide-react';
 import { AppBar } from '../../components/AppBar';
 import { ThreadsPanel } from './ThreadsPanel';
-import { ChatPanel, ChatPanelRef } from './ChatPanel';
-import { ThreadMetadata } from '../../store/useThreadsStore';
+import type { ChatPanelRef } from './ChatPanel';
+import { ChatPanel } from './ChatPanel';
+import type { ThreadMetadata } from '../../store/useThreadsStore';
 
 interface ChatViewProps {
   threads: ThreadMetadata[];

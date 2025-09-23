@@ -77,8 +77,8 @@ interface LocalModel {
 }
 
 export class LLMConfigManager {
-  private configDirectory: string;
-  private configPath: string;
+  private readonly configDirectory: string;
+  private readonly configPath: string;
   private configuration: LLMConfiguration | null = null;
 
   constructor() {
@@ -159,7 +159,9 @@ export class LLMConfigManager {
     if (!this.configuration) {
       await this.loadConfiguration();
     }
-    if (!this.configuration) return null;
+    if (!this.configuration) {
+      return null;
+    }
     return (
       models.find(m => m.id === this.configuration!.defaultModelId) || null
     );
@@ -288,7 +290,9 @@ export class LLMConfigManager {
 
     // Process detected services
     for (const service of detectedServices) {
-      if (!service.available) continue;
+      if (!service.available) {
+        continue;
+      }
 
       if (service.modelsWithMetadata) {
         // New format with metadata
@@ -326,7 +330,9 @@ export class LLMConfigManager {
 
     // Process custom services (skip those that were already detected)
     for (const customService of this.configuration.customServices) {
-      if (!customService.enabled) continue;
+      if (!customService.enabled) {
+        continue;
+      }
 
       // Skip custom services that match detected services to avoid duplicates
       if (detectedBaseURLs.has(customService.baseURL)) {
@@ -352,11 +358,7 @@ export class LLMConfigManager {
               id: customService.id,
               name: customService.name,
               baseURL: customService.baseURL,
-              type: customService.type as
-                | 'ollama'
-                | 'anthropic'
-                | 'perplexity'
-                | 'google',
+              type: customService.type,
               models,
               available: true,
             };

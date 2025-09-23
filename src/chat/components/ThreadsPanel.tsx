@@ -1,5 +1,5 @@
 import { MessageSquare, Terminal } from 'lucide-react';
-import { ThreadMetadata } from '../../store/useThreadsStore';
+import type { ThreadMetadata } from '../../store/useThreadsStore';
 import { ListPanel } from '../../components/shared/ListPanel';
 
 interface ThreadsPanelProps {

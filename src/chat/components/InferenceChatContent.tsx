@@ -50,7 +50,9 @@ export function InferenceChatContent({
 
   const handleChatSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim() || isLoading) return;
+    if (!chatInput.trim() || isLoading) {
+      return;
+    }
 
     const userMessage = chatInput.trim();
     setChatInput('');

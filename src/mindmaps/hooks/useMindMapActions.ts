@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
-import { Node, Edge } from 'reactflow';
-import { MindMapNodeData } from '../types/mindMap';
-import { MindMapData } from './useMindMapData';
+import type { Node, Edge } from 'reactflow';
+import type { MindMapNodeData } from '../types/mindMap';
+import type { MindMapData } from './useMindMapData';
 
 interface UseMindMapActionsProps {
   nodes: Node<MindMapNodeData>[];
@@ -110,7 +110,9 @@ export function useMindMapActions({
   const addChildNode = useCallback(
     async (parentNodeId: string) => {
       const parentNode = nodes.find(n => n.id === parentNodeId);
-      if (!parentNode) return;
+      if (!parentNode) {
+        return;
+      }
 
       const newNodeId = `node-${Date.now()}`;
       const newNode: Node<MindMapNodeData> = {
@@ -143,7 +145,9 @@ export function useMindMapActions({
   const addSiblingNode = useCallback(
     async (siblingNodeId: string) => {
       const siblingNode = nodes.find(n => n.id === siblingNodeId);
-      if (!siblingNode || !siblingNode.data.parentId) return;
+      if (!siblingNode?.data.parentId) {
+        return;
+      }
 
       const parentNodeId = siblingNode.data.parentId;
       const newNodeId = `node-${Date.now()}`;
@@ -183,10 +187,14 @@ export function useMindMapActions({
   // Delete a node and its children
   const deleteNode = useCallback(
     async (nodeIdToDelete: string) => {
-      if (nodeIdToDelete === rootNodeId) return; // Can't delete root
+      if (nodeIdToDelete === rootNodeId) {
+        return;
+      } // Can't delete root
 
       const nodeToDelete = nodes.find(n => n.id === nodeIdToDelete);
-      if (!nodeToDelete) return;
+      if (!nodeToDelete) {
+        return;
+      }
 
       // Find all descendants to delete
       const nodesToDelete = new Set([nodeIdToDelete]);
@@ -249,7 +257,9 @@ export function useMindMapActions({
   // Move node to new parent
   const moveNode = useCallback(
     async (nodeId: string, newParentId: string, insertIndex?: number) => {
-      if (nodeId === rootNodeId) return;
+      if (nodeId === rootNodeId) {
+        return;
+      }
 
       // Prevent cycles
       const wouldCreateCycle = (
@@ -273,7 +283,9 @@ export function useMindMapActions({
         return descendants.includes(checkParentId);
       };
 
-      if (wouldCreateCycle(nodeId, newParentId)) return;
+      if (wouldCreateCycle(nodeId, newParentId)) {
+        return;
+      }
 
       // Update parent relationship
       let updatedNodes = nodes.map(node =>

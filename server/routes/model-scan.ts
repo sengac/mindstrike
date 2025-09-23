@@ -178,11 +178,15 @@ async function performModelSearch(
   signal: AbortSignal
 ): Promise<void> {
   const session = activeScanSessions.get(searchId);
-  if (!session) return;
+  if (!session) {
+    return;
+  }
 
   try {
     // Stage 1: Initialize
-    if (signal.aborted) return;
+    if (signal.aborted) {
+      return;
+    }
     broadcastProgress(searchId, {
       stage: 'searching',
       message: 'Starting search...',
@@ -193,7 +197,9 @@ async function performModelSearch(
     await new Promise(resolve => setTimeout(resolve, 500)); // Brief delay for UX
 
     // Stage 2: Perform search
-    if (signal.aborted) return;
+    if (signal.aborted) {
+      return;
+    }
     broadcastProgress(searchId, {
       stage: 'searching',
       message: `Searching for "${searchParams.query}"...`,
@@ -206,7 +212,9 @@ async function performModelSearch(
       searchParams.query,
       searchParams.searchType,
       progress => {
-        if (signal.aborted) return;
+        if (signal.aborted) {
+          return;
+        }
 
         let stage: 'searching' | 'checking-models' = 'searching';
         let message = progress.message;
@@ -267,12 +275,16 @@ async function performModelSearch(
       }
     );
 
-    if (signal.aborted) return;
+    if (signal.aborted) {
+      return;
+    }
 
     await new Promise(resolve => setTimeout(resolve, 300)); // Brief delay for UX
 
     // Stage 3: Completed
-    if (signal.aborted) return;
+    if (signal.aborted) {
+      return;
+    }
     session.status = 'completed';
     broadcastProgress(searchId, {
       stage: 'completed',
@@ -324,11 +336,15 @@ async function performModelScan(
   signal: AbortSignal
 ): Promise<void> {
   const session = activeScanSessions.get(scanId);
-  if (!session) return;
+  if (!session) {
+    return;
+  }
 
   try {
     // Stage 1: Initialize
-    if (signal.aborted) return;
+    if (signal.aborted) {
+      return;
+    }
     broadcastProgress(scanId, {
       stage: 'initializing',
       message: 'Preparing to fetch model list...',
@@ -339,7 +355,9 @@ async function performModelScan(
     await new Promise(resolve => setTimeout(resolve, 500)); // Brief delay for UX
 
     // Stage 2: Fetch from HuggingFace
-    if (signal.aborted) return;
+    if (signal.aborted) {
+      return;
+    }
     broadcastProgress(scanId, {
       stage: 'fetching-huggingface',
       message: 'Fetching popular models from HuggingFace...',
@@ -349,7 +367,9 @@ async function performModelScan(
 
     // Fetch popular models with progress tracking
     await modelFetcher.fetchPopularModels((current, total, modelId) => {
-      if (signal.aborted) return;
+      if (signal.aborted) {
+        return;
+      }
 
       const progress = 10 + Math.round((current / total) * 40); // 10-50%
       broadcastProgress(scanId, {
@@ -364,7 +384,9 @@ async function performModelScan(
     }, signal);
 
     // Stage 3: Check model availability
-    if (signal.aborted) return;
+    if (signal.aborted) {
+      return;
+    }
     broadcastProgress(scanId, {
       stage: 'checking-models',
       message: 'Checking model availability and metadata...',
@@ -398,7 +420,9 @@ async function performModelScan(
     }
 
     // Stage 4: Completing
-    if (signal.aborted) return;
+    if (signal.aborted) {
+      return;
+    }
     broadcastProgress(scanId, {
       stage: 'completing',
       message: 'Finalizing scan results...',
@@ -409,7 +433,9 @@ async function performModelScan(
     await new Promise(resolve => setTimeout(resolve, 500)); // Brief delay for UX
 
     // Stage 5: Completed
-    if (signal.aborted) return;
+    if (signal.aborted) {
+      return;
+    }
     session.status = 'completed';
     broadcastProgress(scanId, {
       stage: 'completed',

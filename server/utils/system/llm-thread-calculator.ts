@@ -334,9 +334,15 @@ class LLMThreadCalculator {
   private static detectPlatform(): 'linux' | 'windows' | 'darwin' | 'unknown' {
     if (typeof navigator !== 'undefined') {
       const userAgent = navigator.userAgent.toLowerCase();
-      if (userAgent.includes('mac')) return 'darwin';
-      if (userAgent.includes('win')) return 'windows';
-      if (userAgent.includes('linux')) return 'linux';
+      if (userAgent.includes('mac')) {
+        return 'darwin';
+      }
+      if (userAgent.includes('win')) {
+        return 'windows';
+      }
+      if (userAgent.includes('linux')) {
+        return 'linux';
+      }
     }
     return 'unknown';
   }

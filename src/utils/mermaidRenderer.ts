@@ -60,7 +60,7 @@ function setupMermaidObserver(container: HTMLElement) {
         mutation.target &&
         mutation.target.parentElement
       ) {
-        const target = mutation.target.parentElement as HTMLElement;
+        const target = mutation.target.parentElement;
         if (
           target.classList?.contains('mermaid') &&
           !target.getAttribute('data-rendered')

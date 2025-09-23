@@ -25,7 +25,9 @@ export function CodeEditor({
   const { fontSize } = useAppStore();
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!containerRef.current) {
+      return;
+    }
 
     // Create editor
     editorRef.current = monaco.editor.create(containerRef.current, {
@@ -78,7 +80,9 @@ export function CodeEditor({
 
   // Handle onChange subscription
   useEffect(() => {
-    if (!editorRef.current) return;
+    if (!editorRef.current) {
+      return;
+    }
 
     // Dispose existing subscription
     subscriptionRef.current?.dispose();

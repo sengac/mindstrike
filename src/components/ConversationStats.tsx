@@ -1,6 +1,6 @@
 import { BarChart3 } from 'lucide-react';
-import { ConversationMessage } from '../types';
-import { LLMModel } from '../hooks/useModels';
+import type { ConversationMessage } from '../types';
+import type { LLMModel } from '../hooks/useModels';
 import {
   calculateConversationTokens,
   calculateConversationSize,
@@ -24,11 +24,17 @@ export function ConversationStats({
   const usagePercentage = calculateContextUsage(tokenCount, maxTokens);
 
   // Don't show if no messages
-  if (messages.length === 0) return null;
+  if (messages.length === 0) {
+    return null;
+  }
 
   const getUsageColor = (percentage: number) => {
-    if (percentage < 50) return 'text-green-400';
-    if (percentage < 80) return 'text-yellow-400';
+    if (percentage < 50) {
+      return 'text-green-400';
+    }
+    if (percentage < 80) {
+      return 'text-yellow-400';
+    }
     return 'text-red-400';
   };
 

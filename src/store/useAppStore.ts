@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { AppView, FontScheme } from '../types';
+import type { AppView, FontScheme } from '../types';
 
 // Simplified - only store the last used model ID
 export interface LastUsedModel {

@@ -96,7 +96,9 @@ export function HuggingFaceConfigDialog({
     }
   };
 
-  if (!shouldRender) return null;
+  if (!shouldRender) {
+    return null;
+  }
 
   return (
     <BaseDialog

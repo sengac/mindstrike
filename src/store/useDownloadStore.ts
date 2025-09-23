@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import toast from 'react-hot-toast';
 import { modelEvents } from '../utils/modelEvents';
-import { sseEventBus, SSEEvent } from '../utils/sseEventBus';
+import type { SSEEvent } from '../utils/sseEventBus';
+import { sseEventBus } from '../utils/sseEventBus';
 
 interface DownloadProgress {
   progress: number;
@@ -45,7 +46,9 @@ export const useDownloadStore = create<DownloadStore>(set => ({
 const activeDownloads = new Set<string>();
 
 export function startDownloadTracking(filename: string) {
-  if (activeDownloads.has(filename)) return;
+  if (activeDownloads.has(filename)) {
+    return;
+  }
 
   activeDownloads.add(filename);
 

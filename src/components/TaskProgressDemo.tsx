@@ -10,7 +10,9 @@ export const TaskProgressDemo: React.FC = () => {
   const taskStore = useTaskStore();
 
   const runDemo = async () => {
-    if (isRunning) return;
+    if (isRunning) {
+      return;
+    }
 
     setIsRunning(true);
 

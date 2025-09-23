@@ -28,7 +28,7 @@ import { useTaskStore } from '../../store/useTaskStore';
 import { useThreadsStore } from '../../store/useThreadsStore';
 import { WorkflowProgress } from './WorkflowProgress';
 import { TypingIndicator } from './TypingIndicator';
-import {
+import type {
   ConversationMessage,
   Thread,
   ImageAttachment,
@@ -175,13 +175,17 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
     // Listen for mermaid render completion to scroll to bottom
     useEffect(() => {
       const container = messagesContainerRef.current;
-      if (!container) return;
+      if (!container) {
+        return;
+      }
 
       // Only set up listener if there are mermaid code blocks in the messages
       const hasMermaidContent = messages.some(
         message => message.content && message.content.includes('```mermaid')
       );
-      if (!hasMermaidContent) return;
+      if (!hasMermaidContent) {
+        return;
+      }
 
       const handleMermaidComplete = (_event: Event) => {
         // Clear any existing timeout to debounce multiple diagram completions
@@ -234,8 +238,9 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
           attachedImages.length === 0 &&
           attachedNotes.length === 0) ||
         isLoading
-      )
+      ) {
         return;
+      }
 
       const message = input.trim();
       const images = [...attachedImages];
@@ -250,7 +255,9 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
       event: React.ChangeEvent<HTMLInputElement>
     ) => {
       const files = event.target.files;
-      if (!files) return;
+      if (!files) {
+        return;
+      }
 
       for (const file of Array.from(files)) {
         if (!file.type.startsWith('image/')) {

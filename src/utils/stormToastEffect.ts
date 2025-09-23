@@ -32,7 +32,9 @@ function setupStormToast(toast: Element) {
   // Find the text content
   const textElement = toast.querySelector('[data-visible]') || toast;
 
-  if (!textElement.textContent) return;
+  if (!textElement.textContent) {
+    return;
+  }
 
   let isScattering = false;
 

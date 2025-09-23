@@ -1,6 +1,7 @@
 import React from 'react';
 import { Loader2, CheckCircle, XCircle, Clock } from 'lucide-react';
-import { useTaskStore, Task } from '../../store/useTaskStore';
+import type { Task } from '../../store/useTaskStore';
+import { useTaskStore } from '../../store/useTaskStore';
 
 interface WorkflowProgressProps {
   workflowId: string;

@@ -150,7 +150,7 @@ export function ListPanel<T extends ListItem>({
                             <h3 className="text-sm font-medium text-gray-200 truncate">
                               {item.name}
                             </h3>
-                            {renderItemContent && renderItemContent(item)}
+                            {renderItemContent?.(item)}
                           </div>
                           {item.description && (
                             <p className="text-xs text-gray-400 mt-1 line-clamp-2">

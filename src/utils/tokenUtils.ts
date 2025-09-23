@@ -5,7 +5,9 @@ import { formatBytesInteger } from './formatUtils';
  * This is a rough estimate based on typical token storage requirements
  */
 export function formatContextLength(tokens: number): string {
-  if (!tokens || tokens <= 0) return 'N/A';
+  if (!tokens || tokens <= 0) {
+    return 'N/A';
+  }
 
   // Rough estimate: each token requires ~4 bytes in memory for context
   // This includes embeddings, attention weights, etc.
@@ -19,7 +21,9 @@ export function formatContextLength(tokens: number): string {
  * Format token count with thousands separator
  */
 export function formatTokenCount(tokens: number): string {
-  if (!tokens || tokens <= 0) return 'N/A';
+  if (!tokens || tokens <= 0) {
+    return 'N/A';
+  }
   return tokens.toLocaleString();
 }
 
@@ -27,7 +31,9 @@ export function formatTokenCount(tokens: number): string {
  * Get a short, human-readable context description
  */
 export function getContextDescription(tokens: number): string {
-  if (!tokens || tokens <= 0) return '';
+  if (!tokens || tokens <= 0) {
+    return '';
+  }
 
   const memorySize = formatContextLength(tokens);
   const tokenCount = formatTokenCount(tokens);

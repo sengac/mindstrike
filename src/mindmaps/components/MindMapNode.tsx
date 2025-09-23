@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Handle, Position, NodeProps } from 'reactflow';
+import type { NodeProps } from 'reactflow';
+import { Handle, Position } from 'reactflow';
 import {
   Plus,
   Minus,
@@ -13,7 +14,7 @@ import {
   MessageCircle,
 } from 'lucide-react';
 import { clsx } from 'clsx';
-import { MindMapNodeData } from '../types/mindMap';
+import type { MindMapNodeData } from '../types/mindMap';
 import {
   useMindMapActions,
   useMindMapSelection,
@@ -434,7 +435,7 @@ export function MindMapNode({
       >
         {/* Icon container for chat, notes, and sources */}
         {(data.chatId ||
-          (data.notes && data.notes.trim()) ||
+          data.notes?.trim() ||
           (data.sources && data.sources.length > 0)) && (
           <div className="absolute -bottom-2.5 -right-2.5 flex items-center gap-1 z-10">
             {/* Chat watermark icon */}
@@ -463,7 +464,7 @@ export function MindMapNode({
             )}
 
             {/* Notes watermark icon */}
-            {data.notes && data.notes.trim() && (
+            {data.notes?.trim() && (
               <div
                 className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center cursor-pointer hover:bg-red-600 transition-colors"
                 onClick={e => {

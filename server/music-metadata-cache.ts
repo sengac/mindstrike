@@ -21,16 +21,18 @@ interface CachedMusicMetadata {
 
 export class MusicMetadataCache {
   private cache: Map<string, CachedMusicMetadata> = new Map();
-  private imageCache: Map<string, string> = new Map(); // hash -> base64
-  private cacheDir: string;
-  private cacheFile: string;
-  private imageCacheDir: string;
+  private readonly imageCache: Map<string, string> = new Map(); // hash -> base64
+  private readonly cacheDir: string;
+  private readonly cacheFile: string;
+  private readonly imageCacheDir: string;
 
   /**
    * Clean metadata object by removing all binary data
    */
   private cleanMetadata(metadata: any): any {
-    if (!metadata) return metadata;
+    if (!metadata) {
+      return metadata;
+    }
 
     // Deep clone without binary data
     const cleaned = this.deepCleanObject(metadata);
@@ -41,10 +43,14 @@ export class MusicMetadataCache {
    * Recursively clean an object, removing binary data and large arrays
    */
   private deepCleanObject(obj: any): any {
-    if (obj === null || obj === undefined) return obj;
+    if (obj === null || obj === undefined) {
+      return obj;
+    }
 
     // Handle primitives
-    if (typeof obj !== 'object') return obj;
+    if (typeof obj !== 'object') {
+      return obj;
+    }
 
     // Handle arrays
     if (Array.isArray(obj)) {
@@ -332,11 +338,21 @@ export class MusicMetadataCache {
       };
 
       // Extract basic info
-      if (metadataResult.common.title) title = metadataResult.common.title;
-      if (metadataResult.common.artist) artist = metadataResult.common.artist;
-      if (metadataResult.common.album) album = metadataResult.common.album;
-      if (metadataResult.common.genre) genre = metadataResult.common.genre;
-      if (metadataResult.common.year) year = metadataResult.common.year;
+      if (metadataResult.common.title) {
+        title = metadataResult.common.title;
+      }
+      if (metadataResult.common.artist) {
+        artist = metadataResult.common.artist;
+      }
+      if (metadataResult.common.album) {
+        album = metadataResult.common.album;
+      }
+      if (metadataResult.common.genre) {
+        genre = metadataResult.common.genre;
+      }
+      if (metadataResult.common.year) {
+        year = metadataResult.common.year;
+      }
 
       // Format duration
       if (metadataResult.format.duration) {

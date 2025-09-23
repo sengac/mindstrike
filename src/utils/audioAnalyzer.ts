@@ -6,7 +6,7 @@ class AudioAnalyzer {
   private analyzer: AnalyserNode | null = null;
   private source: MediaElementAudioSourceNode | null = null;
   private currentAudioElement: HTMLAudioElement | null = null;
-  private subscribers: Set<
+  private readonly subscribers: Set<
     (data: { frequency: Uint8Array; waveform: Uint8Array }) => void
   > = new Set();
   private animationFrame: number | null = null;
@@ -65,7 +65,9 @@ class AudioAnalyzer {
   }
 
   private startAnalysis() {
-    if (!this.analyzer || this.animationFrame) return;
+    if (!this.analyzer || this.animationFrame) {
+      return;
+    }
 
     const bufferLength = this.analyzer.frequencyBinCount;
     const frequencyData = new Uint8Array(bufferLength);

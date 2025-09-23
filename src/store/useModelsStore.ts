@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { LLMModel } from '../hooks/useModels';
+import type { LLMModel } from '../hooks/useModels';
 import { modelEvents } from '../utils/modelEvents';
 import { sseEventBus } from '../utils/sseEventBus';
 import { SSEEventType } from '../types';

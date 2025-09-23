@@ -11,7 +11,7 @@ export interface ModelLoadingSettings {
 }
 
 export class ModelSettingsManager {
-  private settingsDir: string;
+  private readonly settingsDir: string;
 
   constructor() {
     this.settingsDir = getLocalModelSettingsDirectory();

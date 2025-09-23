@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronUp, Cpu, RefreshCw, Settings } from 'lucide-react';
-import { LLMModel } from '../../hooks/useModels';
+import type { LLMModel } from '../../hooks/useModels';
 import {
   getContextDescription,
   getActualContextSize,
@@ -54,7 +54,9 @@ const ModelSelectionPopup: React.FC<ModelSelectionPopupProps> = ({
 
   // Auto-select first model if none selected and models are available
   useEffect(() => {
-    if (models.length === 0) return;
+    if (models.length === 0) {
+      return;
+    }
 
     // If no default model is set, auto-select the first available model
     if (!defaultModel) {

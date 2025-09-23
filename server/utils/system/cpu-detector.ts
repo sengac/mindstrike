@@ -413,10 +413,18 @@ class RealCPUDetector {
 
     if (intelGen12Plus) {
       // Rough estimation based on common Intel configurations
-      if (modelName.includes('i3')) return 0;
-      if (modelName.includes('i5')) return 4;
-      if (modelName.includes('i7')) return 4;
-      if (modelName.includes('i9')) return 8;
+      if (modelName.includes('i3')) {
+        return 0;
+      }
+      if (modelName.includes('i5')) {
+        return 4;
+      }
+      if (modelName.includes('i7')) {
+        return 4;
+      }
+      if (modelName.includes('i9')) {
+        return 8;
+      }
     }
 
     return 0;
@@ -439,34 +447,57 @@ class RealCPUDetector {
   }
 
   private static guessCPUVendor(userAgent: string): string {
-    if (userAgent.includes('Intel')) return 'Intel';
-    if (userAgent.includes('AMD')) return 'AMD';
-    if (userAgent.includes('Mac')) return 'Apple';
-    if (userAgent.includes('ARM')) return 'ARM';
+    if (userAgent.includes('Intel')) {
+      return 'Intel';
+    }
+    if (userAgent.includes('AMD')) {
+      return 'AMD';
+    }
+    if (userAgent.includes('Mac')) {
+      return 'Apple';
+    }
+    if (userAgent.includes('ARM')) {
+      return 'ARM';
+    }
     return 'Unknown';
   }
 
   private static guessCPUModel(userAgent: string): string {
     if (userAgent.includes('Mac')) {
-      if (userAgent.includes('Intel')) return 'Intel-based Mac';
+      if (userAgent.includes('Intel')) {
+        return 'Intel-based Mac';
+      }
       return 'Apple Silicon Mac';
     }
     return 'Unknown CPU';
   }
 
   private static detectArchitecture(userAgent: string): string {
-    if (userAgent.includes('x86_64') || userAgent.includes('x64')) return 'x64';
-    if (userAgent.includes('arm64') || userAgent.includes('aarch64'))
+    if (userAgent.includes('x86_64') || userAgent.includes('x64')) {
+      return 'x64';
+    }
+    if (userAgent.includes('arm64') || userAgent.includes('aarch64')) {
       return 'arm64';
-    if (userAgent.includes('x86')) return 'x86';
+    }
+    if (userAgent.includes('x86')) {
+      return 'x86';
+    }
     return 'unknown';
   }
 
   private static extractVendorFromModel(model: string): string {
-    if (model.includes('Intel')) return 'Intel';
-    if (model.includes('AMD')) return 'AMD';
-    if (model.includes('Apple')) return 'Apple';
-    if (model.includes('ARM')) return 'ARM';
+    if (model.includes('Intel')) {
+      return 'Intel';
+    }
+    if (model.includes('AMD')) {
+      return 'AMD';
+    }
+    if (model.includes('Apple')) {
+      return 'Apple';
+    }
+    if (model.includes('ARM')) {
+      return 'ARM';
+    }
     return 'Unknown';
   }
 

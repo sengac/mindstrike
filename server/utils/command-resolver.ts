@@ -27,8 +27,8 @@ export interface BundledServerInfo {
  * Handles npx detection, fallback paths, and bundled MCP servers
  */
 export class CommandResolver {
-  private static commandCache = new Map<string, CommandResolution>();
-  private static bundledServers = new Map<string, BundledServerInfo>();
+  private static readonly commandCache = new Map<string, CommandResolution>();
+  private static readonly bundledServers = new Map<string, BundledServerInfo>();
 
   // Common installation paths for Node.js/npm on different platforms
   private static readonly NODE_PATHS = {

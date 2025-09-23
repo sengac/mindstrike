@@ -1,4 +1,4 @@
-import { Response } from 'express';
+import type { Response } from 'express';
 import { logger } from './logger.js';
 import { SSEEventType } from '../src/types.js';
 
@@ -9,9 +9,9 @@ interface SSEClient {
 }
 
 class SSEManager {
-  private clients: Map<string, SSEClient> = new Map();
-  private clientsByTopic: Map<string, Set<string>> = new Map();
-  private largeContentStore: Map<string, string> = new Map();
+  private readonly clients: Map<string, SSEClient> = new Map();
+  private readonly clientsByTopic: Map<string, Set<string>> = new Map();
+  private readonly largeContentStore: Map<string, string> = new Map();
 
   addClient(id: string, response: Response, topic: string): void {
     // Set up SSE headers

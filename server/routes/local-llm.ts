@@ -213,7 +213,9 @@ router.get('/update-models-stream', async (req: any, res: any) => {
     res.write(
       `data: {"type": "${SSEEventType.CONNECTED}", "message": "Connected to model update stream"}\n\n`
     );
-    if (res.flush) res.flush();
+    if (res.flush) {
+      res.flush();
+    }
 
     // Progress callback that sends updates via SSE
     const progressCallback = (progress: any) => {
@@ -223,7 +225,9 @@ router.get('/update-models-stream', async (req: any, res: any) => {
           ...progress,
         })}\n\n`
       );
-      if (res.flush) res.flush();
+      if (res.flush) {
+        res.flush();
+      }
     };
 
     // Handle client disconnect
@@ -417,7 +421,7 @@ router.post('/download', async (req, res) => {
       .catch(error => {
         // Download failed or cancelled - broadcast error
         const isCancelled = error.message === 'Download cancelled';
-        let errorDetails: any = {
+        const errorDetails: any = {
           filename,
           progress: 0,
           speed: '0 B/s',

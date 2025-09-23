@@ -1,10 +1,10 @@
 import { useRef } from 'react';
-import { ConversationMessage, NotesAttachment } from '../../types';
-import { ThreadMetadata } from '../../store/useThreadsStore';
+import type { ConversationMessage, NotesAttachment } from '../../types';
+import type { ThreadMetadata } from '../../store/useThreadsStore';
 
 import { ChatContentViewer } from '../../components/shared/ChatContentViewer';
-import { Source } from '../types/mindMap';
-import { ChatPanelRef } from '../../chat/components/ChatPanel';
+import type { Source } from '../types/mindMap';
+import type { ChatPanelRef } from '../../chat/components/ChatPanel';
 
 interface MindMapChatIntegrationProps {
   nodeId: string;

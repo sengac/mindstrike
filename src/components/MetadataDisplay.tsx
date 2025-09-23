@@ -1,5 +1,5 @@
 import React from 'react';
-import { ExtractedMetadata } from '../services/metadata-extractor';
+import type { ExtractedMetadata } from '../services/metadata-extractor';
 import { useImageCache } from '../hooks/useImageCache';
 import {
   Music,
@@ -42,7 +42,9 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({
   };
 
   const getCoverArtUrl = (): string | null => {
-    if (!metadata.coverArt?.length) return null;
+    if (!metadata.coverArt?.length) {
+      return null;
+    }
     const coverArt = metadata.coverArt[0];
     const base64 = coverArt.data;
     return `data:${coverArt.format};base64,${base64}`;

@@ -1,12 +1,12 @@
-import {
-  BaseAgent,
+import type {
   AgentConfig,
   ConversationMessage,
   ImageAttachment,
   NotesAttachment,
 } from './base-agent.js';
+import { BaseAgent } from './base-agent.js';
+import type { BaseMessage } from '@langchain/core/messages';
 import {
-  BaseMessage,
   HumanMessage,
   AIMessage,
   SystemMessage,
@@ -65,7 +65,9 @@ const DEFAULT_WORKFLOW_ROLE = `You are a sophisticated workflow agent that decom
 You have access to a comprehensive set of tools for file operations, web searches, code analysis, and more. Always provide clear reasoning for your decisions and keep the user informed of your progress.`;
 
 export class WorkflowAgent extends BaseAgent {
-  private workflowGraph: { invoke: (state: any) => Promise<any> };
+  private readonly workflowGraph: {
+    invoke: (state: WorkflowStateType) => Promise<WorkflowStateType>;
+  };
   private chatTopic?: string;
 
   constructor(config: AgentConfig, agentId?: string) {

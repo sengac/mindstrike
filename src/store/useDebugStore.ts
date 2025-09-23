@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { sseEventBus, SSEEvent } from '../utils/sseEventBus';
+import type { SSEEvent } from '../utils/sseEventBus';
+import { sseEventBus } from '../utils/sseEventBus';
 import { isSseDebugEntryData, isSseTokenStatsData } from '../utils/sseDecoder';
 
 export interface LLMDebugEntry {
@@ -177,7 +178,9 @@ async function initializeDebugEventSubscriptions(): Promise<void> {
 }
 
 export async function initializeDebugSSE() {
-  if (debugSSEInitialized) return;
+  if (debugSSEInitialized) {
+    return;
+  }
   debugSSEInitialized = true;
 
   // Initialize event bus subscriptions

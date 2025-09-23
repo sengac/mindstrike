@@ -51,8 +51,8 @@ export class ModelFetcher {
   private readonly ACCESSIBILITY_CACHE_DURATION = 1000 * 60 * 60 * 24; // 24 hours
   private accessibilityCache: ModelAccessibilityCache = {};
   private huggingFaceToken: string | null = null;
-  private cacheDir: string;
-  private cacheFile: string;
+  private readonly cacheDir: string;
+  private readonly cacheFile: string;
   private searchCache: Map<string, Set<string>> = new Map(); // Track which searches have been done
   private isFetching: boolean = false;
   private fetchPromise: Promise<void> | null = null;
@@ -235,7 +235,7 @@ export class ModelFetcher {
       const cachedModelIds = this.searchCache.get(normalizedQuery)!;
       const results = Array.from(cachedModelIds)
         .map(id => this.cache.get(id))
-        .filter(model => model !== undefined) as DynamicModelInfo[];
+        .filter(model => model !== undefined);
 
       // If cached results are empty, remove from cache and search again
       if (results.length === 0) {
@@ -342,7 +342,7 @@ export class ModelFetcher {
         const cachedModelIds = this.searchCache.get(normalizedQuery)!;
         const results = Array.from(cachedModelIds)
           .map(id => this.cache.get(id))
-          .filter(model => model !== undefined) as DynamicModelInfo[];
+          .filter(model => model !== undefined);
 
         // If cached results are empty, remove from cache and search again
         if (results.length === 0) {
@@ -959,12 +959,24 @@ export class ModelFetcher {
     const modelIdLower = modelId.toLowerCase();
 
     // Known context lengths for popular models
-    if (modelIdLower.includes('llama-3')) return 8192;
-    if (modelIdLower.includes('mistral')) return 8192;
-    if (modelIdLower.includes('qwen')) return 32768;
-    if (modelIdLower.includes('gemma')) return 8192;
-    if (modelIdLower.includes('phi')) return 4096;
-    if (modelIdLower.includes('codellama')) return 16384;
+    if (modelIdLower.includes('llama-3')) {
+      return 8192;
+    }
+    if (modelIdLower.includes('mistral')) {
+      return 8192;
+    }
+    if (modelIdLower.includes('qwen')) {
+      return 32768;
+    }
+    if (modelIdLower.includes('gemma')) {
+      return 8192;
+    }
+    if (modelIdLower.includes('phi')) {
+      return 4096;
+    }
+    if (modelIdLower.includes('codellama')) {
+      return 16384;
+    }
 
     return 4096; // Default fallback
   }

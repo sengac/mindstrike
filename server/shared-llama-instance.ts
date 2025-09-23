@@ -7,7 +7,9 @@ class SharedLlamaInstance {
     Awaited<ReturnType<typeof getLlama>>
   > | null = null;
   private isInferenceActive = false;
-  private pendingSystemInfoRequests: Array<() => Promise<void> | void> = [];
+  private readonly pendingSystemInfoRequests: Array<
+    () => Promise<void> | void
+  > = [];
 
   public static getInstance(): SharedLlamaInstance {
     if (!SharedLlamaInstance.instance) {

@@ -1,4 +1,4 @@
-import { ConversationMessage } from './agents/base-agent.js';
+import type { ConversationMessage } from './agents/base-agent.js';
 import { getLocalLLMManager } from './local-llm-singleton.js';
 import { logger } from './logger.js';
 
@@ -128,7 +128,7 @@ export class SessionManagerFactory {
 }
 
 export class GlobalSessionManager {
-  private sessionManagers = new Map<string, SessionManager>();
+  private readonly sessionManagers = new Map<string, SessionManager>();
 
   private getSessionManager(llmType: string): SessionManager {
     if (!this.sessionManagers.has(llmType)) {

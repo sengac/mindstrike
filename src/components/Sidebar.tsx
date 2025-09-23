@@ -9,7 +9,7 @@ import { clsx } from 'clsx';
 import { NetworkEffect } from './NetworkEffect';
 import { MusicPlayer } from './MusicPlayer';
 import { SidebarMusicControls } from './SidebarMusicControls';
-import { AppView } from '../types';
+import type { AppView } from '../types';
 import MCPIcon from './MCPIcon';
 
 interface SidebarProps {

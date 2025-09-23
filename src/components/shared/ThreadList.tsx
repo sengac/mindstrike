@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { MessageSquare, Plus, Edit2, Trash2, Terminal } from 'lucide-react';
 
-import { ThreadMetadata } from '../../store/useThreadsStore';
+import type { ThreadMetadata } from '../../store/useThreadsStore';
 
 interface ThreadListProps {
   threads: ThreadMetadata[];

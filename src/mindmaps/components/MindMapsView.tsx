@@ -2,9 +2,9 @@ import { Network } from 'lucide-react';
 import { AppBar } from '../../components/AppBar';
 import { MindMapsPanel } from './MindMapsPanel';
 import { MindMapCanvas } from './MindMapCanvas';
-import { ThreadMetadata } from '../../store/useThreadsStore';
-import { MindMap } from '../hooks/useMindMaps';
-import { Source } from '../../types/mindMap';
+import type { ThreadMetadata } from '../../store/useThreadsStore';
+import type { MindMap } from '../hooks/useMindMaps';
+import type { Source } from '../../types/mindMap';
 
 interface MindMapsViewProps {
   mindMaps: MindMap[];

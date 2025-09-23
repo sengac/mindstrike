@@ -1,5 +1,7 @@
-import React, { ReactNode } from 'react';
-import { LucideProps, Cpu } from 'lucide-react';
+import type { ReactNode } from 'react';
+import React from 'react';
+import type { LucideProps } from 'lucide-react';
+import { Cpu } from 'lucide-react';
 import { WindowControls } from './WindowControls';
 import { SystemInfo } from './SystemInfo';
 import { useAppStore } from '../store/useAppStore';

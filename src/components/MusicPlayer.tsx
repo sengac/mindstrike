@@ -262,7 +262,9 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
     event: React.MouseEvent
   ) => {
     const track = filteredAudioFiles[filteredIndex];
-    if (!track) return;
+    if (!track) {
+      return;
+    }
 
     const isMetaOrCtrl = event.metaKey || event.ctrlKey;
     const isShift = event.shiftKey;
@@ -410,7 +412,9 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
     allTracks,
   ]);
 
-  if (!shouldRender) return null;
+  if (!shouldRender) {
+    return null;
+  }
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -443,7 +447,9 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
         ? `ALBUM: ${currentTrack.album}`
         : '';
       const yearPart = currentTrack?.year ? `YEAR: ${currentTrack.year}` : '';
-      if (albumPart && yearPart) return `${albumPart} • ${yearPart}`;
+      if (albumPart && yearPart) {
+        return `${albumPart} • ${yearPart}`;
+      }
       return albumPart || yearPart || '';
     })();
 
@@ -468,7 +474,9 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
 
   // Filter tracks based on search term and current view
   const filteredAudioFiles = (() => {
-    if (!searchTerm.trim()) return audioFiles;
+    if (!searchTerm.trim()) {
+      return audioFiles;
+    }
 
     const searchLower = searchTerm.toLowerCase();
     const tracksToFilter =
@@ -499,7 +507,9 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
 
   const getSelectedTracksInfo = () => {
     const selectedCount = selectedTracks.size;
-    if (selectedCount === 0) return null;
+    if (selectedCount === 0) {
+      return null;
+    }
 
     const selectedList = filteredAudioFiles.filter(t =>
       selectedTracks.has(t.id)

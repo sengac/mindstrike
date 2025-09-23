@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "types": ["vitest/globals", "@playwright/test"]
+  },
+  "include": ["**/*.ts", "**/*.tsx"]
+}

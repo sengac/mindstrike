@@ -1,8 +1,6 @@
 import { create } from 'zustand';
-import {
-  useAvailableModelsStore,
-  AvailableModel,
-} from './useAvailableModelsStore';
+import type { AvailableModel } from './useAvailableModelsStore';
+import { useAvailableModelsStore } from './useAvailableModelsStore';
 import { sseEventBus } from '../utils/sseEventBus';
 import { isSSEModelScanEvent } from '../types/sse-events';
 
@@ -299,9 +297,11 @@ export const useModelScanStore = create<ModelScanState>((set, get) => ({
     // Subscribe to unified event bus for scan progress
     const unsubscribe = sseEventBus.subscribe('scan-progress', async event => {
       // Handle nested data structure from unified SSE
-      if (!isSSEModelScanEvent(event.data)) return;
+      if (!isSSEModelScanEvent(event.data)) {
+        return;
+      }
       const data = event.data;
-      if (data && data.progress) {
+      if (data?.progress) {
         get().updateProgress(data.progress as ScanProgress);
       }
     });

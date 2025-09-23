@@ -373,7 +373,9 @@ export const useTaskStore = create<TaskState>()(
 
     getActiveTask: () => {
       const state = get();
-      if (!state.currentWorkflow) return null;
+      if (!state.currentWorkflow) {
+        return null;
+      }
 
       const currentTask =
         state.currentWorkflow.tasks[state.currentWorkflow.currentTaskIndex];
@@ -384,7 +386,7 @@ export const useTaskStore = create<TaskState>()(
 
 // Global SSE listener that runs immediately when the module loads
 let sseInitialized = false;
-let taskUnsubscribeFunctions: (() => void)[] = [];
+const taskUnsubscribeFunctions: (() => void)[] = [];
 
 async function initializeTaskEventSubscriptions() {
   if (taskUnsubscribeFunctions.length > 0) {

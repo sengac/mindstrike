@@ -6,7 +6,9 @@
  * Remove <think></think> tags and their content from text
  */
 export function stripThinkTags(content: string): string {
-  if (!content) return content;
+  if (!content) {
+    return content;
+  }
 
   // Remove <think>content</think> patterns, including multiline content
   return content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();

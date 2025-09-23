@@ -8,7 +8,7 @@ import {
   ExternalLink,
   Link,
 } from 'lucide-react';
-import { Source } from '../../types/mindMap';
+import type { Source } from '../../types/mindMap';
 
 const typeIcons = {
   file: FileText,
@@ -154,8 +154,11 @@ export function SourcesList({ sources, onSourcesUpdate }: SourcesListProps) {
             value={source.name || ''}
             onChange={e => onSourceChange({ name: e.target.value })}
             onKeyDown={e => {
-              if (e.key === 'Enter') onSave();
-              else if (e.key === 'Escape') onCancel();
+              if (e.key === 'Enter') {
+                onSave();
+              } else if (e.key === 'Escape') {
+                onCancel();
+              }
             }}
             className="w-full bg-gray-600 border border-gray-500 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-400"
             placeholder="Source name"
@@ -187,8 +190,11 @@ export function SourcesList({ sources, onSourcesUpdate }: SourcesListProps) {
           value={source.directory || ''}
           onChange={e => onSourceChange({ directory: e.target.value })}
           onKeyDown={e => {
-            if (e.key === 'Enter') onSave();
-            else if (e.key === 'Escape') onCancel();
+            if (e.key === 'Enter') {
+              onSave();
+            } else if (e.key === 'Escape') {
+              onCancel();
+            }
           }}
           className="w-full bg-gray-600 border border-gray-500 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-400"
           placeholder="File path, URL, or location"

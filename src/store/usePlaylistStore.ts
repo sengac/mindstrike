@@ -115,7 +115,7 @@ export const usePlaylistStore = create<PlaylistState>()((set, get) => ({
   addTrackToPlaylist: (playlistId, track) => {
     // Check if track is already in the playlist
     const playlist = get().playlists.find(p => p.id === playlistId);
-    if (playlist && playlist.trackRefs.some(ref => ref.trackId === track.id)) {
+    if (playlist?.trackRefs.some(ref => ref.trackId === track.id)) {
       console.log('Track already in playlist');
       return;
     }
@@ -187,7 +187,9 @@ export const usePlaylistStore = create<PlaylistState>()((set, get) => ({
 
   getPlaylistTracks: playlistId => {
     const playlist = get().playlists.find(p => p.id === playlistId);
-    if (!playlist) return [];
+    if (!playlist?.trackRefs) {
+      return [];
+    }
 
     const { allTracks } = get();
     return playlist.trackRefs
@@ -200,7 +202,7 @@ export const usePlaylistStore = create<PlaylistState>()((set, get) => ({
         }
         return track;
       })
-      .filter(track => track !== undefined) as AudioFile[];
+      .filter(track => track !== undefined);
   },
 
   setAllTracks: tracks => {

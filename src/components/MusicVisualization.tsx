@@ -64,10 +64,14 @@ export function MusicVisualization({
     }
 
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) {
+      return;
+    }
 
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
 
     // Ensure canvas is properly sized when animation starts
     const resizeCanvas = () => {
@@ -80,7 +84,9 @@ export function MusicVisualization({
     resizeCanvas();
 
     const draw = () => {
-      if (!isPlaying || !audioData) return;
+      if (!isPlaying || !audioData) {
+        return;
+      }
 
       const dataArray = audioData.frequency;
       const bufferLength = dataArray.length;
@@ -137,7 +143,9 @@ export function MusicVisualization({
   // Resize canvas to match container
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) {
+      return;
+    }
 
     const resizeCanvas = () => {
       const rect = canvas.getBoundingClientRect();
@@ -236,7 +244,9 @@ export function MusicVisualization({
       const x = (idx + 0.5) * barSpacing;
 
       // Skip bars that are off screen
-      if (x < -barWidth || x > rect.width + barWidth) return;
+      if (x < -barWidth || x > rect.width + barWidth) {
+        return;
+      }
 
       const barHeight = height * maxBarHeight;
       const topY = centerY - barHeight / 2;

@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { BaseDialog } from './BaseDialog';
 import { useDialogAnimation } from '../../hooks/useDialogAnimation';
 
@@ -30,7 +30,9 @@ export function MultiChoiceDialog({
     onClose
   );
 
-  if (!shouldRender) return null;
+  if (!shouldRender) {
+    return null;
+  }
 
   const getChoiceClasses = (variant: string = 'primary') => {
     switch (variant) {

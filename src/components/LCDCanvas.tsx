@@ -151,33 +151,43 @@ export function LCDCanvas({
   const canvasHeight = useMemo(
     () =>
       dynamicSize
-        ? actualHeight!
+        ? actualHeight
         : charRows * 8 * dotSize + (charRows - 1) * charSpacing,
     [dynamicSize, actualHeight, charRows, dotSize, charSpacing]
   );
 
   // Calculate centering offsets for dynamic sizing
   const centerOffsetX = useMemo(() => {
-    if (!dynamicSize) return 0;
+    if (!dynamicSize) {
+      return 0;
+    }
     const usedWidth = charCols * (5 * dotSize + charSpacing) - charSpacing;
     return Math.max(0, (canvasWidth - usedWidth) / 2);
   }, [dynamicSize, charCols, dotSize, charSpacing, canvasWidth]);
 
   const centerOffsetY = useMemo(() => {
-    if (!dynamicSize) return 0;
+    if (!dynamicSize) {
+      return 0;
+    }
     const usedHeight = charRows * (8 * dotSize + charSpacing) - charSpacing;
     return Math.max(0, (canvasHeight - usedHeight) / 2);
   }, [dynamicSize, charRows, dotSize, charSpacing, canvasHeight]);
 
   // Get positioned text segments for a line with scrolling applied
   const getPositionedSegments = (lineIndex: number) => {
-    if (lineIndex >= processedLines.length) return [];
+    if (lineIndex >= processedLines.length) {
+      return [];
+    }
 
     const lineSegments = processedLines[lineIndex];
-    if (!lineSegments) return [];
+    if (!lineSegments) {
+      return [];
+    }
 
     const scrollInfo = lineScrollInfo[lineIndex];
-    if (!scrollInfo?.needsScroll) return lineSegments;
+    if (!scrollInfo?.needsScroll) {
+      return lineSegments;
+    }
 
     // Apply scrolling to this line
     const combinedText = scrollInfo.displayText.join('');
@@ -194,10 +204,14 @@ export function LCDCanvas({
   // Render function
   const render = () => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) {
+      return;
+    }
 
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
 
     // Clear canvas completely
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -325,7 +339,9 @@ export function LCDCanvas({
 
   // Measure container size for dynamic sizing
   useEffect(() => {
-    if (!dynamicSize || !containerRef.current) return;
+    if (!dynamicSize || !containerRef.current) {
+      return;
+    }
 
     const resizeObserver = new ResizeObserver(entries => {
       for (const entry of entries) {

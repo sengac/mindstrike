@@ -44,7 +44,9 @@ export function GenerateDialog({
 
   // Animate dots
   useEffect(() => {
-    if (!isVisible || !isGenerating) return;
+    if (!isVisible || !isGenerating) {
+      return;
+    }
     const interval = setInterval(() => {
       setDots(prev => (prev === '...' ? '' : prev + '.'));
     }, 500);
@@ -81,7 +83,9 @@ export function GenerateDialog({
     generationError,
   ]);
 
-  if (!shouldRender) return null;
+  if (!shouldRender) {
+    return null;
+  }
 
   return (
     <BaseDialog

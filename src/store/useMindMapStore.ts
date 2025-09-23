@@ -2,16 +2,17 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { useMemo } from 'react';
-import { Node, Edge } from 'reactflow';
-import { MindMapNodeData, Source } from '../types/mindMap';
-import { MindMapData, MindMapDataManager } from '../utils/mindMapData';
+import type { Node, Edge } from 'reactflow';
+import type { MindMapNodeData, Source } from '../types/mindMap';
+import type { MindMapData } from '../utils/mindMapData';
+import { MindMapDataManager } from '../utils/mindMapData';
 import { MindMapLayoutManager } from '../utils/mindMapLayout';
 import { MindMapActionsManager } from '../utils/mindMapActions';
+import type { SseDecodedData } from '../utils/sseDecoder';
 import {
   isSseObject,
   isSseMindmapChangeData,
   isSseMindmapCompleteData,
-  SseDecodedData,
 } from '../utils/sseDecoder';
 import { sseEventBus } from '../utils/sseEventBus';
 
@@ -273,7 +274,9 @@ export const useMindMapStore = create<MindMapStore>()(
       // Node operations
       addChildNode: async parentNodeId => {
         const state = get();
-        if (!state.isInitialized) return;
+        if (!state.isInitialized) {
+          return;
+        }
 
         try {
           const result = await actionsManager.addChildNode(
@@ -307,7 +310,9 @@ export const useMindMapStore = create<MindMapStore>()(
 
       addSiblingNode: async siblingNodeId => {
         const state = get();
-        if (!state.isInitialized) return;
+        if (!state.isInitialized) {
+          return;
+        }
 
         try {
           const result = await actionsManager.addSiblingNode(
@@ -341,7 +346,9 @@ export const useMindMapStore = create<MindMapStore>()(
 
       deleteNode: async nodeId => {
         const state = get();
-        if (!state.isInitialized) return;
+        if (!state.isInitialized) {
+          return;
+        }
 
         try {
           // Find all nodes that will be deleted (including descendants)
@@ -398,7 +405,9 @@ export const useMindMapStore = create<MindMapStore>()(
 
       updateNodeLabel: (nodeId, label) => {
         const state = get();
-        if (!state.isInitialized) return;
+        if (!state.isInitialized) {
+          return;
+        }
 
         const updatedNodes = actionsManager.updateNodeLabel(
           state.nodes,
@@ -410,7 +419,9 @@ export const useMindMapStore = create<MindMapStore>()(
 
       updateNodeLabelWithLayout: async (nodeId, label) => {
         const state = get();
-        if (!state.isInitialized) return;
+        if (!state.isInitialized) {
+          return;
+        }
 
         try {
           const result = await actionsManager.updateNodeLabelWithLayout(
@@ -438,7 +449,9 @@ export const useMindMapStore = create<MindMapStore>()(
 
       toggleNodeCollapse: async nodeId => {
         const state = get();
-        if (!state.isInitialized) return;
+        if (!state.isInitialized) {
+          return;
+        }
 
         try {
           const result = await actionsManager.toggleNodeCollapse(
@@ -465,7 +478,9 @@ export const useMindMapStore = create<MindMapStore>()(
 
       moveNode: async (nodeId, newParentId, insertIndex) => {
         const state = get();
-        if (!state.isInitialized) return;
+        if (!state.isInitialized) {
+          return;
+        }
 
         try {
           const result = await actionsManager.moveNode(
@@ -495,7 +510,9 @@ export const useMindMapStore = create<MindMapStore>()(
       // Node properties
       updateNodeChatId: (nodeId, chatId) => {
         const state = get();
-        if (!state.isInitialized) return;
+        if (!state.isInitialized) {
+          return;
+        }
 
         const updatedNodes = actionsManager.updateNodeChatId(
           state.nodes,
@@ -512,7 +529,9 @@ export const useMindMapStore = create<MindMapStore>()(
 
       updateNodeNotes: (nodeId, notes) => {
         const state = get();
-        if (!state.isInitialized) return;
+        if (!state.isInitialized) {
+          return;
+        }
 
         const updatedNodes = actionsManager.updateNodeNotes(
           state.nodes,
@@ -536,7 +555,9 @@ export const useMindMapStore = create<MindMapStore>()(
 
       updateNodeSources: (nodeId, sources) => {
         const state = get();
-        if (!state.isInitialized) return;
+        if (!state.isInitialized) {
+          return;
+        }
 
         const updatedNodes = actionsManager.updateNodeSources(
           state.nodes,
@@ -560,7 +581,9 @@ export const useMindMapStore = create<MindMapStore>()(
 
       setNodeColors: (nodeId, colors) => {
         const state = get();
-        if (!state.isInitialized) return;
+        if (!state.isInitialized) {
+          return;
+        }
 
         const updatedNodes = state.nodes.map(node =>
           node.id === nodeId
@@ -582,7 +605,9 @@ export const useMindMapStore = create<MindMapStore>()(
 
       clearNodeColors: nodeId => {
         const state = get();
-        if (!state.isInitialized) return;
+        if (!state.isInitialized) {
+          return;
+        }
 
         const updatedNodes = state.nodes.map(node =>
           node.id === nodeId
@@ -605,7 +630,9 @@ export const useMindMapStore = create<MindMapStore>()(
       // Layout operations
       changeLayout: async newLayout => {
         const state = get();
-        if (!state.isInitialized) return;
+        if (!state.isInitialized) {
+          return;
+        }
 
         try {
           const result = await actionsManager.changeLayout(
@@ -632,7 +659,9 @@ export const useMindMapStore = create<MindMapStore>()(
 
       resetLayout: async () => {
         const state = get();
-        if (!state.isInitialized) return;
+        if (!state.isInitialized) {
+          return;
+        }
 
         try {
           const result = await actionsManager.resetLayout(
@@ -659,7 +688,9 @@ export const useMindMapStore = create<MindMapStore>()(
       // History operations
       undo: () => {
         const state = get();
-        if (!state.isInitialized || !state.canUndo()) return;
+        if (!state.isInitialized || !state.canUndo()) {
+          return;
+        }
 
         set(draft => {
           draft.historyIndex -= 1;
@@ -674,7 +705,9 @@ export const useMindMapStore = create<MindMapStore>()(
 
       redo: () => {
         const state = get();
-        if (!state.isInitialized || !state.canRedo()) return;
+        if (!state.isInitialized || !state.canRedo()) {
+          return;
+        }
 
         set(draft => {
           draft.historyIndex += 1;
@@ -699,7 +732,9 @@ export const useMindMapStore = create<MindMapStore>()(
 
       saveToHistory: () => {
         const state = get();
-        if (!state.isInitialized) return;
+        if (!state.isInitialized) {
+          return;
+        }
 
         set(draft => {
           const newHistoryState: HistoryState = {
@@ -729,7 +764,9 @@ export const useMindMapStore = create<MindMapStore>()(
       // Selection
       selectNode: nodeId => {
         const state = get();
-        if (!state.isInitialized) return;
+        if (!state.isInitialized) {
+          return;
+        }
 
         // Update nodes selection state
         const updatedNodes = state.nodes.map(n => ({
@@ -816,8 +853,7 @@ export const useMindMapStore = create<MindMapStore>()(
                 typeof state.finalGenerationResult === 'object' &&
                 state.finalGenerationResult !== null
               ) {
-                const changes =
-                  (state.finalGenerationResult as any).changes || [];
+                const changes = state.finalGenerationResult.changes || [];
                 set({
                   generationSummary: `Iterative reasoning completed! Created ${changes.length} node(s) through ${currentStepNumber || 1} reasoning steps.`,
                   isGenerating: false,
@@ -839,11 +875,15 @@ export const useMindMapStore = create<MindMapStore>()(
           });
 
           const unsubscribe = sseEventBus.subscribe('*', event => {
-            if (event.streamId !== streamId) return;
+            if (event.streamId !== streamId) {
+              return;
+            }
 
             try {
               // Handle nested data structure from unified SSE - data is already decoded by event bus
-              if (typeof event.data !== 'object' || event.data === null) return;
+              if (typeof event.data !== 'object' || event.data === null) {
+                return;
+              }
               const eventData = ((event.data as Record<string, unknown>).data ||
                 event.data) as SseDecodedData;
 
@@ -1059,7 +1099,9 @@ export const useMindMapStore = create<MindMapStore>()(
       // Bulk operations
       applyMindmapChanges: async changes => {
         const state = get();
-        if (!state.isInitialized) return;
+        if (!state.isInitialized) {
+          return;
+        }
 
         let updatedNodes = [...state.nodes];
 
@@ -1105,8 +1147,12 @@ export const useMindMapStore = create<MindMapStore>()(
                 const node = updatedNodes[nodeIndex];
                 const newData = { ...node.data };
 
-                if (change.text !== undefined) newData.label = change.text;
-                if (change.notes !== undefined) newData.notes = change.notes;
+                if (change.text !== undefined) {
+                  newData.label = change.text;
+                }
+                if (change.notes !== undefined) {
+                  newData.notes = change.notes;
+                }
                 if (change.sources !== undefined) {
                   newData.sources = change.sources.map((source: any) => ({
                     id:
@@ -1223,8 +1269,9 @@ export const useMindMapStore = create<MindMapStore>()(
       // Utilities
       save: async () => {
         const state = get();
-        if (!state.isInitialized || !state.saveCallback || !state.rootNodeId)
+        if (!state.isInitialized || !state.saveCallback || !state.rootNodeId) {
           return;
+        }
 
         try {
           const treeData = dataManager.convertNodesToTree(

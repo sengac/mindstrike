@@ -71,7 +71,9 @@ export function SidebarMusicControls({}: SidebarMusicControlsProps) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       // Only respond to keyboard shortcuts if music controls are visible
-      if (!shouldShow) return;
+      if (!shouldShow) {
+        return;
+      }
 
       switch (event.key) {
         case 'MediaTrackPrevious':

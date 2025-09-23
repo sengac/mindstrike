@@ -1,210 +1,200 @@
-# MindStrike Agent Architecture
+# MindStrike - AI Knowledge Assistant Platform
 
-## Overview
+## Project Overview
 
-MindStrike is a knowledge assistant built as a modern desktop application featuring multi-threaded conversations, interactive mind mapping, workspace management, and real-time AI agent workflows.
+MindStrike is a comprehensive AI knowledge assistant platform built as a modern desktop and web application. It combines multi-threaded conversational AI, interactive mind mapping, workspace management, and real-time agent workflows in a unified interface.
 
-## Core Architecture
+## Technical Architecture
 
-### Technology Stack
+### Tech Stack
 
-- **Frontend**: React + TypeScript + Vite + Tailwind CSS
-- **Backend**: Node.js + Express + TypeScript
-- **Desktop**: Electron with cross-platform packaging
-- **State Management**: Zustand with persistence and SSE integration
-- **AI Integration**: LangChain + Multiple LLM providers
-- **Real-time**: Server-Sent Events (SSE) for streaming
-- **UI Components**: ReactFlow (mind maps), Monaco Editor (code), Lucide icons
+**Frontend**
 
-### Application Structure
+- React 18 + TypeScript
+- Vite (build tooling)
+- Tailwind CSS (styling)
+- Zustand (state management)
+- ReactFlow (mind maps)
+- Monaco Editor (code editing)
+- Lucide React (icons)
 
-```
-src/
-├── App.tsx                 # Main app orchestrator with 5 panels
-├── chat/                   # Multi-threaded chat system
-├── mindmaps/              # Interactive knowledge visualization
-├── workspace/             # File explorer and code editor
-├── components/            # Shared UI components
-├── settings/              # LLM configuration and management
-├── store/                 # Zustand state management
-└── types/                 # TypeScript definitions
+**Backend**
 
-server/
-├── index.ts               # Express server with comprehensive API
-├── agents/                # AI agent implementations
-├── routes/                # API endpoint handlers
-├── conversation-manager.ts # Thread and message persistence
-├── sse-manager.ts         # Real-time event broadcasting
-├── llm-config-manager.ts  # Model configuration
-└── mcp-manager.ts         # Model Context Protocol integration
-```
+- Node.js + Express
+- TypeScript
+- LangChain (AI orchestration)
+- Model Context Protocol (MCP) for tools
+- Winston (logging)
 
-## Core Features
+**Desktop**
 
-### 1. Multi-threaded Chat System
+- Electron
+- Cross-platform packaging (DMG, NSIS, AppImage)
 
-- **Thread Management**: Persistent conversations with metadata
-- **Real-time Streaming**: SSE-powered response streaming
-- **Agent Modes**: Standard chat vs. workflow execution
-- **Attachments**: Image and note integration
-- **Cancellation**: Real-time message cancellation
-- **Custom Prompts**: Custom prompts per thread
+**Real-time**
 
-### 2. Interactive Mind Maps
+- Server-Sent Events (SSE)
+- WebSocket fallback support
 
-- **AI Generation**: Automated content creation with iterative agents
-- **Visual Interface**: ReactFlow-based drag-and-drop nodes
-- **Chat Integration**: Contextual discussions within mind maps
-- **Persistence**: JSON-based storage with workspace organization
-- **Source Linking**: Connect nodes to external references
-
-### 3. Workspace Management
-
-- **File Explorer**: Directory navigation with file operations
-- **Code Editor**: Monaco-powered editing with syntax highlighting
-- **Tabbed Interface**: Multi-file editing support
-- **Workspace Initialization**: Automatic setup and persistence
-
-### 4. Agent System
-
-- **BaseAgent**: Abstract foundation with LLM integration
-- **ChatAgent**: Standard conversational AI
-- **WorkflowAgent**: Multi-step task execution
-- **MindmapAgentIterative**: Specialized mind map generation
-- **Thread Isolation**: Agent pool for concurrent conversations
-
-## State Management Architecture
-
-### Zustand Store System
-
-All business logic centralized in reactive stores:
-
-- **`useAppStore`**: Global configuration, workspace, model settings
-- **`useChatThreadStore`**: Thread-specific message management
-- **`useThreadsStore`**: Thread list and active thread tracking
-- **`useMindMapStore`**: Mind map data and operations
-- **`useModelsStore`**: Available models and configurations
-- **`useTaskStore`**: Background task and workflow tracking
-- **`useDebugStore`**: Development debugging and monitoring
-
-## LLM Provider Integration
-
-### Supported Providers
-
-- **Ollama**: Local model hosting
-- **OpenAI**: GPT models with streaming
-- **Anthropic**: Claude models
-- **Google**: Gemini integration
-- **Perplexity**: Web-enhanced responses
-- **Local Models**: node-llama-cpp integration
-- **Custom**: OpenAI-compatible endpoints
-
-### Model Management
-
-- **Auto-detection**: Scan and discover available models
-- **Configuration**: Per-provider settings and authentication
-- **Switching**: Dynamic model selection per thread
-- **Local Loading**: Download and run models locally
-
-## Real-time Communication
-
-### SSE Architecture
-
-- **Frontend**: `sseEventBus` singleton manages single EventSource connection
-- **Backend**: `sseManager` handles topic-based client broadcasting
-- **Connection Management**: Automatic reconnection with exponential backoff
-- **Event Types**: `message_chunk`, `thread_updated`, `task_progress`, `model_loaded`
-- **Topic-based Broadcasting**: Targeted updates to relevant client groups
-- **Large Content Handling**: Automatic chunking and reference storage
-
-### API Endpoints
+### Directory Structure
 
 ```
-POST /api/message              # Send chat message with streaming
-GET  /api/threads              # List all conversation threads
-POST /api/threads              # Create new thread
-GET  /api/mindmaps/:id         # Get mind map data
-POST /api/mindmaps/:id/generate # Generate mind map content
-GET  /api/llm/models           # List available models
-POST /api/llm/scan             # Scan for new models
-GET  /api/events/stream        # SSE event stream
+mindstrike/
+├── src/                      # Frontend React application
+│   ├── App.tsx              # Main app component with 5-panel layout
+│   ├── chat/                # Chat system components
+│   │   ├── components/      # ChatView, ChatPanel, MessageList, etc.
+│   │   └── hooks/          # useThreadsRefactored, useMessages
+│   ├── mindmaps/           # Mind mapping system
+│   │   ├── components/     # MindMapsView, MindMapNode
+│   │   ├── hooks/         # useMindMaps, useMindMapLayout
+│   │   └── types/         # MindMap type definitions
+│   ├── workspace/          # File management
+│   │   ├── components/     # WorkspaceView, FileExplorer, CodeEditor
+│   │   └── hooks/         # useWorkspace
+│   ├── settings/           # Configuration UI
+│   │   └── components/     # SettingsView, ModelSelector, PromptsModal
+│   ├── components/         # Shared UI components
+│   │   └── shared/        # Dialogs, modals, common widgets
+│   ├── store/             # Zustand state stores
+│   │   ├── useAppStore.ts         # Global app state
+│   │   ├── useThreadsStore.ts     # Thread management
+│   │   ├── useMindMapStore.ts     # Mind map state
+│   │   ├── useModelsStore.ts      # LLM configurations
+│   │   └── useTaskStore.ts        # Background tasks
+│   ├── services/          # Frontend services
+│   │   ├── responseValidator.ts   # Response validation
+│   │   └── metadata-extractor.ts  # Music metadata
+│   ├── hooks/             # Global React hooks
+│   └── utils/             # Utilities and helpers
+│       ├── sseEventBus.ts # SSE connection management
+│       └── workspace-initializer.ts
+
+├── server/                 # Backend Express server
+│   ├── index.ts           # Main server entry point
+│   ├── agents/            # AI agent implementations
+│   │   ├── base-agent.ts  # Abstract base class
+│   │   ├── chat-agent.ts  # Standard chat
+│   │   ├── workflow-agent.ts      # Multi-step workflows
+│   │   └── mindmap-agent-iterative.ts  # Mind map generation
+│   ├── routes/            # API route handlers
+│   │   ├── local-llm.ts   # Local model management
+│   │   ├── model-scan.ts  # Model discovery
+│   │   └── tasks.ts       # Task tracking
+│   ├── utils/             # Server utilities
+│   │   ├── async-handler.ts       # Express error handling
+│   │   ├── content-filter.ts      # Content sanitization
+│   │   └── command-resolver.ts    # Command resolution
+│   ├── conversation-manager.ts    # Thread persistence
+│   ├── llm-config-manager.ts      # Model configuration
+│   ├── llm-scanner.ts             # Model discovery
+│   ├── mcp-manager.ts             # MCP tool integration
+│   ├── sse-manager.ts             # SSE broadcasting
+│   ├── local-llm-manager.ts       # Local model loading
+│   └── logger.ts                  # Winston logging
+
+├── electron/              # Desktop app
+│   ├── main.js           # Electron main process
+│   └── preload.js        # Preload script
+
+└── public/               # Static assets
 ```
 
-## Agent Workflow System
-
-### Tool Integration (MCP)
-
-- **Filesystem**: File operations and directory navigation
-- **GitHub**: Repository access and code analysis
-- **Web Search**: External information retrieval
-- **Code Analysis**: Syntax checking and diagnostics
-- **Custom Tools**: Extensible tool system
-- **Stdio Monitoring**: Real-time stderr/stdout capture from MCP servers
-  - Process monitoring with PID tracking
-  - Stderr output capture for debugging and startup monitoring
-  - Special handling for npx-based servers to show download progress
-  - API endpoints: `/api/mcp/processes`, `/api/mcp/server-logs`
-
-## Development Workflow
-
-### Commands
-
-```bash
-npm run dev                # Parallel client/server development
-npm run dev:debug          # Debug mode with enhanced logging
-npm run build              # Production build (client + server)
-npm run typecheck          # TypeScript validation
-npm run lint               # ESLint checking
-npm run electron:dev       # Desktop app development
-npm run package:mac:arm64  # macOS ARM64 build
-```
-
-### Code Conventions
-
-- **Files**: kebab-case (`chat-panel.tsx`, `use-threads.ts`)
-- **Components**: PascalCase functional components with hooks
-- **State**: Zustand actions for all mutations
-- **Types**: Comprehensive TypeScript interfaces
-- **Imports**: External first, then internal grouped by type
-- **Error Handling**: Try-catch with user-friendly notifications
-
-## Performance Optimizations
+## Core Systems
 
 ### State Management
 
-- **Selective Subscriptions**: Components only re-render on relevant changes
-- **Batched Updates**: Multiple state changes in single cycle
-- **Memory Management**: Automatic cleanup of unused resources
+#### Zustand Stores
 
-### Real-time Updates
+- `useAppStore` - Global settings, workspace config
+- `useThreadsStore` - Active threads, selection
+- `useChatThreadStore` - Per-thread messages
+- `useMindMapStore` - Mind map data and operations
+- `useModelsStore` - Available LLM configurations
+- `useTaskStore` - Background task tracking
+- `useDebugStore` - Development debugging
 
-- **Connection Pooling**: Efficient SSE connection management
-- **Event Filtering**: Targeted updates to relevant clients
-- **Backpressure Handling**: Prevent memory leaks from slow clients
+#### Persistence
 
-## Deployment Architecture
+- Zustand persist middleware for local storage
+- Server-side file persistence for threads/mindmaps
+- Automatic state synchronization
 
-### Development
+#### Immer middleware
 
-- **Client**: Vite dev server (localhost:5173)
-- **Server**: Node.js with tsx watch (localhost:3001)
-- **Hot Reload**: Instant updates during development
+- Using Immer for undo/redo functionality as Zustand middleware
 
-### Production
+### Real-time Communication
 
-- **Build**: Static client + compiled server
-- **Electron**: Cross-platform desktop packaging
-- **Distribution**: DMG (macOS), NSIS (Windows), AppImage (Linux)
+#### SSE Architecture
 
-## Future Enhancements
+- Single persistent EventSource connection
+- Topic-based message routing
+- Automatic reconnection with exponential backoff
+- Large content chunking and reference storage
 
-### Technical Improvements
+### Coding Standards
 
-- **LangGraph Integration**: Replace custom workflow system
-- **Worker Threads**: Offload heavy processing
-- **Caching Layer**: Improve response times
-- **Error Boundaries**: Better error isolation and recovery
+#### TypeScript Rules (Strict Enforcement)
 
----
+- **Strict Mode**: All TypeScript strict checks enabled
+- **No `any` Types**: Complete type safety required - use proper types always
+- **Interface Over Type**: Use `interface` for object definitions, not `type`
+- **Readonly Properties**: Use `readonly` where immutability is expected
+- **Null Safety**: Strict null checks enabled - handle undefined/null explicitly
 
-This architecture enables a responsive, transparent, and powerful AI-assisted knowledge management system with real-time collaboration capabilities and extensible agent workflows.
+#### Import & Module Rules
+
+- **ES6 Imports Only**: Never use `require()` - always use `import`
+- **File Extensions**: Always use `.js` extension for local module imports (ES modules)
+- **Consistent Type Imports**: Use `import type` for type-only imports
+- **Explicit Imports**: Prefer explicit imports over star imports
+
+#### Code Quality Requirements
+
+- **Error Handling**: Comprehensive try/catch patterns for async operations
+- **Async/Await**: Always await thenable expressions - no floating promises
+- **Promise Handling**: All promises must be properly handled or explicitly ignored
+- **Function Purity**: Prefer pure functions and immutable data structures
+
+#### Linting Rules (ESLint)
+
+- **Curly Braces**: Required for all control statements
+- **Const Preference**: Use `const` over `let`/`var` where possible
+- **No Unused Variables**: All declared variables must be used
+- **Strict Equality**: Use `===` and `!==` instead of `==` and `!=`
+- **No Console**: Console statements discouraged (except in server/test files)
+
+#### Naming Conventions
+
+- **Files**: `kebab-case.tsx` for components, `use-kebab-case.ts` for hooks
+- **Components**: `PascalCase` for React components
+- **Hooks**: `useCamelCase` for custom hooks
+- **CSS**: `kebab-case` for class names
+- **Constants**: `UPPER_SNAKE_CASE` for global constants
+- **Interfaces**: `IPascalCase` or just `PascalCase` for TypeScript interfaces
+
+#### React Best Practices
+
+- **Functional Components**: Always use functional components with hooks
+- **Component Size**: Keep components focused and small (< 200 lines)
+- **Hook Extraction**: Extract complex logic to custom hooks
+- **Memo Usage**: Use React.memo for expensive components
+- **Prop Types**: TypeScript interfaces for all component props
+- **State Management**: Zustand for global state, useState for local state
+
+#### Development Workflow
+
+##### Before Starting Development
+
+1. **Understanding**: Review relevant source files in the module you're working on
+2. **Testing**: Run existing tests to ensure baseline functionality
+3. **Linting**: Ensure code passes all linting rules before making changes
+4. **Typechecking**: Ensure all code typechecking works
+
+##### During Development
+
+1. **Type Safety**: Write code that satisfies TypeScript strict mode
+2. **Testing**: Write tests for new functionality (unit and integration as appropriate)
+3. **Error Handling**: Implement proper error handling for all async operations
+4. **Documentation**: Update code comments for complex logic

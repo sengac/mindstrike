@@ -10,13 +10,14 @@ import {
   ArrowUp,
   Settings,
 } from 'lucide-react';
-import { MindMap as MindMapType } from '../hooks/useMindMaps';
-import { MindMap, MindMapControls } from './MindMap';
+import type { MindMap as MindMapType } from '../hooks/useMindMaps';
+import type { MindMapControls } from './MindMap';
+import { MindMap } from './MindMap';
 import { ControlsModal } from '../../components/ControlsModal';
 import { ColorPalette } from '../../components/ColorPalette';
 import { useAppStore } from '../../store/useAppStore';
-import { Source } from '../types/mindMap';
-import { MindMapData } from '../../utils/mindMapData';
+import type { Source } from '../types/mindMap';
+import type { MindMapData } from '../../utils/mindMapData';
 
 // Import the new store hooks
 import {

@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ConversationMessage } from '../types';
-import {
-  ResponseValidationOrchestrator,
-  ValidationProgress,
-} from '../services/responseValidationOrchestrator';
+import type { ConversationMessage } from '../types';
+import type { ValidationProgress } from '../services/responseValidationOrchestrator';
+import { ResponseValidationOrchestrator } from '../services/responseValidationOrchestrator';
 
 export interface UseResponseValidationReturn {
   isValidating: boolean;

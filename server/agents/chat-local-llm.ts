@@ -1,15 +1,11 @@
-import {
-  BaseChatModel,
-  BaseChatModelParams,
-} from '@langchain/core/language_models/chat_models';
-import {
-  BaseMessage,
-  AIMessage,
-  AIMessageChunk,
-} from '@langchain/core/messages';
-import { CallbackManagerForLLMRun } from '@langchain/core/callbacks/manager';
-import { ChatGenerationChunk, ChatResult } from '@langchain/core/outputs';
-import { DynamicStructuredTool } from '@langchain/core/tools';
+import type { BaseChatModelParams } from '@langchain/core/language_models/chat_models';
+import { BaseChatModel } from '@langchain/core/language_models/chat_models';
+import type { BaseMessage } from '@langchain/core/messages';
+import { AIMessage, AIMessageChunk } from '@langchain/core/messages';
+import type { CallbackManagerForLLMRun } from '@langchain/core/callbacks/manager';
+import type { ChatResult } from '@langchain/core/outputs';
+import { ChatGenerationChunk } from '@langchain/core/outputs';
+import type { DynamicStructuredTool } from '@langchain/core/tools';
 import { getLocalLLMManager } from '../local-llm-singleton.js';
 
 interface LocalLLMManagerInterface {

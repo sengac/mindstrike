@@ -90,16 +90,30 @@ export class MetadataExtractor {
   getSummary(metadata: ExtractedMetadata): string {
     const parts: string[] = [];
 
-    if (metadata.title) parts.push(`Title: ${metadata.title}`);
-    if (metadata.artist) parts.push(`Artist: ${metadata.artist}`);
-    if (metadata.album) parts.push(`Album: ${metadata.album}`);
-    if (metadata.year) parts.push(`Year: ${metadata.year}`);
-    if (metadata.genre?.length)
+    if (metadata.title) {
+      parts.push(`Title: ${metadata.title}`);
+    }
+    if (metadata.artist) {
+      parts.push(`Artist: ${metadata.artist}`);
+    }
+    if (metadata.album) {
+      parts.push(`Album: ${metadata.album}`);
+    }
+    if (metadata.year) {
+      parts.push(`Year: ${metadata.year}`);
+    }
+    if (metadata.genre?.length) {
       parts.push(`Genre: ${metadata.genre.join(', ')}`);
-    if (metadata.duration)
+    }
+    if (metadata.duration) {
       parts.push(`Duration: ${this.formatDuration(metadata.duration)}`);
-    if (metadata.bitrate) parts.push(`Bitrate: ${metadata.bitrate} kbps`);
-    if (metadata.format?.codec) parts.push(`Codec: ${metadata.format.codec}`);
+    }
+    if (metadata.bitrate) {
+      parts.push(`Bitrate: ${metadata.bitrate} kbps`);
+    }
+    if (metadata.format?.codec) {
+      parts.push(`Codec: ${metadata.format.codec}`);
+    }
 
     return parts.join(' • ');
   }
@@ -124,7 +138,9 @@ export class MetadataExtractor {
    * Get the primary cover art as a data URL
    */
   getCoverArtDataUrl(metadata: ExtractedMetadata): string | null {
-    if (!metadata.coverArt?.length) return null;
+    if (!metadata.coverArt?.length) {
+      return null;
+    }
 
     const coverArt = metadata.coverArt[0];
     // Cover art data is already base64 encoded from server

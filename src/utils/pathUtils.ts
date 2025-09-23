@@ -8,20 +8,26 @@
  * @returns Joined path
  */
 export function joinPath(...segments: string[]): string {
-  if (segments.length === 0) return '';
+  if (segments.length === 0) {
+    return '';
+  }
 
   // Filter out empty segments
   const validSegments = segments.filter(
     segment => segment && segment.length > 0
   );
-  if (validSegments.length === 0) return '';
+  if (validSegments.length === 0) {
+    return '';
+  }
 
   const first = validSegments[0];
   const rest = validSegments.slice(1);
 
   // Handle relative root case
   if (first === '.') {
-    if (rest.length === 0) return '.';
+    if (rest.length === 0) {
+      return '.';
+    }
     return rest.join('/');
   }
 
@@ -32,20 +38,26 @@ export function joinPath(...segments: string[]): string {
 
   if (isWindowsRoot) {
     // For Windows root (C:), join with forward slashes for web compatibility
-    if (rest.length === 0) return first;
+    if (rest.length === 0) {
+      return first;
+    }
     return [first, ...rest].join('/');
   }
 
   if (isWindowsRootWithSlash) {
     // For Windows root with slash (C:/ or C:\), normalize and join
     const normalizedRoot = first.replace(/[/\\]$/, ''); // Remove trailing slash
-    if (rest.length === 0) return normalizedRoot;
+    if (rest.length === 0) {
+      return normalizedRoot;
+    }
     return [normalizedRoot, ...rest].join('/');
   }
 
   if (isUnixRoot) {
     // For Unix root (/), avoid double slashes
-    if (rest.length === 0) return '/';
+    if (rest.length === 0) {
+      return '/';
+    }
     return '/' + rest.join('/');
   }
 
@@ -60,16 +72,24 @@ export function joinPath(...segments: string[]): string {
  */
 export function isRootPath(path: string): boolean {
   // Unix root
-  if (path === '/') return true;
+  if (path === '/') {
+    return true;
+  }
 
   // Windows root (C:, D:, etc.)
-  if (/^[A-Za-z]:$/.test(path)) return true;
+  if (/^[A-Za-z]:$/.test(path)) {
+    return true;
+  }
 
   // Windows root with slash (C:\, D:\, etc.) - normalize to forward slash
-  if (/^[A-Za-z]:[/\\]$/.test(path)) return true;
+  if (/^[A-Za-z]:[/\\]$/.test(path)) {
+    return true;
+  }
 
   // Relative root
-  if (path === '.') return true;
+  if (path === '.') {
+    return true;
+  }
 
   return false;
 }

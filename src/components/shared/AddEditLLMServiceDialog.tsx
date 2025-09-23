@@ -62,7 +62,9 @@ export function AddEditLLMServiceDialog({
     setShowApiKey(false);
   }, [editingService, isOpen]);
 
-  if (!shouldRender) return null;
+  if (!shouldRender) {
+    return null;
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

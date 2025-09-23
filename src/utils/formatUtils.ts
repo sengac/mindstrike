@@ -2,7 +2,9 @@
  * Format size in bytes to human readable format
  */
 export function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
+  if (bytes === 0) {
+    return '0 B';
+  }
 
   const k = 1024;
   const sizes = ['B', 'KB', 'MB', 'GB'];
@@ -15,7 +17,9 @@ export function formatBytes(bytes: number): string {
  * Format size in bytes to human readable format with integer values
  */
 export function formatBytesInteger(bytes: number): string {
-  if (bytes === 0) return '0 B';
+  if (bytes === 0) {
+    return '0 B';
+  }
 
   const k = 1024;
   const sizes = ['B', 'KB', 'MB', 'GB'];

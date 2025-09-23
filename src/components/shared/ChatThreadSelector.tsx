@@ -1,6 +1,6 @@
 import { MessageSquare, Terminal, X } from 'lucide-react';
 import { clsx } from 'clsx';
-import { Thread } from '../../types';
+import type { Thread } from '../../types';
 
 interface ChatThreadSelectorProps {
   threads: Thread[];

@@ -87,7 +87,9 @@ export function LocalModelLoadDialog({
 
   // Auto-load target model when data is available
   useEffect(() => {
-    if (!isOpen || !targetModelId || loadingModelId || loading) return;
+    if (!isOpen || !targetModelId || loadingModelId || loading) {
+      return;
+    }
 
     const targetModel = localModels.find(m => m.id === targetModelId);
     const isAlreadyLoaded = modelStatuses.get(targetModelId)?.loaded;
@@ -105,7 +107,9 @@ export function LocalModelLoadDialog({
     loadModel,
   ]);
 
-  if (!shouldRender) return null;
+  if (!shouldRender) {
+    return null;
+  }
 
   // Don't show dialog UI when auto-loading a specific model
   // Just handle the loading logic in the background

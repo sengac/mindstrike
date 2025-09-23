@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { ConversationMessage } from '../types';
+import type { ConversationMessage } from '../types';
 // Note: SSE event handling moved to per-thread stores
 
 export interface ChatMessagesState {

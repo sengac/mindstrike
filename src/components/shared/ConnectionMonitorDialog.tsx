@@ -25,7 +25,9 @@ export function ConnectionMonitorDialog({
     }
   }, [isConnected, isOpen, handleClose]);
 
-  if (!shouldRender) return null;
+  if (!shouldRender) {
+    return null;
+  }
 
   return (
     <BaseDialog

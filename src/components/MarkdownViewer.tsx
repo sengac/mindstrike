@@ -59,7 +59,9 @@ const languageMap: Record<string, string> = {
 };
 
 const getSupportedLanguage = (language?: string): string => {
-  if (!language) return 'text';
+  if (!language) {
+    return 'text';
+  }
 
   const lowerLang = language.toLowerCase();
 
@@ -112,10 +114,14 @@ export function MarkdownViewer({ content }: MarkdownViewerProps) {
   const downloadMermaidDiagram = async (diagramId: string) => {
     try {
       const diagramElement = document.getElementById(diagramId);
-      if (!diagramElement) return;
+      if (!diagramElement) {
+        return;
+      }
 
       const svgElement = diagramElement.querySelector('svg');
-      if (!svgElement) return;
+      if (!svgElement) {
+        return;
+      }
 
       const svgData = new XMLSerializer().serializeToString(svgElement);
       const svgBlob = new Blob([svgData], { type: 'image/svg+xml' });
@@ -238,7 +244,7 @@ export function MarkdownViewer({ content }: MarkdownViewerProps) {
 
     // Process markdown
     const html = String(marked.parse(processedContent));
-    let sanitizedHtml = DOMPurify.sanitize(html);
+    const sanitizedHtml = DOMPurify.sanitize(html);
 
     // Create a component that will replace placeholders with LaTeX
     const LatexProcessor = ({ html }: { html: string }) => {

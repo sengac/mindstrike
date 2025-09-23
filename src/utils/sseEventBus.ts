@@ -13,13 +13,13 @@ type EventHandler = (event: SSEEvent) => void;
 
 class SSEEventBus {
   private eventSource: EventSource | null = null;
-  private subscribers: Map<string, Set<EventHandler>> = new Map();
-  private connectionStatusSubscribers: Set<(status: boolean) => void> =
+  private readonly subscribers: Map<string, Set<EventHandler>> = new Map();
+  private readonly connectionStatusSubscribers: Set<(status: boolean) => void> =
     new Set();
   private isConnected = false;
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
-  private reconnectDelay = 3000;
+  private readonly maxReconnectAttempts = 5;
+  private readonly reconnectDelay = 3000;
 
   constructor() {
     this.handleVisibilityChange = this.handleVisibilityChange.bind(this);

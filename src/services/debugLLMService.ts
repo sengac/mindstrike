@@ -1,4 +1,4 @@
-import { RenderableContent } from './responseValidator';
+import type { RenderableContent } from './responseValidator';
 
 export interface DebugRequest {
   originalContent: string;

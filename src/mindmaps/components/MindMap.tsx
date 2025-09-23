@@ -1,6 +1,6 @@
 import React, { useEffect, useCallback, useRef } from 'react';
+import type { Node } from 'reactflow';
 import ReactFlow, {
-  Node,
   ConnectionMode,
   useReactFlow,
   ReactFlowProvider,
@@ -11,14 +11,14 @@ import { Plus, Trash2, Sparkles } from 'lucide-react';
 
 import { MindMapNode } from './MindMapNode';
 import { MusicVisualization } from '../../components/MusicVisualization';
-import { MindMapNodeData } from '../types/mindMap';
-import { Source } from '../types/mindMap';
+import type { MindMapNodeData } from '../types/mindMap';
+import type { Source } from '../types/mindMap';
 import { GenerateDialog } from '../../components/shared/GenerateDialog';
 import { useGenerationStreaming } from '../../hooks/useGenerationStreaming';
 import { useIterativeGeneration } from '../../hooks/useIterativeGeneration';
 
 import { useMindMapDrag } from '../hooks/useMindMapDrag';
-import { MindMapData } from '../../utils/mindMapData';
+import type { MindMapData } from '../../utils/mindMapData';
 import { useDialogAnimation } from '../../hooks/useDialogAnimation';
 
 // Import the new Zustand store and hooks
@@ -97,12 +97,16 @@ function MindMapInner({
 
   // Filter visible nodes and edges based on collapse state
   const nodes = React.useMemo(() => {
-    if (!layoutManager) return allNodes;
+    if (!layoutManager) {
+      return allNodes;
+    }
     return layoutManager.getVisibleNodes(allNodes, allEdges);
   }, [allNodes, allEdges, layoutManager]);
 
   const edges = React.useMemo(() => {
-    if (!layoutManager) return allEdges;
+    if (!layoutManager) {
+      return allEdges;
+    }
     return layoutManager.getVisibleEdges(allNodes, allEdges);
   }, [allNodes, allEdges, layoutManager]);
 
@@ -170,7 +174,9 @@ function MindMapInner({
 
   // Handle external node updates via props
   useEffect(() => {
-    if (!externalNodeUpdates || !isInitialized) return;
+    if (!externalNodeUpdates || !isInitialized) {
+      return;
+    }
 
     const { nodeId, chatId, notes, sources } = externalNodeUpdates;
 
@@ -394,7 +400,9 @@ function MindMapInner({
   // Resize observer for responsive fitView
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
+    if (!container) {
+      return;
+    }
 
     let resizeTimeout: NodeJS.Timeout;
     let lastSize = { width: 0, height: 0 };
@@ -502,7 +510,9 @@ function MindMapInner({
       const { currentNodeId, direction } = e.detail;
 
       const currentNode = allNodes.find(n => n.id === currentNodeId);
-      if (!currentNode) return;
+      if (!currentNode) {
+        return;
+      }
 
       // Build a tree traversal order (depth-first)
       const buildTraversalOrder = (): Node<MindMapNodeData>[] => {
@@ -510,7 +520,9 @@ function MindMapInner({
 
         // Find root node
         const rootNode = allNodes.find(n => n.data.isRoot || !n.data.parentId);
-        if (!rootNode) return [];
+        if (!rootNode) {
+          return [];
+        }
 
         // Recursive depth-first traversal
         const traverse = (node: Node<MindMapNodeData>) => {
@@ -540,7 +552,9 @@ function MindMapInner({
         n => n.id === currentNodeId
       );
 
-      if (currentIndex === -1) return;
+      if (currentIndex === -1) {
+        return;
+      }
 
       let targetNode: Node<MindMapNodeData> | null = null;
 
@@ -637,12 +651,20 @@ function MindMapInner({
 
       const getKeyString = (e: KeyboardEvent) => {
         const modifiers = [];
-        if (e.ctrlKey || e.metaKey) modifiers.push('Ctrl');
-        if (e.shiftKey) modifiers.push('Shift');
-        if (e.altKey) modifiers.push('Alt');
+        if (e.ctrlKey || e.metaKey) {
+          modifiers.push('Ctrl');
+        }
+        if (e.shiftKey) {
+          modifiers.push('Shift');
+        }
+        if (e.altKey) {
+          modifiers.push('Alt');
+        }
 
         let key = e.key;
-        if (key === ' ') key = 'Space';
+        if (key === ' ') {
+          key = 'Space';
+        }
 
         return modifiers.length > 0 ? `${modifiers.join('+')}+${key}` : key;
       };
@@ -773,7 +795,9 @@ function MindMapInner({
         dragCursorPosition &&
         (() => {
           const draggedNode = nodes.find(n => n.id === draggedNodeId);
-          if (!draggedNode) return null;
+          if (!draggedNode) {
+            return null;
+          }
 
           const nodeLevel = draggedNode.data.level || 0;
           const rootColorClass = 'bg-blue-500 border-blue-400';
@@ -858,18 +882,24 @@ function MindMapInner({
             {closestDropTarget &&
               (() => {
                 const targetNode = nodes.find(n => n.id === closestDropTarget);
-                if (!targetNode) return null;
+                if (!targetNode) {
+                  return null;
+                }
 
                 // Get the actual DOM element for the target node
                 const targetElement = document.querySelector(
                   `[data-id="${closestDropTarget}"]`
                 );
-                if (!targetElement) return null;
+                if (!targetElement) {
+                  return null;
+                }
 
                 const targetRect = targetElement.getBoundingClientRect();
                 const containerRect =
                   containerRef.current?.getBoundingClientRect();
-                if (!containerRect) return null;
+                if (!containerRect) {
+                  return null;
+                }
 
                 // Calculate position relative to the ReactFlow container
                 const relativeLeft = targetRect.left - containerRect.left;

@@ -82,7 +82,7 @@ export const useDebugStore = create<DebugState>()(
 );
 
 // Event Bus Subscriptions
-let debugUnsubscribeFunctions: (() => void)[] = [];
+const debugUnsubscribeFunctions: (() => void)[] = [];
 
 function initializeDebugEventSubscriptions(): void {
   if (debugUnsubscribeFunctions.length > 0) {
@@ -92,7 +92,9 @@ function initializeDebugEventSubscriptions(): void {
   // Subscribe to debug entries
   debugUnsubscribeFunctions.push(
     sseEventBus.subscribe('debug-entry', event => {
-      if (!isSSEDebugEvent(event.data)) return;
+      if (!isSSEDebugEvent(event.data)) {
+        return;
+      }
 
       const { addEntry } = useDebugStore.getState();
       const data = event.data;
@@ -119,7 +121,9 @@ function initializeDebugEventSubscriptions(): void {
   // Subscribe to token stats
   debugUnsubscribeFunctions.push(
     sseEventBus.subscribe('token-stats', event => {
-      if (!isSSETokenStatsEvent(event.data)) return;
+      if (!isSSETokenStatsEvent(event.data)) {
+        return;
+      }
 
       const { updateTokenStats } = useDebugStore.getState();
       const data = event.data;
@@ -130,7 +134,9 @@ function initializeDebugEventSubscriptions(): void {
   // Subscribe to generation status
   debugUnsubscribeFunctions.push(
     sseEventBus.subscribe('generation-status', event => {
-      if (!isSSEStatusEvent(event.data)) return;
+      if (!isSSEStatusEvent(event.data)) {
+        return;
+      }
 
       const { setGenerating } = useDebugStore.getState();
       const data = event.data as { status: string; generating?: boolean };

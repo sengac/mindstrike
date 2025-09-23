@@ -1,5 +1,6 @@
-import { BaseAgent, AgentConfig } from './base-agent.js';
-import { MindMapData, MindMapNode } from '../../src/utils/mindMapData';
+import type { AgentConfig } from './base-agent.js';
+import { BaseAgent } from './base-agent.js';
+import type { MindMapData, MindMapNode } from '../../src/utils/mindMapData';
 import { SSEEventType } from '../../src/types.js';
 import { logger } from '../logger.js';
 import { sseManager } from '../sse-manager.js';
@@ -220,7 +221,9 @@ export class MindmapAgentIterative extends BaseAgent {
     if (node.children) {
       for (const child of node.children) {
         const found = this.findNodeById(child, nodeId);
-        if (found) return found;
+        if (found) {
+          return found;
+        }
       }
     }
 

@@ -38,10 +38,14 @@ export const PromptsModal: React.FC<PromptsModalProps> = ({
   const [generatedPrompt, setGeneratedPrompt] = useState('');
   const [showGenerator, setShowGenerator] = useState(false);
 
-  if (!shouldRender) return null;
+  if (!shouldRender) {
+    return null;
+  }
 
   const handleGeneratePrompt = async () => {
-    if (!customPrompt.trim()) return;
+    if (!customPrompt.trim()) {
+      return;
+    }
 
     setIsGenerating(true);
     try {

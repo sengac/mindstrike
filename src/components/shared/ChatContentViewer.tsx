@@ -17,10 +17,11 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { ConversationMessage, NotesAttachment } from '../../types';
-import { ThreadMetadata } from '../../store/useThreadsStore';
-import { Source } from '../../types/mindMap';
-import { ChatPanel, ChatPanelRef } from '../../chat/components/ChatPanel';
+import type { ConversationMessage, NotesAttachment } from '../../types';
+import type { ThreadMetadata } from '../../store/useThreadsStore';
+import type { Source } from '../../types/mindMap';
+import type { ChatPanelRef } from '../../chat/components/ChatPanel';
+import { ChatPanel } from '../../chat/components/ChatPanel';
 import { MarkdownEditor } from './MarkdownEditor';
 import { ThreadList } from './ThreadList';
 import { SourcesList } from './SourcesList';
@@ -142,7 +143,7 @@ export const ChatContentViewer = forwardRef<
 
     const handleCopyToNotes = (content: string) => {
       // Check if notes already have content
-      if (nodeNotes && nodeNotes.trim()) {
+      if (nodeNotes?.trim()) {
         // Show confirmation dialog
         setPendingContent(content);
         setShowOverwriteConfirm(true);
@@ -188,7 +189,7 @@ export const ChatContentViewer = forwardRef<
     };
 
     const handleCopyNotesToChat = () => {
-      if (!nodeNotes || !nodeNotes.trim()) {
+      if (!nodeNotes?.trim()) {
         toast.error('No notes content to copy');
         return;
       }
@@ -386,14 +387,14 @@ export const ChatContentViewer = forwardRef<
                 onChange={() => {}} // MarkdownEditor handles its own state
                 placeholder="Add notes and context for this node using markdown..."
                 showTabs={true}
-                defaultMode={nodeNotes && nodeNotes.trim() ? 'preview' : 'edit'}
+                defaultMode={nodeNotes?.trim() ? 'preview' : 'edit'}
                 activeMode={notesActiveMode}
                 onSave={handleSaveNotes}
                 className="flex-1"
                 additionalButtons={
                   <button
                     onClick={handleCopyNotesToChat}
-                    disabled={!nodeNotes || !nodeNotes.trim()}
+                    disabled={!nodeNotes?.trim()}
                     className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded text-sm font-medium transition-colors"
                     title="Copy notes to chat as attachment"
                   >

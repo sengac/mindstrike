@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { AlertTriangle, Trash2, X } from 'lucide-react';
 import { BaseDialog } from './BaseDialog';
 import { useDialogAnimation } from '../../hooks/useDialogAnimation';
@@ -31,7 +31,9 @@ export function ConfirmDialog({
     onClose
   );
 
-  if (!shouldRender) return null;
+  if (!shouldRender) {
+    return null;
+  }
 
   const getColors = () => {
     switch (type) {

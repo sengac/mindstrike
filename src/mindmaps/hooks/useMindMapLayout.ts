@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
-import { Node, Edge } from 'reactflow';
-import { MindMapNodeData } from '../types/mindMap';
+import type { Node, Edge } from 'reactflow';
+import type { MindMapNodeData } from '../types/mindMap';
 
 export function useMindMapLayout() {
   // Get visible nodes (excluding collapsed subtrees)
@@ -69,7 +69,9 @@ export function useMindMapLayout() {
       while (queue.length > 0) {
         const { nodeId, level } = queue.shift()!;
 
-        if (visited.has(nodeId)) continue;
+        if (visited.has(nodeId)) {
+          continue;
+        }
         visited.add(nodeId);
 
         const childEdges = edges.filter(edge => edge.source === nodeId);
@@ -125,7 +127,9 @@ export function useMindMapLayout() {
       direction: 'LR' | 'RL' | 'TB' | 'BT' = 'LR'
     ) => {
       const rootNode = nodes.find(n => n.id === rootId);
-      if (!rootNode) return nodes;
+      if (!rootNode) {
+        return nodes;
+      }
 
       const visibleEdges = getVisibleEdges(nodes, edges);
 
@@ -177,7 +181,9 @@ export function useMindMapLayout() {
       // Calculate subtree sizes
       const calculateSubtreeSize = (nodeId: string, depth: number): number => {
         const nodeChildren = children.get(nodeId) || [];
-        if (nodeChildren.length === 0) return 1;
+        if (nodeChildren.length === 0) {
+          return 1;
+        }
 
         let totalSize = 0;
         for (const childId of nodeChildren) {

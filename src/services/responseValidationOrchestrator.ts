@@ -1,11 +1,10 @@
-import { ConversationMessage } from '../types';
-import {
-  ResponseScanner,
-  OffScreenValidator,
+import type { ConversationMessage } from '../types';
+import type {
   RenderableContent,
   ValidationResult,
   ValidationReport,
 } from './responseValidator';
+import { ResponseScanner, OffScreenValidator } from './responseValidator';
 import { DebugLLMService } from './debugLLMService';
 
 export interface ValidationProgress {
@@ -41,8 +40,9 @@ export class ResponseValidationOrchestrator {
     skipValidationForTypes: [],
   };
 
-  private static progressCallbacks: ((progress: ValidationProgress) => void)[] =
-    [];
+  private static readonly progressCallbacks: ((
+    progress: ValidationProgress
+  ) => void)[] = [];
 
   /**
    * Configure the validation system

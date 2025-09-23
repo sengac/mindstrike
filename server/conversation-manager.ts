@@ -1,10 +1,10 @@
-import { ConversationMessage, Thread } from '../src/types.js';
+import type { ConversationMessage, Thread } from '../src/types.js';
 import path from 'path';
 import fs from 'fs/promises';
 
 export class ConversationManager {
   private conversationsPath: string;
-  private conversations: Map<string, Thread> = new Map();
+  private readonly conversations: Map<string, Thread> = new Map();
   private isLoaded = false;
   private workspaceRoot: string;
   private savePromise: Promise<void> | null = null;
@@ -31,7 +31,9 @@ export class ConversationManager {
   }
 
   async load(): Promise<void> {
-    if (this.isLoaded) return;
+    if (this.isLoaded) {
+      return;
+    }
 
     try {
       const data = await fs.readFile(this.conversationsPath, 'utf-8');
@@ -188,10 +190,14 @@ export class ConversationManager {
     updates: Partial<ConversationMessage>
   ): Promise<boolean> {
     const thread = this.conversations.get(threadId);
-    if (!thread) return false;
+    if (!thread) {
+      return false;
+    }
 
     const messageIndex = thread.messages.findIndex(msg => msg.id === messageId);
-    if (messageIndex === -1) return false;
+    if (messageIndex === -1) {
+      return false;
+    }
 
     thread.messages[messageIndex] = {
       ...thread.messages[messageIndex],
@@ -204,7 +210,9 @@ export class ConversationManager {
 
   async deleteMessage(threadId: string, messageId: string): Promise<boolean> {
     const thread = this.conversations.get(threadId);
-    if (!thread) return false;
+    if (!thread) {
+      return false;
+    }
 
     const initialLength = thread.messages.length;
     thread.messages = thread.messages.filter(msg => msg.id !== messageId);
@@ -228,7 +236,9 @@ export class ConversationManager {
       const messageIndex = thread.messages.findIndex(
         msg => msg.id === messageId
       );
-      if (messageIndex === -1) continue;
+      if (messageIndex === -1) {
+        continue;
+      }
 
       const messageToDelete = thread.messages[messageIndex];
       const messagesToRemove: Array<{ index: number; id: string }> = [
@@ -278,7 +288,9 @@ export class ConversationManager {
   // Get the most recent thread (for auto-selection)
   getMostRecentThread(): Thread | null {
     const threads = Array.from(this.conversations.values());
-    if (threads.length === 0) return null;
+    if (threads.length === 0) {
+      return null;
+    }
 
     return threads.sort(
       (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()

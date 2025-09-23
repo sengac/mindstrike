@@ -89,7 +89,9 @@ export function InferenceChatPopup({
 
   // Handle window resize to reposition popup
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      return;
+    }
 
     const handleResize = () => {
       // Force re-render to recalculate position
@@ -102,7 +104,9 @@ export function InferenceChatPopup({
 
   const handleChatSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim() || isLoading) return;
+    if (!chatInput.trim() || isLoading) {
+      return;
+    }
 
     const userMessage = chatInput.trim();
     setChatInput('');
@@ -161,7 +165,9 @@ export function InferenceChatPopup({
     }
   };
 
-  if (!shouldRender) return null;
+  if (!shouldRender) {
+    return null;
+  }
 
   // Calculate smart position based on viewport boundaries (synchronously during render)
   const calculatePosition = (): React.CSSProperties => {

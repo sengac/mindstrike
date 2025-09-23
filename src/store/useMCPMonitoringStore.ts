@@ -140,8 +140,12 @@ export const useMCPMonitoringStore = create<MCPMonitoringState>()(
         let url = '/api/mcp/server-logs';
         const params = new URLSearchParams();
 
-        if (serverId) params.append('serverId', serverId);
-        if (type === 'stderr') params.append('stderrOnly', 'true');
+        if (serverId) {
+          params.append('serverId', serverId);
+        }
+        if (type === 'stderr') {
+          params.append('stderrOnly', 'true');
+        }
 
         if (params.toString()) {
           url += '?' + params.toString();

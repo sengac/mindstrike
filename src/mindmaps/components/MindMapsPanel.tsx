@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Network } from 'lucide-react';
-import { MindMap } from '../hooks/useMindMaps';
-import { ConversationMessage } from '../../types';
-import { ThreadMetadata } from '../../store/useThreadsStore';
+import type { MindMap } from '../hooks/useMindMaps';
+import type { ConversationMessage } from '../../types';
+import type { ThreadMetadata } from '../../store/useThreadsStore';
 import { ListPanel } from '../../components/shared/ListPanel';
 import { MindMapChatIntegration } from './MindMapChatIntegration';
-import { Source } from '../types/mindMap';
+import type { Source } from '../types/mindMap';
 
 interface MindMapsPanelProps {
   mindMaps: MindMap[];
@@ -300,7 +300,9 @@ export function MindMapsPanel({
 
   // Navigation logic - using event system to get sibling nodes
   const handleNavigateToPrevNode = () => {
-    if (!inferenceChatNode) return;
+    if (!inferenceChatNode) {
+      return;
+    }
 
     // Dispatch event to request previous sibling
     window.dispatchEvent(
@@ -314,7 +316,9 @@ export function MindMapsPanel({
   };
 
   const handleNavigateToNextNode = () => {
-    if (!inferenceChatNode) return;
+    if (!inferenceChatNode) {
+      return;
+    }
 
     // Dispatch event to request next sibling
     window.dispatchEvent(

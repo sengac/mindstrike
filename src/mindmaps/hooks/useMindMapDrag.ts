@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
-import { NodeDragHandler, XYPosition, Node } from 'reactflow';
-import { MindMapNodeData } from '../types/mindMap';
+import type { NodeDragHandler, XYPosition, Node } from 'reactflow';
+import type { MindMapNodeData } from '../types/mindMap';
 
 interface UseMindMapDragProps {
   nodes: Node<MindMapNodeData>[];
@@ -41,7 +41,9 @@ export function useMindMapDrag({
       let closestDistance = Infinity;
 
       for (const node of nodes) {
-        if (node.id === excludeNodeId) continue;
+        if (node.id === excludeNodeId) {
+          continue;
+        }
 
         const distance = Math.sqrt(
           Math.pow(node.position.x - position.x, 2) +
@@ -66,10 +68,14 @@ export function useMindMapDrag({
       targetNodeId: string
     ): 'above' | 'below' | 'over' => {
       const targetNode = nodes.find(n => n.id === targetNodeId);
-      if (!targetNode) return 'over';
+      if (!targetNode) {
+        return 'over';
+      }
 
       // Root node only accepts children
-      if (targetNodeId === rootNodeId) return 'over';
+      if (targetNodeId === rootNodeId) {
+        return 'over';
+      }
 
       const THRESHOLD = 30;
 
@@ -87,8 +93,12 @@ export function useMindMapDrag({
           offset = dragPosition.y - targetNode.position.y;
       }
 
-      if (offset < -THRESHOLD) return 'above';
-      if (offset > THRESHOLD) return 'below';
+      if (offset < -THRESHOLD) {
+        return 'above';
+      }
+      if (offset > THRESHOLD) {
+        return 'below';
+      }
       return 'over';
     },
     [nodes, rootNodeId, layout]
@@ -120,7 +130,9 @@ export function useMindMapDrag({
   const handleSiblingPositioning = useCallback(
     (nodeId: string, targetNodeId: string, position: 'above' | 'below') => {
       const targetNode = nodes.find(n => n.id === targetNodeId);
-      if (!targetNode || !targetNode.data.parentId) return;
+      if (!targetNode?.data.parentId) {
+        return;
+      }
 
       const parentNodeId = targetNode.data.parentId;
 
@@ -140,7 +152,9 @@ export function useMindMapDrag({
       const targetSiblingIndex = siblingNodes.findIndex(
         n => n.id === targetNodeId
       );
-      if (targetSiblingIndex === -1) return;
+      if (targetSiblingIndex === -1) {
+        return;
+      }
 
       // Calculate the desired position in the siblings array
       let desiredSiblingPosition = targetSiblingIndex;
@@ -175,25 +189,33 @@ export function useMindMapDrag({
       newPosition: XYPosition,
       dragPosition: 'above' | 'below' | 'over'
     ) => {
-      if (nodeId === rootNodeId) return;
+      if (nodeId === rootNodeId) {
+        return;
+      }
 
       const closestNodeId = findClosestNode(newPosition, nodeId);
-      if (!closestNodeId || closestNodeId === nodeId) return;
+      if (!closestNodeId || closestNodeId === nodeId) {
+        return;
+      }
 
       // Handle sibling positioning
       if (dragPosition === 'above' || dragPosition === 'below') {
         const targetNode = nodes.find(n => n.id === closestNodeId);
-        if (targetNode && targetNode.data.parentId) {
+        if (targetNode?.data.parentId) {
           handleSiblingPositioning(nodeId, closestNodeId, dragPosition);
           return;
         }
       }
 
       // Handle child positioning
-      if (wouldCreateCycle(nodeId, closestNodeId)) return;
+      if (wouldCreateCycle(nodeId, closestNodeId)) {
+        return;
+      }
 
       const draggedNode = nodes.find(n => n.id === nodeId);
-      if (draggedNode && draggedNode.data.parentId === closestNodeId) return;
+      if (draggedNode && draggedNode.data.parentId === closestNodeId) {
+        return;
+      }
 
       moveNode(nodeId, closestNodeId);
     },
@@ -210,7 +232,9 @@ export function useMindMapDrag({
   // Drag start handler
   const onNodeDragStart: NodeDragHandler = useCallback(
     (_, node) => {
-      if (node.id === rootNodeId) return;
+      if (node.id === rootNodeId) {
+        return;
+      }
 
       setDraggedNodeId(node.id);
       setDragStartPosition({ x: node.position.x, y: node.position.y });
@@ -226,8 +250,9 @@ export function useMindMapDrag({
         node.id === rootNodeId ||
         node.id !== draggedNodeId ||
         !dragStartPosition
-      )
+      ) {
         return;
+      }
 
       // Track cursor position
       if (event && 'clientX' in event && 'clientY' in event) {
@@ -250,7 +275,9 @@ export function useMindMapDrag({
 
         // Throttle updates more aggressively to reduce flicker
         const now = Date.now();
-        if (now - lastDragUpdate.current < 50) return;
+        if (now - lastDragUpdate.current < 50) {
+          return;
+        }
         lastDragUpdate.current = now;
 
         const closestNodeId = findClosestNode(node.position, node.id);

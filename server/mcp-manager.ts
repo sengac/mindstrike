@@ -37,12 +37,12 @@ export interface MCPTool {
 }
 
 export class MCPManager extends EventEmitter {
-  private clients: Map<string, Client> = new Map();
-  private servers: Map<string, MCPServerConfig> = new Map();
-  private tools: Map<string, MCPTool> = new Map();
-  private transports: Map<string, StdioClientTransport> = new Map();
+  private readonly clients: Map<string, Client> = new Map();
+  private readonly servers: Map<string, MCPServerConfig> = new Map();
+  private readonly tools: Map<string, MCPTool> = new Map();
+  private readonly transports: Map<string, StdioClientTransport> = new Map();
   private processInfoInterval: NodeJS.Timeout | null = null;
-  private configPath: string;
+  private readonly configPath: string;
   private workspaceRoot: string;
   private logs: Array<{
     id: string;

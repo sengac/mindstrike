@@ -7,7 +7,7 @@ import {
   Settings,
   Brain,
 } from 'lucide-react';
-import { ValidationProgress } from '../services/responseValidationOrchestrator';
+import type { ValidationProgress } from '../services/responseValidationOrchestrator';
 
 interface ValidationStatusNotificationProps {
   isVisible: boolean;
@@ -87,7 +87,9 @@ export function ValidationStatusNotification({
   };
 
   const getProgressPercentage = () => {
-    if (!progress.totalItems || progress.totalItems === 0) return 0;
+    if (!progress.totalItems || progress.totalItems === 0) {
+      return 0;
+    }
     return Math.round(
       ((progress.completedItems || 0) / progress.totalItems) * 100
     );

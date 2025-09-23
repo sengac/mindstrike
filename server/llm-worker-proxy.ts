@@ -4,13 +4,13 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'fs';
 import { logger } from './logger.js';
-import {
+import type {
   LocalModelInfo,
   ModelDownloadInfo,
   ModelLoadingSettings,
   ModelRuntimeInfo,
 } from './local-llm-manager.js';
-import { DynamicModelInfo } from './model-fetcher.js';
+import type { DynamicModelInfo } from './model-fetcher.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -53,12 +53,12 @@ interface MCPToolExecutionRequest {
 
 export class LLMWorkerProxy extends EventEmitter {
   private worker: Worker | null = null;
-  private pendingRequests = new Map<string, PendingRequest<unknown>>();
-  private streamingRequests = new Map<string, StreamingRequest>();
+  private readonly pendingRequests = new Map<string, PendingRequest<unknown>>();
+  private readonly streamingRequests = new Map<string, StreamingRequest>();
   private requestId = 0;
   private isInitialized = false;
   private restartCount = 0;
-  private maxRestarts = 3;
+  private readonly maxRestarts = 3;
 
   constructor() {
     super();

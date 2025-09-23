@@ -16,13 +16,12 @@ import {
 } from 'lucide-react';
 import { fontSchemes } from '../../utils/fontSchemes';
 import { AppBar } from '../../components/AppBar';
-import { useCustomServices, CustomLLMService } from '../../hooks/useModels';
+import type { CustomLLMService } from '../../hooks/useModels';
+import { useCustomServices } from '../../hooks/useModels';
 import { useAppStore } from '../../store/useAppStore';
 import { LocalLLMManager } from './LocalLLMManager';
-import {
-  AddEditLLMServiceDialog,
-  LLMServiceFormData,
-} from '../../components/shared/AddEditLLMServiceDialog';
+import type { LLMServiceFormData } from '../../components/shared/AddEditLLMServiceDialog';
+import { AddEditLLMServiceDialog } from '../../components/shared/AddEditLLMServiceDialog';
 import toast from 'react-hot-toast';
 import { MusicVisualization } from '../../components/MusicVisualization';
 
@@ -612,7 +611,7 @@ export function SettingsView() {
           editingService && editingService.type !== 'local'
             ? {
                 name: editingService.name,
-                type: editingService.type as LLMServiceFormData['type'],
+                type: editingService.type,
                 baseURL: editingService.baseURL,
                 apiKey: editingService.apiKey || '',
               }

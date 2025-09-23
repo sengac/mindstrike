@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar';
-import { ChatPanelRef } from './chat/components/ChatPanel';
+import type { ChatPanelRef } from './chat/components/ChatPanel';
 import { ChatView } from './chat/components/ChatView';
 import { MindMapsView } from './mindmaps/components/MindMapsView';
 import { WorkspaceView } from './workspace/components/WorkspaceView';
@@ -12,7 +12,7 @@ import { ApplicationLogsView } from './components/ApplicationLogsView';
 import { useThreadsRefactored } from './chat/hooks/useThreadsRefactored';
 import { useThreadsStore } from './store/useThreadsStore';
 import { SSEEventType } from './types';
-import { LogsTabType } from './types/logs';
+import type { LogsTabType } from './types/logs';
 
 import { sseEventBus } from './utils/sseEventBus';
 import { useMCPLogsStore } from './store/useMCPLogsStore';
@@ -21,7 +21,7 @@ import { useMindMaps } from './mindmaps/hooks/useMindMaps';
 import { useAppStore } from './store/useAppStore';
 import { loadFontScheme } from './utils/fontSchemes';
 
-import { Source } from './types/mindMap';
+import type { Source } from './types/mindMap';
 import { Menu, X } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 import { initStormToastEffect } from './utils/stormToastEffect';

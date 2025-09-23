@@ -6,7 +6,7 @@ type ModelEventType =
   | 'service-removed';
 
 class ModelEventEmitter {
-  private listeners: Map<ModelEventType, (() => void)[]> = new Map();
+  private readonly listeners: Map<ModelEventType, (() => void)[]> = new Map();
 
   on(event: ModelEventType, callback: () => void) {
     if (!this.listeners.has(event)) {

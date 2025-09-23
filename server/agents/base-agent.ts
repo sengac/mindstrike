@@ -1,6 +1,6 @@
-import { BaseChatModel } from '@langchain/core/language_models/chat_models';
+import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
+import type { BaseMessage } from '@langchain/core/messages';
 import {
-  BaseMessage,
   HumanMessage,
   AIMessage,
   SystemMessage,
@@ -10,7 +10,7 @@ import { ChatOpenAI } from '@langchain/openai';
 import { ChatAnthropic } from '@langchain/anthropic';
 import { ChatPerplexity } from '@langchain/community/chat_models/perplexity';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
-import { DynamicStructuredTool } from '@langchain/core/tools';
+import type { DynamicStructuredTool } from '@langchain/core/tools';
 import { AgentExecutor, createToolCallingAgent } from 'langchain/agents';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 
@@ -1805,9 +1805,16 @@ export abstract class BaseAgent {
   /**
    * Format LFS summary for chat display
    */
-  private formatLFSSummary(summary: any, lfsReference: string): string {
+  private formatLFSSummary(
+    summary: {
+      summary: string;
+      originalSize: number;
+      keyPoints?: string[];
+    },
+    lfsReference: string
+  ): string {
     const keyPointsText = summary.keyPoints?.length
-      ? `\n\n**Key Points:**\n${summary.keyPoints.map((point: string) => `• ${point}`).join('\n')}`
+      ? `\n\n**Key Points:**\n${summary.keyPoints.map(point => `• ${point}`).join('\n')}`
       : '';
 
     return `📄 **Large Content Summary** (${summary.originalSize} characters)\n\n${summary.summary}${keyPointsText}\n\n*Full content available: ${lfsReference}*`;
@@ -1828,7 +1835,7 @@ export abstract class BaseAgent {
           m.baseURL === this.config.llmConfig.baseURL
       );
 
-      if (!currentModel || !currentModel.contextLength) {
+      if (!currentModel?.contextLength) {
         // Default fallback if we can't determine context length
         return 4000; // Conservative estimate
       }

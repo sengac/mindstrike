@@ -3,7 +3,9 @@ import { ChevronDown, ChevronRight, Copy } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 type JSONValue = string | number | boolean | null | JSONObject | JSONArray;
-type JSONObject = { [key: string]: JSONValue };
+interface JSONObject {
+  [key: string]: JSONValue;
+}
 type JSONArray = JSONValue[];
 
 interface JSONViewerProps {

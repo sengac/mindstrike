@@ -130,10 +130,14 @@ export function NetworkEffect({
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) {
+      return;
+    }
 
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
 
     // Set canvas size
     const resizeCanvas = () => {
@@ -614,7 +618,9 @@ export function NetworkEffect({
         const x = (idx + 0.5) * barSpacing + beatDetection.slideOffset;
 
         // Skip bars that are off screen
-        if (x < -barWidth || x > canvas.width + barWidth) return;
+        if (x < -barWidth || x > canvas.width + barWidth) {
+          return;
+        }
 
         const barHeight = height * maxBarHeight;
         const topY = centerY - barHeight / 2;
@@ -751,7 +757,7 @@ export function NetworkEffect({
       // Calculate rotations with smooth variable speed and mouse influence
       let rotX = time * 0.7 * currentSpeed;
       let rotY = time * 0.5 * currentSpeed;
-      let rotZ = time * 0.3 * currentSpeed;
+      const rotZ = time * 0.3 * currentSpeed;
 
       // Add mouse-controlled rotation when hovering
       if (isHovering.current) {

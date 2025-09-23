@@ -50,8 +50,12 @@ export function getLocalModelSettingsDirectory(): string {
  */
 export function getHomeDirectory(): string {
   // Use environment variables first (most reliable)
-  if (process.env.HOME) return process.env.HOME; // Unix/Linux/macOS
-  if (process.env.USERPROFILE) return process.env.USERPROFILE; // Windows
+  if (process.env.HOME) {
+    return process.env.HOME;
+  } // Unix/Linux/macOS
+  if (process.env.USERPROFILE) {
+    return process.env.USERPROFILE;
+  } // Windows
   if (process.env.HOMEDRIVE && process.env.HOMEPATH) {
     return path.join(process.env.HOMEDRIVE, process.env.HOMEPATH); // Windows fallback
   }

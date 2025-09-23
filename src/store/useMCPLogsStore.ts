@@ -65,7 +65,9 @@ function initializeMCPLogsEventSubscription(): void {
   mcpLogsUnsubscribe = sseEventBus.subscribe(SSEEventType.MCP_LOG, event => {
     const { addLog } = useMCPLogsStore.getState();
     // Handle nested data structure from unified SSE
-    if (!isSSELogEvent(event.data)) return;
+    if (!isSSELogEvent(event.data)) {
+      return;
+    }
     const data = event.data;
 
     addLog({

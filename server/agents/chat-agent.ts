@@ -1,4 +1,5 @@
-import { BaseAgent, AgentConfig } from './base-agent.js';
+import type { AgentConfig } from './base-agent.js';
+import { BaseAgent } from './base-agent.js';
 
 const DEFAULT_CHAT_ROLE = `You are a helpful assistant.`;
 

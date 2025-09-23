@@ -132,18 +132,28 @@ export function ControlsModal({
 
   // Handle key capture
   useEffect(() => {
-    if (!isCapturing) return;
+    if (!isCapturing) {
+      return;
+    }
 
     const handleKeyDown = (e: KeyboardEvent) => {
       e.preventDefault();
 
       const modifiers = [];
-      if (e.ctrlKey || e.metaKey) modifiers.push('Ctrl');
-      if (e.shiftKey) modifiers.push('Shift');
-      if (e.altKey) modifiers.push('Alt');
+      if (e.ctrlKey || e.metaKey) {
+        modifiers.push('Ctrl');
+      }
+      if (e.shiftKey) {
+        modifiers.push('Shift');
+      }
+      if (e.altKey) {
+        modifiers.push('Alt');
+      }
 
       let key = e.key;
-      if (key === ' ') key = 'Space';
+      if (key === ' ') {
+        key = 'Space';
+      }
       if (key === 'Escape') {
         setIsCapturing(false);
         setEditingId(null);
@@ -235,7 +245,9 @@ export function ControlsModal({
     onKeyBindingsChange(bindingsObject);
   };
 
-  if (!shouldRender) return null;
+  if (!shouldRender) {
+    return null;
+  }
 
   return (
     <BaseDialog

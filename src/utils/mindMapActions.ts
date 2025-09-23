@@ -1,13 +1,13 @@
-import { Node, Edge } from 'reactflow';
-import { MindMapNodeData } from '../types/mindMap';
-import { MindMapDataManager } from './mindMapData';
-import { MindMapLayoutManager } from './mindMapLayout';
-import { Source } from '../types/mindMap';
+import type { Node, Edge } from 'reactflow';
+import type { MindMapNodeData } from '../types/mindMap';
+import type { MindMapDataManager } from './mindMapData';
+import type { MindMapLayoutManager } from './mindMapLayout';
+import type { Source } from '../types/mindMap';
 
 export class MindMapActionsManager {
   constructor(
-    private dataManager: MindMapDataManager,
-    private layoutManager: MindMapLayoutManager
+    private readonly dataManager: MindMapDataManager,
+    private readonly layoutManager: MindMapLayoutManager
   ) {}
 
   // Helper to apply complete layout
@@ -93,7 +93,7 @@ export class MindMapActionsManager {
     newNodeId: string;
   }> {
     const siblingNode = nodes.find(n => n.id === siblingNodeId);
-    if (!siblingNode || !siblingNode.data.parentId) {
+    if (!siblingNode?.data.parentId) {
       throw new Error('Sibling node not found or has no parent');
     }
 

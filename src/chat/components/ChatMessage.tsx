@@ -21,7 +21,7 @@ import {
   Brain,
   StickyNote,
 } from 'lucide-react';
-import { ConversationMessage } from '../../types';
+import type { ConversationMessage } from '../../types';
 import { useState, useEffect, useRef } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -79,7 +79,9 @@ const languageMap: Record<string, string> = {
 
 // Function to map language aliases to supported languages or fallback to 'text'
 const getSupportedLanguage = (language?: string): string => {
-  if (!language) return 'text';
+  if (!language) {
+    return 'text';
+  }
 
   const lowerLang = language.toLowerCase();
 
@@ -201,10 +203,14 @@ function ChatMessageComponent({
   const downloadMermaidDiagram = async (diagramId: string) => {
     try {
       const diagramElement = document.getElementById(diagramId);
-      if (!diagramElement) return;
+      if (!diagramElement) {
+        return;
+      }
 
       const svgElement = diagramElement.querySelector('svg');
-      if (!svgElement) return;
+      if (!svgElement) {
+        return;
+      }
 
       // Get SVG string
       const svgData = new XMLSerializer().serializeToString(svgElement);
@@ -389,7 +395,7 @@ function ChatMessageComponent({
 
     // Process markdown
     const html = String(marked.parse(processedContent));
-    let sanitizedHtml = DOMPurify.sanitize(html);
+    const sanitizedHtml = DOMPurify.sanitize(html);
 
     // Create a component that will replace placeholders with LaTeX
     const LatexProcessor = ({ html }: { html: string }) => {

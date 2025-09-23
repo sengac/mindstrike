@@ -1,9 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import type { DocumentSummary } from './document-ingestion-service.js';
 import {
   documentIngestionService,
-  DocumentSummary,
   ProcessedDocument,
   DocumentIngestionService,
 } from './document-ingestion-service.js';
@@ -21,7 +21,7 @@ interface LFSEntry {
 
 class LFSManager {
   private entries: Record<string, LFSEntry> = {};
-  private filePath: string;
+  private readonly filePath: string;
   private readonly maxSizeBytes = 1024;
 
   constructor() {
@@ -153,7 +153,9 @@ class LFSManager {
    */
   getSummaryByReference(reference: string): DocumentSummary | null {
     const lfsMatch = reference.match(/^\[LFS:([^\]]+)\]$/);
-    if (!lfsMatch) return null;
+    if (!lfsMatch) {
+      return null;
+    }
 
     const lfsId = lfsMatch[1];
     return this.getSummary(lfsId);

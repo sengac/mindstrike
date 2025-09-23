@@ -1,5 +1,5 @@
-import { Node, Edge } from 'reactflow';
-import { MindMapNodeData, Source } from '../types/mindMap';
+import type { Node, Edge } from 'reactflow';
+import type { MindMapNodeData, Source } from '../types/mindMap';
 
 export interface MindMapNode {
   id: string;

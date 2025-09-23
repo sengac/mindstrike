@@ -1,4 +1,4 @@
-import { ConversationMessage } from '../types';
+import type { ConversationMessage } from '../types';
 export { formatBytes } from './formatUtils';
 
 /**
@@ -6,7 +6,9 @@ export { formatBytes } from './formatUtils';
  * This is an approximation since exact tokenization depends on the specific model
  */
 export function estimateTokenCount(text: string): number {
-  if (!text) return 0;
+  if (!text) {
+    return 0;
+  }
 
   // Rough heuristic: average ~4 characters per token for English text
   // This varies by model but gives a reasonable estimate
@@ -74,6 +76,8 @@ export function calculateContextUsage(
   usedTokens: number,
   maxTokens: number
 ): number {
-  if (!maxTokens || maxTokens <= 0) return 0;
+  if (!maxTokens || maxTokens <= 0) {
+    return 0;
+  }
   return Math.round((usedTokens / maxTokens) * 100);
 }

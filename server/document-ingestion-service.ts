@@ -2,7 +2,7 @@ import { Document } from '@langchain/core/documents';
 import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 import { ChatOpenAI } from '@langchain/openai';
 import { ChatOllama } from '@langchain/ollama';
-import { BaseChatModel } from '@langchain/core/language_models/chat_models';
+import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { ChatLocalLLM } from './agents/chat-local-llm.js';
 import { PromptTemplate } from '@langchain/core/prompts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
@@ -44,10 +44,10 @@ export interface DocumentChunk {
 }
 
 export class DocumentIngestionService {
-  private textSplitter: RecursiveCharacterTextSplitter;
-  private llmConfigManager: LLMConfigManager;
-  private summaryPrompt: PromptTemplate;
-  private keyPointsPrompt: PromptTemplate;
+  private readonly textSplitter: RecursiveCharacterTextSplitter;
+  private readonly llmConfigManager: LLMConfigManager;
+  private readonly summaryPrompt: PromptTemplate;
+  private readonly keyPointsPrompt: PromptTemplate;
 
   constructor() {
     this.llmConfigManager = new LLMConfigManager();

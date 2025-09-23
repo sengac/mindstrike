@@ -56,7 +56,7 @@ export function MermaidModal({
 
           // Render with mermaid
           await mermaid.run({
-            nodes: [element as HTMLElement],
+            nodes: [element],
           });
 
           // Scale the SVG to fit the container
@@ -82,10 +82,14 @@ export function MermaidModal({
   const downloadMermaidDiagram = async () => {
     try {
       const diagramElement = document.getElementById(modalId);
-      if (!diagramElement) return;
+      if (!diagramElement) {
+        return;
+      }
 
       const svgElement = diagramElement.querySelector('svg');
-      if (!svgElement) return;
+      if (!svgElement) {
+        return;
+      }
 
       // Get SVG string
       const svgData = new XMLSerializer().serializeToString(svgElement);
@@ -123,7 +127,9 @@ export function MermaidModal({
     };
   }, [isOpen, handleClose]);
 
-  if (!shouldRender) return null;
+  if (!shouldRender) {
+    return null;
+  }
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] bg-black bg-opacity-75 backdrop-blur-sm flex items-center justify-center">

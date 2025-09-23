@@ -2,7 +2,7 @@
  * Frontend image cache service to prevent duplicate downloads of album art
  */
 export class ImageCache {
-  private cache = new Map<string, Promise<string>>();
+  private readonly cache = new Map<string, Promise<string>>();
   private static instance: ImageCache;
 
   static getInstance(): ImageCache {
@@ -16,7 +16,9 @@ export class ImageCache {
    * Get image URL, using cache if available
    */
   async getImageUrl(originalUrl: string): Promise<string> {
-    if (!originalUrl) return '';
+    if (!originalUrl) {
+      return '';
+    }
 
     // If it's already a data URL, use it directly
     if (originalUrl.startsWith('data:')) {

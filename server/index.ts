@@ -1,15 +1,17 @@
-import express, { Request, Response } from 'express';
+import type { Request, Response } from 'express';
+import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs/promises';
 import { existsSync, statSync, createReadStream, stat } from 'fs';
 import { musicMetadataCache } from './music-metadata-cache.js';
-import { Stats } from 'fs';
+import type { Stats } from 'fs';
 
 import { fileURLToPath } from 'url';
 // NOTE: .js extensions are required for ES modules in Node.js/Electron
 // Without them, we get ERR_MODULE_NOT_FOUND errors in the packaged app
-import { Agent, AgentConfig } from './agent.js';
+import type { AgentConfig } from './agent.js';
+import { Agent } from './agent.js';
 import { logger } from './logger.js';
 import { cleanContentForLLM } from './utils/content-filter.js';
 import { LLMScanner } from './llm-scanner.js';
@@ -28,24 +30,21 @@ import {
   getLocalLLMManager,
   cleanup as cleanupLLMWorker,
 } from './local-llm-singleton.js';
-import { LocalModelInfo } from './local-llm-manager.js';
+import type { LocalModelInfo } from './local-llm-manager.js';
 import localLlmRoutes from './routes/local-llm.js';
 import modelScanRoutes from './routes/model-scan.js';
 import { MindmapAgentIterative } from './agents/mindmap-agent-iterative.js';
 import { WorkflowAgent } from './agents/workflow-agent.js';
 import { ConversationManager } from './conversation-manager.js';
 import { asyncHandler } from './utils/async-handler.js';
-import {
-  ImageAttachment,
-  NotesAttachment,
-  SSEEventType,
-} from '../src/types.js';
+import type { ImageAttachment, NotesAttachment } from '../src/types.js';
+import { SSEEventType } from '../src/types.js';
 import { systemInfoManager } from './system-info-manager.js';
 import { ChatAgent } from './agents/chat-agent.js';
 
 // Cancellation system for ongoing message processing
 class MessageCancellationManager {
-  private activeTasks = new Map<string, AbortController>();
+  private readonly activeTasks = new Map<string, AbortController>();
 
   startTask(threadId: string): AbortController {
     // Cancel any existing task for this thread
@@ -273,7 +272,7 @@ async function loadWorkspaceSettings() {
     musicRoot = persistedMusicRoot;
   }
 }
-let currentLlmConfig = {
+const currentLlmConfig = {
   baseURL: 'http://localhost:11434',
   model: '',
   displayName: undefined as string | undefined,
@@ -311,8 +310,8 @@ const getAgentConfig = (threadId?: string): AgentConfig => ({
 
 // Thread-aware agent pool
 class AgentPool {
-  private agents: Map<string, Agent> = new Map();
-  private workflowAgents: Map<string, WorkflowAgent> = new Map();
+  private readonly agents: Map<string, Agent> = new Map();
+  private readonly workflowAgents: Map<string, WorkflowAgent> = new Map();
   private currentThreadId: string = 'default';
 
   async setCurrentThread(threadId: string): Promise<void> {
@@ -550,7 +549,7 @@ setInterval(() => {
 
 // Playlist file operation queue to prevent race conditions
 class PlaylistFileQueue {
-  private queue: Array<() => Promise<void>> = [];
+  private readonly queue: Array<() => Promise<void>> = [];
   private isProcessing = false;
 
   async add<T>(operation: () => Promise<T>): Promise<T> {
@@ -568,7 +567,9 @@ class PlaylistFileQueue {
   }
 
   private async process() {
-    if (this.isProcessing || this.queue.length === 0) return;
+    if (this.isProcessing || this.queue.length === 0) {
+      return;
+    }
 
     this.isProcessing = true;
 
@@ -2421,7 +2422,7 @@ app.post(
         useAgenticWorkflow = true,
       } = req.body;
 
-      if (!prompt || !prompt.trim()) {
+      if (!prompt?.trim()) {
         return res.status(400).json({ error: 'Prompt is required' });
       }
 
@@ -2585,7 +2586,7 @@ app.post(
     try {
       const { prompt } = req.body;
 
-      if (!prompt || !prompt.trim()) {
+      if (!prompt?.trim()) {
         return res.status(400).json({ error: 'Prompt is required' });
       }
 
@@ -2947,8 +2948,12 @@ app.get('/api/workspace/files', async (req: Request, res: Response) => {
     const files = entries
       .sort((a, b) => {
         // Directories first, then files
-        if (a.isDirectory() && !b.isDirectory()) return -1;
-        if (!a.isDirectory() && b.isDirectory()) return 1;
+        if (a.isDirectory() && !b.isDirectory()) {
+          return -1;
+        }
+        if (!a.isDirectory() && b.isDirectory()) {
+          return 1;
+        }
         return a.name.localeCompare(b.name);
       })
       .map(entry => (entry.isDirectory() ? `${entry.name}/` : entry.name));
