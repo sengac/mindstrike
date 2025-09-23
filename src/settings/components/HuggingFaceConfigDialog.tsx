@@ -3,6 +3,7 @@ import { Key, Eye, EyeOff, Save, X } from 'lucide-react';
 import { BaseDialog } from '../../components/shared/BaseDialog';
 import { useDialogAnimation } from '../../hooks/useDialogAnimation';
 import toast from 'react-hot-toast';
+import { logger } from '../../utils/logger';
 
 interface HuggingFaceConfigDialogProps {
   isOpen: boolean;
@@ -59,7 +60,7 @@ export function HuggingFaceConfigDialog({
         toast.error(error.error || 'Failed to save token');
       }
     } catch (error) {
-      console.error('Error saving HF token:', error);
+      logger.error('Error saving HF token:', error);
       toast.error('Failed to save token');
     } finally {
       setIsLoading(false);
@@ -76,7 +77,7 @@ export function HuggingFaceConfigDialog({
           setHfToken(data.token);
         }
       } catch (error) {
-        console.error('Error fetching token:', error);
+        logger.error('Error fetching token:', error);
         toast.error('Failed to retrieve token');
         return;
       }

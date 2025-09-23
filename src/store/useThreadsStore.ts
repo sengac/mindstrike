@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
+import { logger } from '../utils/logger';
 
 export interface ThreadMetadata {
   id: string;
@@ -78,7 +79,7 @@ export const useThreadsStore = create<ThreadsState>()(
             get().activeThreadId || (threads.length > 0 ? threads[0].id : null),
         });
       } catch (error: unknown) {
-        console.error('Failed to load threads:', error);
+        logger.error('Failed to load threads:', error);
         const errorMessage =
           error instanceof Error ? error.message : 'Unknown error';
         set({ error: errorMessage, isLoading: false });
@@ -116,7 +117,7 @@ export const useThreadsStore = create<ThreadsState>()(
 
         return newThread.id;
       } catch (error: unknown) {
-        console.error('Failed to create thread:', error);
+        logger.error('Failed to create thread:', error);
         const errorMessage =
           error instanceof Error ? error.message : 'Unknown error';
         set({ error: errorMessage, isLoading: false });
@@ -155,7 +156,7 @@ export const useThreadsStore = create<ThreadsState>()(
           isLoading: false,
         });
       } catch (error: unknown) {
-        console.error('Failed to delete thread:', error);
+        logger.error('Failed to delete thread:', error);
         const errorMessage =
           error instanceof Error ? error.message : 'Unknown error';
         set({ error: errorMessage, isLoading: false });
@@ -182,7 +183,7 @@ export const useThreadsStore = create<ThreadsState>()(
           ),
         }));
       } catch (error: unknown) {
-        console.error('Failed to rename thread:', error);
+        logger.error('Failed to rename thread:', error);
         const errorMessage =
           error instanceof Error ? error.message : 'Unknown error';
         set({ error: errorMessage });
@@ -210,7 +211,7 @@ export const useThreadsStore = create<ThreadsState>()(
           ),
         }));
       } catch (error: unknown) {
-        console.error('Failed to update thread prompt:', error);
+        logger.error('Failed to update thread prompt:', error);
         const errorMessage =
           error instanceof Error ? error.message : 'Unknown error';
         set({ error: errorMessage });
@@ -235,7 +236,7 @@ export const useThreadsStore = create<ThreadsState>()(
           ),
         }));
       } catch (error: unknown) {
-        console.error('Failed to clear thread:', error);
+        logger.error('Failed to clear thread:', error);
         const errorMessage =
           error instanceof Error ? error.message : 'Unknown error';
         set({ error: errorMessage });

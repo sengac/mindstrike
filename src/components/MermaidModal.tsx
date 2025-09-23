@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import mermaid from 'mermaid';
 import { MERMAID_CONFIG } from '../utils/mermaidConfig';
 import { useDialogAnimation } from '../hooks/useDialogAnimation';
+import { logger } from '../utils/logger';
 
 interface MermaidModalProps {
   isOpen: boolean;
@@ -70,7 +71,7 @@ export function MermaidModal({
 
           setIsRendering(false);
         } catch (error) {
-          console.error('Modal mermaid rendering failed:', error);
+          logger.error('Modal mermaid rendering failed:', error);
           setIsRendering(false);
         }
       };
@@ -105,7 +106,7 @@ export function MermaidModal({
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (err) {
-      console.error('Failed to download diagram:', err);
+      logger.error('Failed to download diagram:', err);
     }
   };
 

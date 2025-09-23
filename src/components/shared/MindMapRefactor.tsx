@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Plus, Edit2, Trash2, Save, X } from 'lucide-react';
 import { ConfirmDialog } from './ConfirmDialog';
+import { logger } from '../../utils/logger';
 
 interface MindMapRefactorProps {
   nodeId: string;
@@ -35,7 +36,7 @@ export function MindMapRefactor({
       await onNodeUpdate(nodeId, editedLabel.trim());
       setIsEditing(false);
     } catch (error) {
-      console.error('Failed to update node:', error);
+      logger.error('Failed to update node:', error);
     } finally {
       setIsLoading(false);
     }
@@ -54,7 +55,7 @@ export function MindMapRefactor({
       setNewChildText('');
       setIsAddingChild(false);
     } catch (error) {
-      console.error('Failed to add child node:', error);
+      logger.error('Failed to add child node:', error);
     } finally {
       setIsLoading(false);
     }
@@ -76,7 +77,7 @@ export function MindMapRefactor({
     try {
       await onNodeDelete(nodeId);
     } catch (error) {
-      console.error('Failed to delete node:', error);
+      logger.error('Failed to delete node:', error);
     } finally {
       setIsLoading(false);
     }

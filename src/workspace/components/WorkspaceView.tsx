@@ -22,6 +22,7 @@ import { ConfirmDialog } from '../../components/shared/ConfirmDialog';
 import toast from 'react-hot-toast';
 import { joinPath } from '../../utils/pathUtils';
 import { MusicVisualization } from '../../components/MusicVisualization';
+import { logger } from '../../utils/logger';
 
 interface WorkspaceViewProps {
   onDirectoryChange?: () => void;
@@ -199,10 +200,10 @@ export function WorkspaceView({ onDirectoryChange }: WorkspaceViewProps) {
         setIsEditing(false);
         // Optionally show success message
       } else {
-        console.error('Failed to save file');
+        logger.error('Failed to save file');
       }
     } catch (error) {
-      console.error('Error saving file:', error);
+      logger.error('Error saving file:', error);
     }
   };
 
@@ -240,11 +241,11 @@ export function WorkspaceView({ onDirectoryChange }: WorkspaceViewProps) {
         setFileToDelete(null);
       } else {
         const errorData = await response.json();
-        console.error('Failed to delete file:', errorData.error);
+        logger.error('Failed to delete file:', errorData.error);
         toast.error(`Failed to delete file: ${errorData.error}`);
       }
     } catch (error) {
-      console.error('Error deleting file:', error);
+      logger.error('Error deleting file:', error);
       toast.error('Error deleting file');
     }
   };
@@ -539,10 +540,10 @@ export function WorkspaceView({ onDirectoryChange }: WorkspaceViewProps) {
                               );
 
                               if (!response.ok) {
-                                console.error('Failed to save file');
+                                logger.error('Failed to save file');
                               }
                             } catch (error) {
-                              console.error('Error saving file:', error);
+                              logger.error('Error saving file:', error);
                             }
                           }}
                         />

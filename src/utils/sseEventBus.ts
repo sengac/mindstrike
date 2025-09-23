@@ -1,4 +1,5 @@
 import { decodeSseDataSync } from './sseDecoder';
+import { logger } from './logger';
 
 export interface SSEEvent {
   type: string;
@@ -97,12 +98,12 @@ class SSEEventBus {
 
         this.broadcast(sseEvent);
       } catch (error) {
-        console.error('[SSEEventBus] Error parsing event:', error);
+        logger.error('[SSEEventBus] Error parsing event:', error);
       }
     };
 
     this.eventSource.onerror = error => {
-      console.error('[SSEEventBus] Connection error:', error);
+      logger.error('[SSEEventBus] Connection error:', error);
       this.isConnected = false;
       this.notifyConnectionStatusChange(false);
 
@@ -120,7 +121,7 @@ class SSEEventBus {
    */
   private scheduleReconnect(): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('[SSEEventBus] Max reconnection attempts reached');
+      logger.error('[SSEEventBus] Max reconnection attempts reached');
       return;
     }
 
@@ -175,7 +176,7 @@ class SSEEventBus {
           try {
             handler(event);
           } catch (error) {
-            console.error(
+            logger.error(
               `[SSEEventBus] Error in event handler for ${event.type}:`,
               error
             );
@@ -189,7 +190,7 @@ class SSEEventBus {
           try {
             handler(event);
           } catch (error) {
-            console.error(
+            logger.error(
               `[SSEEventBus] Error in wildcard event handler for ${event.type}:`,
               error
             );
@@ -247,7 +248,7 @@ class SSEEventBus {
       try {
         callback(isConnected);
       } catch (error) {
-        console.error(
+        logger.error(
           '[SSEEventBus] Error in connection status callback:',
           error
         );

@@ -18,6 +18,7 @@ import { ColorPalette } from '../../components/ColorPalette';
 import { useAppStore } from '../../store/useAppStore';
 import type { Source } from '../types/mindMap';
 import type { MindMapData } from '../../utils/mindMapData';
+import { logger } from '../../utils/logger';
 
 // Import the new store hooks
 import {
@@ -110,7 +111,7 @@ export function MindMapCanvas({
       setIsDataLoaded(true);
       loadingRef.current = null; // Reset loading state
     } catch (error) {
-      console.error('Failed to load mindmap data:', error);
+      logger.error('Failed to load mindmap data:', error);
       setMindMapData(undefined);
       setLoadedMindMapId(null);
       setIsDataLoaded(true);
@@ -122,7 +123,7 @@ export function MindMapCanvas({
   const saveMindMapData = useCallback(
     async (data: MindMapData) => {
       if (!activeMindMap?.id) {
-        console.warn('No active MindMap ID for saving mindmap');
+        logger.warn('No active MindMap ID for saving mindmap');
         return;
       }
 
@@ -142,16 +143,15 @@ export function MindMapCanvas({
           // Reload mindmaps to refresh the updated timestamp, preserving active mindmap
           loadMindMaps(true);
         } else {
-          console.error(
-            'Failed to save mindmap:',
-            response.status,
-            response.statusText
-          );
+          logger.error('Failed to save mindmap:', {
+            status: response.status,
+            statusText: response.statusText,
+          });
           const errorText = await response.text();
-          console.error('Error response body:', errorText);
+          logger.error('Error response body:', { errorText });
         }
       } catch (error) {
-        console.error('Failed to save mindmap data:', error);
+        logger.error('Failed to save mindmap data:', error);
       }
     },
     [activeMindMap?.id, loadMindMaps]

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { logger } from '../utils/logger';
 
 interface DocumentSummary {
   id: string;
@@ -56,7 +57,7 @@ export const useLFSStore = create<LFSStore>()(
         try {
           const response = await fetch(`/api/lfs/${lfsId}`);
           if (!response.ok) {
-            console.warn(`LFS entry not found: ${lfsId}`);
+            logger.warn(`LFS entry not found: ${lfsId}`);
             return null;
           }
 
@@ -68,7 +69,7 @@ export const useLFSStore = create<LFSStore>()(
 
           return content;
         } catch (error) {
-          console.error(`Failed to retrieve LFS entry ${lfsId}:`, error);
+          logger.error(`Failed to retrieve LFS entry ${lfsId}:`, error);
           return null;
         }
       },
@@ -97,7 +98,7 @@ export const useLFSStore = create<LFSStore>()(
 
           return summary;
         } catch (error) {
-          console.error(`Failed to retrieve LFS summary ${lfsId}:`, error);
+          logger.error(`Failed to retrieve LFS summary ${lfsId}:`, error);
           return null;
         }
       },
@@ -110,7 +111,7 @@ export const useLFSStore = create<LFSStore>()(
           }
           return await response.json();
         } catch (error) {
-          console.error('Failed to get LFS stats:', error);
+          logger.error('Failed to get LFS stats:', error);
           return {
             totalEntries: 0,
             totalSize: 0,

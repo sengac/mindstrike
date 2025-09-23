@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { logger } from '../utils/logger';
 
 interface VramState {
   total: number; // bytes
@@ -69,7 +70,7 @@ export const useSystemInformationStore = create<SystemInformationStore>()(
             });
           }
         } catch (error) {
-          console.error('Failed to update system information:', error);
+          logger.error('Failed to update system information:', error);
           set({ isLoading: false });
         }
       },

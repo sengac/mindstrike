@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { joinPath } from '../../utils/pathUtils';
+import { logger } from '../../utils/logger';
 
 export function useWorkspaceStore() {
   const {
@@ -23,7 +24,7 @@ export function useWorkspaceStore() {
         setCurrentDirectory(data.currentDirectory);
       }
     } catch (error) {
-      console.error('Failed to load current directory:', error);
+      logger.error('Failed to load current directory:', error);
     }
   }, [setCurrentDirectory]);
 
@@ -35,10 +36,10 @@ export function useWorkspaceStore() {
         const fileList = await response.json();
         setFiles(fileList);
       } else {
-        console.error('Failed to load files');
+        logger.error('Failed to load files');
       }
     } catch (error) {
-      console.error('Failed to load files:', error);
+      logger.error('Failed to load files:', error);
     } finally {
       setIsLoading(false);
     }

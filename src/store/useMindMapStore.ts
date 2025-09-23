@@ -15,6 +15,7 @@ import {
   isSseMindmapCompleteData,
 } from '../utils/sseDecoder';
 import { sseEventBus } from '../utils/sseEventBus';
+import { logger } from '../utils/logger';
 
 interface HistoryState {
   nodes: Node<MindMapNodeData>[];
@@ -266,7 +267,7 @@ export const useMindMapStore = create<MindMapStore>()(
             state.selectedNodeId = null;
           });
         } catch (error) {
-          console.error('Failed to initialize mind map:', error);
+          logger.error('Failed to initialize mind map:', error);
           set({ isInitializing: false });
         }
       },
@@ -304,7 +305,7 @@ export const useMindMapStore = create<MindMapStore>()(
           actions.saveToHistory();
           actions.save();
         } catch (error) {
-          console.error('Failed to add child node:', error);
+          logger.error('Failed to add child node:', error);
         }
       },
 
@@ -340,7 +341,7 @@ export const useMindMapStore = create<MindMapStore>()(
           actions.saveToHistory();
           actions.save();
         } catch (error) {
-          console.error('Failed to add sibling node:', error);
+          logger.error('Failed to add sibling node:', error);
         }
       },
 
@@ -399,7 +400,7 @@ export const useMindMapStore = create<MindMapStore>()(
           actions.saveToHistory();
           actions.save();
         } catch (error) {
-          console.error('Failed to delete node:', error);
+          logger.error('Failed to delete node:', error);
         }
       },
 
@@ -443,7 +444,7 @@ export const useMindMapStore = create<MindMapStore>()(
           actions.saveToHistory();
           actions.save();
         } catch (error) {
-          console.error('Failed to update node label with layout:', error);
+          logger.error('Failed to update node label with layout:', error);
         }
       },
 
@@ -472,7 +473,7 @@ export const useMindMapStore = create<MindMapStore>()(
           actions.saveToHistory();
           actions.save();
         } catch (error) {
-          console.error('Failed to toggle node collapse:', error);
+          logger.error('Failed to toggle node collapse:', error);
         }
       },
 
@@ -503,7 +504,7 @@ export const useMindMapStore = create<MindMapStore>()(
           actions.saveToHistory();
           actions.save();
         } catch (error) {
-          console.error('Failed to move node:', error);
+          logger.error('Failed to move node:', error);
         }
       },
 
@@ -653,7 +654,7 @@ export const useMindMapStore = create<MindMapStore>()(
           actions.saveToHistory();
           actions.save();
         } catch (error) {
-          console.error('Failed to change layout:', error);
+          logger.error('Failed to change layout:', error);
         }
       },
 
@@ -681,7 +682,7 @@ export const useMindMapStore = create<MindMapStore>()(
           actions.saveToHistory();
           actions.save();
         } catch (error) {
-          console.error('Failed to reset layout:', error);
+          logger.error('Failed to reset layout:', error);
         }
       },
 
@@ -1030,7 +1031,7 @@ export const useMindMapStore = create<MindMapStore>()(
                 checkGenerationCompletion();
               }
             } catch (error) {
-              console.error('Failed to parse SSE data:', error);
+              logger.error('Failed to parse SSE data:', error);
             }
           });
 
@@ -1064,7 +1065,7 @@ export const useMindMapStore = create<MindMapStore>()(
             checkComplete();
           });
         } catch (error) {
-          console.error('❌ Generation failed:', error);
+          logger.error('❌ Generation failed:', error);
           set({
             generationError:
               error instanceof Error ? error.message : String(error),
@@ -1083,7 +1084,7 @@ export const useMindMapStore = create<MindMapStore>()(
           fetch(`/api/mindmaps/cancel/${state.currentGenerationWorkflowId}`, {
             method: 'POST',
           }).catch(error => {
-            console.warn('Failed to cancel server-side generation:', error);
+            logger.warn('Failed to cancel server-side generation:', error);
           });
         }
 
@@ -1180,7 +1181,7 @@ export const useMindMapStore = create<MindMapStore>()(
               deleteNodeAndChildren(change.nodeId);
             }
           } catch (error) {
-            console.error('Error applying change:', change, error);
+            logger.error('Error applying change:', { change, error });
           }
         }
 
@@ -1281,7 +1282,7 @@ export const useMindMapStore = create<MindMapStore>()(
           );
           await state.saveCallback(treeData);
         } catch (error) {
-          console.error('Failed to save mind map:', error);
+          logger.error('Failed to save mind map:', error);
         }
       },
 
@@ -1335,7 +1336,7 @@ export const useMindMapStore = create<MindMapStore>()(
                 await get().applyMindmapChanges(eventData.result.changes);
               }
             } catch (error) {
-              console.error('Failed to apply task changes from SSE:', error);
+              logger.error('Failed to apply task changes from SSE:', error);
             }
           }
         );

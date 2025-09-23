@@ -8,6 +8,7 @@ import {
 } from '../utils/sseDecoder';
 import { sseEventBus } from '../utils/sseEventBus';
 import { SSEEventType } from '../types';
+import { logger } from '../utils/logger';
 
 export interface Task {
   id: string;
@@ -484,7 +485,7 @@ async function initializeTaskEventSubscriptions() {
           break;
       }
     } catch (error) {
-      console.error('Error parsing workflow SSE message:', error);
+      logger.error('Error parsing workflow SSE message:', error);
     }
   };
 

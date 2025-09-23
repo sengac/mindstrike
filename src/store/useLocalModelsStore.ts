@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import toast from 'react-hot-toast';
 import { modelEvents } from '../utils/modelEvents';
+import { logger } from '../utils/logger';
 
 export interface ModelLoadingSettings {
   gpuLayers?: number; // -1 for auto, 0 for CPU only, positive number for specific layers
@@ -130,7 +131,7 @@ export const useLocalModelsStore = create<LocalModelsState>()(
               allSettings = await settingsResponse.json();
             }
           } catch (error) {
-            console.error('Error loading server-side settings:', error);
+            logger.error('Error loading server-side settings:', error);
           }
 
           // Merge server-calculated settings with user settings from server
@@ -160,7 +161,7 @@ export const useLocalModelsStore = create<LocalModelsState>()(
                   statuses.set(model.id, status);
                 }
               } catch (error) {
-                console.error(
+                logger.error(
                   `Error loading status for model ${model.id}:`,
                   error
                 );
@@ -170,7 +171,7 @@ export const useLocalModelsStore = create<LocalModelsState>()(
           set({ modelStatuses: statuses });
         }
       } catch (error) {
-        console.error('Error loading local LLM data:', error);
+        logger.error('Error loading local LLM data:', error);
         const errorMessage =
           error instanceof TypeError && error.message.includes('NetworkError')
             ? 'Server not running.'
@@ -214,7 +215,7 @@ export const useLocalModelsStore = create<LocalModelsState>()(
                   method: 'POST',
                 });
               } catch (error) {
-                console.error(`Error unloading model ${modelId}:`, error);
+                logger.error(`Error unloading model ${modelId}:`, error);
               }
             })
           );
@@ -232,7 +233,7 @@ export const useLocalModelsStore = create<LocalModelsState>()(
             get().loadModel(targetModelId, true);
           }, 1000);
         } catch (error) {
-          console.error('Error during memory issue retry:', error);
+          logger.error('Error during memory issue retry:', error);
           toast.error('Failed to free up memory and retry');
         }
       };
@@ -275,7 +276,7 @@ export const useLocalModelsStore = create<LocalModelsState>()(
           toast.error(message);
         }
       } catch (error) {
-        console.error('Error loading model:', error);
+        logger.error('Error loading model:', error);
         const message = isAutoLoad
           ? 'Failed to start model due to connection error'
           : 'Failed to load model';
@@ -314,7 +315,7 @@ export const useLocalModelsStore = create<LocalModelsState>()(
           toast.error(error.error || 'Failed to unload model');
         }
       } catch (error) {
-        console.error('Error unloading model:', error);
+        logger.error('Error unloading model:', error);
         toast.error('Failed to unload model');
       }
     },
@@ -337,7 +338,7 @@ export const useLocalModelsStore = create<LocalModelsState>()(
           toast.error(error.error || 'Failed to delete model');
         }
       } catch (error) {
-        console.error('Error deleting model:', error);
+        logger.error('Error deleting model:', error);
         toast.error('Failed to delete model');
       }
     },
@@ -356,7 +357,7 @@ export const useLocalModelsStore = create<LocalModelsState>()(
           set({ modelStatuses: newStatuses });
         }
       } catch (error) {
-        console.error(`Error refreshing status for model ${modelId}:`, error);
+        logger.error(`Error refreshing status for model ${modelId}:`, error);
       }
     },
 
@@ -396,7 +397,7 @@ export const useLocalModelsStore = create<LocalModelsState>()(
           toast.error(error.error || 'Failed to update model settings');
         }
       } catch (error) {
-        console.error('Error updating model settings:', error);
+        logger.error('Error updating model settings:', error);
         toast.error('Failed to update model settings');
       }
     },
@@ -443,7 +444,12 @@ export function initializeLocalModelsStore() {
     const { isLoading, fetchModelsAndStatuses } =
       useLocalModelsStore.getState();
     if (!isLoading) {
-      fetchModelsAndStatuses().catch(console.error);
+      fetchModelsAndStatuses().catch(error =>
+        logger.error(
+          'Failed to fetch models and statuses on model downloaded event:',
+          error
+        )
+      );
     }
   };
 
@@ -451,7 +457,15 @@ export function initializeLocalModelsStore() {
   modelEvents.on('models-changed', handleModelDownloaded);
 
   // Initial fetch
-  useLocalModelsStore.getState().fetchModelsAndStatuses().catch(console.error);
+  useLocalModelsStore
+    .getState()
+    .fetchModelsAndStatuses()
+    .catch(error =>
+      logger.error(
+        'Failed to fetch models and statuses during initialization:',
+        error
+      )
+    );
 
   // Cleanup on page unload
   window.addEventListener('beforeunload', () => {

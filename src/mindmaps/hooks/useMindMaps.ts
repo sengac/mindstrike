@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import { logger } from '../../utils/logger';
 
 export interface MindMap {
   id: string;
@@ -54,7 +55,7 @@ export function useMindMaps() {
         }
       }
     } catch (error) {
-      console.error('Failed to load mindmaps from file:', error);
+      logger.error('Failed to load mindmaps from file:', error);
     } finally {
       setIsLoaded(true);
     }
@@ -92,7 +93,7 @@ export function useMindMaps() {
             throw new Error(`HTTP error! status: ${response.status}`);
           }
         } catch (error) {
-          console.error('Failed to save mindmaps to file:', error);
+          logger.error('Failed to save mindmaps to file:', error);
         }
       } else {
         // Clear any existing timeout
@@ -115,7 +116,7 @@ export function useMindMaps() {
               throw new Error(`HTTP error! status: ${response.status}`);
             }
           } catch (error) {
-            console.error('Failed to save mindmaps to file:', error);
+            logger.error('Failed to save mindmaps to file:', error);
           }
         }, 500);
       }

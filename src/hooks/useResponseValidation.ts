@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type { ConversationMessage } from '../types';
 import type { ValidationProgress } from '../services/responseValidationOrchestrator';
 import { ResponseValidationOrchestrator } from '../services/responseValidationOrchestrator';
+import { logger } from '../utils/logger';
 
 export interface UseResponseValidationReturn {
   isValidating: boolean;
@@ -58,7 +59,7 @@ export function useResponseValidation(): UseResponseValidationReturn {
         JSON.stringify(enabled)
       );
     } catch (error) {
-      console.warn('Failed to save validation preference:', error);
+      logger.warn('Failed to save validation preference:', { error });
     }
   }, []);
 
@@ -71,7 +72,7 @@ export function useResponseValidation(): UseResponseValidationReturn {
         setValidationEnabledState(enabled);
       }
     } catch (error) {
-      console.warn('Failed to load validation preference:', error);
+      logger.warn('Failed to load validation preference:', { error });
     }
   }, []);
 
@@ -98,7 +99,7 @@ export function useResponseValidation(): UseResponseValidationReturn {
           hasChanges: result.hasChanges,
         };
       } catch (error) {
-        console.error('Message validation failed:', error);
+        logger.error('Message validation failed:', error);
         return { message, hasChanges: false };
       }
     },

@@ -3,6 +3,7 @@ import { useAppStore } from '../store/useAppStore';
 import { modelEvents } from '../utils/modelEvents';
 import { sseEventBus } from '../utils/sseEventBus';
 import { SSEEventType } from '../types';
+import { logger } from '../utils/logger';
 
 export interface LLMModel {
   id: string;
@@ -108,7 +109,7 @@ export function useModels() {
         // Store in localStorage
         setLastUsedModel(modelId);
       } catch (error) {
-        console.error('Failed to set default model:', error);
+        logger.error('Failed to set default model:', error);
         throw error;
       }
     },
@@ -131,7 +132,7 @@ export function useModels() {
 
       await fetchModels();
     } catch (error) {
-      console.error('Failed to rescan models:', error);
+      logger.error('Failed to rescan models:', error);
       setError(
         error instanceof Error ? error.message : 'Failed to rescan models'
       );
@@ -243,7 +244,7 @@ export function useCustomServices() {
 
         return newService;
       } catch (error) {
-        console.error('Failed to add custom service:', error);
+        logger.error('Failed to add custom service:', error);
         throw error;
       }
     },
@@ -275,7 +276,7 @@ export function useCustomServices() {
 
         return updatedService;
       } catch (error) {
-        console.error('Failed to update custom service:', error);
+        logger.error('Failed to update custom service:', error);
         throw error;
       }
     },
@@ -297,7 +298,7 @@ export function useCustomServices() {
       // Emit event to trigger model rescan
       modelEvents.emit('service-removed');
     } catch (error) {
-      console.error('Failed to remove custom service:', error);
+      logger.error('Failed to remove custom service:', error);
       throw error;
     }
   }, []);

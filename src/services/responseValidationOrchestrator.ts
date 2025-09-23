@@ -6,6 +6,7 @@ import type {
 } from './responseValidator';
 import { ResponseScanner, OffScreenValidator } from './responseValidator';
 import { DebugLLMService } from './debugLLMService';
+import { logger } from '../utils/logger';
 
 export interface ValidationProgress {
   stage:
@@ -69,7 +70,7 @@ export class ResponseValidationOrchestrator {
       try {
         callback(progress);
       } catch (error) {
-        console.error('Error in validation progress callback:', error);
+        logger.error('Error in validation progress callback:', error);
       }
     });
   }

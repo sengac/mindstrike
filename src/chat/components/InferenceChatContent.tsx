@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Brain, Send } from 'lucide-react';
 import { clsx } from 'clsx';
+import { logger } from '../../utils/logger';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -90,7 +91,7 @@ export function InferenceChatContent({
         { role: 'assistant', content: assistantMessage },
       ]);
     } catch (error) {
-      console.error('Error calling AI API:', error);
+      logger.error('Error calling AI API:', error);
       setChatMessages([
         ...newMessages,
         {

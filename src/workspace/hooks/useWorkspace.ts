@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { logger } from '../../utils/logger';
 
 export function useWorkspace() {
   const [files, setFiles] = useState<string[]>([]);
@@ -13,7 +14,7 @@ export function useWorkspace() {
         setCurrentDirectory(data.currentDirectory);
       }
     } catch (error) {
-      console.error('Failed to load current directory:', error);
+      logger.error('Failed to load current directory:', error);
     }
   }, []);
 
@@ -25,10 +26,10 @@ export function useWorkspace() {
         const fileList = await response.json();
         setFiles(fileList);
       } else {
-        console.error('Failed to load files');
+        logger.error('Failed to load files');
       }
     } catch (error) {
-      console.error('Failed to load files:', error);
+      logger.error('Failed to load files:', error);
     } finally {
       setIsLoading(false);
     }

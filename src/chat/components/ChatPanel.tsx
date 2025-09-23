@@ -28,6 +28,7 @@ import { useTaskStore } from '../../store/useTaskStore';
 import { useThreadsStore } from '../../store/useThreadsStore';
 import { WorkflowProgress } from './WorkflowProgress';
 import { TypingIndicator } from './TypingIndicator';
+import { logger } from '../../utils/logger';
 import type {
   ConversationMessage,
   Thread,
@@ -106,7 +107,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
       isAgentMode: isAgentActive,
     });
 
-    // console.log('[ChatPanel] ThreadId:', threadId, 'Messages:', messages?.length, 'isLoading:', isLoading);
+    // logger.info('[ChatPanel] ThreadId:', threadId, 'Messages:', messages?.length, 'isLoading:', isLoading);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -290,7 +291,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
 
           setAttachedImages(prev => [...prev, imageAttachment]);
         } catch (error) {
-          console.error('Error processing image:', error);
+          logger.error('Error processing image:', error);
           toast.error('Error processing image. Please try again.');
         }
       }

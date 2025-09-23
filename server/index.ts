@@ -107,11 +107,56 @@ interface _MindMapData {
   [key: string]: unknown;
 }
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Conditionally setup OpenAPI generator for documentation generation
+if (process.env.GENERATE_OPENAPI === 'true') {
+  const expressOasGenerator = await import('express-oas-generator');
+  const openApiOptions = {
+    info: {
+      title: 'MindStrike API',
+      version: '1.0.0',
+      description:
+        'API documentation for MindStrike - AI Knowledge Assistant Platform',
+      contact: {
+        name: 'MindStrike Team',
+        url: 'https://github.com/mindstrike',
+      },
+      license: {
+        name: 'MIT',
+        url: 'https://opensource.org/licenses/MIT',
+      },
+    },
+    servers: [
+      {
+        url: `http://localhost:${PORT}`,
+        description: 'Development server',
+      },
+    ],
+    tags: [
+      { name: 'System', description: 'System information and health checks' },
+      { name: 'Audio', description: 'Audio streaming and metadata operations' },
+      { name: 'Playlists', description: 'Playlist management operations' },
+      {
+        name: 'LLM',
+        description: 'Language model configuration and management',
+      },
+      { name: 'Conversations', description: 'Thread and message management' },
+      { name: 'MindMaps', description: 'Mind map creation and management' },
+      { name: 'Workspace', description: 'File and directory operations' },
+      { name: 'MCP', description: 'Model Context Protocol server management' },
+      { name: 'SSE', description: 'Server-Sent Events for real-time updates' },
+    ],
+    basePath: '/api',
+    specOutputPath: './openapi.json',
+    exposeApiDocs: true,
+    apiDocsPath: '/api-docs',
+    ignoredNodeEnvironments: ['production'],
+  };
+
+  expressOasGenerator.default.init(app, openApiOptions);
+}
 
 // Initialize cancellation manager
 const cancellationManager = new MessageCancellationManager();
@@ -146,7 +191,48 @@ app.use('/api/local-llm', localLlmRoutes);
 // Mount model scan routes
 app.use('/api/model-scan', modelScanRoutes);
 
-// System information endpoint
+/**
+ * @swagger
+ * /api/system/info:
+ *   get:
+ *     summary: Get system information
+ *     description: Returns comprehensive system information including CPU, memory, OS details, and MindStrike version
+ *     tags: [System]
+ *     responses:
+ *       200:
+ *         description: System information retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 os:
+ *                   type: object
+ *                   properties:
+ *                     platform: { type: string, example: "darwin" }
+ *                     type: { type: string, example: "Darwin" }
+ *                     release: { type: string, example: "23.5.0" }
+ *                     arch: { type: string, example: "x64" }
+ *                     hostname: { type: string, example: "MacBook-Pro.local" }
+ *                 cpu:
+ *                   type: object
+ *                   properties:
+ *                     model: { type: string, example: "Apple M1 Pro" }
+ *                     cores: { type: integer, example: 10 }
+ *                     speed: { type: number, example: 3.2 }
+ *                 memory:
+ *                   type: object
+ *                   properties:
+ *                     total: { type: integer, example: 17179869184 }
+ *                     free: { type: integer, example: 2147483648 }
+ *                     used: { type: integer, example: 15032385536 }
+ *                 mindstrike:
+ *                   type: object
+ *                   properties:
+ *                     version: { type: string, example: "0.1.0" }
+ *                     nodeVersion: { type: string, example: "v20.11.0" }
+ *                     serverUptime: { type: number, example: 3600 }
+ */
 app.get(
   '/api/system/info',
   asyncHandler(async (req: Request, res: Response) => {
@@ -174,7 +260,56 @@ if (process.env.NODE_ENV !== 'development') {
   }
 }
 
-// Audio streaming endpoint with range request support
+/**
+ * @swagger
+ * /audio/{path}:
+ *   get:
+ *     summary: Stream audio file
+ *     description: Streams audio files with support for range requests (seeking)
+ *     tags: [Audio]
+ *     parameters:
+ *       - in: path
+ *         name: path
+ *         required: true
+ *         description: Path to the audio file relative to music root
+ *         schema:
+ *           type: string
+ *       - in: header
+ *         name: range
+ *         required: false
+ *         description: Range header for partial content requests
+ *         schema:
+ *           type: string
+ *           example: "bytes=0-1024"
+ *     responses:
+ *       200:
+ *         description: Full audio file stream
+ *         headers:
+ *           Content-Type:
+ *             schema:
+ *               type: string
+ *               example: "audio/mpeg"
+ *           Content-Length:
+ *             schema:
+ *               type: integer
+ *           Accept-Ranges:
+ *             schema:
+ *               type: string
+ *               example: "bytes"
+ *       206:
+ *         description: Partial content (range request)
+ *         headers:
+ *           Content-Range:
+ *             schema:
+ *               type: string
+ *               example: "bytes 0-1024/2048"
+ *       403:
+ *         description: Access denied - path traversal attempt
+ *       404:
+ *         description: Audio file not found
+ *       416:
+ *         description: Range not satisfiable
+ */
 app.get('/audio/*', (req: Request, res: Response) => {
   const audioPath = req.params[0];
   const fullPath = path.resolve(musicRoot, audioPath);
@@ -584,7 +719,48 @@ class PlaylistFileQueue {
 
 const playlistFileQueue = new PlaylistFileQueue();
 
-// Playlist API endpoints
+/**
+ * @swagger
+ * /api/playlists/save:
+ *   post:
+ *     summary: Save playlists
+ *     description: Saves an array of playlists to persistent storage
+ *     tags: [Playlists]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: array
+ *             items:
+ *               type: object
+ *               required: [id, name, tracks]
+ *               properties:
+ *                 id:
+ *                   type: string
+ *                   description: Unique playlist identifier
+ *                 name:
+ *                   type: string
+ *                   description: Playlist name
+ *                 tracks:
+ *                   type: array
+ *                   description: Array of track paths
+ *                   items:
+ *                     type: string
+ *     responses:
+ *       200:
+ *         description: Playlists saved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *       500:
+ *         description: Failed to save playlists
+ */
 app.post('/api/playlists/save', async (req: Request, res: Response) => {
   try {
     const result = await playlistFileQueue.add(async () => {
@@ -609,6 +785,34 @@ app.post('/api/playlists/save', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/playlists/load:
+ *   get:
+ *     summary: Load all playlists
+ *     description: Retrieves all saved playlists from storage
+ *     tags: [Playlists]
+ *     responses:
+ *       200:
+ *         description: Playlists loaded successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: string
+ *                   name:
+ *                     type: string
+ *                   tracks:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *       500:
+ *         description: Failed to load playlists
+ */
 app.get('/api/playlists/load', async (req: Request, res: Response) => {
   try {
     const result = await playlistFileQueue.add(async () => {
@@ -650,6 +854,41 @@ app.get('/api/playlists/load', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/playlists/{id}:
+ *   get:
+ *     summary: Get playlist by ID
+ *     description: Retrieves a specific playlist by its ID
+ *     tags: [Playlists]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: Playlist ID
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Playlist found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: string
+ *                 name:
+ *                   type: string
+ *                 tracks:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *       404:
+ *         description: Playlist not found
+ *       500:
+ *         description: Server error
+ */
 app.get('/api/playlists/:id', async (req: Request, res: Response) => {
   try {
     const { getMindstrikeDirectory } = await import(
@@ -666,7 +905,9 @@ app.get('/api/playlists/:id', async (req: Request, res: Response) => {
       console.warn('Invalid JSON in playlists file');
       return res.status(500).json({ error: 'Invalid playlists file format' });
     }
-    const playlist = playlists.find((p: any) => p.id === req.params.id);
+    const playlist = playlists.find(
+      (p: { id: string }) => p.id === req.params.id
+    );
 
     if (!playlist) {
       return res.status(404).json({ error: 'Playlist not found' });
@@ -679,6 +920,34 @@ app.get('/api/playlists/:id', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/playlists/{id}:
+ *   delete:
+ *     summary: Delete playlist
+ *     description: Removes a playlist by its ID
+ *     tags: [Playlists]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: Playlist ID to delete
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Playlist deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *       500:
+ *         description: Failed to delete playlist
+ */
 app.delete('/api/playlists/:id', async (req: Request, res: Response) => {
   try {
     const { getMindstrikeDirectory } = await import(
@@ -696,7 +965,7 @@ app.delete('/api/playlists/:id', async (req: Request, res: Response) => {
       return res.status(500).json({ error: 'Invalid playlists file format' });
     }
     const filteredPlaylists = playlists.filter(
-      (p: any) => p.id !== req.params.id
+      (p: { id: string }) => p.id !== req.params.id
     );
 
     await fs.writeFile(
@@ -710,7 +979,41 @@ app.delete('/api/playlists/:id', async (req: Request, res: Response) => {
   }
 });
 
-// Get all available models from server-side configuration
+/**
+ * @swagger
+ * /api/llm/models:
+ *   get:
+ *     summary: Get available LLM models
+ *     description: Returns all available language models from configured services
+ *     tags: [LLM]
+ *     responses:
+ *       200:
+ *         description: List of available models
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: string
+ *                     example: "gpt-4-turbo-preview"
+ *                   displayName:
+ *                     type: string
+ *                     example: "GPT-4 Turbo"
+ *                   provider:
+ *                     type: string
+ *                     example: "openai"
+ *                   contextLength:
+ *                     type: integer
+ *                     example: 128000
+ *                   capabilities:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *                     example: ["chat", "completion", "function-calling"]
+ */
 app.get(
   '/api/llm/models',
   asyncHandler(async (req: Request, res: Response) => {
@@ -719,7 +1022,33 @@ app.get(
   })
 );
 
-// Get current default model
+/**
+ * @swagger
+ * /api/llm/default-model:
+ *   get:
+ *     summary: Get default LLM model
+ *     description: Returns the currently configured default language model
+ *     tags: [LLM]
+ *     responses:
+ *       200:
+ *         description: Default model information
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 modelId:
+ *                   type: string
+ *                   example: "gpt-4-turbo-preview"
+ *                 displayName:
+ *                   type: string
+ *                   example: "GPT-4 Turbo"
+ *                 provider:
+ *                   type: string
+ *                   example: "openai"
+ *       404:
+ *         description: No default model configured
+ */
 app.get(
   '/api/llm/default-model',
   asyncHandler(async (req: Request, res: Response) => {
@@ -728,7 +1057,43 @@ app.get(
   })
 );
 
-// Set default model
+/**
+ * @swagger
+ * /api/llm/default-model:
+ *   post:
+ *     summary: Set default LLM model
+ *     description: Updates the default language model configuration
+ *     tags: [LLM]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [modelId]
+ *             properties:
+ *               modelId:
+ *                 type: string
+ *                 description: ID of the model to set as default
+ *                 example: "gpt-4-turbo-preview"
+ *     responses:
+ *       200:
+ *         description: Default model updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 model:
+ *                   type: object
+ *       400:
+ *         description: Invalid request - Model ID is required
+ *       404:
+ *         description: Model not found
+ */
 app.post(
   '/api/llm/default-model',
   asyncHandler(async (req: Request, res: Response) => {
@@ -1055,13 +1420,55 @@ app.post('/api/llm/test-service', async (req: Request, res: Response) => {
   }
 });
 
-// Debug logging
+/**
+ * @swagger
+ * /api/debug/stream:
+ *   get:
+ *     summary: Debug SSE stream
+ *     description: Establishes SSE connection for debug logging events
+ *     tags: [SSE]
+ *     responses:
+ *       200:
+ *         description: Debug SSE stream established
+ *         content:
+ *           text/event-stream:
+ *             schema:
+ *               type: string
+ *               description: Debug events stream
+ */
 app.get('/api/debug/stream', (req: Request, res: Response) => {
   const clientId = `debug_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   sseManager.addClient(clientId, res, 'debug');
 });
 
-// Endpoint to fetch large content by ID
+/**
+ * @swagger
+ * /api/large-content/{contentId}:
+ *   get:
+ *     summary: Fetch large content
+ *     description: Retrieves large content that was referenced in SSE events
+ *     tags: [SSE]
+ *     parameters:
+ *       - in: path
+ *         name: contentId
+ *         required: true
+ *         description: Content ID from SSE reference
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Content retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 content:
+ *                   type: string
+ *                   description: The large content data
+ *       404:
+ *         description: Content not found or expired
+ */
 app.get('/api/large-content/:contentId', (req: Request, res: Response) => {
   const { contentId } = req.params;
   const content = sseManager.getLargeContent(contentId);
@@ -1106,6 +1513,49 @@ app.get('/api/lfs/:lfsId/summary', (req: Request, res: Response) => {
 // Generation streaming, task progress, and workflow updates now handled by unified SSE event bus
 
 // Audio files discovery endpoint
+/**
+ * @swagger
+ * /api/audio/files:
+ *   get:
+ *     summary: Discover audio files
+ *     description: Recursively scans music directory for supported audio files
+ *     tags: [Audio]
+ *     responses:
+ *       200:
+ *         description: List of discovered audio files
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   path:
+ *                     type: string
+ *                     example: "artist/album/song.mp3"
+ *                   name:
+ *                     type: string
+ *                     example: "song.mp3"
+ *                   size:
+ *                     type: integer
+ *                     example: 5242880
+ *                   extension:
+ *                     type: string
+ *                     example: "mp3"
+ *                   metadata:
+ *                     type: object
+ *                     properties:
+ *                       title:
+ *                         type: string
+ *                       artist:
+ *                         type: string
+ *                       album:
+ *                         type: string
+ *                       duration:
+ *                         type: number
+ *       500:
+ *         description: Failed to scan audio files
+ */
 app.get('/api/audio/files', async (req: Request, res: Response) => {
   try {
     const supportedExtensions = [
@@ -1505,7 +1955,66 @@ app.post('/api/message', async (req: Request, res: Response) => {
   }
 });
 
-// SSE endpoint for real-time message processing
+/**
+ * @swagger
+ * /api/message/stream:
+ *   post:
+ *     summary: Stream message processing
+ *     description: Processes a message and streams the response via SSE
+ *     tags: [Conversations]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [message, messageId, threadId]
+ *             properties:
+ *               message:
+ *                 type: string
+ *                 description: User message content
+ *               messageId:
+ *                 type: string
+ *                 description: Unique message identifier
+ *               threadId:
+ *                 type: string
+ *                 description: Thread ID for the conversation
+ *               images:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     data:
+ *                       type: string
+ *                       description: Base64 encoded image data
+ *                     mimeType:
+ *                       type: string
+ *                       example: "image/png"
+ *               notes:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     content:
+ *                       type: string
+ *                     metadata:
+ *                       type: object
+ *               isAgentMode:
+ *                 type: boolean
+ *                 description: Whether to use agent mode processing
+ *     responses:
+ *       200:
+ *         description: SSE stream for message processing
+ *         content:
+ *           text/event-stream:
+ *             schema:
+ *               type: string
+ *               description: Real-time message updates
+ *       400:
+ *         description: Invalid request
+ *       500:
+ *         description: Processing error
+ */
 app.post('/api/message/stream', async (req: Request, res: Response) => {
   try {
     const { message, messageId, threadId, images, notes, isAgentMode } =
@@ -2008,7 +2517,28 @@ app.delete('/api/message/:messageId', async (req: Request, res: Response) => {
   }
 });
 
-// Single unified SSE endpoint for all events
+/**
+ * @swagger
+ * /api/events/stream:
+ *   get:
+ *     summary: Server-Sent Events stream
+ *     description: Establishes SSE connection for real-time updates
+ *     tags: [SSE]
+ *     responses:
+ *       200:
+ *         description: SSE stream established
+ *         content:
+ *           text/event-stream:
+ *             schema:
+ *               type: string
+ *               description: Server-sent events stream
+ *               example: |
+ *                 event: message
+ *                 data: {"type":"chat.message","payload":{"content":"Hello"}}
+ *
+ *                 event: system
+ *                 data: {"type":"system.status","payload":{"status":"connected"}}
+ */
 app.get('/api/events/stream', (req: Request, res: Response) => {
   const clientId = `events-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   sseManager.addClient(clientId, res, 'unified-events');
@@ -2023,7 +2553,41 @@ app.get('/api/events/stream', (req: Request, res: Response) => {
   }, 100);
 });
 
-// New Thread-based API
+/**
+ * @swagger
+ * /api/threads:
+ *   get:
+ *     summary: Get all threads
+ *     description: Retrieves all conversation threads
+ *     tags: [Conversations]
+ *     responses:
+ *       200:
+ *         description: List of threads
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: string
+ *                     example: "thread_123"
+ *                   name:
+ *                     type: string
+ *                     example: "Project Discussion"
+ *                   createdAt:
+ *                     type: string
+ *                     format: date-time
+ *                   updatedAt:
+ *                     type: string
+ *                     format: date-time
+ *                   messageCount:
+ *                     type: integer
+ *                     example: 42
+ *       500:
+ *         description: Failed to load threads
+ */
 app.get('/api/threads', async (req: Request, res: Response) => {
   try {
     // Add timeout to conversation manager load
@@ -2051,6 +2615,49 @@ app.get('/api/threads', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/threads/{threadId}/messages:
+ *   get:
+ *     summary: Get thread messages
+ *     description: Retrieves all messages from a specific thread
+ *     tags: [Conversations]
+ *     parameters:
+ *       - in: path
+ *         name: threadId
+ *         required: true
+ *         description: Thread ID
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: List of messages
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: string
+ *                   content:
+ *                     type: string
+ *                   role:
+ *                     type: string
+ *                     enum: [user, assistant, system]
+ *                   timestamp:
+ *                     type: string
+ *                     format: date-time
+ *                   model:
+ *                     type: string
+ *                   toolCalls:
+ *                     type: array
+ *                   toolResults:
+ *                     type: array
+ *       404:
+ *         description: Thread not found
+ */
 app.get(
   '/api/threads/:threadId/messages',
   async (req: Request, res: Response) => {
@@ -2067,6 +2674,44 @@ app.get(
   }
 );
 
+/**
+ * @swagger
+ * /api/threads:
+ *   post:
+ *     summary: Create new thread
+ *     description: Creates a new conversation thread
+ *     tags: [Conversations]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name]
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: Thread name
+ *                 example: "New Discussion"
+ *     responses:
+ *       201:
+ *         description: Thread created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: string
+ *                   example: "thread_456"
+ *                 name:
+ *                   type: string
+ *                 createdAt:
+ *                   type: string
+ *                   format: date-time
+ *       400:
+ *         description: Invalid request
+ */
 app.post('/api/threads', async (req: Request, res: Response) => {
   try {
     const { name } = req.body;
@@ -2172,7 +2817,41 @@ app.post(
   }
 );
 
-// MindMaps API
+/**
+ * @swagger
+ * /api/mindmaps:
+ *   get:
+ *     summary: Get all mind maps
+ *     description: Retrieves list of all saved mind maps
+ *     tags: [MindMaps]
+ *     responses:
+ *       200:
+ *         description: List of mind maps
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: string
+ *                     example: "mindmap_123"
+ *                   name:
+ *                     type: string
+ *                     example: "Project Architecture"
+ *                   createdAt:
+ *                     type: string
+ *                     format: date-time
+ *                   updatedAt:
+ *                     type: string
+ *                     format: date-time
+ *                   nodeCount:
+ *                     type: integer
+ *                     example: 25
+ *       500:
+ *         description: Failed to load mind maps
+ */
 app.get('/api/mindmaps', async (req: Request, res: Response) => {
   try {
     const fs = await import('fs/promises');
@@ -2194,6 +2873,47 @@ app.get('/api/mindmaps', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/mindmaps:
+ *   post:
+ *     summary: Save mind maps
+ *     description: Saves or updates mind map metadata
+ *     tags: [MindMaps]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: array
+ *             items:
+ *               type: object
+ *               required: [id, name]
+ *               properties:
+ *                 id:
+ *                   type: string
+ *                 name:
+ *                   type: string
+ *                 createdAt:
+ *                   type: string
+ *                   format: date-time
+ *                 updatedAt:
+ *                   type: string
+ *                   format: date-time
+ *     responses:
+ *       200:
+ *         description: Mind maps saved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *       500:
+ *         description: Failed to save mind maps
+ */
 app.post('/api/mindmaps', async (req: Request, res: Response) => {
   try {
     const fs = await import('fs/promises');
@@ -2251,7 +2971,67 @@ app.post('/api/mindmaps', async (req: Request, res: Response) => {
   }
 });
 
-// MindMap data API for MindMaps
+/**
+ * @swagger
+ * /api/mindmaps/{mindMapId}/mindmap:
+ *   get:
+ *     summary: Get mind map data
+ *     description: Retrieves the full mind map data including nodes and edges
+ *     tags: [MindMaps]
+ *     parameters:
+ *       - in: path
+ *         name: mindMapId
+ *         required: true
+ *         description: Mind map ID
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Mind map data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 nodes:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                       type:
+ *                         type: string
+ *                       data:
+ *                         type: object
+ *                         properties:
+ *                           label:
+ *                             type: string
+ *                           content:
+ *                             type: string
+ *                       position:
+ *                         type: object
+ *                         properties:
+ *                           x:
+ *                             type: number
+ *                           y:
+ *                             type: number
+ *                 edges:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                       source:
+ *                         type: string
+ *                       target:
+ *                         type: string
+ *                       type:
+ *                         type: string
+ *       404:
+ *         description: Mind map not found
+ */
 app.get(
   '/api/mindmaps/:mindMapId/mindmap',
   async (req: Request, res: Response) => {
@@ -2617,6 +3397,41 @@ app.post(
   }
 );
 
+/**
+ * @swagger
+ * /api/generate-title:
+ *   post:
+ *     summary: Generate thread title
+ *     description: Uses AI to generate a title based on conversation context
+ *     tags: [Conversations]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [context]
+ *             properties:
+ *               context:
+ *                 type: string
+ *                 description: Conversation context to generate title from
+ *                 example: "Discussion about implementing authentication"
+ *     responses:
+ *       200:
+ *         description: Title generated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 title:
+ *                   type: string
+ *                   example: "Authentication Implementation Discussion"
+ *       400:
+ *         description: Context is required
+ *       500:
+ *         description: Failed to generate title
+ */
 app.post('/api/generate-title', async (req: Request, res: Response) => {
   try {
     const { context } = req.body;
@@ -2757,7 +3572,28 @@ app.post('/api/role/:threadId?', (req: Request, res: Response) => {
   }
 });
 
-// Get current working directory
+/**
+ * @swagger
+ * /api/workspace/directory:
+ *   get:
+ *     summary: Get current working directory
+ *     description: Returns the current working directory path
+ *     tags: [Workspace]
+ *     responses:
+ *       200:
+ *         description: Current directory information
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 currentDirectory:
+ *                   type: string
+ *                   example: "/Users/username/projects"
+ *                 absolutePath:
+ *                   type: string
+ *                   example: "/Users/username/projects"
+ */
 app.get('/api/workspace/directory', (req: Request, res: Response) => {
   try {
     res.json({
@@ -2771,7 +3607,42 @@ app.get('/api/workspace/directory', (req: Request, res: Response) => {
   }
 });
 
-// Set current working directory
+/**
+ * @swagger
+ * /api/workspace/directory:
+ *   post:
+ *     summary: Set current working directory
+ *     description: Changes the current working directory
+ *     tags: [Workspace]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [path]
+ *             properties:
+ *               path:
+ *                 type: string
+ *                 description: New directory path (absolute or relative)
+ *                 example: "./subfolder"
+ *     responses:
+ *       200:
+ *         description: Directory changed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 currentDirectory:
+ *                   type: string
+ *                 absolutePath:
+ *                   type: string
+ *       400:
+ *         description: Invalid path or path is not a directory
+ *       403:
+ *         description: Path outside workspace root
+ */
 app.post('/api/workspace/directory', (req: Request, res: Response) => {
   try {
     const { path: newPath } = req.body;
@@ -2809,7 +3680,28 @@ app.post('/api/workspace/directory', (req: Request, res: Response) => {
   }
 });
 
-// Get workspace root
+/**
+ * @swagger
+ * /api/workspace/root:
+ *   get:
+ *     summary: Get workspace root
+ *     description: Returns the configured workspace root directory
+ *     tags: [Workspace]
+ *     responses:
+ *       200:
+ *         description: Workspace root information
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 workspaceRoot:
+ *                   type: string
+ *                   example: "/Users/username/workspace"
+ *                 currentDirectory:
+ *                   type: string
+ *                   example: "/Users/username/workspace/project"
+ */
 app.get('/api/workspace/root', (req: Request, res: Response) => {
   try {
     res.json({
@@ -2940,6 +3832,40 @@ app.post('/api/music/root', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/workspace/files:
+ *   get:
+ *     summary: List workspace files
+ *     description: Returns files and directories in the current working directory
+ *     tags: [Workspace]
+ *     responses:
+ *       200:
+ *         description: List of files and directories
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   name:
+ *                     type: string
+ *                     example: "index.ts"
+ *                   path:
+ *                     type: string
+ *                     example: "src/index.ts"
+ *                   isDirectory:
+ *                     type: boolean
+ *                   size:
+ *                     type: integer
+ *                     description: File size in bytes (files only)
+ *                   lastModified:
+ *                     type: string
+ *                     format: date-time
+ *       500:
+ *         description: Failed to read directory
+ */
 app.get('/api/workspace/files', async (req: Request, res: Response) => {
   try {
     const targetDir = currentWorkingDirectory;
@@ -3024,7 +3950,44 @@ app.post('/api/workspace/delete', async (req: Request, res: Response) => {
   }
 });
 
-// MCP API Routes
+/**
+ * @swagger
+ * /api/mcp/servers:
+ *   get:
+ *     summary: Get MCP server configurations
+ *     description: Returns all configured Model Context Protocol servers
+ *     tags: [MCP]
+ *     responses:
+ *       200:
+ *         description: List of MCP server configurations
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 servers:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                         example: "filesystem"
+ *                       name:
+ *                         type: string
+ *                         example: "Filesystem Tools"
+ *                       command:
+ *                         type: string
+ *                         example: "npx"
+ *                       args:
+ *                         type: array
+ *                         items:
+ *                           type: string
+ *                       env:
+ *                         type: object
+ *                       enabled:
+ *                         type: boolean
+ */
 app.get('/api/mcp/servers', async (req: Request, res: Response) => {
   try {
     const servers = mcpManager.getServerConfigs();
@@ -3036,6 +3999,39 @@ app.get('/api/mcp/servers', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/mcp/tools:
+ *   get:
+ *     summary: Get available MCP tools
+ *     description: Returns all tools available from connected MCP servers
+ *     tags: [MCP]
+ *     responses:
+ *       200:
+ *         description: List of available tools
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 tools:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       name:
+ *                         type: string
+ *                         example: "read_file"
+ *                       description:
+ *                         type: string
+ *                         example: "Read contents of a file"
+ *                       inputSchema:
+ *                         type: object
+ *                         description: JSON Schema for tool parameters
+ *                       serverId:
+ *                         type: string
+ *                         example: "filesystem"
+ */
 app.get('/api/mcp/tools', async (req: Request, res: Response) => {
   try {
     const tools = mcpManager.getAvailableTools();
@@ -3047,6 +4043,47 @@ app.get('/api/mcp/tools', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/mcp/servers:
+ *   post:
+ *     summary: Add MCP server
+ *     description: Adds a new Model Context Protocol server configuration
+ *     tags: [MCP]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [id, name, command]
+ *             properties:
+ *               id:
+ *                 type: string
+ *                 description: Unique server identifier
+ *               name:
+ *                 type: string
+ *                 description: Display name for the server
+ *               command:
+ *                 type: string
+ *                 description: Command to execute
+ *               args:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Command arguments
+ *               env:
+ *                 type: object
+ *                 description: Environment variables
+ *               enabled:
+ *                 type: boolean
+ *                 default: true
+ *     responses:
+ *       200:
+ *         description: Server added successfully
+ *       400:
+ *         description: Invalid configuration
+ */
 app.post('/api/mcp/servers', async (req: Request, res: Response) => {
   try {
     const config = req.body;
@@ -3301,7 +4338,11 @@ process.on('SIGINT', () => {
 });
 
 // Only start the server if not running in Electron
-if (typeof window === 'undefined' && !process.versions.electron) {
+if (
+  typeof window === 'undefined' &&
+  !process.versions.electron &&
+  process.env.GENERATE_OPENAPI !== 'true'
+) {
   (async () => {
     // Load workspace settings before starting the server
     await loadWorkspaceSettings();

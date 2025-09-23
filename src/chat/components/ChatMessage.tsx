@@ -31,6 +31,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { MermaidModal } from '../../components/MermaidModal';
 import { renderMermaidDiagramsDelayed } from '../../utils/mermaidRenderer';
+import { logger } from '../../utils/logger';
 
 // Common language mappings for syntax highlighting
 const languageMap: Record<string, string> = {
@@ -178,7 +179,7 @@ function ChatMessageComponent({
     try {
       await navigator.clipboard.writeText(text);
     } catch (err) {
-      console.error('Clipboard API failed, trying fallback:', err);
+      logger.error('Clipboard API failed, trying fallback:', err);
       try {
         // Fallback for older browsers
         const textArea = document.createElement('textarea');
@@ -192,10 +193,10 @@ function ChatMessageComponent({
         const successful = document.execCommand('copy');
         document.body.removeChild(textArea);
         if (!successful) {
-          console.error('Fallback copy failed');
+          logger.error('Fallback copy failed');
         }
       } catch (fallbackErr) {
-        console.error('Both copy methods failed:', fallbackErr);
+        logger.error('Both copy methods failed:', fallbackErr);
       }
     }
   };
@@ -226,7 +227,7 @@ function ChatMessageComponent({
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (err) {
-      console.error('Failed to download diagram:', err);
+      logger.error('Failed to download diagram:', err);
     }
   };
 

@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { CodeEditor } from '../../workspace/components/CodeEditor';
 import { MarkdownViewer } from '../MarkdownViewer';
 import { clsx } from 'clsx';
+import { logger } from '../../utils/logger';
 
 interface MarkdownEditorProps {
   value: string;
@@ -57,7 +58,7 @@ export function MarkdownEditor({
         await onSave(content);
         toast.success('Notes saved successfully');
       } catch (error) {
-        console.error('Save failed:', error);
+        logger.error('Save failed:', error);
         toast.error('Failed to save notes');
       }
     }

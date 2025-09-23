@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from 'react';
 import { useAudioStore } from '../store/useAudioStore';
 import { audioAnalyzer } from '../utils/audioAnalyzer';
+import { logger } from '../utils/logger';
 
 interface MusicVisualizationProps {
   className?: string;
@@ -29,7 +30,7 @@ export function MusicVisualization({
 
     const audioElement = (howl as any)._sounds[0]?._node;
     if (!audioElement) {
-      console.warn('No audio element found in Howler instance');
+      logger.warn('No audio element found in Howler instance');
       return;
     }
 
@@ -42,7 +43,7 @@ export function MusicVisualization({
     audioAnalyzer.connectToAudio(audioElement).then(success => {
       setIsConnected(success);
       if (!success) {
-        console.warn('Failed to connect to audio analyzer');
+        logger.warn('Failed to connect to audio analyzer');
       }
     });
 

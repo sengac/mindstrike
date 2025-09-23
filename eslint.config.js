@@ -223,4 +223,11 @@ export default [
       'no-console': 'off', // Allow console in Node.js scripts
     },
   },
+  {
+    // Logger utility - needs console access
+    files: ['src/utils/logger.ts'],
+    rules: {
+      'no-console': 'off', // Logger needs direct console access
+    },
+  },
 ];

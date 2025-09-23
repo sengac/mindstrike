@@ -12,6 +12,7 @@ import { isSSEChunkEvent, isSSEMessageEvent } from '../../types/sse-events';
 import { useChatThreadStore } from '../../store/useChatThreadStore';
 import { useThreadsStore } from '../../store/useThreadsStore';
 import { sseEventBus } from '../../utils/sseEventBus';
+import { logger } from '../../utils/logger';
 
 interface UseChatProps {
   threadId?: string;
@@ -94,7 +95,7 @@ export function useChatRefactored({
 
           return validatedMessage;
         } catch (error) {
-          console.error('Message validation failed:', error);
+          logger.error('Message validation failed:', error);
           return message; // Return original if validation fails
         }
       }
@@ -268,7 +269,7 @@ export function useChatRefactored({
                 }
               }
             } catch (error) {
-              console.error(
+              logger.error(
                 '[useChatRefactored] Failed to generate thread title:',
                 error
               );
@@ -417,7 +418,7 @@ export function useChatRefactored({
         // Reload thread list to update message count and name
         useThreadsStore.getState().loadThreads();
       } catch (error) {
-        console.error('SSE Error:', error);
+        logger.error('SSE Error:', error);
         toast.error(`Failed to send message: ${error}`);
         setError(`Failed to send message: ${error}`);
         // Clear loading state on error
@@ -448,7 +449,7 @@ export function useChatRefactored({
       await useThreadsStore.getState().clearThread(currentThreadId);
       await loadMessages();
     } catch (error) {
-      console.error('Failed to clear conversation:', error);
+      logger.error('Failed to clear conversation:', error);
       toast.error('Failed to clear conversation');
     }
   }, [currentThreadId, loadMessages]);
@@ -483,7 +484,7 @@ export function useChatRefactored({
           });
         }
       } catch (error) {
-        console.error('Failed to cancel streaming:', error);
+        logger.error('Failed to cancel streaming:', error);
         // Fallback to local cancellation
         updateMessage(streamingMessage.id, {
           status: 'cancelled' as const,
@@ -560,7 +561,7 @@ export function useChatRefactored({
         // Response contains the message - SSE will handle real-time updates
         await response.json();
       } catch (error) {
-        console.error('SSE Error:', error);
+        logger.error('SSE Error:', error);
         toast.error(`Failed to regenerate message: ${error}`);
         setError(`Failed to regenerate message: ${error}`);
         // Clear loading state on error
@@ -637,7 +638,7 @@ export function useChatRefactored({
         // Response contains the message - SSE will handle real-time updates
         await response.json();
       } catch (error) {
-        console.error('SSE Error:', error);
+        logger.error('SSE Error:', error);
         toast.error(`Failed to edit message: ${error}`);
         setError(`Failed to edit message: ${error}`);
         await loadMessages(); // Reload from server
@@ -673,7 +674,7 @@ export function useChatRefactored({
           // so we don't need to manually update the message here
         }
       } catch (error) {
-        console.error('Failed to cancel tool calls:', error);
+        logger.error('Failed to cancel tool calls:', error);
       }
     },
     [currentThreadId]
@@ -718,7 +719,7 @@ export function useChatRefactored({
       // Response contains the message - SSE will handle real-time updates
       await response.json();
     } catch (error: unknown) {
-      console.error('Error retrying message:', error);
+      logger.error('Error retrying message:', error);
       setError(`Failed to retry message: ${error}`);
       // Streaming state is derived from message status
     }

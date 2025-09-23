@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { sseEventBus } from '../utils/sseEventBus';
 import { SSEEventType } from '../types';
+import { logger } from '../utils/logger';
 import {
   isSSEMCPProcessInfoEvent,
   isSSEMCPStdoutLogEvent,
@@ -131,7 +132,7 @@ export const useMCPMonitoringStore = create<MCPMonitoringState>()(
           get().updateProcessInfo(data.processes || []);
         }
       } catch (error) {
-        console.error('Failed to fetch MCP process info:', error);
+        logger.error('Failed to fetch MCP process info:', error);
       }
     },
 
@@ -180,7 +181,7 @@ export const useMCPMonitoringStore = create<MCPMonitoringState>()(
           set({ processLogs });
         }
       } catch (error) {
-        console.error('Failed to fetch MCP process logs:', error);
+        logger.error('Failed to fetch MCP process logs:', error);
       }
     },
 

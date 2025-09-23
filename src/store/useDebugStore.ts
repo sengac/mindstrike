@@ -3,6 +3,7 @@ import { subscribeWithSelector } from 'zustand/middleware';
 import type { SSEEvent } from '../utils/sseEventBus';
 import { sseEventBus } from '../utils/sseEventBus';
 import { isSseDebugEntryData, isSseTokenStatsData } from '../utils/sseDecoder';
+import { logger } from '../utils/logger';
 
 export interface LLMDebugEntry {
   id: string;
@@ -156,7 +157,7 @@ async function initializeDebugEventSubscriptions(): Promise<void> {
         );
       }
     } catch (error) {
-      console.error('Error parsing debug SSE data:', error);
+      logger.error('Error parsing debug SSE data:', error);
     }
   };
 

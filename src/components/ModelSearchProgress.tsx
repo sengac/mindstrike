@@ -10,6 +10,7 @@ import {
   FileCheck,
 } from 'lucide-react';
 import { useModelScanStore } from '../store/useModelScanStore';
+import { logger } from '../utils/logger';
 
 interface ModelSearchProgressProps {
   isVisible: boolean;
@@ -35,7 +36,9 @@ export function ModelSearchProgress({
       !isScanning &&
       progress.stage === 'idle'
     ) {
-      startScan().catch(console.error);
+      startScan().catch(error =>
+        logger.error('Failed to start model search scan:', error)
+      );
     }
   }, [isVisible, isScanningModels, isScanning, progress.stage, startScan]);
 
@@ -107,7 +110,7 @@ export function ModelSearchProgress({
       try {
         await cancelScan();
       } catch (error) {
-        console.error('Failed to cancel operation:', error);
+        logger.error('Failed to cancel operation:', error);
       }
     }
   };

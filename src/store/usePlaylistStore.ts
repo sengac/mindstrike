@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { logger } from '../utils/logger';
 
 interface AudioFile {
   id: number;
@@ -116,7 +117,7 @@ export const usePlaylistStore = create<PlaylistState>()((set, get) => ({
     // Check if track is already in the playlist
     const playlist = get().playlists.find(p => p.id === playlistId);
     if (playlist?.trackRefs.some(ref => ref.trackId === track.id)) {
-      console.log('Track already in playlist');
+      logger.info('Track already in playlist');
       return;
     }
 
@@ -221,14 +222,13 @@ export const usePlaylistStore = create<PlaylistState>()((set, get) => ({
       });
 
       if (!response.ok) {
-        console.error(
-          'Failed to save playlists:',
-          response.status,
-          response.statusText
-        );
+        logger.error('Failed to save playlists:', {
+          status: response.status,
+          statusText: response.statusText,
+        });
       }
     } catch (error) {
-      console.error('Failed to save playlists:', error);
+      logger.error('Failed to save playlists:', error);
     }
   },
 
@@ -239,14 +239,13 @@ export const usePlaylistStore = create<PlaylistState>()((set, get) => ({
         const playlists = await response.json();
         set({ playlists });
       } else {
-        console.error(
-          'Failed to load playlists:',
-          response.status,
-          response.statusText
-        );
+        logger.error('Failed to load playlists:', {
+          status: response.status,
+          statusText: response.statusText,
+        });
       }
     } catch (error) {
-      console.error('Failed to load playlists:', error);
+      logger.error('Failed to load playlists:', error);
     }
   },
 
@@ -254,7 +253,7 @@ export const usePlaylistStore = create<PlaylistState>()((set, get) => ({
     try {
       await get().loadPlaylistsFromFile();
     } catch (error) {
-      console.error('Failed to initialize playlist store:', error);
+      logger.error('Failed to initialize playlist store:', error);
     }
   },
 }));

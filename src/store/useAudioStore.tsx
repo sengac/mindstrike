@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Howl } from 'howler';
 import toast from 'react-hot-toast';
+import { logger } from '../utils/logger';
 
 interface AudioFile {
   id: number;
@@ -197,7 +198,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
         get().nextTrack();
       },
       onloaderror: (error: any) => {
-        console.error('Audio error:', error);
+        logger.error('Audio error:', error);
         set({ isLoading: false, isPlaying: false });
       },
     });

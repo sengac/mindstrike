@@ -9,6 +9,7 @@ import {
   Link,
 } from 'lucide-react';
 import type { Source } from '../../types/mindMap';
+import { logger } from '../../utils/logger';
 
 const typeIcons = {
   file: FileText,
@@ -68,7 +69,7 @@ export function SourcesList({ sources, onSourcesUpdate }: SourcesListProps) {
         setIsCreating(false);
         setNewSource({ name: '', directory: '', type: 'file' });
       } catch (error) {
-        console.error('Failed to save source:', error);
+        logger.error('Failed to save source:', error);
       }
     } else {
       setIsCreating(false);
@@ -112,7 +113,7 @@ export function SourcesList({ sources, onSourcesUpdate }: SourcesListProps) {
         setEditingSourceId(null);
         setEditingSource({});
       } catch (error) {
-        console.error('Failed to update source:', error);
+        logger.error('Failed to update source:', error);
       }
     } else {
       setEditingSourceId(null);
@@ -134,7 +135,7 @@ export function SourcesList({ sources, onSourcesUpdate }: SourcesListProps) {
       try {
         await onSourcesUpdate(updatedSources);
       } catch (error) {
-        console.error('Failed to delete source:', error);
+        logger.error('Failed to delete source:', error);
       }
     }
   };

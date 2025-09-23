@@ -24,6 +24,7 @@ import type { LLMServiceFormData } from '../../components/shared/AddEditLLMServi
 import { AddEditLLMServiceDialog } from '../../components/shared/AddEditLLMServiceDialog';
 import toast from 'react-hot-toast';
 import { MusicVisualization } from '../../components/MusicVisualization';
+import { logger } from '../../utils/logger';
 
 interface ServiceCardProps {
   service: CustomLLMService;
@@ -284,7 +285,7 @@ export function SettingsView() {
         toast.success('Rescan complete! No services found');
       }
     } catch (error) {
-      console.error('Rescan error:', error);
+      logger.error('Rescan error:', error);
       toast.error('Failed to rescan services');
     }
   };

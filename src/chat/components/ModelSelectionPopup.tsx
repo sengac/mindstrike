@@ -8,6 +8,7 @@ import {
 import { useAppStore } from '../../store/useAppStore';
 import { useModelsStore } from '../../store/useModelsStore';
 import toast from 'react-hot-toast';
+import { logger } from '../../utils/logger';
 
 interface ModelSelectionPopupProps {
   className?: string;
@@ -61,7 +62,7 @@ const ModelSelectionPopup: React.FC<ModelSelectionPopupProps> = ({
     // If no default model is set, auto-select the first available model
     if (!defaultModel) {
       setDefaultModel(models[0].id).catch((error: unknown) => {
-        console.error('Failed to set default model:', error);
+        logger.error('Failed to set default model:', error);
         toast.error('Failed to set default model');
       });
     }
@@ -73,7 +74,7 @@ const ModelSelectionPopup: React.FC<ModelSelectionPopupProps> = ({
       setIsOpen(false);
       toast.success(`Switched to ${model.displayName}`);
     } catch (error) {
-      console.error('Failed to set default model:', error);
+      logger.error('Failed to set default model:', error);
       toast.error('Failed to switch model');
     }
   };
@@ -85,7 +86,7 @@ const ModelSelectionPopup: React.FC<ModelSelectionPopupProps> = ({
       await rescanModels();
       toast.success('Model scan completed');
     } catch (error) {
-      console.error('Failed to rescan models:', error);
+      logger.error('Failed to rescan models:', error);
       toast.error('Failed to rescan models');
     }
   };

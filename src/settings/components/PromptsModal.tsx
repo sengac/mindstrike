@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { BaseDialog } from '../../components/shared/BaseDialog';
 import { useDialogAnimation } from '../../hooks/useDialogAnimation';
+import { logger } from '../../utils/logger';
 
 interface PromptsModalProps {
   isOpen: boolean;
@@ -62,10 +63,10 @@ export const PromptsModal: React.FC<PromptsModalProps> = ({
         setGeneratedPrompt(data.prompt);
         setShowCustomPrompt(true);
       } else {
-        console.error('Failed to generate prompt');
+        logger.error('Failed to generate prompt');
       }
     } catch (error) {
-      console.error('Error generating prompt:', error);
+      logger.error('Error generating prompt:', error);
     } finally {
       setIsGenerating(false);
     }

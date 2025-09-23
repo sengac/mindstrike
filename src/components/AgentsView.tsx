@@ -16,6 +16,7 @@ import { BaseDialog } from './shared/BaseDialog';
 import { useDialogAnimation } from '../hooks/useDialogAnimation';
 import { MusicVisualization } from './MusicVisualization';
 import { MCPMonitoringPanel } from './MCPMonitoringPanel';
+import { logger } from '../utils/logger';
 
 interface MCPServer {
   id: string;
@@ -91,7 +92,7 @@ export function AgentsView() {
         setMcpStatus(data);
       }
     } catch (error) {
-      console.error('Failed to fetch MCP data:', error);
+      logger.error('Failed to fetch MCP data:', error);
     } finally {
       setLoading(false);
     }
@@ -109,7 +110,7 @@ export function AgentsView() {
         await fetchMCPData();
       }
     } catch (error) {
-      console.error('Failed to toggle MCP server:', error);
+      logger.error('Failed to toggle MCP server:', error);
     }
   };
 
@@ -122,7 +123,7 @@ export function AgentsView() {
         setShowConfigEditor(true);
       }
     } catch (error) {
-      console.error('Failed to load MCP config:', error);
+      logger.error('Failed to load MCP config:', error);
     }
   };
 
@@ -143,7 +144,7 @@ export function AgentsView() {
         alert(`Failed to save config: ${error.error}`);
       }
     } catch (error) {
-      console.error('Failed to save MCP config:', error);
+      logger.error('Failed to save MCP config:', error);
       alert('Failed to save config');
     } finally {
       setSaving(false);

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import type { ConversationMessage } from '../types';
+import { logger } from '../utils/logger';
 
 export interface ChatThreadState {
   // Thread identification
@@ -70,7 +71,7 @@ const createChatThreadStore = (threadId: string) =>
             isStreaming: false,
           });
         } catch (error: unknown) {
-          console.error(
+          logger.error(
             `[useChatThreadStore:${threadId}] Error loading messages:`,
             error
           );

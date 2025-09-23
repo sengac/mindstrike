@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { toast } from 'react-hot-toast';
+import { logger } from '../utils/logger';
 
 export interface AvailableModel {
   name: string;
@@ -124,7 +125,7 @@ export const useAvailableModelsStore = create<AvailableModelsState>(
           `Found ${data.models?.length || 0} models for "${searchQuery.trim()}" in ${searchTypeText}`
         );
       } catch (error) {
-        console.error('Error searching models:', error);
+        logger.error('Error searching models:', error);
 
         // Handle specific error messages from server
         const errorMessage =
@@ -172,11 +173,11 @@ export const useAvailableModelsStore = create<AvailableModelsState>(
           set({ availableModels: models });
           return models.length > 0;
         } else {
-          console.error('Failed to load cached models:', response.statusText);
+          logger.error('Failed to load cached models:', response.statusText);
           return false;
         }
       } catch (error) {
-        console.error('Error loading cached models:', error);
+        logger.error('Error loading cached models:', error);
         return false;
       }
     },
@@ -190,13 +191,10 @@ export const useAvailableModelsStore = create<AvailableModelsState>(
           const data = await response.json();
           set({ availableModels: data || [] });
         } else {
-          console.error(
-            'Failed to load available models:',
-            response.statusText
-          );
+          logger.error('Failed to load available models:', response.statusText);
         }
       } catch (error) {
-        console.error('Error loading available models:', error);
+        logger.error('Error loading available models:', error);
       } finally {
         set({ loadingAvailable: false });
       }

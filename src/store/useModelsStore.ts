@@ -3,6 +3,7 @@ import type { LLMModel } from '../hooks/useModels';
 import { modelEvents } from '../utils/modelEvents';
 import { sseEventBus } from '../utils/sseEventBus';
 import { SSEEventType } from '../types';
+import { logger } from '../utils/logger';
 
 interface ModelsState {
   models: LLMModel[];
@@ -60,7 +61,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
               (model: { status: string }) => model.status === 'loaded'
             );
             if (loadedModels.length > 0) {
-              console.log(
+              logger.info(
                 `Unloading ${loadedModels.length} local model(s) to free memory...`
               );
             }
@@ -72,18 +73,17 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
                   await fetch(`/api/local-llm/models/${model.id}/unload`, {
                     method: 'POST',
                   });
-                  console.log(`Unloaded local model: ${model.name}`);
+                  logger.info(`Unloaded local model: ${model.name}`);
                 } catch (unloadError) {
-                  console.warn(
-                    `Failed to unload local model ${model.name}:`,
-                    unloadError
-                  );
+                  logger.warn(`Failed to unload local model ${model.name}:`, {
+                    error: unloadError,
+                  });
                 }
               }
             }
           }
         } catch (error) {
-          console.warn('Failed to unload local models:', error);
+          logger.warn('Failed to unload local models:', { error });
           // Continue with model switching even if unloading fails
         }
       }
@@ -122,7 +122,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
       );
       useSystemInformationStore.getState().updateSystemInfo();
     } catch (error) {
-      console.error('Failed to set default model:', error);
+      logger.error('Failed to set default model:', error);
       set({
         error:
           error instanceof Error
@@ -177,7 +177,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
 
       await get().fetchModels();
     } catch (error) {
-      console.error('Failed to rescan models:', error);
+      logger.error('Failed to rescan models:', error);
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to rescan models';
       set({ error: errorMessage });
@@ -206,7 +206,12 @@ export function initializeModelsEventSubscription(): void {
     _event => {
       const { isLoading, fetchModels } = useModelsStore.getState();
       if (!isLoading) {
-        fetchModels().catch(console.error);
+        fetchModels().catch(error =>
+          logger.error(
+            'Failed to fetch models on SSE models updated event:',
+            error
+          )
+        );
       }
     }
   );
@@ -221,7 +226,9 @@ if (typeof window !== 'undefined') {
     const handleModelChange = () => {
       const { isLoading, rescanModels } = useModelsStore.getState();
       if (!isLoading) {
-        rescanModels().catch(console.error);
+        rescanModels().catch(error =>
+          logger.error('Failed to rescan models on model change event:', error)
+        );
       }
     };
 
@@ -231,6 +238,11 @@ if (typeof window !== 'undefined') {
     modelEvents.on('service-removed', handleModelChange);
 
     // Initial fetch
-    useModelsStore.getState().fetchModels().catch(console.error);
+    useModelsStore
+      .getState()
+      .fetchModels()
+      .catch(error =>
+        logger.error('Failed to fetch models during initialization:', error)
+      );
   }, 100);
 }

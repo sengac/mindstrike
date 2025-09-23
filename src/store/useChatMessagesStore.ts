@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import type { ConversationMessage } from '../types';
+import { logger } from '../utils/logger';
 // Note: SSE event handling moved to per-thread stores
 
 export interface ChatMessagesState {
@@ -70,7 +71,7 @@ export const useChatMessagesStore = create<ChatMessagesState>()(
           streamingThreadId: null,
         });
       } catch (error: unknown) {
-        console.error('[useChatMessagesStore] Error loading messages:', error);
+        logger.error('[useChatMessagesStore] Error loading messages:', error);
         set({
           error: error instanceof Error ? error.message : 'Unknown error',
           isLoadingThread: false,

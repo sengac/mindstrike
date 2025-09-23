@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { audioAnalyzer } from '../utils/audioAnalyzer';
 import { useAudioStore } from '../store/useAudioStore';
+import { logger } from '../utils/logger';
 
 interface NetworkEffectProps {
   className?: string;
@@ -101,7 +102,7 @@ export function NetworkEffect({
 
     const audioElement = (howl as any)._sounds[0]?._node;
     if (!audioElement) {
-      console.warn('NetworkEffect: No audio element found in Howler instance');
+      logger.warn('NetworkEffect: No audio element found in Howler instance');
       return;
     }
 
@@ -116,7 +117,7 @@ export function NetworkEffect({
     audioAnalyzer.connectToAudio(audioElement).then(success => {
       setIsConnected(success);
       if (!success) {
-        console.warn('NetworkEffect: Failed to connect to audio analyzer');
+        logger.warn('NetworkEffect: Failed to connect to audio analyzer');
       }
     });
 

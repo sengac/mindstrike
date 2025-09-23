@@ -1,3 +1,5 @@
+import { logger } from './logger';
+
 /**
  * Shared utilities for encoding/decoding SSE data with base64 and large content support
  */
@@ -434,7 +436,7 @@ export async function decodeSseData(
         return `[Large content not available - ${obj.length} characters]`;
       }
     } catch (error) {
-      console.error('Failed to fetch large content:', error);
+      logger.error('Failed to fetch large content:', error);
       return `[Large content error - ${obj.length} characters]`;
     }
   }

@@ -8,6 +8,7 @@ import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Copy, Download, Maximize2 } from 'lucide-react';
 import { MermaidModal } from './MermaidModal';
 import { renderMermaidDiagramsDelayed } from '../utils/mermaidRenderer';
+import { logger } from '../utils/logger';
 
 interface MarkdownViewerProps {
   content: string;
@@ -90,7 +91,7 @@ export function MarkdownViewer({ content }: MarkdownViewerProps) {
     try {
       await navigator.clipboard.writeText(text);
     } catch (err) {
-      console.error('Clipboard API failed, trying fallback:', err);
+      logger.error('Clipboard API failed, trying fallback:', err);
       try {
         const textArea = document.createElement('textarea');
         textArea.value = text;
@@ -103,10 +104,10 @@ export function MarkdownViewer({ content }: MarkdownViewerProps) {
         const successful = document.execCommand('copy');
         document.body.removeChild(textArea);
         if (!successful) {
-          console.error('Fallback copy failed');
+          logger.error('Fallback copy failed');
         }
       } catch (fallbackErr) {
-        console.error('Both copy methods failed:', fallbackErr);
+        logger.error('Both copy methods failed:', fallbackErr);
       }
     }
   };
@@ -135,7 +136,7 @@ export function MarkdownViewer({ content }: MarkdownViewerProps) {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (err) {
-      console.error('Failed to download diagram:', err);
+      logger.error('Failed to download diagram:', err);
     }
   };
 

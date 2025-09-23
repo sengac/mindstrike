@@ -28,6 +28,7 @@ import { useImageCache } from '../hooks/useImageCache';
 import { LCDDisplay } from './LCDDisplay';
 import { CachedAlbumArt } from './CachedAlbumArt';
 import { List as VirtualizedList, AutoSizer } from 'react-virtualized';
+import { logger } from '../utils/logger';
 
 interface MusicPlayerProps {
   isOpen: boolean;
@@ -203,7 +204,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
         setAudioFiles(audioFiles);
       }
     } catch (error) {
-      console.error('Error fetching audio files:', error);
+      logger.error('Error fetching audio files:', error);
     } finally {
       setIsLoadingPlaylist(false);
     }
@@ -716,7 +717,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
               }
             }
           } catch (error) {
-            console.error('Reorder error:', error);
+            logger.error('Reorder error:', error);
           }
         }
       }

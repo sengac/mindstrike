@@ -133,6 +133,63 @@ mindstrike/
 - Automatic reconnection with exponential backoff
 - Large content chunking and reference storage
 
+### MCP (Model Context Protocol) Integration
+
+#### Memory Server - When to Use
+
+**Store Knowledge When:**
+
+- Discovering important architectural patterns or design decisions in the codebase
+- Finding non-obvious relationships between components or systems
+- Learning about project-specific conventions or patterns
+- Debugging complex issues and finding root causes
+- Understanding business logic or domain concepts
+
+**Retrieve Knowledge When:**
+
+- Starting work on a related component or feature
+- Debugging similar issues
+- Needing context about architectural decisions
+- Onboarding to a new area of the codebase
+- Making changes that might affect related systems
+
+**What to Store:**
+
+- Architectural patterns and their rationale
+- Component relationships and dependencies
+- Bug patterns and their solutions
+- Performance optimizations and their impact
+- Business rules and domain logic
+- Integration points and API contracts
+
+#### Context7 Server - When to Use
+
+**Use for Documentation When:**
+
+- Implementing new features with unfamiliar libraries
+- Upgrading dependencies and checking breaking changes
+- Following current best practices for frameworks
+- Researching optimal API usage patterns
+- Verifying correct implementation approaches
+
+**Priority Libraries for MindStrike:**
+
+- React 18 patterns and hooks
+- TypeScript strict mode practices
+- Zustand state management patterns
+- ReactFlow for mind mapping
+- LangChain for AI orchestration
+- Electron for desktop features
+- Vite configuration and optimization
+
+#### Knowledge Management Strategy
+
+1. **Capture During Development**: Store insights immediately when discovering important patterns
+2. **Build Relationships**: Connect related components, bugs, and solutions
+3. **Update Continuously**: Add new observations to existing entities as understanding evolves
+4. **Query Before Changes**: Check stored knowledge before modifying complex systems
+5. **Document Integration Points**: Store how different systems interact and communicate
+
 ### Coding Standards
 
 #### TypeScript Rules (Strict Enforcement)
@@ -198,3 +255,76 @@ mindstrike/
 2. **Testing**: Write tests for new functionality (unit and integration as appropriate)
 3. **Error Handling**: Implement proper error handling for all async operations
 4. **Documentation**: Update code comments for complex logic
+
+### Specialized Subagents
+
+MindStrike uses specialized subagents for specific development tasks. Use these agents proactively when their expertise matches the task:
+
+#### API Documenter Agent
+
+**Triggers:**
+
+- After creating new API endpoints
+- When modifying endpoint parameters or responses
+- Before releasing API changes
+- When examples or documentation are outdated
+
+#### Code Reviewer Agent
+
+**Triggers:**
+
+- Completed implementation of 50+ lines
+- Modified critical business logic
+- Changed authentication/authorization code
+- Implemented new data structures
+- Refactored existing components
+
+#### Error Handler Agent
+
+**Triggers:**
+
+- Writing async/await code
+- Implementing API calls or network requests
+- Creating new React components with dynamic data
+- Working with file system operations
+- Integrating external services
+
+#### Test Generator Agent
+
+**Triggers:**
+
+- New feature implementation complete
+- Refactoring that changes interfaces
+- Bug fixes that need regression tests
+- Coverage reports show gaps
+- Before major releases
+
+**Testing Requirements:**
+
+- **Unit Tests**: Test individual functions and components in isolation
+- **Integration Tests**: Test interactions between components using fixtures
+- **Fixtures**: Create reusable test data and mock objects for:
+  - Store states (Zustand mocks)
+  - API responses
+  - Component props
+  - User interactions
+  - File system operations
+- **Test Structure**:
+  - Place tests in `__tests__` directories adjacent to source files
+  - Name test files as `[component].test.tsx` or `[module].test.ts`
+  - Use descriptive test names that explain the behavior being tested
+- **Testing Libraries**:
+  - Vitest for test runner
+  - React Testing Library for component tests
+  - MSW (Mock Service Worker) for API mocking
+  - Testing Library User Event for user interactions
+
+#### Type Enforcer Agent
+
+**Triggers:**
+
+- TypeScript errors in build
+- Using `any` type temporarily
+- Creating new interfaces or types
+- Working with third-party libraries
+- Implementing generic components

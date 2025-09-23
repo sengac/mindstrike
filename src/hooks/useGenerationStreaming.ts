@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useDebugStore } from '../store/useDebugStore';
 import { sseEventBus } from '../utils/sseEventBus';
+import { logger } from '../utils/logger';
 import {
   isSSETokenStatsEvent,
   isSSEContentEvent,
@@ -74,7 +75,7 @@ export function useGenerationStreaming() {
       options: StreamingOptions = {}
     ) => {
       if (isStreaming) {
-        console.warn('Already streaming, ignoring new request');
+        logger.warn('Already streaming, ignoring new request');
         return;
       }
 
@@ -95,7 +96,8 @@ export function useGenerationStreaming() {
 
       try {
         // First make the initial request to start generation
-        console.log('Starting generation request:', url, {
+        logger.info('Starting generation request:', {
+          url,
           ...requestData,
           stream: true,
         });
@@ -119,7 +121,7 @@ export function useGenerationStreaming() {
 
         // Get the stream ID and workflow ID from response
         const result = await response.json();
-        console.log('Generation request response:', result);
+        logger.info('Generation request response:', result);
         const { streamId, workflowId } = result;
 
         // Call workflow ID callback if provided
@@ -128,7 +130,7 @@ export function useGenerationStreaming() {
         }
 
         // Subscribe to unified SSE event bus for updates
-        console.log(
+        logger.info(
           'Subscribing to unified SSE events for streamId:',
           streamId
         );
@@ -215,7 +217,7 @@ export function useGenerationStreaming() {
               options.onProgress(stats);
             }
           } catch (error) {
-            console.error('Error processing SSE event:', error);
+            logger.error('Error processing SSE event:', error);
           }
         });
 
@@ -228,7 +230,7 @@ export function useGenerationStreaming() {
           stopStreaming();
         }, 300000); // 5 minute timeout
       } catch (error: unknown) {
-        console.error('Error starting stream:', error);
+        logger.error('Error starting stream:', error);
         if (options.onError) {
           options.onError(
             error instanceof Error ? error.message : 'Unknown error'

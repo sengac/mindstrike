@@ -1,5 +1,6 @@
 import mermaid from 'mermaid';
 import { MERMAID_CONFIG } from './mermaidConfig';
+import { logger } from './logger';
 
 // Global flag to prevent multiple initializations
 let isInitialized = false;
@@ -172,7 +173,7 @@ export async function renderMermaidDiagrams(
       } catch (error) {
         // Only log errors for elements that are still in the DOM
         if (htmlElement.isConnected) {
-          console.error('Mermaid rendering failed for element:', error);
+          logger.error('Mermaid rendering failed for element:', error);
 
           // Show error state with original code
           const originalCode =

@@ -131,9 +131,6 @@ export class CommandResolver {
       const bundledPath = this.findBundledPackage(config.packageName);
       if (bundledPath) {
         config.bundledPath = bundledPath;
-        logger.info(
-          `[CommandResolver] Found bundled MCP server: ${config.packageName} at ${bundledPath}`
-        );
       }
 
       this.bundledServers.set(key, config);

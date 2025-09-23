@@ -10,6 +10,7 @@ import {
   FileCheck,
 } from 'lucide-react';
 import { useModelScanStore } from '../store/useModelScanStore';
+import { logger } from '../utils/logger';
 
 interface ModelScanProgressProps {
   isVisible: boolean;
@@ -26,7 +27,9 @@ export function ModelScanProgress({
   // Auto-start scan when component becomes visible
   useEffect(() => {
     if (isVisible && !isScanning && progress.stage === 'idle') {
-      startScan().catch(console.error);
+      startScan().catch(error =>
+        logger.error('Failed to start model scan:', error)
+      );
     }
   }, [isVisible, isScanning, progress.stage, startScan]);
 
@@ -85,7 +88,7 @@ export function ModelScanProgress({
     try {
       await cancelScan();
     } catch (error) {
-      console.error('Failed to cancel scan:', error);
+      logger.error('Failed to cancel scan:', error);
     }
   };
 

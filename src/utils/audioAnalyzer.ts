@@ -1,3 +1,10 @@
+import { logger } from './logger';
+
+// Type declaration for webkit audio context
+interface WindowWithWebkitAudioContext extends Window {
+  webkitAudioContext?: typeof AudioContext;
+}
+
 // Global audio analyzer singleton to handle MediaElementSource reuse issues
 
 class AudioAnalyzer {
@@ -35,8 +42,13 @@ class AudioAnalyzer {
 
       // Create AudioContext if needed
       if (!this.audioContext) {
-        this.audioContext = new (window.AudioContext ||
-          (window as any).webkitAudioContext)();
+        const webkitWindow = window as WindowWithWebkitAudioContext;
+        const AudioContextClass =
+          window.AudioContext || webkitWindow.webkitAudioContext;
+        if (!AudioContextClass) {
+          throw new Error('AudioContext not supported in this browser');
+        }
+        this.audioContext = new AudioContextClass();
       }
 
       // Resume context if suspended
@@ -59,7 +71,7 @@ class AudioAnalyzer {
       this.startAnalysis();
       return true;
     } catch (error) {
-      console.warn('Failed to connect audio analyzer:', error);
+      logger.warn('Failed to connect audio analyzer:', { error });
       return false;
     }
   }
@@ -90,7 +102,7 @@ class AudioAnalyzer {
             waveform: new Uint8Array(waveformData),
           });
         } catch (error) {
-          console.warn('Error in audio analyzer subscriber:', error);
+          logger.warn('Error in audio analyzer subscriber:', { error });
         }
       });
 

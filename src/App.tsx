@@ -27,6 +27,7 @@ import { Toaster } from 'react-hot-toast';
 import { initStormToastEffect } from './utils/stormToastEffect';
 import { ConnectionMonitorDialog } from './components/shared/ConnectionMonitorDialog';
 import { useConnectionMonitor } from './hooks/useConnectionMonitor';
+import { logger } from './utils/logger';
 
 function App() {
   const [, setWorkspaceRestored] = useState(false);
@@ -145,7 +146,7 @@ function App() {
           unsubscribeMusicRoot();
         };
       } catch (error) {
-        console.error('Failed to initialize workspace:', error);
+        logger.error('Failed to initialize workspace:', error);
       }
       setWorkspaceRestored(true);
     };
@@ -214,7 +215,7 @@ function App() {
         throw new Error('Failed to delete message');
       }
     } catch (error) {
-      console.error('Error deleting message:', error);
+      logger.error('Error deleting message:', error);
     }
   };
 

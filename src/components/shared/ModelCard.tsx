@@ -9,6 +9,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { useState } from 'react';
+import { logger } from '../../utils/logger';
 
 interface ModelLoadingSettings {
   gpuLayers?: number;
@@ -111,7 +112,7 @@ export function ModelCard({
         onUpdateSettings(model.id, optimalSettings);
       }
     } catch (error) {
-      console.error('Error fetching optimal settings:', error);
+      logger.error('Error fetching optimal settings:', error);
       // Fallback to clearing settings if API fails
       const defaultSettings: ModelLoadingSettings = {};
       setTempSettings(defaultSettings);

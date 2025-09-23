@@ -3,6 +3,7 @@ import { subscribeWithSelector } from 'zustand/middleware';
 import { sseEventBus } from '../utils/sseEventBus';
 import { SSEEventType } from '../types';
 import { isSSELogEvent } from '../types/sse-events';
+import { logger } from '../utils/logger';
 
 export interface MCPLogEntry {
   id: string;
@@ -48,7 +49,7 @@ export const useMCPLogsStore = create<MCPLogsState>()(
           set({ logs: data.logs || [] });
         }
       } catch (error) {
-        console.error('Failed to fetch MCP logs:', error);
+        logger.error('Failed to fetch MCP logs:', error);
       }
     },
   }))

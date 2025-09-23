@@ -915,7 +915,9 @@ class QualityChecker {
       // Check for 'any' type usage in TypeScript files
       const asAnyRule = config._fileConfig.rules?.asAny || {};
       if (
-        (this.fileType === 'typescript' || this.fileType === 'component') &&
+        (this.fileType === 'typescript' ||
+          this.fileType === 'component' ||
+          (this.fileType === 'test' && /\.(ts|tsx)$/.test(this.filePath))) &&
         asAnyRule.enabled !== false
       ) {
         lines.forEach((line, index) => {
@@ -930,11 +932,23 @@ class QualityChecker {
             { pattern: /\bas\s+any\b/, description: "'as any' type assertion" },
             { pattern: /:\s*any\b/, description: "': any' type annotation" },
             { pattern: /\bany\[\]/, description: "'any[]' array type" },
-            { pattern: /\bArray<any>/, description: "'Array<any>' generic type" },
-            { pattern: /\bPromise<any>/, description: "'Promise<any>' generic type" },
-            { pattern: /\bRecord<[^,]+,\s*any>/, description: "'Record<K, any>' type" },
+            {
+              pattern: /\bArray<any>/,
+              description: "'Array<any>' generic type",
+            },
+            {
+              pattern: /\bPromise<any>/,
+              description: "'Promise<any>' generic type",
+            },
+            {
+              pattern: /\bRecord<[^,]+,\s*any>/,
+              description: "'Record<K, any>' type",
+            },
             { pattern: /<any[,>]/, description: "generic 'any' type" },
-            { pattern: /\bas\s+unknown\s+as\b/, description: "'as unknown as' double assertion" }
+            {
+              pattern: /\bas\s+unknown\s+as\b/,
+              description: "'as unknown as' double assertion",
+            },
           ];
 
           for (const { pattern, description } of anyPatterns) {
@@ -961,7 +975,11 @@ class QualityChecker {
       }
 
       // Check for 'as unknown as' in TypeScript files
-      if (this.fileType === 'typescript' || this.fileType === 'component') {
+      if (
+        this.fileType === 'typescript' ||
+        this.fileType === 'component' ||
+        (this.fileType === 'test' && /\.(ts|tsx)$/.test(this.filePath))
+      ) {
         lines.forEach((line, index) => {
           if (line.includes('as unknown as')) {
             this.errors.push(
@@ -1034,6 +1052,148 @@ class QualityChecker {
           log.warning(`Found TODO/FIXME comment at line ${index + 1}`);
         }
       });
+
+      // Check for ESLint disable comments
+      const eslintDisableRule = config._fileConfig.rules?.eslintDisable || {};
+      if (
+        eslintDisableRule.enabled !== false &&
+        !this.filePath.endsWith('quality-check.js')
+      ) {
+        // Skip checking the quality-check.js file itself to avoid recursive issues
+        lines.forEach((line, index) => {
+          const trimmedLine = line.trim();
+
+          // Skip lines that are part of pattern definitions in code
+          if (
+            trimmedLine.includes('eslintDisablePatterns') ||
+            trimmedLine.includes('eslintDisableStrings') ||
+            (trimmedLine.includes('pattern:') &&
+              trimmedLine.includes('eslint')) ||
+            (trimmedLine.startsWith("'eslint-") &&
+              trimmedLine.endsWith("',")) ||
+            (trimmedLine.startsWith('"eslint-') && trimmedLine.endsWith('",'))
+          ) {
+            return;
+          }
+
+          // Check for actual ESLint disable usage
+          const eslintDisableStrings = [
+            'eslint-disable-next-line',
+            'eslint-disable-line',
+            'eslint-disable',
+            'eslint-enable',
+          ];
+
+          for (const disableString of eslintDisableStrings) {
+            if (line.includes(disableString)) {
+              const severity = eslintDisableRule.severity || 'error';
+              const message =
+                eslintDisableRule.message ||
+                'ESLint disable comments found - Fix the underlying issue instead of disabling the linter. Only use ESLint disable comments when absolutely necessary (e.g., in config files for specific, well-documented exceptions).';
+
+              if (severity === 'error') {
+                this.errors.push(
+                  `Found ESLint disable comment in ${this.filePath} - ${message}`
+                );
+                console.error(`  Line ${index + 1}: ${line.trim()}`);
+                foundIssues = true;
+              } else {
+                // Warning level - just warn, don't block
+                log.warning(
+                  `ESLint disable comment at line ${index + 1}: ${message}`
+                );
+              }
+              break; // Only report once per line
+            }
+          }
+        });
+      }
+
+      // Check for underscore prefix workaround for unused vars
+      const underscorePrefixRule =
+        config._fileConfig.rules?.underscorePrefix || {};
+      if (underscorePrefixRule.enabled !== false) {
+        // Common patterns where underscores are used to bypass no-unused-vars
+        const underscorePatterns = [
+          // Variable declarations with underscore prefix
+          {
+            pattern: /\b(?:const|let|var)\s+_\w+\s*[=:]/,
+            description: 'underscore-prefixed variable',
+          },
+          // Function parameters with underscore prefix (including TypeScript type annotations)
+          {
+            pattern: /\(\s*_\w+\s*[:),]/,
+            description: 'underscore-prefixed parameter',
+          },
+          {
+            pattern: /,\s*_\w+\s*[:),]/,
+            description: 'underscore-prefixed parameter',
+          },
+          // Arrow function parameters
+          {
+            pattern: /_\w+\s*=>/,
+            description: 'underscore-prefixed arrow function parameter',
+          },
+          // Destructuring with underscore prefix
+          {
+            pattern: /{\s*_\w+\s*[,:}]/,
+            description: 'underscore-prefixed destructuring',
+          },
+          {
+            pattern: /\[\s*_\w+\s*[,\]]/,
+            description: 'underscore-prefixed array destructuring',
+          },
+          // Catch clause parameters
+          {
+            pattern: /catch\s*\(\s*_\w+/,
+            description: 'underscore-prefixed catch parameter',
+          },
+        ];
+
+        lines.forEach((line, index) => {
+          // Skip comments
+          const trimmedLine = line.trim();
+          if (trimmedLine.startsWith('//') || trimmedLine.startsWith('*')) {
+            return;
+          }
+
+          // Skip legitimate underscore usage
+          if (
+            // Private methods/properties
+            trimmedLine.includes('private _') ||
+            trimmedLine.includes('this._') ||
+            // ESM compatibility for __dirname and __filename
+            trimmedLine.includes('__dirname') ||
+            trimmedLine.includes('__filename') ||
+            // Lodash or similar utility library usage
+            trimmedLine.includes('import _') ||
+            trimmedLine.includes('= _.')
+          ) {
+            return;
+          }
+
+          for (const { pattern, description } of underscorePatterns) {
+            if (pattern.test(line)) {
+              const severity = underscorePrefixRule.severity || 'error';
+              const message =
+                underscorePrefixRule.message ||
+                "Remove unused variables instead of prefixing with underscore. If the parameter is required by an interface/callback, use a descriptive name or comment why it's unused.";
+
+              if (severity === 'error') {
+                this.errors.push(
+                  `Found ${description} in ${this.filePath} - ${message}`
+                );
+                console.error(`  Line ${index + 1}: ${line.trim()}`);
+                foundIssues = true;
+              } else {
+                // Warning level - just warn, don't block
+                log.warning(`${description} at line ${index + 1}: ${message}`);
+              }
+              break; // Only report once per line
+            }
+          }
+        });
+      }
 
       if (!foundIssues) {
         log.success('No common issues found');
@@ -1328,10 +1488,14 @@ async function main() {
       e.includes('Prettier formatting issues') ||
       e.includes('console statements') ||
       e.includes("'as any' usage") ||
-      e.includes('Found') && e.includes('any') && e.includes('type') ||
-      e.includes('Found') && e.includes('unknown as') && e.includes('double assertion') ||
+      (e.includes('Found') && e.includes('any') && e.includes('type')) ||
+      (e.includes('Found') &&
+        e.includes('unknown as') &&
+        e.includes('double assertion')) ||
       e.includes('were auto-fixed') ||
-      e.includes('CommonJS syntax')
+      e.includes('CommonJS syntax') ||
+      e.includes('ESLint disable comment') ||
+      e.includes('underscore-prefixed')
   );
 
   const dependencyWarnings = errors.filter(e => !editedFileErrors.includes(e));

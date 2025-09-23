@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { AppView, FontScheme } from '../types';
+import { logger } from '../utils/logger';
 
 // Simplified - only store the last used model ID
 export interface LastUsedModel {
@@ -154,7 +155,7 @@ export const useAppStore = create<AppState>()(
             set({ musicRoot });
           }
         } catch (error) {
-          console.error('Failed to load workspace roots:', error);
+          logger.error('Failed to load workspace roots:', error);
         }
       },
     }),

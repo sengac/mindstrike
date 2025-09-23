@@ -34,6 +34,7 @@ import { ModelSearchProgress } from '../../components/ModelSearchProgress';
 import { useModelScanStore } from '../../store/useModelScanStore';
 import { HuggingFaceConfigDialog } from './HuggingFaceConfigDialog';
 import { ModelList } from '../../components/shared/ModelList';
+import { logger } from '../../utils/logger';
 
 interface ModelDownloadInfo {
   name: string;
@@ -238,22 +239,22 @@ export function LocalLLMManager() {
         availableModels.length === 0 &&
         !hasSearched
       ) {
-        console.log(
+        logger.info(
           'No available models found, checking for cached models first...'
         );
         try {
           // First try to load cached models
           const hasCachedModels = await loadCachedModels();
           if (!hasCachedModels) {
-            console.log(
+            logger.info(
               'No cached models found, auto-triggering model scan...'
             );
             await startScan();
           } else {
-            console.log('Loaded cached models successfully');
+            logger.info('Loaded cached models successfully');
           }
         } catch (error) {
-          console.error('Failed to auto-start model scan:', error);
+          logger.error('Failed to auto-start model scan:', error);
         }
       }
     };
@@ -293,7 +294,7 @@ export function LocalLLMManager() {
       try {
         await startScan();
       } catch (error) {
-        console.error('Failed to start model scan:', error);
+        logger.error('Failed to start model scan:', error);
         toast.error('Failed to start model scan');
       }
     } else {
@@ -306,7 +307,7 @@ export function LocalLLMManager() {
         };
         await startSearch(searchQuery, searchType, filters);
       } catch (error) {
-        console.error('Failed to start search:', error);
+        logger.error('Failed to start search:', error);
         toast.error('Failed to start search');
       }
     }
@@ -320,11 +321,11 @@ export function LocalLLMManager() {
     try {
       const hasCachedModels = await loadCachedModels();
       if (!hasCachedModels) {
-        console.log('No cached models found during initial load');
+        logger.info('No cached models found during initial load');
         // The auto-scan useEffect will handle this case
       }
     } catch (error) {
-      console.error('Error loading cached models:', error);
+      logger.error('Error loading cached models:', error);
       // The auto-scan useEffect will handle this case
     }
   };
@@ -345,7 +346,7 @@ export function LocalLLMManager() {
         }
       }
     } catch (error) {
-      console.error('Error loading HF token status:', error);
+      logger.error('Error loading HF token status:', error);
     }
   };
 
@@ -387,7 +388,7 @@ export function LocalLLMManager() {
         toast.error(error.error || 'Failed to start download');
       }
     } catch (error) {
-      console.error('Error starting download:', error);
+      logger.error('Error starting download:', error);
       toast.error('Failed to start download');
     }
   };
@@ -414,7 +415,7 @@ export function LocalLLMManager() {
         toast.error(error.error || 'Failed to cancel download');
       }
     } catch (error) {
-      console.error('Error cancelling download:', error);
+      logger.error('Error cancelling download:', error);
       toast.error('Failed to cancel download');
     }
     setPendingCancelFilename('');
@@ -446,7 +447,7 @@ export function LocalLLMManager() {
         toast.error(error.error || 'Failed to open models directory');
       }
     } catch (error) {
-      console.error('Error opening models directory:', error);
+      logger.error('Error opening models directory:', error);
       toast.error('Failed to open models directory');
     }
   };
