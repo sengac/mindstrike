@@ -91,7 +91,7 @@ export function ValidationStatusNotification({
       return 0;
     }
     return Math.round(
-      ((progress.completedItems || 0) / progress.totalItems) * 100
+      ((progress.completedItems ?? 0) / progress.totalItems) * 100
     );
   };
 

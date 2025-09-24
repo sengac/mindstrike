@@ -9,7 +9,7 @@ console.log('🚀 Starting OpenAPI documentation generator...');
 console.log('⏳ Loading server routes...');
 
 // Import the server which will set up express-oas-generator
-import('./index.js')
+import('./index')
   .then(() => {
     console.log('✅ Server loaded successfully');
     console.log('📄 OpenAPI spec will be generated at: ./openapi.json');

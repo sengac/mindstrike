@@ -11,6 +11,11 @@ export class MockEventSource implements EventSource {
   static readonly OPEN = EVENT_SOURCE_STATE.OPEN;
   static readonly CLOSED = EVENT_SOURCE_STATE.CLOSED;
 
+  // Instance constants for EventSource compatibility
+  readonly CONNECTING = EVENT_SOURCE_STATE.CONNECTING;
+  readonly OPEN = EVENT_SOURCE_STATE.OPEN;
+  readonly CLOSED = EVENT_SOURCE_STATE.CLOSED;
+
   readonly url: string;
   readyState: number = MockEventSource.CONNECTING;
   readonly withCredentials = false;
@@ -35,7 +40,8 @@ export class MockEventSource implements EventSource {
 
   constructor(url: string, eventSourceInitDict?: EventSourceInit) {
     this.url = url;
-    this.withCredentials = eventSourceInitDict?.withCredentials ?? false;
+    this.withCredentials = (eventSourceInitDict?.withCredentials ??
+      false) as false;
 
     // Simulate async connection unless manually controlled
     if (!this.isManuallyControlled) {
@@ -124,9 +130,26 @@ export class MockEventSource implements EventSource {
   /**
    * addEventListener implementation
    */
+  addEventListener<K extends keyof EventSourceEventMap>(
+    type: K,
+    listener: (this: EventSource, ev: EventSourceEventMap[K]) => void,
+    options?: boolean | AddEventListenerOptions
+  ): void;
   addEventListener(
     type: string,
-    listener: EventListenerOrEventListenerObject | null,
+    listener: (this: EventSource, event: MessageEvent) => void,
+    options?: boolean | AddEventListenerOptions
+  ): void;
+  addEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+    options?: boolean | AddEventListenerOptions
+  ): void;
+  addEventListener(
+    type: string,
+    listener:
+      | EventListenerOrEventListenerObject
+      | ((this: EventSource, event: MessageEvent) => void),
     options?: boolean | AddEventListenerOptions
   ): void {
     if (!listener) {
@@ -142,15 +165,34 @@ export class MockEventSource implements EventSource {
     }
 
     // Store listener with its options
-    this.eventListeners.get(type)!.set(listener, { capture });
+    const listenerAsEventListener =
+      listener as EventListenerOrEventListenerObject;
+    this.eventListeners.get(type)!.set(listenerAsEventListener, { capture });
   }
 
   /**
    * removeEventListener implementation
    */
+  removeEventListener<K extends keyof EventSourceEventMap>(
+    type: K,
+    listener: (this: EventSource, ev: EventSourceEventMap[K]) => void,
+    options?: boolean | EventListenerOptions
+  ): void;
   removeEventListener(
     type: string,
-    listener: EventListenerOrEventListenerObject | null,
+    listener: (this: EventSource, event: MessageEvent) => void,
+    options?: boolean | EventListenerOptions
+  ): void;
+  removeEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+    options?: boolean | EventListenerOptions
+  ): void;
+  removeEventListener(
+    type: string,
+    listener:
+      | EventListenerOrEventListenerObject
+      | ((this: EventSource, event: MessageEvent) => void),
     options?: boolean | EventListenerOptions
   ): void {
     if (!listener) {
@@ -184,7 +226,7 @@ export class MockEventSource implements EventSource {
     if (listeners) {
       // Dispatch to all registered listeners regardless of capture phase
       // (EventSource doesn't support capture phase, but we track it for API compatibility)
-      listeners.forEach((options, listener) => {
+      listeners.forEach((_, listener) => {
         if (typeof listener === 'function') {
           listener(event);
         } else if (listener && typeof listener.handleEvent === 'function') {

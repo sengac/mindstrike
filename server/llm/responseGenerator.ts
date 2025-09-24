@@ -5,9 +5,9 @@ import type {
   ChatSessionModelFunctions,
 } from 'node-llama-cpp';
 import { parentPort } from 'worker_threads';
-import type { MCPTool } from '../mcpManager.js';
-import { logger } from '../logger.js';
-import { TIMING, PROBABILITY, RANDOM_STRING, PROGRESS } from './constants.js';
+import type { MCPTool } from '../mcpManager';
+import { logger } from '../logger';
+import { TIMING, PROBABILITY, RANDOM_STRING, PROGRESS } from './constants';
 
 // Type definitions for worker messages
 interface MCPToolsMessage {

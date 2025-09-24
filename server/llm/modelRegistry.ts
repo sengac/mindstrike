@@ -1,7 +1,7 @@
 import type { LlamaModel, LlamaContext } from 'node-llama-cpp';
 import type { LlamaChatSession } from 'node-llama-cpp';
-import { logger } from '../logger.js';
-import { PROGRESS, MEMORY, CALCULATION } from './constants.js';
+import { logger } from '../logger';
+import { PROGRESS, MEMORY, CALCULATION } from './constants';
 
 export interface ModelRuntimeInfo {
   model: LlamaModel;

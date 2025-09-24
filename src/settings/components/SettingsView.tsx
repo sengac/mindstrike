@@ -176,21 +176,21 @@ export function SettingsView() {
     try {
       if (editingService) {
         // Update existing service
-        updateService(editingService.id, {
+        await updateService(editingService.id, {
           name: data.name.trim(),
           baseURL: data.baseURL.trim(),
           type: data.type,
-          apiKey: data.apiKey.trim() || undefined,
+          apiKey: data.apiKey.trim() ?? undefined,
           enabled: true,
         });
         toast.success('LLM service updated successfully');
       } else {
         // Add new service
-        addService({
+        await addService({
           name: data.name.trim(),
           baseURL: data.baseURL.trim(),
           type: data.type,
-          apiKey: data.apiKey.trim() || undefined,
+          apiKey: data.apiKey.trim() ?? undefined,
           enabled: true,
         });
         toast.success('LLM service added successfully');
@@ -227,7 +227,7 @@ export function SettingsView() {
       const result = await testService(service);
       if (result.success) {
         toast.success(
-          `✓ Connection successful! Found ${result.models?.length || 0} models`
+          `✓ Connection successful! Found ${result.models?.length ?? 0} models`
         );
       } else {
         toast.error(`✗ Connection failed: ${result.error}`);
@@ -257,22 +257,24 @@ export function SettingsView() {
       // Refresh the services list
       await refetch();
 
-      const addedCount = result.addedServices?.length || 0;
-      const removedCount = result.removedServices?.length || 0;
+      const addedCount = result.addedServices?.length ?? 0;
+      const removedCount = result.removedServices?.length ?? 0;
       const availableCount =
-        result.scannedServices?.filter((s: any) => s.available)?.length || 0;
+        result.scannedServices?.filter(
+          (s: { available: boolean }) => s.available
+        )?.length ?? 0;
 
       if (addedCount > 0 || removedCount > 0) {
         const messages = [];
         if (addedCount > 0) {
           const serviceNames = result.addedServices
-            .map((s: any) => s.name)
+            .map((s: { name: string }) => s.name)
             .join(', ');
           messages.push(`Added: ${serviceNames}`);
         }
         if (removedCount > 0) {
           const serviceNames = result.removedServices
-            .map((s: any) => s.name)
+            .map((s: { name: string }) => s.name)
             .join(', ');
           messages.push(`Removed: ${serviceNames}`);
         }
@@ -614,7 +616,7 @@ export function SettingsView() {
                 name: editingService.name,
                 type: editingService.type,
                 baseURL: editingService.baseURL,
-                apiKey: editingService.apiKey || '',
+                apiKey: editingService.apiKey ?? '',
               }
             : null
         }

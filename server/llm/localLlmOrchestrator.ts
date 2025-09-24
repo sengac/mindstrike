@@ -3,20 +3,20 @@ import type {
   ModelDownloadInfo,
   ModelLoadingSettings,
   StreamResponseOptions,
-} from '../localLlmManager.js';
-import type { DynamicModelInfo } from '../modelFetcher.js';
+} from '../localLlmManager';
+import type { DynamicModelInfo } from '../modelFetcher';
 
-import { ModelFileManager } from './modelFileManager.js';
-import { ModelDownloader } from './modelDownloader.js';
-import { ContextCalculator } from './contextCalculator.js';
-import { LlamaSessionManager } from './sessionManager.js';
-import { ModelResponseGenerator } from './responseGenerator.js';
-import { ModelRegistry } from './modelRegistry.js';
-import { ModelDiscovery } from './modelDiscovery.js';
-import { ModelSettingsService } from './modelSettingsService.js';
-import { ModelLoader } from './modelLoader.js';
-import { ResponseService } from './responseService.js';
-import { logger } from '../logger.js';
+import { ModelFileManager } from './modelFileManager';
+import { ModelDownloader } from './modelDownloader';
+import { ContextCalculator } from './contextCalculator';
+import { LlamaSessionManager } from './sessionManager';
+import { ModelResponseGenerator } from './responseGenerator';
+import { ModelRegistry } from './modelRegistry';
+import { ModelDiscovery } from './modelDiscovery';
+import { ModelSettingsService } from './modelSettingsService';
+import { ModelLoader } from './modelLoader';
+import { ResponseService } from './responseService';
+import { logger } from '../logger';
 
 /**
  * Orchestrates all LLM operations through specialized services

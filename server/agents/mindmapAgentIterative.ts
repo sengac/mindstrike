@@ -1,9 +1,9 @@
-import type { AgentConfig } from './baseAgent.js';
-import { BaseAgent } from './baseAgent.js';
+import type { AgentConfig } from './baseAgent';
+import { BaseAgent } from './baseAgent';
 import type { MindMapData, MindMapNode } from '../../src/utils/mindMapData';
-import { SSEEventType } from '../../src/types.js';
-import { logger } from '../logger.js';
-import { sseManager } from '../sseManager.js';
+import { SSEEventType } from '../../src/types';
+import { logger } from '../logger';
+import { sseManager } from '../sseManager';
 import * as path from 'path';
 
 export interface MindmapChange {
@@ -13,6 +13,17 @@ export interface MindmapChange {
   text?: string;
   notes?: string;
   sources?: Array<{ id: string; title: string; url: string; type: string }>;
+}
+
+// Type for the reasoning response from the LLM
+interface ReasoningResponse {
+  reasoning?: {
+    isComplete?: boolean;
+    decision?: string;
+    explanation?: string;
+    nextAction?: string;
+  };
+  changes?: MindmapChange[];
 }
 
 const DEFAULT_MINDMAP_ROLE = `You are a specialized mindmap agent that uses iterative reasoning to process user requests. You examine each request, create content step-by-step, and decide what to do next based on accumulated results.`;
@@ -107,6 +118,58 @@ export class MindmapAgentIterative extends BaseAgent {
     ]) as Promise<{ content: string; id: string; role: string }>;
   }
 
+  /**
+   * Safely parse and validate reasoning response JSON
+   */
+  private parseReasoningResponse(jsonString: string): ReasoningResponse {
+    try {
+      const parsed: unknown = JSON.parse(jsonString) as unknown;
+
+      // Basic validation that it's an object
+      if (typeof parsed !== 'object' || parsed === null) {
+        return {};
+      }
+
+      const response = parsed as Record<string, unknown>;
+
+      // Safely extract reasoning object
+      const reasoning =
+        typeof response.reasoning === 'object' && response.reasoning !== null
+          ? (response.reasoning as Record<string, unknown>)
+          : {};
+
+      // Safely extract changes array
+      const changes = Array.isArray(response.changes)
+        ? (response.changes as MindmapChange[])
+        : [];
+
+      return {
+        reasoning: {
+          isComplete:
+            typeof reasoning.isComplete === 'boolean'
+              ? reasoning.isComplete
+              : false,
+          decision:
+            typeof reasoning.decision === 'string'
+              ? reasoning.decision
+              : undefined,
+          explanation:
+            typeof reasoning.explanation === 'string'
+              ? reasoning.explanation
+              : undefined,
+          nextAction:
+            typeof reasoning.nextAction === 'string'
+              ? reasoning.nextAction
+              : undefined,
+        },
+        changes,
+      };
+    } catch (error) {
+      logger.warn('Failed to parse reasoning response JSON:', error);
+      return {};
+    }
+  }
+
   constructor(config: AgentConfig) {
     super(config);
   }
@@ -193,7 +256,10 @@ export class MindmapAgentIterative extends BaseAgent {
         return null;
       }
 
-      const mindMaps = JSON.parse(data);
+      const mindMaps = JSON.parse(data) as {
+        id: string;
+        mindmapData: MindMapData;
+      }[];
       const mindMap = mindMaps.find(
         (m: { id: string; mindmapData: MindMapData }) => m.id === mindMapId
       );
@@ -316,7 +382,7 @@ export class MindmapAgentIterative extends BaseAgent {
   }> {
     // Generate workflow ID if not provided
     const finalWorkflowId =
-      workflowId ||
+      workflowId ??
       `iterative-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     // Set streamId for token stats broadcasting
@@ -554,11 +620,11 @@ export class MindmapAgentIterative extends BaseAgent {
       );
 
       const cleanedResponse = this.cleanMindmapResponse(response.content);
-      const result = JSON.parse(cleanedResponse);
+      const result = this.parseReasoningResponse(cleanedResponse);
 
-      // Extract reasoning information
-      const reasoning = result.reasoning || {};
-      const changes = result.changes || [];
+      // Extract reasoning information safely
+      const reasoning = result.reasoning ?? {};
+      const changes = result.changes ?? [];
       const shouldContinue =
         !reasoning.isComplete && reasoning.decision !== 'completed';
 
@@ -566,11 +632,11 @@ export class MindmapAgentIterative extends BaseAgent {
         step,
         request: this.workflowState.originalRequest,
         context: previousContext,
-        decision: reasoning.decision || 'unknown',
+        decision: reasoning.decision ?? 'unknown',
         changes,
         reasoning:
-          reasoning.explanation ||
-          reasoning.nextAction ||
+          reasoning.explanation ??
+          reasoning.nextAction ??
           'No reasoning provided',
         shouldContinue,
         timestamp: new Date(),
@@ -613,7 +679,7 @@ export class MindmapAgentIterative extends BaseAgent {
         step.changes.forEach(change => {
           if (change.action === 'create') {
             contextParts.push(
-              `  - Created: "${change.text}" (${change.notes?.length || 0} chars)`
+              `  - Created: "${change.text}" (${change.notes?.length ?? 0} chars)`
             );
           }
         });

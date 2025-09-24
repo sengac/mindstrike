@@ -285,7 +285,7 @@ export class ResponseValidationOrchestrator {
           return { success: true, fixedContent: fixResponse.fixedContent };
         } else {
           // Fix didn't work, try again with the new error
-          error = validationResult.error || 'Validation failed after fix';
+          error = validationResult.error ?? 'Validation failed after fix';
           retryCount++;
         }
       } catch (fixError) {

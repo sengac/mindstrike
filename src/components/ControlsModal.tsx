@@ -304,7 +304,7 @@ export function ControlsModal({
                       {editingId === binding.id ? (
                         <span className="text-blue-400">
                           {isCapturing
-                            ? capturedKey || 'Press a key...'
+                            ? (capturedKey ?? 'Press a key...')
                             : 'Click to capture'}
                         </span>
                       ) : (

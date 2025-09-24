@@ -19,9 +19,7 @@ class AudioAnalyzer {
   private animationFrame: number | null = null;
 
   static getInstance(): AudioAnalyzer {
-    if (!AudioAnalyzer.instance) {
-      AudioAnalyzer.instance = new AudioAnalyzer();
-    }
+    AudioAnalyzer.instance ??= new AudioAnalyzer();
     return AudioAnalyzer.instance;
   }
 
@@ -145,8 +143,9 @@ class AudioAnalyzer {
     if (this.source) {
       try {
         this.source.disconnect();
-      } catch (error) {
+      } catch {
         // Already disconnected
+        // Audio source already disconnected
       }
       this.source = null;
     }
@@ -154,8 +153,9 @@ class AudioAnalyzer {
     if (this.analyzer) {
       try {
         this.analyzer.disconnect();
-      } catch (error) {
+      } catch {
         // Already disconnected
+        // Audio analyzer already disconnected
       }
       this.analyzer = null;
     }

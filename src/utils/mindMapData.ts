@@ -1,6 +1,6 @@
 import type { Node, Edge } from 'reactflow';
 import type { MindMapNodeData, Source } from '../types/mindMap';
-import type { NodeColorTheme } from '../mindmaps/constants/nodeColors';
+import type { NodeColorThemeType } from '../mindmaps/constants/nodeColors';
 import { RadialLayoutCalculator } from './radialLayoutCalculator';
 import {
   needsColorMigration,
@@ -17,7 +17,7 @@ export interface MindMapNode {
   side?: 'left' | 'right';
   children?: MindMapNode[];
   isCollapsed?: boolean;
-  colorTheme?: NodeColorTheme | null;
+  colorTheme?: NodeColorThemeType | null;
   // Legacy field for migration
   customColors?: {
     backgroundClass?: string;
@@ -80,10 +80,10 @@ export class MindMapDataManager {
           hasChildren:
             (treeNode.children && treeNode.children.length > 0) || false,
           isCollapsed: treeNode.isCollapsed || false,
-          chatId: treeNode.chatId || undefined,
-          notes: treeNode.notes || undefined,
-          sources: treeNode.sources || undefined,
-          colorTheme: colorTheme || undefined,
+          chatId: treeNode.chatId ?? undefined,
+          notes: treeNode.notes ?? undefined,
+          sources: treeNode.sources ?? undefined,
+          colorTheme: colorTheme ?? undefined,
         },
       };
 
@@ -144,7 +144,7 @@ export class MindMapDataManager {
       const nodeData: MindMapNode = {
         id: node.id,
         text: node.data.label,
-        notes: node.data.notes || null,
+        notes: node.data.notes ?? null,
         ...(children.length > 0 && { children }),
       };
 

@@ -10,19 +10,13 @@ import {
   Trash2,
   HardDrive,
   Loader2,
-  CheckCircle,
-  Clock,
   X,
   Key,
-  ExternalLink,
   AlertTriangle,
   Search,
   Filter,
   ChevronDown,
   ChevronUp,
-  User,
-  Heart,
-  Calendar,
   ChevronLeft,
   ChevronRight,
   FolderOpen,
@@ -34,6 +28,7 @@ import { ModelSearchProgress } from '../../components/ModelSearchProgress';
 import { useModelScanStore } from '../../store/useModelScanStore';
 import { HuggingFaceConfigDialog } from './HuggingFaceConfigDialog';
 import { ModelList } from '../../components/shared/ModelList';
+import { ModelCard } from '../../components/shared/ModelCard';
 import { logger } from '../../utils/logger';
 
 interface ModelDownloadInfo {
@@ -132,7 +127,7 @@ export function LocalLLMManager() {
   const filteredModels = modelsToFilter.filter(model => {
     // Parameter size filter
     if (selectedParameterSize !== 'all') {
-      const paramCount = model.parameterCount?.toLowerCase() || '';
+      const paramCount = model.parameterCount?.toLowerCase() ?? '';
       switch (selectedParameterSize) {
         case 'small': // Under 7B
           return (
@@ -180,10 +175,10 @@ export function LocalLLMManager() {
 
     switch (sortBy) {
       case 'downloads':
-        comparison = (a.downloads || 0) - (b.downloads || 0);
+        comparison = (a.downloads ?? 0) - (b.downloads ?? 0);
         break;
       case 'likes':
-        comparison = (a.likes || 0) - (b.likes || 0);
+        comparison = (a.likes ?? 0) - (b.likes ?? 0);
         break;
       case 'updated': {
         const aDate = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
@@ -195,7 +190,7 @@ export function LocalLLMManager() {
         comparison = a.name.localeCompare(b.name);
         break;
       default:
-        comparison = (a.downloads || 0) - (b.downloads || 0);
+        comparison = (a.downloads ?? 0) - (b.downloads ?? 0);
     }
 
     // If primary sort is equal, use name as secondary sort for stability
@@ -385,7 +380,7 @@ export function LocalLLMManager() {
         startDownloadProgressStream(model.filename);
       } else {
         const error = await response.json();
-        toast.error(error.error || 'Failed to start download');
+        toast.error(error.error ?? 'Failed to start download');
       }
     } catch (error) {
       logger.error('Error starting download:', error);
@@ -412,7 +407,7 @@ export function LocalLLMManager() {
         toast.success('Download cancelled');
       } else {
         const error = await response.json();
-        toast.error(error.error || 'Failed to cancel download');
+        toast.error(error.error ?? 'Failed to cancel download');
       }
     } catch (error) {
       logger.error('Error cancelling download:', error);
@@ -444,7 +439,7 @@ export function LocalLLMManager() {
         toast.success('Opened models directory');
       } else {
         const error = await response.json();
-        toast.error(error.error || 'Failed to open models directory');
+        toast.error(error.error ?? 'Failed to open models directory');
       }
     } catch (error) {
       logger.error('Error opening models directory:', error);
@@ -848,235 +843,46 @@ export function LocalLLMManager() {
             <div className="space-y-3">
               {filteredAvailableModels.map(model => {
                 const progressInfo = downloads.get(model.filename);
-                const isDownloading = Boolean(progressInfo);
-                const progress = progressInfo?.progress || 0;
-                const speed = progressInfo?.speed || '0 B/s';
                 const isAlreadyDownloaded = localModels.some(
                   local => local.filename === model.filename
                 );
-                const hasError = progressInfo?.errorType;
+
+                // Transform the model data to match ModelCard's expected interface
+                const modelForCard = {
+                  id: model.filename,
+                  name: model.modelId || model.name,
+                  modelId: model.modelId,
+                  filename: model.filename,
+                  size: model.size || 0,
+                  contextLength: model.contextLength,
+                  parameterCount: model.parameterCount,
+                  quantization: model.quantization,
+                  vramEstimates: model.vramEstimates,
+                  modelArchitecture: model.modelArchitecture,
+                  hasVramData: model.hasVramData,
+                  vramError: model.vramError,
+                  description: model.description,
+                  huggingFaceUrl: model.huggingFaceUrl,
+                  downloads: model.downloads,
+                  username: model.username,
+                  likes: model.likes,
+                  updatedAt: model.updatedAt,
+                };
 
                 return (
-                  <div
+                  <ModelCard
                     key={`${model.filename}-${model.name}-${model.url}`}
-                    className="p-4 bg-gray-800 rounded-lg border border-gray-700"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <Download size={16} className="text-green-400" />
-                          <h4 className="text-white font-medium">
-                            {model.modelId || model.name}
-                          </h4>
-                          {model.huggingFaceUrl && (
-                            <a
-                              href={model.huggingFaceUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-1 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-blue-400"
-                              title="View on Hugging Face"
-                            >
-                              <ExternalLink size={12} />
-                            </a>
-                          )}
-                        </div>
-
-                        {model.description && (
-                          <p className="text-gray-400 text-sm mb-2">
-                            {model.description}
-                          </p>
-                        )}
-
-                        <div className="space-y-1 text-sm">
-                          {model.size && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-gray-400 w-20">Size:</span>
-                              <span className="text-gray-300">
-                                {formatFileSize(model.size)}
-                              </span>
-                            </div>
-                          )}
-                          {model.contextLength && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-gray-400 w-20">
-                                Context:
-                              </span>
-                              <span className="text-gray-300">
-                                {model.contextLength.toLocaleString()} tokens
-                              </span>
-                            </div>
-                          )}
-                          {model.username && (
-                            <div className="flex items-center gap-2">
-                              <User size={12} className="text-gray-400" />
-                              <span className="text-gray-400 w-16">By:</span>
-                              <a
-                                href={`https://huggingface.co/${model.username}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-300 hover:text-blue-200 hover:underline transition-colors"
-                              >
-                                {model.username}
-                              </a>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Model Stats */}
-                        {(model.downloads || model.likes) && (
-                          <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
-                            {model.downloads && (
-                              <div className="flex items-center gap-1">
-                                <Download size={12} />
-                                <span>
-                                  {model.downloads.toLocaleString()} downloads
-                                </span>
-                              </div>
-                            )}
-                            {model.likes && (
-                              <div className="flex items-center gap-1">
-                                <Heart size={12} />
-                                <span>
-                                  {model.likes.toLocaleString()} likes
-                                </span>
-                              </div>
-                            )}
-                            {model.updatedAt && (
-                              <div className="flex items-center gap-1">
-                                <Calendar size={12} />
-                                <span>
-                                  Updated{' '}
-                                  {new Date(
-                                    model.updatedAt
-                                  ).toLocaleDateString()}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Download Progress */}
-                        {isDownloading && !hasError && (
-                          <div className="mt-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                <Loader2
-                                  size={14}
-                                  className="animate-spin text-blue-400"
-                                />
-                                <span className="text-sm text-blue-400">
-                                  Downloading... {progress}%
-                                </span>
-                                <span className="text-xs text-gray-400">
-                                  ({speed})
-                                </span>
-                              </div>
-                              <button
-                                onClick={() =>
-                                  handleCancelDownload(model.filename)
-                                }
-                                className="p-1 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-red-400"
-                                title="Cancel download"
-                              >
-                                <X size={12} />
-                              </button>
-                            </div>
-                            <div className="w-full bg-gray-700 rounded-full h-2">
-                              <div
-                                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                                style={{ width: `${progress}%` }}
-                              ></div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Download Error */}
-                        {hasError && (
-                          <div className="mt-3 p-3 bg-red-900/20 border border-red-600/30 rounded-lg">
-                            <div className="flex items-start gap-3">
-                              <AlertTriangle
-                                size={16}
-                                className="text-red-400 mt-0.5 flex-shrink-0"
-                              />
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <span className="text-sm font-medium text-red-200">
-                                    Download Error
-                                  </span>
-                                  {progressInfo?.errorType === '403' &&
-                                    progressInfo?.huggingFaceUrl && (
-                                      <a
-                                        href={progressInfo.huggingFaceUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-1 px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs text-white transition-colors"
-                                      >
-                                        <ExternalLink size={10} />
-                                        Request Access
-                                      </a>
-                                    )}
-                                </div>
-                                <p className="text-sm text-red-300">
-                                  {progressInfo?.errorMessage ||
-                                    'Download failed'}
-                                </p>
-                                {progressInfo?.errorType === '403' && (
-                                  <p className="text-xs text-red-400 mt-1">
-                                    This model requires permission to access.
-                                    Click the acknowledgement button on Hugging
-                                    Face.
-                                  </p>
-                                )}
-                              </div>
-                              <button
-                                onClick={() =>
-                                  handleDismissError(model.filename)
-                                }
-                                className="p-1 hover:bg-red-800/50 rounded transition-colors text-red-400 hover:text-red-300"
-                                title="Dismiss error"
-                              >
-                                <X size={14} />
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2 ml-4">
-                        {isAlreadyDownloaded ? (
-                          <span
-                            className="p-2 text-green-400"
-                            title="Already downloaded"
-                          >
-                            <CheckCircle size={14} />
-                          </span>
-                        ) : hasError ? (
-                          <button
-                            onClick={() => handleDownload(model)}
-                            className="p-2 hover:bg-gray-700 rounded transition-colors text-red-400 hover:text-red-300"
-                            title="Retry download"
-                          >
-                            <Download size={14} />
-                          </button>
-                        ) : isDownloading ? (
-                          <span
-                            className="p-2 text-blue-400"
-                            title="Downloading"
-                          >
-                            <Clock size={14} />
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => handleDownload(model)}
-                            className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-green-400"
-                            title="Download model"
-                          >
-                            <Download size={14} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                    model={modelForCard}
+                    formatFileSize={formatFileSize}
+                    isDownloadable={true}
+                    isAlreadyDownloaded={isAlreadyDownloaded}
+                    downloadProgress={progressInfo}
+                    onDownload={() => handleDownload(model)}
+                    onCancelDownload={() =>
+                      handleCancelDownload(model.filename)
+                    }
+                    onDismissError={() => handleDismissError(model.filename)}
+                  />
                 );
               })}
             </div>

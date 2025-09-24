@@ -172,7 +172,7 @@ export const ChatContentViewer = forwardRef<
 
     const handleAppendToNotes = () => {
       if (onNotesUpdate && pendingContent) {
-        const currentNotes = nodeNotes || '';
+        const currentNotes = nodeNotes ?? '';
         const separator = currentNotes.trim() ? '\n\n---\n\n' : '';
         const newContent = currentNotes + separator + pendingContent;
         onNotesUpdate(newContent);
@@ -370,7 +370,7 @@ export const ChatContentViewer = forwardRef<
               />
             ) : (
               <ThreadList
-                threads={threads || []}
+                threads={threads ?? []}
                 onThreadSelect={onThreadSelect || (() => {})}
                 onThreadCreate={onThreadCreate}
                 onThreadRename={onThreadRename}
@@ -383,7 +383,7 @@ export const ChatContentViewer = forwardRef<
           ) : activeTab === 'notes' ? (
             <div className="flex flex-col h-full">
               <MarkdownEditor
-                value={nodeNotes || ''}
+                value={nodeNotes ?? ''}
                 onChange={() => {}} // MarkdownEditor handles its own state
                 placeholder="Add notes and context for this node using markdown..."
                 showTabs={true}
@@ -406,7 +406,7 @@ export const ChatContentViewer = forwardRef<
             </div>
           ) : activeTab === 'sources' ? (
             <SourcesList
-              sources={nodeSources || []}
+              sources={nodeSources ?? []}
               onSourcesUpdate={onSourcesUpdate}
             />
           ) : null}

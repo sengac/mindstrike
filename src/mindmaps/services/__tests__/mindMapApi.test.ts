@@ -172,7 +172,9 @@ describe('mindMapApi', () => {
 
       // Check the save call contains the new mindmap first
       const saveCall = mockFetch.mock.calls[1];
-      const savedData = JSON.parse(saveCall[1]?.body as string);
+      const savedData = JSON.parse(saveCall[1]?.body as string) as Array<{
+        id: string;
+      }>;
       expect(savedData[0].id).toBe('3');
       expect(savedData).toHaveLength(3);
     });
@@ -196,11 +198,15 @@ describe('mindMapApi', () => {
       await mindMapApi.update('1', { name: 'Updated Map' });
 
       const saveCall = mockFetch.mock.calls[1];
-      const savedData = JSON.parse(saveCall[1]?.body as string);
-      const updatedMap = savedData.find((m: { id: string }) => m.id === '1');
+      const savedData = JSON.parse(saveCall[1]?.body as string) as Array<{
+        id: string;
+        name: string;
+        updatedAt: string;
+      }>;
+      const updatedMap = savedData.find(m => m.id === '1');
 
-      expect(updatedMap.name).toBe('Updated Map');
-      expect(new Date(updatedMap.updatedAt).getTime()).toBeGreaterThan(
+      expect(updatedMap?.name).toBe('Updated Map');
+      expect(new Date(updatedMap?.updatedAt ?? 0).getTime()).toBeGreaterThan(
         new Date(mockMindMaps[0].updatedAt).getTime()
       );
     });
@@ -222,13 +228,13 @@ describe('mindMapApi', () => {
       await mindMapApi.update('non-existent', { name: 'Updated' });
 
       const saveCall = mockFetch.mock.calls[1];
-      const savedData = JSON.parse(saveCall[1]?.body as string);
+      const savedData = JSON.parse(saveCall[1]?.body as string) as Array<{
+        id: string;
+      }>;
 
       // Should not change the data
       expect(savedData).toHaveLength(2);
-      expect(
-        savedData.every((m: { id: string }) => m.id !== 'non-existent')
-      ).toBe(true);
+      expect(savedData.every(m => m.id !== 'non-existent')).toBe(true);
     });
   });
 
@@ -250,7 +256,9 @@ describe('mindMapApi', () => {
       await mindMapApi.delete('1');
 
       const saveCall = mockFetch.mock.calls[1];
-      const savedData = JSON.parse(saveCall[1]?.body as string);
+      const savedData = JSON.parse(saveCall[1]?.body as string) as Array<{
+        id: string;
+      }>;
 
       expect(savedData).toHaveLength(1);
       expect(savedData[0].id).toBe('2');
@@ -273,7 +281,7 @@ describe('mindMapApi', () => {
       await mindMapApi.delete('non-existent');
 
       const saveCall = mockFetch.mock.calls[1];
-      const savedData = JSON.parse(saveCall[1]?.body as string);
+      const savedData = JSON.parse(saveCall[1]?.body as string) as unknown;
 
       // Should not change the data
       expect(savedData).toHaveLength(2);

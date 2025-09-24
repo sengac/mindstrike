@@ -7,6 +7,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { SSE_CONFIG, SSE_EVENT_TYPES } from '../../constants/sse.constants';
 import { MockEventSource } from '../../__mocks__/EventSource';
 import * as sseEventFixtures from '../../__fixtures__/sseEvents';
+import type { SSEChunkEvent } from '../../types/sseEvents';
 
 // Mock dependencies
 vi.mock('../logger', () => ({
@@ -280,6 +281,10 @@ describe('SSEEventBus', () => {
     });
 
     it('should subscribe to specific event types', () => {
+      sseEventBus.initialize();
+      const mockEventSource = mockEventSourceInstances[0];
+      mockEventSource.simulateOpen();
+
       const handler = vi.fn();
       const unsubscribe = sseEventBus.subscribe(
         SSE_EVENT_TYPES.CONTENT_CHUNK,
@@ -287,19 +292,21 @@ describe('SSEEventBus', () => {
       );
 
       // Simulate message - send the raw data that includes the type field
-      const mockEventSource = mockEventSourceInstances[0];
-      mockEventSource.simulateMessage({
+      const messageData = {
         type: SSE_EVENT_TYPES.CONTENT_CHUNK,
-        ...sseEventFixtures.contentChunkEvents.simple.data,
-      });
+        chunk: (
+          sseEventFixtures.contentChunkEvents.simple.data as SSEChunkEvent
+        ).chunk,
+        threadId: (
+          sseEventFixtures.contentChunkEvents.simple.data as SSEChunkEvent
+        ).threadId,
+      };
+      mockEventSource.simulateMessage(messageData);
 
       expect(handler).toHaveBeenCalledWith(
         expect.objectContaining({
           type: SSE_EVENT_TYPES.CONTENT_CHUNK,
-          data: {
-            type: SSE_EVENT_TYPES.CONTENT_CHUNK,
-            ...sseEventFixtures.contentChunkEvents.simple.data,
-          },
+          data: messageData,
           timestamp: expect.any(Number),
           threadId: 'test-thread-1', // Extracted from the data
         })
@@ -308,41 +315,58 @@ describe('SSEEventBus', () => {
       // Test unsubscribe
       unsubscribe();
       handler.mockClear();
-      mockEventSource.simulateMessage(
-        sseEventFixtures.contentChunkEvents.simple.data
-      );
+      const messageData2 = {
+        type: SSE_EVENT_TYPES.CONTENT_CHUNK,
+        chunk: (
+          sseEventFixtures.contentChunkEvents.simple.data as SSEChunkEvent
+        ).chunk,
+        threadId: (
+          sseEventFixtures.contentChunkEvents.simple.data as SSEChunkEvent
+        ).threadId,
+      };
+      mockEventSource.simulateMessage(messageData2);
       expect(handler).not.toHaveBeenCalled();
     });
 
     it('should support multiple subscribers for same event', () => {
+      sseEventBus.initialize();
+      const mockEventSource = mockEventSourceInstances[0];
+      mockEventSource.simulateOpen();
+
       const handler1 = vi.fn();
       const handler2 = vi.fn();
 
       sseEventBus.subscribe(SSE_EVENT_TYPES.MESSAGE_UPDATE, handler1);
       sseEventBus.subscribe(SSE_EVENT_TYPES.MESSAGE_UPDATE, handler2);
 
-      const mockEventSource = mockEventSourceInstances[0];
-      mockEventSource.simulateMessage({
-        type: SSE_EVENT_TYPES.MESSAGE_UPDATE,
-        ...sseEventFixtures.messageUpdateEvents.initial.data,
-      });
+      mockEventSource.simulateMessage(
+        Object.assign(
+          { type: SSE_EVENT_TYPES.MESSAGE_UPDATE },
+          sseEventFixtures.messageUpdateEvents.initial.data
+        )
+      );
 
       expect(handler1).toHaveBeenCalled();
       expect(handler2).toHaveBeenCalled();
     });
 
     it('should support wildcard subscribers', () => {
+      sseEventBus.initialize();
+      const mockEventSource = mockEventSourceInstances[0];
+      mockEventSource.simulateOpen();
+
       const wildcardHandler = vi.fn();
       const specificHandler = vi.fn();
 
       sseEventBus.subscribe('*', wildcardHandler);
       sseEventBus.subscribe(SSE_EVENT_TYPES.COMPLETED, specificHandler);
 
-      const mockEventSource = mockEventSourceInstances[0];
-      mockEventSource.simulateMessage({
-        type: SSE_EVENT_TYPES.COMPLETED,
-        ...sseEventFixtures.completedEvents.simple.data,
-      });
+      mockEventSource.simulateMessage(
+        Object.assign(
+          { type: SSE_EVENT_TYPES.COMPLETED },
+          sseEventFixtures.completedEvents.simple.data
+        )
+      );
 
       // Both should be called
       expect(wildcardHandler).toHaveBeenCalled();
@@ -350,6 +374,10 @@ describe('SSEEventBus', () => {
     });
 
     it('should handle errors in event handlers gracefully', () => {
+      sseEventBus.initialize();
+      const mockEventSource = mockEventSourceInstances[0];
+      mockEventSource.simulateOpen();
+
       const errorHandler = vi.fn().mockImplementation(() => {
         throw new Error('Handler error');
       });
@@ -358,11 +386,12 @@ describe('SSEEventBus', () => {
       sseEventBus.subscribe(SSE_EVENT_TYPES.ERROR, errorHandler);
       sseEventBus.subscribe(SSE_EVENT_TYPES.ERROR, goodHandler);
 
-      const mockEventSource = mockEventSourceInstances[0];
-      mockEventSource.simulateMessage({
-        type: SSE_EVENT_TYPES.ERROR,
-        ...sseEventFixtures.errorEvents.networkError.data,
-      });
+      mockEventSource.simulateMessage(
+        Object.assign(
+          { type: SSE_EVENT_TYPES.ERROR },
+          sseEventFixtures.errorEvents.networkError.data
+        )
+      );
 
       // Error handler throws, but good handler should still be called
       expect(errorHandler).toHaveBeenCalled();

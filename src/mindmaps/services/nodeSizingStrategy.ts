@@ -56,7 +56,7 @@ export class DefaultNodeSizingStrategy implements NodeSizingStrategy {
       fontSize = this.defaultFontSize,
       fontWeight = this.defaultFontWeight,
       padding = this.defaultPadding,
-    } = options || {};
+    } = options ?? {};
 
     // Calculate base text dimensions
     const textOptions: TextMeasurementOptions = {

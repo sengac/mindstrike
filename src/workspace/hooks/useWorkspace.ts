@@ -72,7 +72,7 @@ export function useWorkspace() {
     async (newPath?: string, onWorkspaceChange?: () => void) => {
       try {
         // If no path provided, use current working directory
-        const pathToSet = newPath || '.';
+        const pathToSet = newPath ?? '.';
 
         const response = await fetch('/api/workspace/root', {
           method: 'POST',
@@ -112,10 +112,10 @@ export function useWorkspace() {
       );
       if (response.ok) {
         const data = await response.json();
-        return data.content || '';
+        return data.content ?? '';
       } else {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to load file');
+        throw new Error(errorData.error ?? 'Failed to load file');
       }
     },
     []

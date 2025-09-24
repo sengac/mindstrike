@@ -59,8 +59,6 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
   (
     {
       threadId,
-      messages: _initialMessages = [],
-      onMessagesUpdate: _onMessagesUpdate,
       onDeleteMessage,
 
       onNavigateToWorkspaces,
@@ -188,8 +186,8 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
         return;
       }
 
-      const handleMermaidComplete = (event: Event) => {
-        // Event parameter required by mermaid callback interface but not used
+      const handleMermaidComplete = () => {
+        // Event parameter was removed since it's not used
         // Clear any existing timeout to debounce multiple diagram completions
         if (scrollTimeoutRef.current) {
           clearTimeout(scrollTimeoutRef.current);
@@ -475,7 +473,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
                   </h3>
                   <div className="flex items-center justify-center gap-3 pb-4">
                     <p className="text-xs font-mono text-gray-400">
-                      Workspace Root: {workspaceRoot || 'No workspace selected'}
+                      Workspace Root: {workspaceRoot ?? 'No workspace selected'}
                     </p>
                     {onNavigateToWorkspaces && (
                       <button
@@ -570,8 +568,8 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
                           )
                           .sort(
                             (a, b) =>
-                              (b.completedAt?.getTime() || 0) -
-                              (a.completedAt?.getTime() || 0)
+                              (b.completedAt?.getTime() ?? 0) -
+                              (a.completedAt?.getTime() ?? 0)
                           )[0];
 
                       return workflowToShow ? (

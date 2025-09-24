@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ContextCalculator } from '../contextCalculator.js';
-import { sharedLlamaInstance } from '../../sharedLlamaInstance.js';
-import { systemInfoManager } from '../../systemInfoManager.js';
-import { LLMResourceCalculator } from '../../utils/system/llmResourceCalculator.js';
-import type { SystemInformation } from '../../systemInfoManager.js';
-import type { LocalModelInfo } from '../../localLlmManager.js';
+import { ContextCalculator } from '../contextCalculator';
+import { sharedLlamaInstance } from '../../sharedLlamaInstance';
+import { systemInfoManager } from '../../systemInfoManager';
+import { LLMResourceCalculator } from '../../utils/system/llmResourceCalculator';
+import type { SystemInformation } from '../../systemInfoManager';
+import type { LocalModelInfo } from '../../localLlmManager';
 import type { Llama } from 'node-llama-cpp';
 
 // Type definitions for test mocks
@@ -43,19 +43,19 @@ interface MockResourceConfig {
 }
 
 // Mock dependencies
-vi.mock('../../sharedLlamaInstance.js', () => ({
+vi.mock('../../sharedLlamaInstance', () => ({
   sharedLlamaInstance: {
     getLlama: vi.fn(),
   },
 }));
 
-vi.mock('../../systemInfoManager.js', () => ({
+vi.mock('../../systemInfoManager', () => ({
   systemInfoManager: {
     getSystemInfo: vi.fn(),
   },
 }));
 
-vi.mock('../../utils/system/llmResourceCalculator.js', () => ({
+vi.mock('../../utils/system/llmResourceCalculator', () => ({
   LLMResourceCalculator: {
     calculateOptimalConfig: vi.fn(),
     getDefaultOptions: vi.fn(() => ({ numCtx: 4096 })),
@@ -63,7 +63,7 @@ vi.mock('../../utils/system/llmResourceCalculator.js', () => ({
   },
 }));
 
-vi.mock('../../logger.js', () => ({
+vi.mock('../../logger', () => ({
   logger: {
     info: vi.fn(),
     error: vi.fn(),

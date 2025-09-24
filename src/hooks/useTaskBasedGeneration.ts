@@ -49,7 +49,7 @@ export function useTaskBasedGeneration() {
 
         if (!planResponse.ok) {
           const errorData = await planResponse.json();
-          throw new Error(errorData.error || 'Failed to plan tasks');
+          throw new Error(errorData.error ?? 'Failed to plan tasks');
         }
 
         const planResult = await planResponse.json();

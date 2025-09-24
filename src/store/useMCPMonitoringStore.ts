@@ -129,7 +129,7 @@ export const useMCPMonitoringStore = create<MCPMonitoringState>()(
         const response = await fetch('/api/mcp/processes');
         if (response.ok) {
           const data = await response.json();
-          get().updateProcessInfo(data.processes || []);
+          get().updateProcessInfo(data.processes ?? []);
         }
       } catch (error) {
         logger.error('Failed to fetch MCP process info:', error);
@@ -155,27 +155,34 @@ export const useMCPMonitoringStore = create<MCPMonitoringState>()(
         const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
-          const processLogs = (data.logs || [])
-            .map((log: any) => {
-              let logType: 'stdout' | 'stderr' = 'stderr';
-              let cleanMessage = log.message;
+          const processLogs = (data.logs ?? [])
+            .map(
+              (log: {
+                id: string;
+                message: string;
+                timestamp: number;
+                serverId: string;
+              }) => {
+                let logType: 'stdout' | 'stderr' = 'stderr';
+                let cleanMessage = log.message;
 
-              if (log.message.includes('[stderr]')) {
-                logType = 'stderr';
-                cleanMessage = log.message.replace('[stderr] ', '');
-              } else if (log.message.includes('[protocol]')) {
-                logType = 'stdout';
-                cleanMessage = log.message.replace('[protocol] ', '');
+                if (log.message.includes('[stderr]')) {
+                  logType = 'stderr';
+                  cleanMessage = log.message.replace('[stderr] ', '');
+                } else if (log.message.includes('[protocol]')) {
+                  logType = 'stdout';
+                  cleanMessage = log.message.replace('[protocol] ', '');
+                }
+
+                return {
+                  id: log.id,
+                  timestamp: log.timestamp,
+                  serverId: log.serverId,
+                  type: logType,
+                  message: cleanMessage,
+                };
               }
-
-              return {
-                id: log.id,
-                timestamp: log.timestamp,
-                serverId: log.serverId,
-                type: logType,
-                message: cleanMessage,
-              };
-            })
+            )
             .filter((log: MCPProcessLog) => !type || log.type === type);
 
           set({ processLogs });

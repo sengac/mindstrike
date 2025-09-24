@@ -1,6 +1,6 @@
 import express from 'express';
-import { sseManager } from '../sseManager.js';
-import { logger } from '../logger.js';
+import { sseManager } from '../sseManager';
+import { logger } from '../logger';
 
 const router = express.Router();
 

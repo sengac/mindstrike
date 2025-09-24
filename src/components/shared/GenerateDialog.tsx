@@ -39,8 +39,8 @@ export function GenerateDialog({
   } = useMindMapGeneration();
 
   // Token performance metrics from generation progress
-  const currentTokensPerSecond = generationProgress?.tokensPerSecond || 0;
-  const currentTotalTokens = generationProgress?.totalTokens || 0;
+  const currentTokensPerSecond = generationProgress?.tokensPerSecond ?? 0;
+  const currentTotalTokens = generationProgress?.totalTokens ?? 0;
 
   // Animate dots
   useEffect(() => {
@@ -241,7 +241,7 @@ export function GenerateDialog({
                         </div>
                       </div>
                       <p className="text-sm text-gray-200 leading-relaxed">
-                        {generationProgress.reasoning ||
+                        {generationProgress.reasoning ??
                           'Analyzing and planning next steps...'}
                       </p>
                     </div>

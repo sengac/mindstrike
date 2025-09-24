@@ -40,7 +40,7 @@ async function importMcpConfig() {
         }
         // Also handle old-style /home/username paths for backwards compatibility
         if (arg.includes('/home/')) {
-          const replaced = arg.replace(/\/home\/[^\/]+/, homedir());
+          const replaced = arg.replace(/\/home\/[^/]+/, homedir());
           console.log(`  Converting path: ${arg} -> ${replaced}`);
           return replaced;
         }

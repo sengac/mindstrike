@@ -214,13 +214,19 @@ class LLMThreadCalculator {
     maxThreadsPerCore: number = 2
   ): number {
     const optimalThreads = this.getOptimalThreadCount(systemInfo.cpus);
+    const totalCores = systemInfo.cpus.reduce(
+      (sum, cpu) => sum + cpu.coreCount,
+      0
+    );
+    const maxThreadsByCore = totalCores * maxThreadsPerCore;
+    const finalMaxThreads = Math.min(optimalThreads, maxThreadsByCore);
 
-    // Don't exceed optimal thread count
-    if (requestedThreads > optimalThreads) {
+    // Don't exceed final maximum thread count
+    if (requestedThreads > finalMaxThreads) {
       console.warn(
-        `Requested ${requestedThreads} threads exceeds optimal ${optimalThreads}, capping to optimal`
+        `Requested ${requestedThreads} threads exceeds maximum ${finalMaxThreads} (optimal: ${optimalThreads}, core-based: ${maxThreadsByCore}), capping to ${finalMaxThreads}`
       );
-      return optimalThreads;
+      return finalMaxThreads;
     }
 
     // Ensure minimum of 1 thread
@@ -324,8 +330,8 @@ class LLMThreadCalculator {
 
     // Show recommendations for different use cases
     console.log(`\n=== Recommendations ===`);
-    ['inference', 'training', 'serving'].forEach(useCase => {
-      const rec = this.getThreadCountRecommendation(systemInfo, useCase as any);
+    (['inference', 'training', 'serving'] as const).forEach(useCase => {
+      const rec = this.getThreadCountRecommendation(systemInfo, useCase);
       console.log(`${useCase}: ${rec.recommended} threads - ${rec.reasoning}`);
     });
   }
@@ -420,10 +426,10 @@ async function demonstrateThreadCalculation() {
     console.log(`Optimal Thread Count: ${optimalThreads}`);
 
     // Test different use cases
-    ['inference', 'training', 'serving'].forEach(useCase => {
+    (['inference', 'training', 'serving'] as const).forEach(useCase => {
       const rec = LLMThreadCalculator.getThreadCountRecommendation(
         systemInfo,
-        useCase as any
+        useCase
       );
       console.log(`${useCase}: ${rec.recommended} threads`);
     });

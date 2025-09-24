@@ -1,5 +1,5 @@
 // Shared types for mind map functionality
-import type { NodeColorTheme } from '../mindmaps/constants/nodeColors';
+import type { NodeColorThemeType } from '../mindmaps/constants/nodeColors';
 
 export interface Source {
   id: string;
@@ -30,5 +30,5 @@ export interface MindMapNodeData {
   layout?: 'LR' | 'RL' | 'TB' | 'BT' | 'RD';
   width?: number; // Calculated width of the node
   height?: number; // Calculated height of the node
-  colorTheme?: NodeColorTheme | null;
+  colorTheme?: NodeColorThemeType | null;
 }

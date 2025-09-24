@@ -3,8 +3,8 @@ import type {
   ConversationMessage,
   ImageAttachment,
   NotesAttachment,
-} from './baseAgent.js';
-import { BaseAgent } from './baseAgent.js';
+} from './baseAgent';
+import { BaseAgent } from './baseAgent';
 import type { BaseMessage } from '@langchain/core/messages';
 import {
   HumanMessage,
@@ -12,10 +12,10 @@ import {
   SystemMessage,
 } from '@langchain/core/messages';
 import { StateGraph, Annotation, START, END } from '@langchain/langgraph';
-import { logger } from '../logger.js';
-import { sseManager } from '../sseManager.js';
-import { serverDebugLogger } from '../debugLogger.js';
-import { SSEEventType } from '../../src/types.js';
+import { logger } from '../logger';
+import { sseManager } from '../sseManager';
+import { serverDebugLogger } from '../debugLogger';
+import { SSEEventType } from '../../src/types';
 
 // Define the workflow state using LangGraph Annotations
 const WorkflowState = Annotation.Root({
@@ -140,7 +140,7 @@ export class WorkflowAgent extends BaseAgent {
     }
   ): Promise<ConversationMessage> {
     // Extract options with defaults (workflow agent defaults to no prior conversation)
-    const { images, notes, onUpdate, userMessageId } = options || {};
+    const { images, notes, onUpdate, userMessageId } = options ?? {};
     const workflowId = this.generateId();
     try {
       // Create initial state
@@ -170,18 +170,20 @@ export class WorkflowAgent extends BaseAgent {
 
       // Add user message to conversation
       const userMsg: ConversationMessage = {
-        id: userMessageId || this.generateId(),
+        id: userMessageId ?? this.generateId(),
         role: 'user',
         content: userMessage,
         timestamp: new Date(),
-        images: images || [],
-        notes: notes || [],
+        images: images ?? [],
+        notes: notes ?? [],
       };
-      this.conversationManager.addMessage(threadId, userMsg);
+      this.conversationManager.addMessage(threadId, userMsg).catch(error => {
+        logger.error('Failed to add user message:', error);
+      });
 
       // Create assistant response from workflow result
       const content =
-        result.messages[result.messages.length - 1]?.content ||
+        result.messages[result.messages.length - 1]?.content ??
         'Workflow completed';
 
       const conversationMessage: ConversationMessage = {
@@ -189,11 +191,15 @@ export class WorkflowAgent extends BaseAgent {
         role: 'assistant',
         content: content.toString(),
         timestamp: new Date(),
-        model: this.config.llmConfig.displayName || this.config.llmConfig.model,
+        model: this.config.llmConfig.displayName ?? this.config.llmConfig.model,
       };
 
       // Add assistant message to conversation
-      this.conversationManager.addMessage(threadId, conversationMessage);
+      this.conversationManager
+        .addMessage(threadId, conversationMessage)
+        .catch(error => {
+          logger.error('Failed to add assistant message:', error);
+        });
 
       if (onUpdate) {
         onUpdate(conversationMessage);
@@ -220,12 +226,16 @@ export class WorkflowAgent extends BaseAgent {
         role: 'assistant',
         content: `I encountered an error while processing your request: ${errorMessage}`,
         timestamp: new Date(),
-        model: this.config.llmConfig.displayName || this.config.llmConfig.model,
+        model: this.config.llmConfig.displayName ?? this.config.llmConfig.model,
       };
 
       // Add error message to conversation if thread exists
       if (threadId) {
-        this.conversationManager.addMessage(threadId, conversationMessage);
+        this.conversationManager
+          .addMessage(threadId, conversationMessage)
+          .catch(error => {
+            logger.error('Failed to add error message:', error);
+          });
       }
 
       if (onUpdate) {
@@ -249,7 +259,7 @@ export class WorkflowAgent extends BaseAgent {
   }
 
   private createPromptDefinition(): string {
-    return this.config.customPrompt || DEFAULT_WORKFLOW_ROLE;
+    return this.config.customPrompt ?? DEFAULT_WORKFLOW_ROLE;
   }
 
   private createReActInstructions(): string {
@@ -319,7 +329,7 @@ export class WorkflowAgent extends BaseAgent {
     if (state.iteration === 0) {
       const lastUserMessage =
         state.messages.filter(msg => msg instanceof HumanMessage).pop()
-          ?.content || '';
+          ?.content ?? '';
 
       this.broadcastWorkflowEvent({
         type: SSEEventType.WORKFLOW_STARTED,
@@ -342,7 +352,7 @@ export class WorkflowAgent extends BaseAgent {
 
     const lastUserMessage =
       state.messages.filter(msg => msg instanceof HumanMessage).pop()
-        ?.content || '';
+        ?.content ?? '';
 
     const reasoningPrompt = `
     **ANALYSIS AND PLANNING PHASE**
@@ -399,9 +409,9 @@ export class WorkflowAgent extends BaseAgent {
 
     // Parse analysis and plan
     const analysisPart =
-      responseText.match(/ANALYSIS:(.*?)(?=PLAN:|$)/s)?.[1]?.trim() ||
+      responseText.match(/ANALYSIS:(.*?)(?=PLAN:|$)/s)?.[1]?.trim() ??
       responseText;
-    const planPart = responseText.match(/PLAN:(.*)/s)?.[1]?.trim() || '';
+    const planPart = responseText.match(/PLAN:(.*)/s)?.[1]?.trim() ?? '';
 
     // Parse plan into array - simplified format
     const plan = planPart
@@ -517,10 +527,13 @@ export class WorkflowAgent extends BaseAgent {
       // Try to parse as JSON first
       const jsonMatch = planText.match(/\[.*\]/s);
       if (jsonMatch) {
-        plan = JSON.parse(jsonMatch[0]);
-        if (!Array.isArray(plan)) {
+        const parsedPlan: unknown = JSON.parse(jsonMatch[0]) as unknown;
+        if (!Array.isArray(parsedPlan)) {
           throw new Error('Parsed JSON is not an array');
         }
+        plan = parsedPlan.filter(
+          (item): item is string => typeof item === 'string'
+        );
       } else {
         throw new Error('No JSON array found in response');
       }
@@ -597,10 +610,10 @@ export class WorkflowAgent extends BaseAgent {
     if (directToolMatch && this.agentExecutor) {
       // Execute tool directly without LLM overhead
       try {
-        const result = await this.agentExecutor.invoke({
+        const result: { output?: string } = await this.agentExecutor.invoke({
           input: `Execute: ${directToolMatch.toolCall}`,
         });
-        actionResult = result.output || `Executed ${directToolMatch.action}`;
+        actionResult = result.output ?? `Executed ${directToolMatch.action}`;
       } catch (toolError: unknown) {
         const errorMessage =
           toolError instanceof Error ? toolError.message : 'Unknown error';
@@ -628,10 +641,10 @@ export class WorkflowAgent extends BaseAgent {
 
       if (this.agentExecutor) {
         try {
-          const result = await this.agentExecutor.invoke({
+          const result: { output?: string } = await this.agentExecutor.invoke({
             input: actionPrompt,
           });
-          actionResult = result.output || 'Task completed';
+          actionResult = result.output ?? 'Task completed';
         } catch (toolError: unknown) {
           const errorMessage =
             toolError instanceof Error ? toolError.message : 'Unknown error';
@@ -681,13 +694,13 @@ export class WorkflowAgent extends BaseAgent {
     const lastCompletedTaskIndex = state.iteration - 1;
     const lastCompletedTaskKey = `task-${lastCompletedTaskIndex + 1}`;
     const taskResult =
-      state.taskResults[lastCompletedTaskKey] || 'No results available';
+      state.taskResults[lastCompletedTaskKey] ?? 'No results available';
 
     const observationPrompt = `
     **OBSERVATION PHASE**
     
     Review the results of the just-completed task:
-    Task: ${state.currentTask || 'No task set'}
+    Task: ${state.currentTask ?? 'No task set'}
     Result: ${JSON.stringify(taskResult, null, 2)}
     
     Progress: ${state.iteration}/${state.plan.length} tasks completed
@@ -752,7 +765,7 @@ export class WorkflowAgent extends BaseAgent {
     const finalizationPrompt = `
     **FINALIZATION PHASE**
     
-    Original Request: ${state.messages.filter(msg => msg instanceof HumanMessage).pop()?.content || ''}
+    Original Request: ${state.messages.filter(msg => msg instanceof HumanMessage).pop()?.content ?? ''}
     
     Initial Analysis: ${state.reasoning}
     

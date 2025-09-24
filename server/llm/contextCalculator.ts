@@ -1,13 +1,10 @@
 // LlamaModel type is used in interfaces but not directly in this file
-import { sharedLlamaInstance } from '../sharedLlamaInstance.js';
-import type { SystemInformation } from '../systemInfoManager.js';
-import { systemInfoManager } from '../systemInfoManager.js';
-import { LLMResourceCalculator } from '../utils/system/llmResourceCalculator.js';
-import type {
-  LocalModelInfo,
-  ModelLoadingSettings,
-} from '../localLlmManager.js';
-import { logger } from '../logger.js';
+import { sharedLlamaInstance } from '../sharedLlamaInstance';
+import type { SystemInformation } from '../systemInfoManager';
+import { systemInfoManager } from '../systemInfoManager';
+import { LLMResourceCalculator } from '../utils/system/llmResourceCalculator';
+import type { LocalModelInfo, ModelLoadingSettings } from '../localLlmManager';
+import { logger } from '../logger';
 
 export interface ContextSizeResult {
   contextSize: number;

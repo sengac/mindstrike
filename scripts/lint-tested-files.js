@@ -113,7 +113,7 @@ async function main() {
     try {
       execSync(eslintCommand, { stdio: 'inherit' });
       console.log('\nLinting completed successfully!');
-    } catch (error) {
+    } catch {
       // ESLint returns non-zero exit code when there are linting errors
       // This is expected behavior, so we don't throw
       process.exit(1);

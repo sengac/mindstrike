@@ -3,10 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import {
-  detectNodeOverlaps,
-  type NodePosition,
-} from '../../src/utils/overlapDetection';
+import { detectNodeOverlaps } from '../../src/utils/overlapDetection';
 
 interface MockElement {
   tagName: string;

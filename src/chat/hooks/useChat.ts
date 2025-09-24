@@ -33,11 +33,11 @@ export function useChat({ threadId, isAgentMode = false }: UseChatProps = {}) {
   } | null>(null);
 
   const { activeThreadId } = useThreadsStore();
-  const currentThreadId = threadId || activeThreadId;
+  const currentThreadId = threadId ?? activeThreadId;
 
   // Get per-thread store state and actions
   // Always use a valid threadId to avoid conditional hook calls
-  const safeThreadId = currentThreadId || 'fallback';
+  const safeThreadId = currentThreadId ?? 'fallback';
   const threadStore = useChatThreadStore(safeThreadId);
   const storeState = threadStore();
 
@@ -74,32 +74,11 @@ export function useChat({ threadId, isAgentMode = false }: UseChatProps = {}) {
   // Load messages when thread changes
   useEffect(() => {
     if (currentThreadId) {
-      loadMessages();
+      loadMessages().catch(error => {
+        logger.error('[useChat] Failed to load messages:', error);
+      });
     }
   }, [currentThreadId, loadMessages]); // Include loadMessages for proper dependency tracking
-
-  // Validate and potentially fix a message before displaying
-  const validateAndProcessMessage = useCallback(
-    async (message: ConversationMessage): Promise<ConversationMessage> => {
-      if (message.role === 'assistant') {
-        try {
-          const { message: validatedMessage, hasChanges } =
-            await validation.validateMessage(message);
-
-          if (hasChanges) {
-            // Message was automatically corrected
-          }
-
-          return validatedMessage;
-        } catch (error) {
-          logger.error('Message validation failed:', error);
-          return message; // Return original if validation fails
-        }
-      }
-      return message;
-    },
-    [validation]
-  );
 
   // Subscribe to unified event bus for real-time streaming events
   useEffect(() => {
@@ -111,7 +90,7 @@ export function useChat({ threadId, isAgentMode = false }: UseChatProps = {}) {
 
     const unsubscribeContentChunk = sseEventBus.subscribe(
       'content-chunk',
-      async event => {
+      event => {
         // Double-check that we're still on the same thread
         if (subscriptionThreadId !== currentThreadId) {
           return;
@@ -153,7 +132,7 @@ export function useChat({ threadId, isAgentMode = false }: UseChatProps = {}) {
 
     const unsubscribeMessageUpdate = sseEventBus.subscribe(
       'message-update',
-      async event => {
+      event => {
         // Double-check that we're still on the same thread
         if (subscriptionThreadId !== currentThreadId) {
           return;
@@ -172,7 +151,7 @@ export function useChat({ threadId, isAgentMode = false }: UseChatProps = {}) {
             role: 'assistant' as const,
             content: messageData.content,
             timestamp: new Date(messageData.timestamp),
-            status: (messageData.status || 'processing') as
+            status: (messageData.status ?? 'processing') as
               | 'processing'
               | 'completed'
               | 'cancelled',
@@ -206,43 +185,43 @@ export function useChat({ threadId, isAgentMode = false }: UseChatProps = {}) {
       }
     );
 
-    const unsubscribeCompleted = sseEventBus.subscribe(
-      'completed',
-      async event => {
-        const data = event.data;
-        if (isSSEMessageEvent(data)) {
-          // Only process if this is for the currently selected thread
-          if (event.threadId && event.threadId !== currentThreadId) {
-            return;
-          }
+    const unsubscribeCompleted = sseEventBus.subscribe('completed', event => {
+      const data = event.data;
+      if (isSSEMessageEvent(data)) {
+        // Only process if this is for the currently selected thread
+        if (event.threadId && event.threadId !== currentThreadId) {
+          return;
+        }
 
-          // Final message completion
-          const messageData = data.message;
-          const completedMessage = {
-            id: messageData.id,
-            role: 'assistant' as const,
-            content: messageData.content,
-            timestamp: new Date(messageData.timestamp),
-            status: 'completed' as const,
-            model: messageData.model as string | undefined,
-            toolCalls: messageData.toolCalls as ToolCall[] | undefined,
-            toolResults: messageData.toolResults as
-              | Array<{ name: string; result: unknown }>
-              | undefined,
-          };
+        // Final message completion
+        const messageData = data.message;
+        const completedMessage = {
+          id: messageData.id,
+          role: 'assistant' as const,
+          content: messageData.content,
+          timestamp: new Date(messageData.timestamp),
+          status: 'completed' as const,
+          model: messageData.model as string | undefined,
+          toolCalls: messageData.toolCalls as ToolCall[] | undefined,
+          toolResults: messageData.toolResults as
+            | Array<{ name: string; result: unknown }>
+            | undefined,
+        };
 
-          if (!currentThreadId) {
-            return;
-          }
-          const chatStore = threadStore.getState();
-          chatStore.updateMessage(completedMessage.id, completedMessage);
+        if (!currentThreadId) {
+          return;
+        }
+        const chatStore = threadStore.getState();
+        chatStore.updateMessage(completedMessage.id, completedMessage);
 
-          // Generate thread title if this was the first message exchange
-          if (pendingTitleGeneration.current) {
-            const { threadId: titleThreadId, userContent } =
-              pendingTitleGeneration.current;
-            pendingTitleGeneration.current = null; // Clear the pending state
+        // Generate thread title if this was the first message exchange
+        if (pendingTitleGeneration.current) {
+          const { threadId: titleThreadId, userContent } =
+            pendingTitleGeneration.current;
+          pendingTitleGeneration.current = null; // Clear the pending state
 
+          // Wrap async code in IIFE to avoid making the event handler async
+          (async () => {
             try {
               const titleResponse = await fetch('/api/generate-title', {
                 method: 'POST',
@@ -255,51 +234,60 @@ export function useChat({ threadId, isAgentMode = false }: UseChatProps = {}) {
               });
 
               if (titleResponse.ok) {
-                const result = await titleResponse.json();
+                const result = (await titleResponse.json()) as {
+                  title?: string;
+                };
                 const title = result.title?.trim();
                 if (title && title.length > 0) {
                   await useThreadsStore
                     .getState()
                     .renameThread(titleThreadId, title);
                   // Reload thread list to update the displayed name
-                  useThreadsStore.getState().loadThreads();
+                  useThreadsStore
+                    .getState()
+                    .loadThreads()
+                    .catch(error => {
+                      logger.error(
+                        '[useChat] Failed to reload threads after title generation:',
+                        error
+                      );
+                    });
                 }
               }
             } catch (error) {
               logger.error('[useChat] Failed to generate thread title:', error);
             }
-          }
+          })().catch(error => {
+            logger.error('[useChat] Failed to generate thread title:', error);
+          });
         }
       }
-    );
+    });
 
-    const unsubscribeCancelled = sseEventBus.subscribe(
-      'cancelled',
-      async event => {
-        const data = event.data;
-        // Only process if this is for the currently selected thread
-        if (event.threadId && event.threadId !== currentThreadId) {
+    const unsubscribeCancelled = sseEventBus.subscribe('cancelled', event => {
+      const data = event.data;
+      // Only process if this is for the currently selected thread
+      if (event.threadId && event.threadId !== currentThreadId) {
+        return;
+      }
+
+      // Update message status to cancelled
+      if (data && typeof data === 'object' && 'messageId' in data) {
+        const messageId = data.messageId as string;
+        if (!currentThreadId) {
           return;
         }
-
-        // Update message status to cancelled
-        if (data && typeof data === 'object' && 'messageId' in data) {
-          const messageId = data.messageId as string;
-          if (!currentThreadId) {
-            return;
-          }
-          const chatStore = threadStore.getState();
-          const message = chatStore.messages.find(m => m.id === messageId);
-          if (message) {
-            chatStore.updateMessage(messageId, { status: 'cancelled' });
-          }
+        const chatStore = threadStore.getState();
+        const message = chatStore.messages.find(m => m.id === messageId);
+        if (message) {
+          chatStore.updateMessage(messageId, { status: 'cancelled' });
         }
       }
-    );
+    });
 
     const unsubscribeMessagesDeleted = sseEventBus.subscribe(
       'messages-deleted',
-      async event => {
+      event => {
         const data = event.data;
         if (data && typeof data === 'object' && 'messageIds' in data) {
           const messageIds = data.messageIds as string[];
@@ -323,7 +311,7 @@ export function useChat({ threadId, isAgentMode = false }: UseChatProps = {}) {
       unsubscribeCancelled();
       unsubscribeMessagesDeleted();
     };
-  }, [currentThreadId]); // Re-subscribe when currentThreadId changes
+  }, [currentThreadId, threadStore]); // Re-subscribe when currentThreadId changes
 
   const sendMessage = useCallback(
     async (
@@ -373,8 +361,8 @@ export function useChat({ threadId, isAgentMode = false }: UseChatProps = {}) {
         role: 'user',
         content,
         timestamp: new Date(),
-        images: images || [],
-        notes: notes || [],
+        images: images ?? [],
+        notes: notes ?? [],
       };
       addMessage(userMessage);
 
@@ -383,8 +371,8 @@ export function useChat({ threadId, isAgentMode = false }: UseChatProps = {}) {
           message: content,
           messageId: userMessage.id, // Send the client-generated message ID
           threadId: currentThreadId,
-          images: images || [],
-          notes: notes || [],
+          images: images ?? [],
+          notes: notes ?? [],
           isAgentMode,
         };
 
@@ -398,19 +386,27 @@ export function useChat({ threadId, isAgentMode = false }: UseChatProps = {}) {
         });
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
+          const errorData = (await response
+            .json()
+            .catch(() => ({}) as { error?: string })) as { error?: string };
           throw new Error(
-            errorData.error || `HTTP error! status: ${response.status}`
+            errorData.error ?? `HTTP error! status: ${response.status}`
           );
         }
 
         // Response contains the message - SSE will handle real-time updates
         await response.json();
 
-        // Thread title generation moved to streaming completion handler
-
         // Reload thread list to update message count and name
-        useThreadsStore.getState().loadThreads();
+        useThreadsStore
+          .getState()
+          .loadThreads()
+          .catch(error => {
+            logger.error(
+              '[useChat] Failed to reload threads after message:',
+              error
+            );
+          });
       } catch (error) {
         logger.error('SSE Error:', error);
         toast.error(`Failed to send message: ${error}`);
@@ -427,10 +423,9 @@ export function useChat({ threadId, isAgentMode = false }: UseChatProps = {}) {
       messages.length,
       isAgentMode,
       addMessage,
-      updateMessage,
       setError,
       loadMessages,
-      validateAndProcessMessage,
+      threadStore,
     ]
   );
 
@@ -539,16 +534,18 @@ export function useChat({ threadId, isAgentMode = false }: UseChatProps = {}) {
           body: JSON.stringify({
             message: userMessage.content,
             threadId: currentThreadId,
-            images: userMessage.images || [],
-            notes: userMessage.notes || [],
+            images: userMessage.images ?? [],
+            notes: userMessage.notes ?? [],
             isAgentMode,
           }),
         });
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
+          const errorData = (await response
+            .json()
+            .catch(() => ({}) as { error?: string })) as { error?: string };
           throw new Error(
-            errorData.error || `HTTP error! status: ${response.status}`
+            errorData.error ?? `HTTP error! status: ${response.status}`
           );
         }
 
@@ -570,11 +567,10 @@ export function useChat({ threadId, isAgentMode = false }: UseChatProps = {}) {
       currentThreadId,
       messages,
       isAgentMode,
-      addMessage,
-      updateMessage,
       setError,
       loadMessages,
-      validateAndProcessMessage,
+      setMessages,
+      threadStore,
     ]
   );
 
@@ -623,9 +619,11 @@ export function useChat({ threadId, isAgentMode = false }: UseChatProps = {}) {
         });
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
+          const errorData = (await response
+            .json()
+            .catch(() => ({}) as { error?: string })) as { error?: string };
           throw new Error(
-            errorData.error || `HTTP error! status: ${response.status}`
+            errorData.error ?? `HTTP error! status: ${response.status}`
           );
         }
 
@@ -644,11 +642,9 @@ export function useChat({ threadId, isAgentMode = false }: UseChatProps = {}) {
       currentThreadId,
       messages,
       isAgentMode,
-      addMessage,
-      updateMessage,
       setError,
       loadMessages,
-      validateAndProcessMessage,
+      setMessages,
     ]
   );
 
@@ -690,7 +686,7 @@ export function useChat({ threadId, isAgentMode = false }: UseChatProps = {}) {
       const requestBody = {
         message: lastMessage.content,
         threadId: currentThreadId,
-        images: lastMessage.images || [],
+        images: lastMessage.images ?? [],
         isAgentMode,
       };
 
@@ -704,9 +700,11 @@ export function useChat({ threadId, isAgentMode = false }: UseChatProps = {}) {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const errorData = (await response
+          .json()
+          .catch(() => ({}) as { error?: string })) as { error?: string };
         throw new Error(
-          errorData.error || `HTTP error! status: ${response.status}`
+          errorData.error ?? `HTTP error! status: ${response.status}`
         );
       }
 
@@ -717,14 +715,7 @@ export function useChat({ threadId, isAgentMode = false }: UseChatProps = {}) {
       setError(`Failed to retry message: ${error}`);
       // Streaming state is derived from message status
     }
-  }, [
-    messages,
-    currentThreadId,
-    validateAndProcessMessage,
-    addMessage,
-    updateMessage,
-    setError,
-  ]);
+  }, [messages, currentThreadId, setError, isAgentMode]);
 
   return {
     messages,

@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { logger } from './logger.js';
-import { getLLMConfigDirectory } from './utils/settingsDirectory.js';
+import { logger } from './logger';
+import { getLLMConfigDirectory } from './utils/settingsDirectory';
 
 export interface LLMModel {
   id: string;
@@ -86,6 +86,16 @@ export class LLMConfigManager {
     this.configPath = path.join(this.configDirectory, 'config.json');
   }
 
+  private isValidConfiguration(obj: unknown): obj is LLMConfiguration {
+    return (
+      typeof obj === 'object' &&
+      obj !== null &&
+      'providers' in obj &&
+      Array.isArray((obj as { providers: unknown }).providers) &&
+      'lastUpdated' in obj
+    );
+  }
+
   async loadConfiguration(): Promise<LLMConfiguration> {
     try {
       // Ensure config directory exists
@@ -98,20 +108,23 @@ export class LLMConfigManager {
         throw new Error('Empty configuration file');
       }
 
-      this.configuration = JSON.parse(data);
+      const parsed: unknown = JSON.parse(data) as unknown;
+      this.configuration = this.isValidConfiguration(parsed) ? parsed : null;
 
-      // Ensure lastUpdated is a Date object
-      if (this.configuration) {
-        this.configuration.lastUpdated = new Date(
-          this.configuration.lastUpdated
-        );
+      // If configuration is invalid, treat it as corrupted and create a new one
+      if (!this.configuration) {
+        throw new Error('Invalid configuration format');
       }
 
-      return this.configuration!;
+      // Ensure lastUpdated is a Date object
+      this.configuration.lastUpdated = new Date(this.configuration.lastUpdated);
+
+      return this.configuration;
     } catch (error: unknown) {
       if (
         (error as NodeJS.ErrnoException).code === 'ENOENT' ||
         (error as Error).message === 'Empty configuration file' ||
+        (error as Error).message === 'Invalid configuration format' ||
         error instanceof SyntaxError
       ) {
         // Create default configuration for missing, empty, or corrupted files
@@ -151,7 +164,7 @@ export class LLMConfigManager {
     if (!this.configuration) {
       await this.loadConfiguration();
     }
-    return this.configuration?.models || [];
+    return this.configuration?.models ?? [];
   }
 
   async getDefaultModel(): Promise<LLMModel | null> {
@@ -163,7 +176,7 @@ export class LLMConfigManager {
       return null;
     }
     return (
-      models.find(m => m.id === this.configuration!.defaultModelId) || null
+      models.find(m => m.id === this.configuration!.defaultModelId) ?? null
     );
   }
 
@@ -267,7 +280,7 @@ export class LLMConfigManager {
     if (!this.configuration) {
       await this.loadConfiguration();
     }
-    return this.configuration?.customServices || [];
+    return this.configuration?.customServices ?? [];
   }
 
   async refreshModels(
@@ -302,7 +315,7 @@ export class LLMConfigManager {
             serviceId: service.id,
             serviceName: service.name,
             model: modelMeta.name,
-            displayName: `${modelMeta.display_name || modelMeta.name} | ${service.name}`,
+            displayName: `${modelMeta.display_name ?? modelMeta.name} | ${service.name}`,
             baseURL: service.baseURL,
             type: service.type as LLMModel['type'],
             contextLength: modelMeta.context_length,
@@ -352,7 +365,7 @@ export class LLMConfigManager {
           models.length > 0
         ) {
           try {
-            const { LLMScanner } = await import('./llmScanner.js');
+            const { LLMScanner } = await import('./llmScanner');
             const scanner = new LLMScanner();
             const serviceForScanner = {
               id: customService.id,
@@ -536,39 +549,38 @@ export class LLMConfigManager {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const data = await response.json();
+      const data: unknown = await response.json();
 
       let models: string[] = [];
       if (service.type === 'ollama') {
+        const responseData = data as {
+          models?: Array<{ name?: string; model?: string }>;
+        };
         models =
-          data?.models
-            ?.map(
-              (m: unknown) =>
-                (m as { name?: string; model?: string }).name ||
-                (m as { name?: string; model?: string }).model ||
-                ''
-            )
-            .filter(Boolean) || [];
+          responseData?.models
+            ?.map(m => m.name ?? m.model ?? '')
+            .filter(Boolean) ?? [];
       } else if (service.type === 'anthropic') {
+        const responseData = data as {
+          data?: Array<{ id?: string; name?: string }>;
+        };
         models =
-          data?.data
-            ?.map(
-              (m: unknown) =>
-                (m as { id?: string; name?: string }).id ||
-                (m as { id?: string; name?: string }).name ||
-                ''
-            )
-            .filter(Boolean) || [];
+          responseData?.data
+            ?.map(m => (m.id || m.name) ?? '')
+            .filter(Boolean) ?? [];
       } else {
+        const responseData = data as {
+          data?: Array<{ id?: string; name?: string }>;
+        };
         models =
-          data?.data
+          responseData?.data
             ?.map(
               (m: unknown) =>
-                (m as { id?: string; model?: string }).id ||
-                (m as { id?: string; model?: string }).model ||
+                ((m as { id?: string; model?: string }).id ||
+                  (m as { id?: string; model?: string }).model) ??
                 ''
             )
-            .filter(Boolean) || [];
+            .filter(Boolean) ?? [];
       }
 
       return models;

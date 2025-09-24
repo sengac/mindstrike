@@ -2,7 +2,7 @@
  * Migration utilities for converting old customColors to new colorTheme format
  */
 
-import type { NodeColorTheme } from '../mindmaps/constants/nodeColors';
+import type { NodeColorThemeType } from '../mindmaps/constants/nodeColors';
 
 interface OldCustomColors {
   backgroundClass?: string;
@@ -15,7 +15,7 @@ interface OldCustomColors {
 /**
  * Map old Tailwind classes or hex colors to new color themes
  */
-const COLOR_MIGRATION_MAP: Record<string, NodeColorTheme> = {
+const COLOR_MIGRATION_MAP: Record<string, NodeColorThemeType> = {
   // Tailwind class mappings
   'bg-blue-500': 'blue',
   'bg-green-500': 'green',
@@ -47,7 +47,7 @@ const COLOR_MIGRATION_MAP: Record<string, NodeColorTheme> = {
  */
 export function migrateCustomColors(
   customColors: OldCustomColors | null | undefined
-): NodeColorTheme | null {
+): NodeColorThemeType | null {
   if (!customColors) {
     return null;
   }
@@ -78,7 +78,7 @@ export function migrateCustomColors(
  */
 export interface NodeDataWithLegacyColors {
   customColors?: OldCustomColors | null;
-  colorTheme?: NodeColorTheme | null;
+  colorTheme?: NodeColorThemeType | null;
 }
 
 /**
@@ -97,11 +97,11 @@ export function needsColorMigration(
  */
 export function migrateNodeData<T extends NodeDataWithLegacyColors>(
   nodeData: T
-): Omit<T, 'customColors'> & { colorTheme: NodeColorTheme | null } {
+): Omit<T, 'customColors'> & { colorTheme: NodeColorThemeType | null } {
   if (!needsColorMigration(nodeData)) {
     const { customColors, ...rest } = nodeData;
     return rest as Omit<T, 'customColors'> & {
-      colorTheme: NodeColorTheme | null;
+      colorTheme: NodeColorThemeType | null;
     };
   }
 
@@ -111,5 +111,5 @@ export function migrateNodeData<T extends NodeDataWithLegacyColors>(
   return {
     ...rest,
     colorTheme,
-  } as Omit<T, 'customColors'> & { colorTheme: NodeColorTheme | null };
+  } as Omit<T, 'customColors'> & { colorTheme: NodeColorThemeType | null };
 }

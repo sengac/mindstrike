@@ -6,8 +6,8 @@ import type { CallbackManagerForLLMRun } from '@langchain/core/callbacks/manager
 import type { ChatResult } from '@langchain/core/outputs';
 import { ChatGenerationChunk } from '@langchain/core/outputs';
 import type { DynamicStructuredTool } from '@langchain/core/tools';
-import { getLocalLLMManager } from '../localLlmSingleton.js';
-import { DEFAULT_MODEL_PARAMS } from '../llm/constants.js';
+import { getLocalLLMManager } from '../localLlmSingleton';
+import { DEFAULT_MODEL_PARAMS } from '../llm/constants';
 
 interface LocalLLMManagerInterface {
   loadModel: (modelName: string, threadId?: string) => Promise<void>;
@@ -53,6 +53,8 @@ export class ChatLocalLLM extends BaseChatModel {
   disableFunctions?: boolean;
   disableChatHistory?: boolean;
   private tools: DynamicStructuredTool[] = [];
+  private lastOptions?: this['ParsedCallOptions'] = undefined;
+  private lastRunManager?: CallbackManagerForLLMRun = undefined;
 
   constructor(fields: ChatLocalLLMInput) {
     super(fields);
@@ -86,9 +88,13 @@ export class ChatLocalLLM extends BaseChatModel {
 
   async _generate(
     messages: BaseMessage[],
-    _options?: this['ParsedCallOptions'],
-    _runManager?: CallbackManagerForLLMRun
+    options?: this['ParsedCallOptions'],
+    runManager?: CallbackManagerForLLMRun
   ): Promise<ChatResult> {
+    // Store options and runManager for potential use
+    this.lastOptions = options;
+    this.lastRunManager = runManager;
+
     const localLlmManager = getLocalLLMManager();
 
     // Ensure model is loaded
@@ -127,9 +133,13 @@ export class ChatLocalLLM extends BaseChatModel {
 
   async *_streamResponseChunks(
     messages: BaseMessage[],
-    _options?: this['ParsedCallOptions'],
-    _runManager?: CallbackManagerForLLMRun
+    options?: this['ParsedCallOptions'],
+    runManager?: CallbackManagerForLLMRun
   ): AsyncGenerator<ChatGenerationChunk> {
+    // Store options and runManager for potential use
+    this.lastOptions = options;
+    this.lastRunManager = runManager;
+
     const localLlmManager = getLocalLLMManager();
 
     // Ensure model is loaded

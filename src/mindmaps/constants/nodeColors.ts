@@ -14,7 +14,7 @@ export const NodeColorTheme = {
   Lime: 'lime',
 } as const;
 
-export type NodeColorTheme =
+export type NodeColorThemeType =
   (typeof NodeColorTheme)[keyof typeof NodeColorTheme];
 
 export interface NodeColorSet {
@@ -25,7 +25,7 @@ export interface NodeColorSet {
 
 // Color definitions for each theme
 // Using exact Tailwind CSS color values
-export const NODE_COLORS: Record<NodeColorTheme, NodeColorSet> = {
+export const NODE_COLORS: Record<NodeColorThemeType, NodeColorSet> = {
   [NodeColorTheme.Blue]: {
     backgroundColor: '#3b82f6', // blue-500
     borderColor: '#2563eb', // blue-600

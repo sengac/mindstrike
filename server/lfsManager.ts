@@ -1,12 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import type { DocumentSummary } from './documentIngestionService.js';
+import type { DocumentSummary } from './documentIngestionService';
 import {
   documentIngestionService,
-  ProcessedDocument,
   DocumentIngestionService,
-} from './documentIngestionService.js';
+} from './documentIngestionService';
 
 interface LFSEntry {
   id: string;
@@ -60,7 +59,9 @@ class LFSManager {
     await this.saveToFile();
 
     // Generate summary asynchronously
-    this.generateSummaryAsync(id, content, contentType);
+    this.generateSummaryAsync(id, content, contentType).catch(error => {
+      console.error(`[LFS] Failed to generate summary for ${id}:`, error);
+    });
 
     console.log(
       `[LFS] Stored large content: ${contentSize} bytes -> ${compressedSize} bytes (${id})`
@@ -145,7 +146,7 @@ class LFSManager {
    */
   getSummary(id: string): DocumentSummary | null {
     const entry = this.entries[id];
-    return entry?.summary || null;
+    return entry?.summary ?? null;
   }
 
   /**
@@ -217,7 +218,11 @@ class LFSManager {
     try {
       if (fs.existsSync(this.filePath)) {
         const data = fs.readFileSync(this.filePath, 'utf8');
-        this.entries = JSON.parse(data);
+        const parsed: unknown = JSON.parse(data) as unknown;
+        this.entries =
+          typeof parsed === 'object' && parsed !== null
+            ? (parsed as Record<string, LFSEntry>)
+            : {};
         console.log(
           `[LFS] Loaded ${Object.keys(this.entries).length} entries from file`
         );

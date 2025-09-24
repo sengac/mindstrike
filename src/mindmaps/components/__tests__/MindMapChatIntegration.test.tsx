@@ -132,7 +132,7 @@ vi.mock('../../../components/shared/ChatContentViewer', () => ({
             data-testid="update-prompt"
             onClick={() => {
               const customPrompt = 'custom prompt';
-              onPromptUpdate?.(threadId || '', customPrompt);
+              onPromptUpdate?.(threadId ?? '', customPrompt);
             }}
           >
             Update Prompt
@@ -187,7 +187,7 @@ vi.mock('../../../components/shared/ChatContentViewer', () => ({
               onCopyNotesToChat?.({
                 id: 'test-notes-id',
                 title: 'Notes',
-                content: nodeNotes || 'test notes',
+                content: nodeNotes ?? 'test notes',
                 attachedAt: new Date(),
               })
             }
@@ -317,7 +317,9 @@ describe('MindMapChatIntegration', () => {
 
       const sourcesElement = screen.getByTestId('node-sources');
       const sourcesText = sourcesElement.textContent;
-      const sources = JSON.parse(sourcesText ?? '[]');
+      const sources = JSON.parse(sourcesText ?? '[]') as Array<{
+        name: string;
+      }>;
 
       expect(sources).toHaveLength(mockSources.length);
       expect(sources[0].name).toBe(mockSources[0].name);
@@ -338,7 +340,7 @@ describe('MindMapChatIntegration', () => {
       });
 
       const focusElement = screen.getByTestId('focus-flags');
-      const focusData = JSON.parse(focusElement.textContent ?? '{}');
+      const focusData = JSON.parse(focusElement.textContent ?? '{}') as unknown;
 
       expect(focusData).toEqual({
         focusChat: true,

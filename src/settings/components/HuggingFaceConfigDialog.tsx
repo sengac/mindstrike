@@ -57,7 +57,7 @@ export function HuggingFaceConfigDialog({
         handleClose();
       } else {
         const error = await response.json();
-        toast.error(error.error || 'Failed to save token');
+        toast.error(error.error ?? 'Failed to save token');
       }
     } catch (error) {
       logger.error('Error saving HF token:', error);

@@ -1,8 +1,34 @@
-import { logger } from './logger.js';
+import { logger } from './logger';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getMindstrikeDirectory } from './utils/settingsDirectory.js';
-import { SSEEventType } from '../src/types.js';
+import { getMindstrikeDirectory } from './utils/settingsDirectory';
+import { SSEEventType } from '../src/types';
+import {
+  loadMetadataFromUrl,
+  calculateVRAMEstimate,
+  type GGUFMetadata,
+  type VRAMEstimate,
+  type CacheType,
+} from './utils/ggufVramCalculator';
+
+export interface VRAMConfiguration {
+  gpuLayers: number;
+  contextSize: number;
+  cacheType: CacheType;
+  label: string;
+}
+
+export interface VRAMEstimateInfo extends VRAMEstimate {
+  config: VRAMConfiguration;
+}
+
+export interface ModelArchitecture {
+  layers?: number;
+  kvHeads?: number;
+  embeddingDim?: number;
+  contextLength?: number;
+  feedForwardDim?: number;
+}
 
 export interface DynamicModelInfo extends Record<string, unknown> {
   name: string;
@@ -21,6 +47,11 @@ export interface DynamicModelInfo extends Record<string, unknown> {
   username: string;
   likes?: number;
   updatedAt?: string;
+  // VRAM calculation fields
+  vramEstimates?: VRAMEstimateInfo[];
+  modelArchitecture?: ModelArchitecture;
+  hasVramData?: boolean;
+  vramError?: string;
 }
 
 interface HuggingFaceModel {
@@ -90,17 +121,21 @@ export class ModelFetcher {
     try {
       if (fs.existsSync(this.cacheFile)) {
         const cacheData = fs.readFileSync(this.cacheFile, 'utf-8');
-        const data = JSON.parse(cacheData);
+        const data = JSON.parse(cacheData) as {
+          models?: DynamicModelInfo[];
+          timestamp?: number;
+          searchCache?: Array<[string, Set<string>]>;
+        };
 
         // Convert array to Map for deduplication
-        const models = data.models || [];
+        const models = data.models ?? [];
         this.cache = new Map();
         models.forEach((model: DynamicModelInfo) => {
           this.cache.set(model.modelId, model);
         });
 
-        this.lastFetch = data.timestamp || 0;
-        this.searchCache = new Map(data.searchCache || []);
+        this.lastFetch = data.timestamp ?? 0;
+        this.searchCache = new Map(data.searchCache ?? []);
         logger.debug(
           `Loaded available models cache with ${this.cache.size} models and ${this.searchCache.size} search queries`
         );
@@ -871,16 +906,16 @@ export class ModelFetcher {
       }
     }
 
-    return {
+    // Prepare base model info
+    const modelInfo: DynamicModelInfo = {
       name: this.formatModelName(model.id, parameterCount, quantization),
       url: downloadUrl,
-      filename: selectedFile.rfilename.replace(/[\/\\]/g, '_'),
+      filename: selectedFile.rfilename.replace(/[/\\]/g, '_'),
       size: selectedFile.size,
       description: this.generateDescription(
         model.id,
         parameterCount,
-        quantization,
-        username
+        quantization
       ),
       contextLength: this.estimateContextLength(model.tags, model.id),
       parameterCount,
@@ -893,7 +928,26 @@ export class ModelFetcher {
       username: username,
       likes: model.likes,
       updatedAt: model.lastModified,
+      hasVramData: false,
     };
+
+    // Try to fetch VRAM data for accessible models
+    if (accessibility === 'accessible') {
+      try {
+        const vramData = await this.fetchVRAMData(downloadUrl);
+        if (vramData) {
+          modelInfo.vramEstimates = vramData.estimates;
+          modelInfo.modelArchitecture = vramData.architecture;
+          modelInfo.hasVramData = true;
+        }
+      } catch (error) {
+        logger.debug(`Could not fetch VRAM data for ${model.id}:`, error);
+        modelInfo.vramError =
+          error instanceof Error ? error.message : 'Unknown error';
+      }
+    }
+
+    return modelInfo;
   }
 
   private extractUsername(modelId: string): string {
@@ -1007,8 +1061,7 @@ export class ModelFetcher {
   private generateDescription(
     modelId: string,
     parameterCount: string,
-    quantization: string,
-    _username: string
+    quantization: string
   ): string {
     const modelName = modelId.split('/').pop() || modelId;
 
@@ -1019,6 +1072,94 @@ export class ModelFetcher {
     const description = `${modelName} ${paramInfo} with ${quantization} quantization`;
 
     return description;
+  }
+
+  /**
+   * Fetch VRAM calculation data for a model
+   */
+  private async fetchVRAMData(modelUrl: string): Promise<{
+    estimates: VRAMEstimateInfo[];
+    architecture: ModelArchitecture;
+  } | null> {
+    try {
+      // Define standard configurations to calculate
+      const configurations: VRAMConfiguration[] = [
+        {
+          gpuLayers: 999,
+          contextSize: 2048,
+          cacheType: 'fp16',
+          label: '2K context',
+        },
+        {
+          gpuLayers: 999,
+          contextSize: 4096,
+          cacheType: 'fp16',
+          label: '4K context',
+        },
+        {
+          gpuLayers: 999,
+          contextSize: 8192,
+          cacheType: 'fp16',
+          label: '8K context',
+        },
+        {
+          gpuLayers: 999,
+          contextSize: 16384,
+          cacheType: 'fp16',
+          label: '16K context',
+        },
+      ];
+
+      // Set a timeout for metadata fetching
+      const metadataPromise = loadMetadataFromUrl(modelUrl);
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error('VRAM metadata fetch timeout')),
+          10000
+        )
+      );
+
+      const metadata: GGUFMetadata = await Promise.race([
+        metadataPromise,
+        timeoutPromise,
+      ]);
+
+      // Extract architecture info
+      const architecture: ModelArchitecture = {
+        layers: metadata.n_layers,
+        kvHeads: metadata.n_kv_heads,
+        embeddingDim: metadata.embedding_dim,
+        contextLength: metadata.context_length,
+        feedForwardDim: metadata.feed_forward_dim,
+      };
+
+      // Calculate VRAM for each configuration
+      const estimates: VRAMEstimateInfo[] = [];
+      for (const config of configurations) {
+        try {
+          const estimate = calculateVRAMEstimate(
+            metadata,
+            config.gpuLayers,
+            config.contextSize,
+            config.cacheType
+          );
+          estimates.push({
+            ...estimate,
+            config,
+          });
+        } catch (error) {
+          logger.debug(
+            `Could not calculate VRAM for config ${config.label}:`,
+            error
+          );
+        }
+      }
+
+      return estimates.length > 0 ? { estimates, architecture } : null;
+    } catch (error) {
+      logger.debug('Error fetching VRAM data:', error);
+      return null;
+    }
   }
 
   /**
@@ -1073,7 +1214,7 @@ export class ModelFetcher {
 
       const cacheFile = path.join(this.cacheDir, 'model-accessibility.json');
       const data = await fs.readFile(cacheFile, 'utf-8');
-      this.accessibilityCache = JSON.parse(data);
+      this.accessibilityCache = JSON.parse(data) as ModelAccessibilityCache;
       logger.debug('Loaded model accessibility cache');
     } catch {
       // File doesn't exist or is invalid, start with empty cache
@@ -1208,7 +1349,7 @@ export class ModelFetcher {
           return model?.accessibility === 'gated';
         })
     );
-    gatedQueries.forEach(([query, _models]) => this.searchCache.delete(query));
+    gatedQueries.forEach(([query]) => this.searchCache.delete(query));
   }
 
   /**

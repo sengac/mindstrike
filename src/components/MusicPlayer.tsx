@@ -21,8 +21,8 @@ import {
 import { BaseDialog } from './shared/BaseDialog';
 import { useDialogAnimation } from '../hooks/useDialogAnimation';
 import { useEffect, useState, useRef } from 'react';
-import { useAudioStore } from '../store/useAudioStore';
-import { usePlaylistStore } from '../store/usePlaylistStore';
+import { useAudioStore, type AudioFile } from '../store/useAudioStore';
+import { usePlaylistStore, type Playlist } from '../store/usePlaylistStore';
 import { useImageCache } from '../hooks/useImageCache';
 
 import { LCDDisplay } from './LCDDisplay';
@@ -63,8 +63,10 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
   );
   const [editingPlaylistName, setEditingPlaylistName] = useState<string>('');
   const [viewingPlaylist, setViewingPlaylist] = useState<boolean>(false);
-  const [allTracks, setAllTracksLocal] = useState<any[]>([]);
-  const [draggedTrack, setDraggedTrack] = useState<any>(null);
+  const [allTracks, setAllTracksLocal] = useState<AudioFile[]>([]);
+  const [draggedTrack, setDraggedTrack] = useState<
+    AudioFile | AudioFile[] | null
+  >(null);
   const [dropTargetPlaylistId, setDropTargetPlaylistId] = useState<
     string | null
   >(null);
@@ -76,7 +78,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
   const [isDraggingForReorder, setIsDraggingForReorder] =
     useState<boolean>(false);
   const reorderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const listRef = useRef<any>(null);
+  const listRef = useRef<VirtualizedList | null>(null);
   const hasScrolledToCurrentTrack = useRef<boolean>(false);
 
   // Multi-selection state
@@ -182,8 +184,37 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
       if (!response.ok) {
         throw new Error('Failed to fetch audio files');
       }
-      const files = await response.json();
-      const audioFiles = files.map((file: any) => ({
+      const files = (await response.json()) as Array<{
+        id: number;
+        title: string;
+        artist: string;
+        album?: string;
+        genre?: string[];
+        year: number;
+        duration: string;
+        url: string;
+        path: string;
+        size: number;
+        metadata?: {
+          common: {
+            title?: string;
+            artist?: string;
+            album?: string;
+            genre?: string[];
+            year?: number;
+            [key: string]: unknown;
+          };
+          format: {
+            duration?: number;
+            bitrate?: number;
+            sampleRate?: number;
+            numberOfChannels?: number;
+            [key: string]: unknown;
+          };
+        };
+        coverArtUrl: string | null;
+      }>;
+      const audioFiles = files.map(file => ({
         id: file.id,
         title: file.title,
         artist: file.artist,
@@ -195,7 +226,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
         path: file.path,
         size: file.size,
         metadata: file.metadata,
-        coverArtUrl: file.coverArtUrl,
+        coverArtUrl: file.coverArtUrl ?? undefined,
       }));
       setAllTracksLocal(audioFiles); // Store the full track list locally
       setAllTracks(audioFiles); // Store in playlist store
@@ -217,7 +248,9 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
       // If no track is selected, automatically select the first track
       if (!currentTrack && audioFiles.length > 0) {
         const firstTrack = audioFiles[0];
-        const playlistId = viewingPlaylist ? currentPlaylist?.id || null : null;
+        const playlistId = viewingPlaylist
+          ? (currentPlaylist?.id ?? null)
+          : null;
         playTrack(firstTrack, 0, playlistId);
       } else {
         play();
@@ -253,7 +286,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
       // Find the original index in the full audioFiles array
       const originalIndex = audioFiles.findIndex(f => f.id === track.id);
       // Pass current playlist context
-      const playlistId = viewingPlaylist ? currentPlaylist?.id || null : null;
+      const playlistId = viewingPlaylist ? (currentPlaylist?.id ?? null) : null;
       playTrack(track, originalIndex, playlistId);
     }
   };
@@ -371,12 +404,18 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
 
       const filteredFiles = searchTerm.trim()
         ? tracksToFilter.filter(track => {
-            const title = track.title?.toLowerCase() || '';
-            const artist = track.artist?.toLowerCase() || '';
-            const album = track.album?.toLowerCase() || '';
+            const title = track.title?.toLowerCase() ?? '';
+            const artist = track.artist?.toLowerCase() ?? '';
+            const album =
+              (typeof track.album === 'string'
+                ? track.album
+                : ''
+              )?.toLowerCase() ?? '';
             const genres = Array.isArray(track.genre)
-              ? track.genre.map((g: any) => g?.toLowerCase() || '').join(' ')
-              : track.genre?.toLowerCase() || '';
+              ? track.genre
+                  .map(g => (typeof g === 'string' ? g.toLowerCase() : ''))
+                  .join(' ')
+              : '';
 
             return (
               title.includes(searchLower) ||
@@ -451,7 +490,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
       if (albumPart && yearPart) {
         return `${albumPart} • ${yearPart}`;
       }
-      return albumPart || yearPart || '';
+      return (albumPart || yearPart) ?? '';
     })();
 
     return [
@@ -486,12 +525,16 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
         : allTracks;
 
     return tracksToFilter.filter(track => {
-      const title = track.title?.toLowerCase() || '';
-      const artist = track.artist?.toLowerCase() || '';
-      const album = track.album?.toLowerCase() || '';
+      const title = track.title?.toLowerCase() ?? '';
+      const artist = track.artist?.toLowerCase() ?? '';
+      const album =
+        (typeof track.album === 'string' ? track.album : '')?.toLowerCase() ??
+        '';
       const genres = Array.isArray(track.genre)
-        ? track.genre.map((g: any) => g?.toLowerCase() || '').join(' ')
-        : track.genre?.toLowerCase() || '';
+        ? track.genre
+            .map(g => (typeof g === 'string' ? g.toLowerCase() : ''))
+            .join(' ')
+        : '';
 
       return (
         title.includes(searchLower) ||
@@ -529,7 +572,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
     }
   };
 
-  const handleStartEditPlaylist = (playlist: any) => {
+  const handleStartEditPlaylist = (playlist: Playlist) => {
     setEditingPlaylistId(playlist.id);
     setEditingPlaylistName(playlist.name);
     setShowCreatePlaylist(false); // Close create playlist if open
@@ -549,7 +592,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
   };
 
   // Drag and Drop handlers
-  const handleDragStart = (e: React.DragEvent, track: any) => {
+  const handleDragStart = (e: React.DragEvent, track: AudioFile) => {
     // If the track being dragged is not in the selection, clear selection and drag just this track
     if (!selectedTracks.has(track.id)) {
       setSelectedTracks(new Set());
@@ -669,8 +712,11 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
     ) {
       // Find the current dragged track index in the original playlist (not the UI state)
       const playlistTracks = getPlaylistTracks(currentPlaylist.id);
+      const draggedTrackItem = Array.isArray(draggedTrack)
+        ? draggedTrack[0]
+        : draggedTrack;
       const draggedIndex = playlistTracks.findIndex(
-        track => track.id === draggedTrack.id
+        track => track.id === draggedTrackItem.id
       );
 
       if (draggedIndex !== -1) {
@@ -725,7 +771,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
     setReorderDropPosition(null);
   };
 
-  const handleViewPlaylist = (playlist: any) => {
+  const handleViewPlaylist = (playlist: Playlist) => {
     setCurrentPlaylist(playlist);
     const playlistTracks = getPlaylistTracks(playlist.id);
     setAudioFiles(playlistTracks);
@@ -737,7 +783,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
     setPlaylistContext(playlist.id, true);
   };
 
-  const handlePlayPlaylist = (playlist: any) => {
+  const handlePlayPlaylist = (playlist: Playlist) => {
     const playlistTracks = getPlaylistTracks(playlist.id);
     if (playlistTracks.length > 0) {
       setCurrentPlaylist(playlist);
@@ -1299,7 +1345,8 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
                                     ? 'bg-blue-600 bg-opacity-50'
                                     : ''
                                 } ${
-                                  draggedTrack?.id === track.id ||
+                                  (!Array.isArray(draggedTrack) &&
+                                    draggedTrack?.id === track.id) ||
                                   (Array.isArray(draggedTrack) &&
                                     draggedTrack.some(t => t.id === track.id))
                                     ? 'opacity-50'

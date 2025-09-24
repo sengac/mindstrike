@@ -240,7 +240,7 @@ export function isSSEMCPProcessInfoEvent(
     typeof data === 'object' &&
     data !== null &&
     'processes' in data &&
-    Array.isArray((data as any).processes) &&
+    Array.isArray((data as { processes?: unknown }).processes) &&
     'timestamp' in data
   );
 }

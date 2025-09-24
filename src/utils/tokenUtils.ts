@@ -58,9 +58,9 @@ interface ModelWithContext {
 
 export function getActualContextSize(model: ModelWithContext): number {
   return (
-    model.loadingSettings?.contextSize ||
-    model.maxContextLength ||
-    model.contextLength ||
+    model.loadingSettings?.contextSize ??
+    model.maxContextLength ??
+    model.contextLength ??
     4096
   );
 }

@@ -97,7 +97,7 @@ async function initializeDebugEventSubscriptions(): Promise<void> {
   const handleDebugEvent = async (event: SSEEvent) => {
     try {
       // Handle nested data structure from unified SSE - data is already decoded by event bus
-      const eventData = (event.data as { data?: unknown }).data || event.data;
+      const eventData = (event.data as { data?: unknown }).data ?? event.data;
 
       if (
         eventData &&

@@ -19,7 +19,7 @@ import { ColorPalette } from '../../components/ColorPalette';
 import { useAppStore } from '../../store/useAppStore';
 import type { MindMapData } from '../../utils/mindMapData';
 import { logger } from '../../utils/logger';
-import type { NodeColorTheme } from '../constants/nodeColors';
+import type { NodeColorThemeType } from '../constants/nodeColors';
 import { ICON_SIZES } from '../constants/magicNumbers';
 
 // Import the new store hooks
@@ -183,7 +183,7 @@ export function MindMapCanvas({
   );
 
   const handleSetNodeColors = useCallback(
-    (nodeId: string, theme: NodeColorTheme) => {
+    (nodeId: string, theme: NodeColorThemeType) => {
       setNodeColors(nodeId, theme);
     },
     [setNodeColors]
@@ -346,7 +346,7 @@ export function MindMapCanvas({
                 mindMapId={activeMindMap.id}
                 onSave={saveMindMapData}
                 initialData={mindMapData}
-                keyBindings={mindMapKeyBindings || {}}
+                keyBindings={mindMapKeyBindings ?? {}}
                 onControlsReady={setMindMapControls}
               />
             ) : (
@@ -376,7 +376,7 @@ export function MindMapCanvas({
         isOpen={showControlsModal}
         onClose={() => setShowControlsModal(false)}
         onKeyBindingsChange={handleKeyBindingsChange}
-        initialKeyBindings={mindMapKeyBindings || {}}
+        initialKeyBindings={mindMapKeyBindings ?? {}}
       />
     </div>
   );

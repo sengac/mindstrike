@@ -46,7 +46,7 @@ export const useMCPLogsStore = create<MCPLogsState>()(
         const response = await fetch('/api/mcp/logs');
         if (response.ok) {
           const data = await response.json();
-          set({ logs: data.logs || [] });
+          set({ logs: data.logs ?? [] });
         }
       } catch (error) {
         logger.error('Failed to fetch MCP logs:', error);

@@ -93,7 +93,7 @@ class RealCPUDetector {
 
       // Determine vendor based on CPU brand string and architecture
       let vendorId = 'Apple';
-      const brandStr = String(cpuBrand || '');
+      const brandStr = String(cpuBrand ?? '');
       if (brandStr.includes('Intel')) {
         vendorId = 'Intel';
       } else if (brandStr.includes('AMD')) {
@@ -102,7 +102,7 @@ class RealCPUDetector {
         vendorId = 'Apple';
       }
 
-      const totalCores = Number(perfCores || 0) + Number(efficiencyCores || 0);
+      const totalCores = Number(perfCores ?? 0) + Number(efficiencyCores ?? 0);
       const threads = Number(logicalCores || os.cpus().length);
 
       return [
@@ -111,9 +111,9 @@ class RealCPUDetector {
           vendorId,
           modelName: String(cpuBrand || `${vendorId} ${arch.toUpperCase()}`),
           coreCount: totalCores || Math.ceil(threads / 2), // Fallback estimation
-          efficiencyCoreCount: Number(efficiencyCores || 0),
+          efficiencyCoreCount: Number(efficiencyCores ?? 0),
           threadCount: threads,
-          clockSpeed: Number(cpuFreq || 0),
+          clockSpeed: Number(cpuFreq ?? 0),
           architecture: arch,
         },
       ];
@@ -138,7 +138,7 @@ class RealCPUDetector {
       const processors = new Map<string, CPUInfo>();
 
       for (const cpu of cpuData) {
-        const physicalId = cpu.physicalId || '0';
+        const physicalId = cpu.physicalId ?? '0';
 
         if (!processors.has(physicalId)) {
           processors.set(physicalId, {
@@ -148,7 +148,7 @@ class RealCPUDetector {
             coreCount: 0,
             efficiencyCoreCount: 0,
             threadCount: 0,
-            clockSpeed: cpu.clockSpeed,
+            clockSpeed: parseFloat(cpu.clockSpeed) || 0,
             architecture: cpu.architecture,
           });
         }
@@ -157,7 +157,7 @@ class RealCPUDetector {
         proc.threadCount++;
 
         // Count unique cores
-        const coreId = cpu.coreId || '0';
+        const coreId = cpu.coreId ?? '0';
         if (!proc.coreCount || proc.coreCount < parseInt(coreId) + 1) {
           proc.coreCount = parseInt(coreId) + 1;
         }
@@ -214,10 +214,12 @@ class RealCPUDetector {
             id: i.toString(),
             vendorId: manufacturer?.trim() || 'Unknown',
             modelName: name?.trim() || 'Unknown CPU',
-            coreCount: parseInt(numberOfCores) || 0,
+            coreCount: parseInt(numberOfCores) ?? 0,
             efficiencyCoreCount: efficiencyCores,
-            threadCount: parseInt(numberOfLogicalProcessors) || 0,
-            clockSpeed: parseInt(maxClockSpeed) * 1000000 || 0, // MHz to Hz
+            threadCount: parseInt(numberOfLogicalProcessors) ?? 0,
+            clockSpeed: isNaN(parseInt(maxClockSpeed))
+              ? 0
+              : parseInt(maxClockSpeed) * 1000000, // MHz to Hz
             architecture: process.arch,
           });
         }
@@ -281,10 +283,10 @@ class RealCPUDetector {
     }
   }
 
-  private static parseCPUInfo(cpuinfo: string): any[] {
+  private static parseCPUInfo(cpuinfo: string): Record<string, string>[] {
     const processors = [];
     const lines = cpuinfo.split('\n');
-    let currentProcessor: any = {};
+    let currentProcessor: Record<string, string> = {};
 
     for (const line of lines) {
       if (line.trim() === '') {
@@ -314,10 +316,12 @@ class RealCPUDetector {
             currentProcessor.coreId = value;
             break;
           case 'cpu MHz':
-            currentProcessor.clockSpeed = parseFloat(value) * 1000000;
+            currentProcessor.clockSpeed = (
+              parseFloat(value) * 1000000
+            ).toString();
             break;
           case 'flags':
-            currentProcessor.flags = value.split(' ');
+            currentProcessor.flags = value;
             break;
         }
       }

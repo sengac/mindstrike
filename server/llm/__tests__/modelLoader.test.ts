@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ModelLoader } from '../modelLoader.js';
-import { ModelRegistry } from '../modelRegistry.js';
-import { LlamaSessionManager } from '../sessionManager.js';
-import { ModelSettingsService } from '../modelSettingsService.js';
-import { ModelDiscovery } from '../modelDiscovery.js';
-import { sharedLlamaInstance } from '../../sharedLlamaInstance.js';
-import { logger } from '../../logger.js';
-import type { LocalModelInfo } from '../../localLlmManager.js';
-import type { ModelRuntimeInfo } from '../modelRegistry.js';
+import { ModelLoader } from '../modelLoader';
+import { ModelRegistry } from '../modelRegistry';
+import { LlamaSessionManager } from '../sessionManager';
+import { ModelSettingsService } from '../modelSettingsService';
+import { ModelDiscovery } from '../modelDiscovery';
+import { sharedLlamaInstance } from '../../sharedLlamaInstance';
+import { logger } from '../../logger';
+import type { LocalModelInfo } from '../../localLlmManager';
+import type { ModelRuntimeInfo } from '../modelRegistry';
 import type {
   Llama,
   LlamaModel,
@@ -16,12 +16,12 @@ import type {
 } from 'node-llama-cpp';
 
 // Mock all dependencies
-vi.mock('../../sharedLlamaInstance.js');
-vi.mock('../../logger.js');
-vi.mock('../modelRegistry.js');
-vi.mock('../sessionManager.js');
-vi.mock('../modelSettingsService.js');
-vi.mock('../modelDiscovery.js');
+vi.mock('../../sharedLlamaInstance');
+vi.mock('../../logger');
+vi.mock('../modelRegistry');
+vi.mock('../sessionManager');
+vi.mock('../modelSettingsService');
+vi.mock('../modelDiscovery');
 
 describe('ModelLoader', () => {
   let modelLoader: ModelLoader;

@@ -1,6 +1,6 @@
-import type { ConversationMessage } from './agents/baseAgent.js';
-import { getLocalLLMManager } from './localLlmSingleton.js';
-import { logger } from './logger.js';
+import type { ConversationMessage } from './agents/baseAgent';
+import { getLocalLLMManager } from './localLlmSingleton';
+import { logger } from './logger';
 
 export interface SessionManager {
   /**
@@ -29,12 +29,15 @@ export class LocalLLMSessionManager implements SessionManager {
     threadId: string,
     messages: ConversationMessage[]
   ): Promise<void> {
+    logger.debug(
+      `Updating session history for model: ${modelName}, thread: ${threadId}, messages: ${messages.length}`
+    );
     const localLLMManager = getLocalLLMManager();
 
     // Only update session if model is actually loaded
     try {
       await localLLMManager.updateSessionHistory(modelName, threadId);
-    } catch (error) {
+    } catch {
       // If model is not loaded, the updateSessionHistory will handle it gracefully
       // We don't need to log this as it's expected behavior
     }
@@ -44,12 +47,15 @@ export class LocalLLMSessionManager implements SessionManager {
     modelName: string,
     threadId: string
   ): Promise<void> {
+    logger.debug(
+      `Clearing session history for model: ${modelName}, thread: ${threadId}`
+    );
     const localLLMManager = getLocalLLMManager();
 
     // Only clear session if model is actually loaded
     try {
       await localLLMManager.updateSessionHistory(modelName, threadId);
-    } catch (error) {
+    } catch {
       // If model is not loaded, the updateSessionHistory will handle it gracefully
       // We don't need to log this as it's expected behavior
     }
@@ -68,14 +74,18 @@ export class StatelessLLMSessionManager implements SessionManager {
   ): Promise<void> {
     // Stateless LLMs (OpenAI, Anthropic, etc.) don't maintain server-side sessions
     // They receive the full message history with each request
-    // So no session update is needed
+    logger.debug(
+      `Stateless session update (no-op) for model: ${modelName}, thread: ${threadId}, messages: ${messages.length}`
+    );
   }
 
   async clearSessionHistory(
     modelName: string,
     threadId: string
   ): Promise<void> {
-    // Nothing to clear for stateless LLMs
+    logger.debug(
+      `Stateless session clear (no-op) for model: ${modelName}, thread: ${threadId}`
+    );
   }
 
   supportsSessionManagement(): boolean {
@@ -91,14 +101,18 @@ export class OllamaSessionManager implements SessionManager {
   ): Promise<void> {
     // Ollama may have its own session management
     // For now, treat it as stateless, but this can be extended
-    // if Ollama provides session management capabilities
+    logger.debug(
+      `Ollama session update (no-op) for model: ${modelName}, thread: ${threadId}, messages: ${messages.length}`
+    );
   }
 
   async clearSessionHistory(
     modelName: string,
     threadId: string
   ): Promise<void> {
-    // Nothing to clear for Ollama (currently stateless)
+    logger.debug(
+      `Ollama session clear (no-op) for model: ${modelName}, thread: ${threadId}`
+    );
   }
 
   supportsSessionManagement(): boolean {
@@ -141,8 +155,8 @@ export class GlobalSessionManager {
   }
 
   private async getConversationManager() {
-    const { ConversationManager } = await import('./conversationManager.js');
-    const { getWorkspaceRoot } = await import('./utils/settingsDirectory.js');
+    const { ConversationManager } = await import('./conversationManager');
+    const { getWorkspaceRoot } = await import('./utils/settingsDirectory');
 
     const workspaceRoot = await getWorkspaceRoot();
     if (!workspaceRoot) {

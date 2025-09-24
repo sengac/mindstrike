@@ -37,7 +37,7 @@ interface PlaylistTrackReference {
   path: string; // backup identifier in case ID changes
 }
 
-interface Playlist {
+export interface Playlist {
   id: string;
   name: string;
   description?: string;

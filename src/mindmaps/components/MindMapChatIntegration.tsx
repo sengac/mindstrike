@@ -111,7 +111,7 @@ export function MindMapChatIntegration({
   return (
     <ChatContentViewer
       ref={chatPanelRef}
-      threadId={associatedThreadMetadata?.id ?? (chatId || undefined)}
+      threadId={associatedThreadMetadata?.id ?? chatId ?? undefined}
       threads={threads}
       nodeLabel={nodeLabel}
       nodeNotes={nodeNotes}

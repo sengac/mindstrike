@@ -1,14 +1,14 @@
-import { logger } from './logger.js';
+import { logger } from './logger';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { getMindstrikeDirectory } from './utils/settingsDirectory.js';
+import { getMindstrikeDirectory } from './utils/settingsDirectory';
 import { parseFile } from 'music-metadata';
 
 interface CachedMusicMetadata {
   filePath: string;
   mtime: number; // File modification time for cache invalidation
-  metadata: any;
+  metadata: unknown;
   title?: string;
   artist?: string;
   album?: string;
@@ -29,7 +29,7 @@ export class MusicMetadataCache {
   /**
    * Clean metadata object by removing all binary data
    */
-  private cleanMetadata(metadata: any): any {
+  private cleanMetadata(metadata: unknown): unknown {
     if (!metadata) {
       return metadata;
     }
@@ -42,7 +42,7 @@ export class MusicMetadataCache {
   /**
    * Recursively clean an object, removing binary data and large arrays
    */
-  private deepCleanObject(obj: any): any {
+  private deepCleanObject(obj: unknown): unknown {
     if (obj === null || obj === undefined) {
       return obj;
     }
@@ -63,7 +63,7 @@ export class MusicMetadataCache {
     }
 
     // Handle objects
-    const cleaned: any = {};
+    const cleaned: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(obj)) {
       // Skip known binary data fields
       if (
@@ -109,7 +109,11 @@ export class MusicMetadataCache {
     try {
       if (fs.existsSync(this.cacheFile)) {
         const cacheData = fs.readFileSync(this.cacheFile, 'utf-8');
-        const data = JSON.parse(cacheData);
+        const data = JSON.parse(cacheData) as {
+          chunks?: number;
+          totalEntries?: number;
+          metadata?: CachedMusicMetadata[];
+        };
 
         this.cache = new Map();
 
@@ -123,7 +127,9 @@ export class MusicMetadataCache {
             );
             if (fs.existsSync(chunkFile)) {
               const chunkData = fs.readFileSync(chunkFile, 'utf-8');
-              const chunk = JSON.parse(chunkData);
+              const chunk = JSON.parse(chunkData) as {
+                metadata: CachedMusicMetadata[];
+              };
               chunk.metadata.forEach((item: CachedMusicMetadata) => {
                 this.cache.set(item.filePath, item);
               });
@@ -134,8 +140,8 @@ export class MusicMetadataCache {
           );
         } else {
           // Legacy format - single file
-          const metadataArray = data.metadata || [];
-          metadataArray.forEach((item: CachedMusicMetadata) => {
+          const metadataArray = data.metadata ?? [];
+          metadataArray.forEach(item => {
             this.cache.set(item.filePath, item);
           });
           logger.debug(
@@ -231,7 +237,7 @@ export class MusicMetadataCache {
    * Get cached metadata for a file, or extract and cache if not found/outdated
    */
   async getMetadata(filePath: string): Promise<{
-    metadata: any;
+    metadata: unknown;
     title: string;
     artist: string;
     album?: string;
@@ -288,11 +294,11 @@ export class MusicMetadataCache {
       return {
         metadata: cached.metadata,
         title: cached.title || path.basename(filePath, path.extname(filePath)),
-        artist: cached.artist || 'Unknown Artist',
+        artist: cached.artist ?? 'Unknown Artist',
         album: cached.album,
         genre: cached.genre,
         year: cached.year,
-        duration: cached.duration || '0:00',
+        duration: cached.duration ?? '0:00',
         coverArtUrl,
       };
     }
@@ -311,7 +317,7 @@ export class MusicMetadataCache {
     let coverArtUrl: string | undefined;
     let coverArtHash: string | undefined;
     let duration = '0:00';
-    let metadata: any = undefined;
+    let metadata: unknown = undefined;
 
     try {
       const metadataResult = await parseFile(filePath);

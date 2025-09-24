@@ -1,5 +1,5 @@
-import { LLMWorkerProxy } from './llmWorkerProxy.js';
-import { logger } from './logger.js';
+import { LLMWorkerProxy } from './llmWorkerProxy';
+import { logger } from './logger';
 
 // Singleton instance of LLMWorkerProxy to ensure the same instance
 // is used across HTTP routes and LLMClient

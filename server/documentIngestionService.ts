@@ -3,11 +3,11 @@ import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 import { ChatOpenAI } from '@langchain/openai';
 import { ChatOllama } from '@langchain/ollama';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
-import { ChatLocalLLM } from './agents/chatLocalLlm.js';
+import { ChatLocalLLM } from './agents/chatLocalLlm';
 import { PromptTemplate } from '@langchain/core/prompts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
-import { logger } from './logger.js';
-import { LLMConfigManager } from './llmConfigManager.js';
+import { logger } from './logger';
+import { LLMConfigManager } from './llmConfigManager';
 
 export interface DocumentSummary {
   id: string;
@@ -163,8 +163,12 @@ Key Points:`);
       // Parse key points JSON
       let keyPoints: string[] = [];
       try {
-        const parsed = JSON.parse(keyPointsResponse.trim());
-        keyPoints = Array.isArray(parsed) ? parsed : [keyPointsResponse];
+        const parsed: unknown = JSON.parse(keyPointsResponse.trim());
+        keyPoints =
+          Array.isArray(parsed) &&
+          parsed.every(item => typeof item === 'string')
+            ? parsed
+            : [keyPointsResponse];
       } catch {
         // Fallback: split by lines if JSON parsing fails
         keyPoints = keyPointsResponse
@@ -280,14 +284,14 @@ Key Points:`);
         });
 
       case 'vllm':
-      case 'openai-compatible':
+      case 'openai-compatible': {
         // Convert relative URLs to full URLs for these models
         const baseURL = defaultModel.baseURL.startsWith('/')
           ? `http://localhost:3001${defaultModel.baseURL}`
           : defaultModel.baseURL;
 
         return new ChatOpenAI({
-          openAIApiKey: defaultModel.apiKey || 'not-needed',
+          openAIApiKey: defaultModel.apiKey ?? 'not-needed',
           modelName: defaultModel.model,
           temperature: 0.3,
           maxTokens: 1000,
@@ -295,6 +299,7 @@ Key Points:`);
             baseURL,
           },
         });
+      }
 
       default:
         throw new Error(`Unsupported model type: ${defaultModel.type}`);
@@ -317,14 +322,14 @@ Key Points:`);
 
     // Check for common code patterns
     if (
-      content.includes('function') ||
-      content.includes('class') ||
-      content.includes('import') ||
-      content.includes('export') ||
-      content.includes('<?php') ||
-      content.includes('def ') ||
-      content.includes('public class') ||
-      content.includes('const ')
+      lowerContent.includes('function') ||
+      lowerContent.includes('class') ||
+      lowerContent.includes('import') ||
+      lowerContent.includes('export') ||
+      lowerContent.includes('<?php') ||
+      lowerContent.includes('def ') ||
+      lowerContent.includes('public class') ||
+      lowerContent.includes('const ')
     ) {
       return 'code';
     }
@@ -335,7 +340,7 @@ Key Points:`);
       (content.trim().startsWith('[') && content.trim().endsWith(']'))
     ) {
       try {
-        JSON.parse(content);
+        JSON.parse(content) as unknown;
         return 'json';
       } catch {
         // Not valid JSON
@@ -344,22 +349,22 @@ Key Points:`);
 
     // Check for logs
     if (
-      content.includes('ERROR') ||
-      content.includes('INFO') ||
-      content.includes('DEBUG') ||
-      content.includes('WARN') ||
-      content.includes('timestamp') ||
-      content.includes('level')
+      lowerContent.includes('error') ||
+      lowerContent.includes('info') ||
+      lowerContent.includes('debug') ||
+      lowerContent.includes('warn') ||
+      lowerContent.includes('timestamp') ||
+      lowerContent.includes('level')
     ) {
       return 'logs';
     }
 
     // Check for HTML
     if (
-      content.includes('<html') ||
-      content.includes('<!DOCTYPE') ||
-      content.includes('<body') ||
-      content.includes('<div')
+      lowerContent.includes('<html') ||
+      lowerContent.includes('<!doctype') ||
+      lowerContent.includes('<body') ||
+      lowerContent.includes('<div')
     ) {
       return 'html';
     }

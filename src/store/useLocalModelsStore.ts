@@ -3,6 +3,10 @@ import { subscribeWithSelector } from 'zustand/middleware';
 import toast from 'react-hot-toast';
 import { modelEvents } from '../utils/modelEvents';
 import { logger } from '../utils/logger';
+import type {
+  VRAMEstimateInfo,
+  ModelArchitecture,
+} from './useAvailableModelsStore';
 
 export interface ModelLoadingSettings {
   gpuLayers?: number; // -1 for auto, 0 for CPU only, positive number for specific layers
@@ -56,6 +60,12 @@ export interface LocalModelInfo {
   loadingSettings?: ModelLoadingSettings;
   layerCount?: number; // Total layers in the model from GGUF metadata
   maxContextLength?: number; // Maximum context length from GGUF metadata
+
+  // VRAM calculation fields
+  vramEstimates?: VRAMEstimateInfo[];
+  modelArchitecture?: ModelArchitecture;
+  hasVramData?: boolean;
+  vramError?: string;
 }
 
 export interface ModelStatus {
@@ -136,7 +146,7 @@ export const useLocalModelsStore = create<LocalModelsState>()(
 
           // Merge server-calculated settings with user settings from server
           const modelsWithSettings = models.map((model: LocalModelInfo) => {
-            const savedSettings = allSettings[model.id] || {};
+            const savedSettings = allSettings[model.id] ?? {};
             return {
               ...model,
               loadingSettings: {
@@ -271,8 +281,8 @@ export const useLocalModelsStore = create<LocalModelsState>()(
           }
 
           const message = isAutoLoad
-            ? `Failed to start model: ${error.error || 'Unknown error'}`
-            : error.error || 'Failed to load model';
+            ? `Failed to start model: ${error.error ?? 'Unknown error'}`
+            : (error.error ?? 'Failed to load model');
           toast.error(message);
         }
       } catch (error) {
@@ -312,7 +322,7 @@ export const useLocalModelsStore = create<LocalModelsState>()(
           modelEvents.emit('models-changed');
         } else {
           const error = await response.json();
-          toast.error(error.error || 'Failed to unload model');
+          toast.error(error.error ?? 'Failed to unload model');
         }
       } catch (error) {
         logger.error('Error unloading model:', error);
@@ -335,7 +345,7 @@ export const useLocalModelsStore = create<LocalModelsState>()(
           modelEvents.emit('models-changed');
         } else {
           const error = await response.json();
-          toast.error(error.error || 'Failed to delete model');
+          toast.error(error.error ?? 'Failed to delete model');
         }
       } catch (error) {
         logger.error('Error deleting model:', error);
@@ -394,7 +404,7 @@ export const useLocalModelsStore = create<LocalModelsState>()(
           toast.success('Model settings updated successfully');
         } else {
           const error = await response.json();
-          toast.error(error.error || 'Failed to update model settings');
+          toast.error(error.error ?? 'Failed to update model settings');
         }
       } catch (error) {
         logger.error('Error updating model settings:', error);

@@ -90,8 +90,8 @@ export async function getWorkspaceRoot(): Promise<string | undefined> {
   try {
     const configPath = getWorkspaceRootsConfigPath();
     const configData = await fs.readFile(configPath, 'utf8');
-    const config = JSON.parse(configData);
-    return config.workspaceRoot;
+    const config = JSON.parse(configData) as Record<string, unknown>;
+    return config.workspaceRoot as string | undefined;
   } catch {
     return undefined;
   }
@@ -106,10 +106,10 @@ export async function setWorkspaceRoot(
   await ensureMindstrikeDirectory();
   const configPath = getWorkspaceRootsConfigPath();
 
-  let config = {};
+  let config: Record<string, unknown> = {};
   try {
     const configData = await fs.readFile(configPath, 'utf8');
-    config = JSON.parse(configData);
+    config = JSON.parse(configData) as Record<string, unknown>;
   } catch {
     // File doesn't exist or invalid JSON, use empty config
   }
@@ -125,8 +125,8 @@ export async function getMusicRoot(): Promise<string | undefined> {
   try {
     const configPath = getWorkspaceRootsConfigPath();
     const configData = await fs.readFile(configPath, 'utf8');
-    const config = JSON.parse(configData);
-    return config.musicRoot;
+    const config = JSON.parse(configData) as Record<string, unknown>;
+    return config.musicRoot as string | undefined;
   } catch {
     return undefined;
   }
@@ -141,10 +141,10 @@ export async function setMusicRoot(
   await ensureMindstrikeDirectory();
   const configPath = getWorkspaceRootsConfigPath();
 
-  let config = {};
+  let config: Record<string, unknown> = {};
   try {
     const configData = await fs.readFile(configPath, 'utf8');
-    config = JSON.parse(configData);
+    config = JSON.parse(configData) as Record<string, unknown>;
   } catch {
     // File doesn't exist or invalid JSON, use empty config
   }
@@ -160,8 +160,8 @@ export async function getWorkspaceRoots(): Promise<string[]> {
   try {
     const configPath = getWorkspaceRootsConfigPath();
     const configData = await fs.readFile(configPath, 'utf8');
-    const config = JSON.parse(configData);
-    return config.workspaceRoots || [];
+    const config = JSON.parse(configData) as Record<string, unknown>;
+    return (config.workspaceRoots as string[]) ?? [];
   } catch {
     return [];
   }
@@ -176,10 +176,10 @@ export async function setWorkspaceRoots(
   await ensureMindstrikeDirectory();
   const configPath = getWorkspaceRootsConfigPath();
 
-  let config = {};
+  let config: Record<string, unknown> = {};
   try {
     const configData = await fs.readFile(configPath, 'utf8');
-    config = JSON.parse(configData);
+    config = JSON.parse(configData) as Record<string, unknown>;
   } catch {
     // File doesn't exist or invalid JSON, use empty config
   }

@@ -221,7 +221,6 @@ describe('Mind Map Layout - Complex Nested Structures', () => {
         80 + LAYOUT_CONSTANTS.HORIZONTAL_SIBLING_GAP + 80;
 
       // Check that child2 is positioned far enough from child1
-      const child1Right = child1.position.x + 100; // child1's own width
       const expectedChild2Left =
         child1.position.x -
         (child1SubtreeWidth - 100) / 2 +
@@ -273,7 +272,7 @@ describe('Mind Map Layout - Complex Nested Structures', () => {
       });
 
       // Check each parent's children for overlaps
-      nodesByParent.forEach((children, parentId) => {
+      nodesByParent.forEach(children => {
         const sortedChildren = [...children].sort(
           (a, b) => a.position.x - b.position.x
         );

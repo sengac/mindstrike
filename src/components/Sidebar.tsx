@@ -70,7 +70,7 @@ export function Sidebar({
         ))}
 
         {/* Music Controls underneath menu items */}
-        <SidebarMusicControls isMusicPlayerVisible={isMusicPlayerOpen} />
+        <SidebarMusicControls />
       </nav>
 
       {/* Application Logs and Settings */}

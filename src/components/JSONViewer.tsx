@@ -55,7 +55,7 @@ function JSONValueComponent({
           (trimmed.startsWith('[') && trimmed.endsWith(']')))
       ) {
         try {
-          const parsed = JSON.parse(val);
+          const parsed = JSON.parse(val) as JSONValue;
           // Return the parsed JSON without the quotes - let it render as a nested structure
           return renderValue(parsed, key);
         } catch (error) {
@@ -66,7 +66,7 @@ function JSONValueComponent({
               .replace(/\n/g, '\\n')
               .replace(/\r/g, '\\r')
               .replace(/\t/g, '\\t');
-            const parsed = JSON.parse(fixedJson);
+            const parsed = JSON.parse(fixedJson) as JSONValue;
             return renderValue(parsed, key);
           } catch {
             // Show as broken JSON with error indicator

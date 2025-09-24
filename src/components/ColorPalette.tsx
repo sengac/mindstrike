@@ -1,10 +1,11 @@
 import React from 'react';
 import { Palette, X } from 'lucide-react';
+import type { NodeColorThemeType } from '../mindmaps/constants/nodeColors';
 import { NodeColorTheme, NODE_COLORS } from '../mindmaps/constants/nodeColors';
 
 interface ColorPaletteProps {
   selectedNodeId: string | null;
-  onColorChange: (theme: NodeColorTheme) => void;
+  onColorChange: (theme: NodeColorThemeType) => void;
   onColorClear: () => void;
 }
 

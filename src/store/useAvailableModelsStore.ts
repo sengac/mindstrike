@@ -2,6 +2,32 @@ import { create } from 'zustand';
 import { toast } from 'react-hot-toast';
 import { logger } from '../utils/logger';
 
+export type CacheType = 'fp16' | 'q8_0' | 'q4_0';
+
+export interface VRAMConfiguration {
+  gpuLayers: number;
+  contextSize: number;
+  cacheType: CacheType;
+  label: string;
+}
+
+export interface VRAMEstimate {
+  expected: number;
+  conservative: number;
+}
+
+export interface VRAMEstimateInfo extends VRAMEstimate {
+  config: VRAMConfiguration;
+}
+
+export interface ModelArchitecture {
+  layers?: number;
+  kvHeads?: number;
+  embeddingDim?: number;
+  contextLength?: number;
+  feedForwardDim?: number;
+}
+
 export interface AvailableModel {
   name: string;
   url: string;
@@ -18,6 +44,12 @@ export interface AvailableModel {
   username?: string;
   likes?: number;
   updatedAt?: string;
+
+  // VRAM calculation fields
+  vramEstimates?: VRAMEstimateInfo[];
+  modelArchitecture?: ModelArchitecture;
+  hasVramData?: boolean;
+  vramError?: string;
 }
 
 interface AvailableModelsState {
@@ -115,14 +147,14 @@ export const useAvailableModelsStore = create<AvailableModelsState>(
 
         const data = await response.json();
         set({
-          searchResults: data.models || [],
+          searchResults: data.models ?? [],
           hasSearched: true,
           currentPage: 1,
         });
 
         const searchTypeText = searchType === 'all' ? 'all fields' : searchType;
         toast.success(
-          `Found ${data.models?.length || 0} models for "${searchQuery.trim()}" in ${searchTypeText}`
+          `Found ${data.models?.length ?? 0} models for "${searchQuery.trim()}" in ${searchTypeText}`
         );
       } catch (error) {
         logger.error('Error searching models:', error);
@@ -169,7 +201,7 @@ export const useAvailableModelsStore = create<AvailableModelsState>(
         const response = await fetch('/api/local-llm/available-models-cached');
         if (response.ok) {
           const data = await response.json();
-          const models = data || [];
+          const models = data ?? [];
           set({ availableModels: models });
           return models.length > 0;
         } else {
@@ -189,7 +221,7 @@ export const useAvailableModelsStore = create<AvailableModelsState>(
         const response = await fetch('/api/local-llm/available-models');
         if (response.ok) {
           const data = await response.json();
-          set({ availableModels: data || [] });
+          set({ availableModels: data ?? [] });
         } else {
           logger.error('Failed to load available models:', response.statusText);
         }

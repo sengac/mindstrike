@@ -276,7 +276,6 @@ class LLMResourceCalculator {
 
     const numLayers = modelInfo.blockCount;
     const numKVHeads = modelInfo.headCountKVMin; // For GQA/MQA models
-    const numHeads = modelInfo.headCountMax;
 
     // Estimate head dimension (hidden_size / num_heads)
     // For most models, hidden_size is roughly 128 * num_heads for modern architectures
@@ -411,7 +410,7 @@ function example() {
     `- Estimated VRAM: ${Math.round(config.estimate.vramSize / 1024 / 1024 / 1024)}GB`
   );
   console.log(`- Fully Loaded: ${config.estimate.fullyLoaded}`);
-  console.log(`- Tensor Split: ${config.estimate.tensorSplit || 'N/A'}`);
+  console.log(`- Tensor Split: ${config.estimate.tensorSplit ?? 'N/A'}`);
 }
 
 export { LLMResourceCalculator, example };

@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
-import { ModelDownloader } from '../modelDownloader.js';
-import { modelFetcher } from '../../modelFetcher.js';
-import type { DynamicModelInfo } from '../../modelFetcher.js';
+import { ModelDownloader } from '../modelDownloader';
+import { modelFetcher } from '../../modelFetcher';
+import type { DynamicModelInfo } from '../../modelFetcher';
 
 // Type definitions for test mocks
 interface MockResponse {
@@ -42,20 +42,20 @@ vi.mock('fs', () => ({
   createWriteStream: vi.fn(),
   unlinkSync: vi.fn(),
 }));
-vi.mock('../../modelFetcher.js', () => ({
+vi.mock('../../modelFetcher', () => ({
   modelFetcher: {
     hasHuggingFaceToken: vi.fn(() => false),
     getAvailableModels: vi.fn(() => Promise.resolve([])),
     searchModels: vi.fn(() => Promise.resolve([])),
   },
 }));
-vi.mock('../../logger.js', () => ({
+vi.mock('../../logger', () => ({
   logger: {
     debug: vi.fn(),
     error: vi.fn(),
   },
 }));
-vi.mock('../../utils/settingsDirectory.js', () => ({
+vi.mock('../../utils/settingsDirectory', () => ({
   getMindstrikeDirectory: vi.fn(() => '/mock/mindstrike'),
 }));
 
@@ -492,7 +492,7 @@ describe('ModelDownloader', () => {
 
       await downloader.downloadModel(testModel, '/test.gguf', {
         onProgress: (percent, speed) => {
-          capturedSpeed = speed || '0 B/s';
+          capturedSpeed = speed ?? '0 B/s';
         },
       });
 

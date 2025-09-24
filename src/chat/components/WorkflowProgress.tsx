@@ -175,7 +175,7 @@ export const WorkflowProgress: React.FC<WorkflowProgressProps> = ({
                   )}
 
                   {/* Task Result Preview */}
-                  {task.result != null && task.status === 'completed' && (
+                  {task.result !== null && task.status === 'completed' && (
                     <div className="mt-2 text-xs text-gray-400">
                       <div className="flex items-center gap-1">
                         <CheckCircle className="w-3 h-3" />

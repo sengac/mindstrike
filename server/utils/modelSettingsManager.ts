@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { getLocalModelSettingsDirectory } from './settingsDirectory.js';
+import { getLocalModelSettingsDirectory } from './settingsDirectory';
 
 export interface ModelLoadingSettings {
   gpuLayers?: number; // -1 for auto, 0 for CPU only, positive number for specific layers
@@ -61,7 +61,7 @@ export class ModelSettingsManager {
     try {
       const filePath = this.getSettingsFilePath(modelId);
       const data = await fs.readFile(filePath, 'utf-8');
-      return JSON.parse(data);
+      return JSON.parse(data) as ModelLoadingSettings;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return null; // Settings file doesn't exist

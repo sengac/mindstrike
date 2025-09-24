@@ -30,7 +30,7 @@ export function initStormToastEffect() {
 
 function setupStormToast(toast: Element) {
   // Find the text content
-  const textElement = toast.querySelector('[data-visible]') || toast;
+  const textElement = toast.querySelector('[data-visible]') ?? toast;
 
   if (!textElement.textContent) {
     return;
@@ -47,7 +47,7 @@ function setupStormToast(toast: Element) {
       ) {
         const target = mutation.target as Element;
         if (target.getAttribute('data-visible') === 'false' && !isScattering) {
-          startStormScatter(toast, textElement);
+          startStormScatter(toast);
           isScattering = true;
         }
       }
@@ -62,13 +62,13 @@ function setupStormToast(toast: Element) {
   // Also set up a timer as backup
   setTimeout(() => {
     if (!isScattering) {
-      startStormScatter(toast, textElement);
+      startStormScatter(toast);
       isScattering = true;
     }
   }, 3500); // Start scattering 500ms before toast disappears
 }
 
-function startStormScatter(toast: Element, _textElement: Element) {
+function startStormScatter(toast: Element) {
   // Just add the scattering class to trigger the simple slide-out animation
   toast.classList.add('storm-scattering');
 }

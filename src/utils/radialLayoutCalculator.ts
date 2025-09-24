@@ -39,7 +39,7 @@ export class RadialLayoutCalculator {
       }
 
       const currentNode = nodes.find(n => n.id === currentId);
-      if (!currentNode || !currentNode.data.parentId) {
+      if (!currentNode?.data.parentId) {
         break;
       }
 
@@ -153,7 +153,7 @@ export class RadialLayoutCalculator {
 
     while (currentId) {
       const currentNode = nodes.find(n => n.id === currentId);
-      if (!currentNode || !currentNode.data.parentId) {
+      if (!currentNode?.data.parentId) {
         return false;
       }
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import type { XYPosition } from 'reactflow';
 import { NODE_SIZING } from '../../src/mindmaps/constants/nodeSizing';
 
@@ -66,17 +66,13 @@ describe('Drag and Drop Coordinate System', () => {
 
     it('should position drop indicators correctly with zoom', () => {
       // Test case: Node at flow position (200, 300) with 0.8x zoom
-      const nodeFlowPosition = { x: 200, y: 300 };
       const zoom = 0.8;
-      const pan = { x: 0, y: 0 };
 
       // Node dimensions in flow space
       const nodeWidth = 150;
-      const nodeHeight = 40;
 
       // When rendered, dimensions are scaled by zoom
       const renderedWidth = nodeWidth * zoom; // 120
-      const renderedHeight = nodeHeight * zoom; // 32
 
       // Drop indicator should be positioned based on rendered dimensions
       const dropIndicatorAbove = {

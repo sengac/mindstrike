@@ -4,7 +4,7 @@ import { immer } from 'zustand/middleware/immer';
 import { useMemo } from 'react';
 import type { Node, Edge } from 'reactflow';
 import type { MindMapNodeData, Source } from '../types/mindMap';
-import type { NodeColorTheme } from '../mindmaps/constants/nodeColors';
+import type { NodeColorThemeType } from '../mindmaps/constants/nodeColors';
 import type { MindMapData } from '../utils/mindMapData';
 import { MindMapDataManager } from '../utils/mindMapData';
 import { MindMapLayoutManager } from '../utils/mindMapLayout';
@@ -84,7 +84,7 @@ interface MindMapState {
   pendingMindmapChanges: number;
   expectedMindmapChanges: number;
   generationComplete: boolean;
-  finalGenerationResult: any;
+  finalGenerationResult: unknown;
 }
 
 interface MindMapActions {
@@ -112,7 +112,7 @@ interface MindMapActions {
   updateNodeChatId: (nodeId: string, chatId: string | null) => void;
   updateNodeNotes: (nodeId: string, notes: string | null) => void;
   updateNodeSources: (nodeId: string, sources: Source[]) => void;
-  setNodeColors: (nodeId: string, theme: NodeColorTheme) => void;
+  setNodeColors: (nodeId: string, theme: NodeColorThemeType) => void;
   clearNodeColors: (nodeId: string) => void;
   updateNodeDimensions: (
     nodeId: string,
@@ -159,7 +159,7 @@ interface MindMapActions {
   cancelIterativeGeneration: () => void;
 
   // Bulk operations
-  applyMindmapChanges: (changes: any[]) => Promise<void>;
+  applyMindmapChanges: (changes: unknown[]) => Promise<void>;
 
   // Task workflow SSE
   connectToWorkflow: (workflowId: string) => void;
@@ -808,8 +808,12 @@ export const useMindMapStore = create<MindMapStore>()(
           const cleanedNodes = cleanNodes(state.nodes);
 
           const newHistoryState: HistoryState = {
-            nodes: JSON.parse(JSON.stringify(cleanedNodes)),
-            edges: JSON.parse(JSON.stringify(state.edges)),
+            nodes: JSON.parse(
+              JSON.stringify(cleanedNodes)
+            ) as typeof cleanedNodes,
+            edges: JSON.parse(
+              JSON.stringify(state.edges)
+            ) as typeof state.edges,
             rootNodeId: state.rootNodeId,
             layout: state.layout,
             selectedNodeId: state.selectedNodeId,
@@ -923,7 +927,9 @@ export const useMindMapStore = create<MindMapStore>()(
                 typeof state.finalGenerationResult === 'object' &&
                 state.finalGenerationResult !== null
               ) {
-                const changes = state.finalGenerationResult.changes || [];
+                const changes =
+                  (state.finalGenerationResult as { changes?: unknown[] })
+                    .changes ?? [];
                 set({
                   generationSummary: `Iterative reasoning completed! Created ${changes.length} node(s) through ${currentStepNumber || 1} reasoning steps.`,
                   isGenerating: false,
@@ -978,12 +984,12 @@ export const useMindMapStore = create<MindMapStore>()(
                   generationProgress: {
                     currentStep: currentStepNumber,
                     maxSteps: 5,
-                    reasoning: `${actionText}: "${eventData.text || 'Untitled'}"`,
+                    reasoning: `${actionText}: "${eventData.text ?? 'Untitled'}"`,
                     decision: eventData.action,
                     isComplete: false,
                     tokensPerSecond:
-                      get().generationProgress?.tokensPerSecond || 0,
-                    totalTokens: get().generationProgress?.totalTokens || 0,
+                      get().generationProgress?.tokensPerSecond ?? 0,
+                    totalTokens: get().generationProgress?.totalTokens ?? 0,
                   },
                 });
 
@@ -1047,8 +1053,8 @@ export const useMindMapStore = create<MindMapStore>()(
                           : 'processing',
                       isComplete: false,
                       tokensPerSecond:
-                        get().generationProgress?.tokensPerSecond || 0,
-                      totalTokens: get().generationProgress?.totalTokens || 0,
+                        get().generationProgress?.tokensPerSecond ?? 0,
+                      totalTokens: get().generationProgress?.totalTokens ?? 0,
                     },
                   });
                 }
@@ -1089,8 +1095,8 @@ export const useMindMapStore = create<MindMapStore>()(
                     decision: 'completed',
                     isComplete: true,
                     tokensPerSecond:
-                      get().generationProgress?.tokensPerSecond || 0,
-                    totalTokens: get().generationProgress?.totalTokens || 0,
+                      get().generationProgress?.tokensPerSecond ?? 0,
+                    totalTokens: get().generationProgress?.totalTokens ?? 0,
                   },
                   generationComplete: true,
                   finalGenerationResult: eventData.result,
@@ -1175,25 +1181,47 @@ export const useMindMapStore = create<MindMapStore>()(
 
         let updatedNodes = [...state.nodes];
 
-        for (const change of changes) {
+        interface ChangeType {
+          action: string;
+          nodeId?: string;
+          text?: string;
+          parentId?: string;
+          notes?: string;
+          sources?: Array<{
+            id?: string;
+            name?: string;
+            title?: string;
+            directory?: string;
+            description?: string;
+            link?: string;
+            type?: string;
+          }>;
+        }
+
+        for (const change of changes as ChangeType[]) {
           try {
-            if (change.action === 'create') {
+            if (change.action === 'create' && change.nodeId && change.text) {
               // Create new node
               const newNodeData = {
                 id: change.nodeId,
                 label: change.text,
                 isRoot: false,
                 parentId: change.parentId,
-                notes: change.notes || null,
-                sources: (change.sources || []).map((source: any) => ({
+                notes: change.notes ?? null,
+                sources: (change.sources ?? []).map(source => ({
                   id:
                     source.id ||
                     `src-${Date.now()}-${Math.random()
                       .toString(36)
                       .substr(2, 9)}`,
-                  name: source.name || source.title || 'Untitled Source',
-                  directory: source.directory || source.description || '',
-                  type: source.type || 'reference',
+                  name: (source.name || source.title) ?? 'Untitled Source',
+                  directory: (source.directory || source.description) ?? '',
+                  type:
+                    (source.type as
+                      | 'document'
+                      | 'url'
+                      | 'file'
+                      | 'reference') ?? 'reference',
                 })),
                 level: 0,
                 hasChildren: false,
@@ -1224,21 +1252,26 @@ export const useMindMapStore = create<MindMapStore>()(
                   newData.notes = change.notes;
                 }
                 if (change.sources !== undefined) {
-                  newData.sources = change.sources.map((source: any) => ({
+                  newData.sources = change.sources.map(source => ({
                     id:
                       source.id ||
                       `src-${Date.now()}-${Math.random()
                         .toString(36)
                         .substr(2, 9)}`,
-                    name: source.name || source.title || 'Untitled Source',
-                    directory: source.directory || source.description || '',
-                    type: source.type || 'reference',
+                    name: (source.name || source.title) ?? 'Untitled Source',
+                    directory: (source.directory || source.description) ?? '',
+                    link: source.link ?? null,
+                    type: (source.type ?? 'reference') as
+                      | 'document'
+                      | 'url'
+                      | 'file'
+                      | 'reference',
                   }));
                 }
 
                 updatedNodes[nodeIndex] = { ...node, data: newData };
               }
-            } else if (change.action === 'delete') {
+            } else if (change.action === 'delete' && change.nodeId) {
               // Delete node and its children
               const deleteNodeAndChildren = (nodeId: string) => {
                 const children = updatedNodes.filter(
@@ -1312,7 +1345,7 @@ export const useMindMapStore = create<MindMapStore>()(
         actions.save();
 
         // Dispatch events to update node panel content
-        changes.forEach(change => {
+        (changes as ChangeType[]).forEach(change => {
           if (change.action === 'update' || change.action === 'create') {
             const updatedNode = result.nodes.find(n => n.id === change.nodeId);
             if (updatedNode) {
@@ -1393,10 +1426,14 @@ export const useMindMapStore = create<MindMapStore>()(
         // Subscribe to task events via event bus
         const unsubscribe = sseEventBus.subscribe(
           'task_completed',
-          async (event: { data: any }) => {
+          async (event: { data: unknown }) => {
             try {
               // Handle nested data structure from unified SSE
-              const eventData = event.data.data || event.data;
+              const eventData = ((event.data as any).data || event.data) as {
+                type?: string;
+                workflowId?: string;
+                result?: { changes?: unknown[] };
+              };
 
               if (
                 eventData.type === 'task_completed' &&

@@ -63,8 +63,9 @@ export class ImageCache {
           // Convert to data URL
           const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
           resolve(dataUrl);
-        } catch (error) {
-          // If canvas conversion fails, use original URL
+        } catch {
+          // If canvas conversion fails, log the error and use original URL
+          // Failed to convert image to data URL - fallback to original URL
           resolve(url);
         }
       };

@@ -1,9 +1,8 @@
-import { getLlama } from 'node-llama-cpp';
 import os from 'os';
 import fs from 'fs/promises';
-import { RealCPUDetector } from './utils/system/cpuDetector.js';
-import { LLMThreadCalculator } from './utils/system/llmThreadCalculator.js';
-import { sharedLlamaInstance } from './sharedLlamaInstance.js';
+import { RealCPUDetector } from './utils/system/cpuDetector';
+import { LLMThreadCalculator } from './utils/system/llmThreadCalculator';
+import { sharedLlamaInstance } from './sharedLlamaInstance';
 
 interface VramState {
   total: number; // bytes
@@ -117,7 +116,7 @@ class SystemInfoManager {
       this.cachedSystemInfo = {
         hasGpu,
         gpuType: typeof llama.gpu === 'string' ? llama.gpu : null,
-        vramState: vramState || null,
+        vramState: vramState ?? null,
         totalRAM,
         freeRAM,
         cpuThreads,

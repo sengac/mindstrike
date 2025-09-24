@@ -6,5 +6,10 @@
     "allowImportingTsExtensions": true,
     "types": ["vitest/globals", "@playwright/test"]
   },
-  "include": ["**/*.ts", "**/*.tsx"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "../server/**/__tests__/**/*.ts",
+    "../server/**/*.test.ts"
+  ]
 }

@@ -1,18 +1,14 @@
-import { Router, Request, Response } from 'express';
+import type { Request, Response } from 'express';
+import { Router } from 'express';
 import { exec } from 'child_process';
 import fs from 'fs';
 import os from 'os';
-import { getLocalLLMManager } from '../localLlmSingleton.js';
-import { sseManager } from '../sseManager.js';
-import { getLocalModelsDirectory } from '../utils/settingsDirectory.js';
-import { modelSettingsManager } from '../utils/modelSettingsManager.js';
-import { SSEEventType } from '../../src/types.js';
-import {
-  HTTP_STATUS,
-  TIMING,
-  PROGRESS,
-  RANDOM_STRING,
-} from '../llm/constants.js';
+import { getLocalLLMManager } from '../localLlmSingleton';
+import { sseManager } from '../sseManager';
+import { getLocalModelsDirectory } from '../utils/settingsDirectory';
+import { modelSettingsManager } from '../utils/modelSettingsManager';
+import { SSEEventType } from '../../src/types';
+import { HTTP_STATUS } from '../llm/constants';
 
 const router = Router();
 const llmManager = getLocalLLMManager();
@@ -35,7 +31,7 @@ router.get('/models', async (req, res) => {
  */
 router.get('/available-models-cached', async (req, res) => {
   try {
-    const { modelFetcher } = await import('../modelFetcher.js');
+    const { modelFetcher } = await import('../modelFetcher');
     const models = modelFetcher.getCachedModels();
     res.json(models);
   } catch (error) {
@@ -62,7 +58,7 @@ router.get('/available-models', async (req, res) => {
  */
 router.post('/refresh-models', async (req, res) => {
   try {
-    const { modelFetcher } = await import('../modelFetcher.js');
+    const { modelFetcher } = await import('../modelFetcher');
     const models = await modelFetcher.refreshAvailableModels(); // Force refresh
     res.json({ success: true, models });
   } catch (error) {
@@ -114,7 +110,7 @@ router.post('/open-models-directory', async (req, res) => {
  */
 router.post('/refresh-accessibility', async (req, res) => {
   try {
-    const { modelFetcher } = await import('../modelFetcher.js');
+    const { modelFetcher } = await import('../modelFetcher');
     modelFetcher.clearAccessibilityCache();
     const models = await modelFetcher.refreshAvailableModels(); // Force refresh
     res.json({ success: true, models });
@@ -134,7 +130,7 @@ router.post('/hf-token', async (req, res) => {
       return res.status(400).json({ error: 'Token is required' });
     }
 
-    const { modelFetcher } = await import('../modelFetcher.js');
+    const { modelFetcher } = await import('../modelFetcher');
     await modelFetcher.setHuggingFaceToken(token);
 
     res.json({
@@ -152,7 +148,7 @@ router.post('/hf-token', async (req, res) => {
  */
 router.delete('/hf-token', async (req, res) => {
   try {
-    const { modelFetcher } = await import('../modelFetcher.js');
+    const { modelFetcher } = await import('../modelFetcher');
     await modelFetcher.removeHuggingFaceToken();
 
     res.json({ success: true, message: 'Hugging Face token removed' });
@@ -188,7 +184,7 @@ router.get('/hf-token', async (req, res) => {
  */
 router.get('/hf-token/status', async (req, res) => {
   try {
-    const { modelFetcher } = await import('../modelFetcher.js');
+    const { modelFetcher } = await import('../modelFetcher');
     const hasToken = modelFetcher.hasHuggingFaceToken();
 
     res.json({ hasToken });
@@ -203,7 +199,7 @@ router.get('/hf-token/status', async (req, res) => {
  */
 router.get('/update-models-stream', async (req: Request, res: Response) => {
   try {
-    const { modelFetcher } = await import('../modelFetcher.js');
+    const { modelFetcher } = await import('../modelFetcher');
 
     const clientId = `model-update-${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
@@ -281,7 +277,7 @@ router.get('/update-models-stream', async (req: Request, res: Response) => {
  */
 router.post('/update-models', async (req, res) => {
   try {
-    const { modelFetcher } = await import('../modelFetcher.js');
+    const { modelFetcher } = await import('../modelFetcher');
 
     // Force refresh
     const models = await modelFetcher.refreshAvailableModels();
@@ -305,7 +301,7 @@ router.post('/search-models', async (req, res) => {
         .json({ error: 'Query parameter is required and must be a string' });
     }
 
-    const { modelFetcher } = await import('../modelFetcher.js');
+    const { modelFetcher } = await import('../modelFetcher');
     const models = await modelFetcher.searchModels(query, searchType);
     res.json({
       success: true,
@@ -347,7 +343,7 @@ router.post('/clear-search-cache', async (req, res) => {
         .json({ error: 'Query parameter is required and must be a string' });
     }
 
-    const { modelFetcher } = await import('../modelFetcher.js');
+    const { modelFetcher } = await import('../modelFetcher');
     modelFetcher.clearSearchCacheForQuery(query);
     res.json({ success: true, message: `Cleared search cache for: ${query}` });
   } catch (error) {

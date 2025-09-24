@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { ModelFileManager } from '../modelFileManager.js';
+import { ModelFileManager } from '../modelFileManager';
 import { readGgufFileInfo } from 'node-llama-cpp';
 
 // Type definitions for test mocks
@@ -33,17 +33,6 @@ interface MockStats {
   birthtime: Date;
 }
 
-interface MockDirent {
-  name: string;
-  isFile(): boolean;
-  isDirectory(): boolean;
-  isBlockDevice(): boolean;
-  isCharacterDevice(): boolean;
-  isSymbolicLink(): boolean;
-  isFIFO(): boolean;
-  isSocket(): boolean;
-}
-
 interface MockGgufMetadata {
   metadata?: {
     llama?: {
@@ -67,10 +56,10 @@ vi.mock('path', () => ({
 vi.mock('node-llama-cpp', () => ({
   readGgufFileInfo: vi.fn(),
 }));
-vi.mock('../../utils/settingsDirectory.js', () => ({
+vi.mock('../../utils/settingsDirectory', () => ({
   getLocalModelsDirectory: vi.fn(() => '/mock/models/dir'),
 }));
-vi.mock('../../modelFetcher.js', () => ({
+vi.mock('../../modelFetcher', () => ({
   modelFetcher: {
     getAvailableModels: vi.fn(() => Promise.resolve([])),
   },

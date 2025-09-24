@@ -1,5 +1,9 @@
 import { Loader2, HardDrive } from 'lucide-react';
 import { ModelCard } from './ModelCard';
+import type {
+  VRAMEstimateInfo,
+  ModelArchitecture,
+} from '../../store/useAvailableModelsStore';
 
 interface ModelLoadingSettings {
   gpuLayers?: number;
@@ -28,6 +32,13 @@ interface ModelInfo {
   parameterCount?: string;
   quantization?: string;
   loadingSettings?: ModelLoadingSettings;
+  layerCount?: number;
+  maxContextLength?: number;
+  // VRAM fields
+  vramEstimates?: VRAMEstimateInfo[];
+  modelArchitecture?: ModelArchitecture;
+  hasVramData?: boolean;
+  vramError?: string;
 }
 
 interface ModelStatus {

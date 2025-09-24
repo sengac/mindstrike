@@ -5,8 +5,8 @@ import type {
   LlamaChatSessionOptions,
 } from 'node-llama-cpp';
 // SystemInformation type is imported but not used in this file
-import { logger } from '../logger.js';
-import { PROGRESS } from './constants.js';
+import { logger } from '../logger';
+import { PROGRESS } from './constants';
 
 export interface SessionConfig {
   contextSize: number;

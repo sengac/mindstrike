@@ -6,7 +6,6 @@ import { MindMap, type MindMapControls } from '../MindMap';
 import {
   mockNodes,
   mockEdges,
-  mockSources,
   mockMindMapData,
 } from '../../__fixtures__/mindMapData';
 // ReactFlow is mocked globally in setup.ts, so we just need to import from reactflow

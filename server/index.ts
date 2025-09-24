@@ -4,43 +4,43 @@ import cors from 'cors';
 import path from 'path';
 import fs from 'fs/promises';
 import { existsSync, statSync, createReadStream, stat } from 'fs';
-import { musicMetadataCache } from './musicMetadataCache.js';
+import { musicMetadataCache } from './musicMetadataCache';
 import type { Stats } from 'fs';
 
 import { fileURLToPath } from 'url';
 // NOTE: .js extensions are required for ES modules in Node.js/Electron
 // Without them, we get ERR_MODULE_NOT_FOUND errors in the packaged app
-import type { AgentConfig } from './agent.js';
-import { Agent } from './agent.js';
-import { logger } from './logger.js';
-import { cleanContentForLLM } from './utils/contentFilter.js';
-import { LLMScanner } from './llmScanner.js';
-import { LLMConfigManager } from './llmConfigManager.js';
-import { mcpManager } from './mcpManager.js';
-import { lfsManager } from './lfsManager.js';
+import type { AgentConfig } from './agent';
+import { Agent } from './agent';
+import { logger } from './logger';
+import { cleanContentForLLM } from './utils/contentFilter';
+import { LLMScanner } from './llmScanner';
+import { LLMConfigManager } from './llmConfigManager';
+import { mcpManager } from './mcpManager';
+import { lfsManager } from './lfsManager';
 import {
   getHomeDirectory,
   getWorkspaceRoot,
   getMusicRoot,
   setWorkspaceRoot,
   setMusicRoot,
-} from './utils/settingsDirectory.js';
-import { sseManager } from './sseManager.js';
+} from './utils/settingsDirectory';
+import { sseManager } from './sseManager';
 import {
   getLocalLLMManager,
   cleanup as cleanupLLMWorker,
-} from './localLlmSingleton.js';
-import type { LocalModelInfo } from './localLlmManager.js';
-import localLlmRoutes from './routes/localLlm.js';
-import modelScanRoutes from './routes/modelScan.js';
-import { MindmapAgentIterative } from './agents/mindmapAgentIterative.js';
-import { WorkflowAgent } from './agents/workflowAgent.js';
-import { ConversationManager } from './conversationManager.js';
-import { asyncHandler } from './utils/asyncHandler.js';
-import type { ImageAttachment, NotesAttachment } from '../src/types.js';
-import { SSEEventType } from '../src/types.js';
-import { systemInfoManager } from './systemInfoManager.js';
-import { ChatAgent } from './agents/chatAgent.js';
+} from './localLlmSingleton';
+import type { LocalModelInfo } from './localLlmManager';
+import localLlmRoutes from './routes/localLlm';
+import modelScanRoutes from './routes/modelScan';
+import { MindmapAgentIterative } from './agents/mindmapAgentIterative';
+import { WorkflowAgent } from './agents/workflowAgent';
+import { ConversationManager } from './conversationManager';
+import { asyncHandler } from './utils/asyncHandler';
+import type { ImageAttachment, NotesAttachment } from '../src/types';
+import { SSEEventType } from '../src/types';
+import { systemInfoManager } from './systemInfoManager';
+import { ChatAgent } from './agents/chatAgent';
 
 // Cancellation system for ongoing message processing
 class MessageCancellationManager {
@@ -101,11 +101,7 @@ interface MessageWithTools {
   notes?: NotesAttachment[];
 }
 
-interface _MindMapData {
-  id: string;
-  mindmapData?: Record<string, unknown>;
-  [key: string]: unknown;
-}
+// Removed unused interface _MindMapData
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -163,7 +159,7 @@ const cancellationManager = new MessageCancellationManager();
 
 // Helper function to sync current agent with thread history
 async function syncCurrentAgentWithThread(threadId: string): Promise<void> {
-  const { globalSessionManager } = await import('./sessionManager.js');
+  const { globalSessionManager } = await import('./sessionManager');
   const currentAgent = agentPool.getCurrentAgent();
 
   await globalSessionManager.switchToThread(
@@ -247,10 +243,15 @@ if (process.env.NODE_ENV !== 'development') {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
 
-  // When built, server is at dist/server/server/index.js
-  // Client files are at dist/client/
-  // So from server location: ../../client
-  const clientPath = path.join(__dirname, '../../client');
+  // Detect if we're running from a bundle or compiled TypeScript
+  const isBundled =
+    __filename.endsWith('index.js') && __dirname.endsWith('dist/server');
+  // When bundled by Vite: dist/server/index.js -> ../client
+  // When compiled by TypeScript: dist/server/server/index.js -> ../../client
+  const clientPath = path.join(
+    __dirname,
+    isBundled ? '../client' : '../../client'
+  );
 
   if (existsSync(clientPath)) {
     logger.info(`Serving static files from: ${clientPath}`);
@@ -585,7 +586,7 @@ async function initializeLLMServices() {
 
     // Initialize model fetcher
     try {
-      const { modelFetcher } = await import('./modelFetcher.js');
+      const { modelFetcher } = await import('./modelFetcher');
       await modelFetcher.initialize();
     } catch (error) {
       logger.warn('Failed to initialize model fetcher:', error);
@@ -827,7 +828,7 @@ app.get('/api/playlists/load', async (req: Request, res: Response) => {
         try {
           const playlists = JSON.parse(data);
           return playlists;
-        } catch (parseError) {
+        } catch {
           // Invalid JSON, create empty playlists file and return empty array
           console.warn(
             'Invalid JSON in playlists file, creating new empty playlists file'
@@ -836,7 +837,7 @@ app.get('/api/playlists/load', async (req: Request, res: Response) => {
           await fs.writeFile(playlistsFile, JSON.stringify([], null, 2));
           return [];
         }
-      } catch (error) {
+      } catch {
         // File doesn't exist, create empty playlists file and return empty array
         console.log(
           'Playlists file does not exist, creating new empty playlists file'
@@ -901,7 +902,7 @@ app.get('/api/playlists/:id', async (req: Request, res: Response) => {
     let playlists;
     try {
       playlists = JSON.parse(data);
-    } catch (parseError) {
+    } catch {
       console.warn('Invalid JSON in playlists file');
       return res.status(500).json({ error: 'Invalid playlists file format' });
     }
@@ -960,7 +961,7 @@ app.delete('/api/playlists/:id', async (req: Request, res: Response) => {
     let playlists;
     try {
       playlists = JSON.parse(data);
-    } catch (parseError) {
+    } catch {
       console.warn('Invalid JSON in playlists file');
       return res.status(500).json({ error: 'Invalid playlists file format' });
     }
@@ -1674,7 +1675,7 @@ app.get('/api/audio/files', async (req: Request, res: Response) => {
                 try {
                   const cachedMetadata =
                     await musicMetadataCache.getMetadata(fullPath);
-                  metadata = cachedMetadata.metadata;
+                  metadata = cachedMetadata.metadata as typeof metadata;
                   title = cachedMetadata.title;
                   artist = cachedMetadata.artist;
                   album = cachedMetadata.album;
@@ -3823,9 +3824,7 @@ app.post('/api/music/root', async (req: Request, res: Response) => {
       musicRoot: musicRoot,
       message: 'Music root changed successfully',
     });
-  } catch (error: unknown) {
-    const errorMessage =
-      error instanceof Error ? error.message : 'Unknown error';
+  } catch {
     res.status(500).json({ error: 'Failed to set music root' });
   }
 });
@@ -4304,7 +4303,12 @@ mcpManager.on('configReloaded', async () => {
 if (process.env.NODE_ENV !== 'development') {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
-  const clientPath = path.join(__dirname, '../../client');
+  const isBundled =
+    __filename.endsWith('index.js') && __dirname.endsWith('dist/server');
+  const clientPath = path.join(
+    __dirname,
+    isBundled ? '../client' : '../../client'
+  );
 
   if (existsSync(clientPath)) {
     app.get('*', (req: Request, res: Response) => {

@@ -1,5 +1,6 @@
 import type { LlamaModel, LlamaContext } from 'node-llama-cpp';
-import { LocalLLMOrchestrator } from './llm/localLlmOrchestrator.js';
+import { LocalLLMOrchestrator } from './llm/localLlmOrchestrator';
+import type { VRAMEstimateInfo, ModelArchitecture } from './modelFetcher';
 
 // Re-export types
 export interface LocalModelInfo {
@@ -15,6 +16,12 @@ export interface LocalModelInfo {
   quantization?: string;
   layerCount?: number;
   maxContextLength?: number;
+
+  // VRAM calculation fields
+  vramEstimates?: VRAMEstimateInfo[];
+  modelArchitecture?: ModelArchitecture;
+  hasVramData?: boolean;
+  vramError?: string;
 }
 
 export interface ModelDownloadInfo {

@@ -260,7 +260,7 @@ export class OffScreenValidator {
         // TODO: fix this, it doesn't work properly
         // case 'json':
         //   try {
-        //     JSON.parse(content);
+        //     JSON.parse(content) as unknown;
         //   } catch (error) {
         //     return {
         //       success: false,

@@ -1,5 +1,119 @@
 # MindStrike - AI Knowledge Assistant Platform
 
+## STRICT ESLINT RULES - MANDATORY COMPLIANCE
+
+**ALL CODE MUST PASS ESLINT CHECKS BEFORE COMMITTING**
+
+### MANDATORY CODING RULES - YOUR CODE WILL NOT PASS IF VIOLATED
+
+**EVERY SINGLE RULE BELOW IS MANDATORY - NO EXCEPTIONS**
+
+#### What You MUST and MUST NOT Do:
+
+**Variables & Types:**
+
+- ❌ **NEVER** write: `const unused = 'value'` without using it
+- ✅ **ALWAYS** remove or use every variable you declare (ignoreRestSiblings allowed for destructuring)
+- ❌ **NEVER** write: `const data: any = response`
+- ✅ **ALWAYS** write: `const data: ResponseType = response`
+- ❌ **NEVER** write: `type User = { name: string }`
+- ✅ **ALWAYS** write: `interface User { name: string }`
+- ❌ **NEVER** write: `import { SomeType } from './types'` when only using as type
+- ✅ **ALWAYS** write: `import type { SomeType } from './types'`
+
+**Type Safety:**
+
+- ❌ **NEVER** write: `const result = someFunction()` without knowing the return type
+- ✅ **ALWAYS** ensure all assignments, calls, and returns are fully typed
+- ❌ **NEVER** pass untyped arguments to functions
+- ✅ **ALWAYS** ensure function arguments match expected types exactly
+
+**Variable Declaration:**
+
+- ❌ **NEVER** write: `let value = 5` if value never changes
+- ✅ **ALWAYS** write: `const value = 5` for unchanging values
+- ❌ **NEVER** write: `var something = 'test'`
+- ✅ **ALWAYS** write: `const something = 'test'` or `let something = 'test'`
+
+**Equality Checks:**
+
+- ❌ **NEVER** write: `if (value == null)` or `if (value != 'test')`
+- ✅ **ALWAYS** write: `if (value === null)` or `if (value !== 'test')`
+
+**Control Flow:**
+
+- ❌ **NEVER** write: `if (condition) doSomething()`
+- ✅ **ALWAYS** write: `if (condition) { doSomething() }`
+- ❌ **NEVER** write: `for (let i = 0; i < 10; i++) console.log(i)`
+- ✅ **ALWAYS** write: `for (let i = 0; i < 10; i++) { console.log(i) }`
+
+**Promises & Async:**
+
+- ❌ **NEVER** write: `fetchData()` without handling the promise
+- ✅ **ALWAYS** write: `await fetchData()` or `fetchData().then()` or `void fetchData()`
+- ❌ **NEVER** write: `await someValue` if someValue is not a promise
+- ✅ **ALWAYS** only await actual promises/thenables
+
+**Nullish Checks:**
+
+- ❌ **NEVER** write: `const value = input || 'default'` for nullish checks
+- ✅ **ALWAYS** write: `const value = input ?? 'default'` for nullish coalescing
+
+**Optional Chaining:**
+
+- ❌ **NEVER** write: `if (user && user.profile && user.profile.name)`
+- ✅ **ALWAYS** write: `if (user?.profile?.name)`
+
+**Console Statements:**
+
+- ❌ **NEVER** write: `console.log('debug')` in frontend components
+- ✅ **ONLY** use console in: server files, test files, scripts, config files, or src/utils/logger.ts
+
+**React Hooks:**
+
+- ❌ **NEVER** call hooks conditionally: `if (condition) { useState() }`
+- ✅ **ALWAYS** call hooks at the top level of components
+- ❌ **NEVER** omit dependencies: `useEffect(() => {}, [])` when using external values
+- ✅ **ALWAYS** include all dependencies: `useEffect(() => {}, [dep1, dep2])`
+
+**Type Assertions:**
+
+- ❌ **NEVER** write: `(value as string)` when TypeScript already knows it's a string
+- ✅ **ONLY** use type assertions when absolutely necessary and type is genuinely unknown
+
+**Empty Blocks & Case Declarations:**
+
+- ⚠️ **AVOID** empty blocks: `catch(e) {}` - handle or comment why it's empty
+- ⚠️ **AVOID** declaring variables in case statements without block scope
+- ✅ **ALWAYS** use block scope in switch cases when declaring variables: `case 'x': { const val = 1; break; }`
+
+**Void Operator:**
+
+- ❌ **NEVER** use the `void` operator except for ignoring promise returns
+- ✅ **ONLY** use void for explicitly ignoring promises: `void asyncFunction()`
+
+### Console Statement Exceptions ONLY
+
+- **Server Files** (`server/**/*.ts`): Console statements allowed
+- **Test Files** (`**/*.test.ts`, `**/*.spec.ts`, `tests/**/*.ts`): Console statements allowed
+- **Scripts and Config** (`scripts/**/*.js`, `*.mjs`, `*.js`): Console statements allowed
+- **Logger** (`src/utils/logger.ts`): Console statements allowed
+
+### Running ESLint
+
+```bash
+# Check all files
+npm run lint
+
+# Auto-fix issues where possible
+npm run lint:fix
+
+# Check specific files
+npx eslint src/components/MyComponent.tsx
+```
+
+**IMPORTANT**: Code that doesn't pass ESLint will be rejected. Always run `npm run lint` before committing.
+
 ## Project Overview
 
 MindStrike is a comprehensive AI knowledge assistant platform built as a modern desktop and web application. It combines multi-threaded conversational AI, interactive mind mapping, workspace management, and real-time agent workflows in a unified interface.
@@ -35,70 +149,6 @@ MindStrike is a comprehensive AI knowledge assistant platform built as a modern 
 
 - Server-Sent Events (SSE)
 - WebSocket fallback support
-
-### Directory Structure
-
-```
-mindstrike/
-├── src/                      # Frontend React application
-│   ├── App.tsx              # Main app component with 5-panel layout
-│   ├── chat/                # Chat system components
-│   │   ├── components/      # ChatView, ChatPanel, MessageList, etc.
-│   │   └── hooks/          # useThreadsRefactored, useMessages
-│   ├── mindmaps/           # Mind mapping system
-│   │   ├── components/     # MindMapsView, MindMapNode
-│   │   ├── hooks/         # useMindMaps, useMindMapLayout
-│   │   └── types/         # MindMap type definitions
-│   ├── workspace/          # File management
-│   │   ├── components/     # WorkspaceView, FileExplorer, CodeEditor
-│   │   └── hooks/         # useWorkspace
-│   ├── settings/           # Configuration UI
-│   │   └── components/     # SettingsView, ModelSelector, PromptsModal
-│   ├── components/         # Shared UI components
-│   │   └── shared/        # Dialogs, modals, common widgets
-│   ├── store/             # Zustand state stores
-│   │   ├── useAppStore.ts         # Global app state
-│   │   ├── useThreadsStore.ts     # Thread management
-│   │   ├── useMindMapStore.ts     # Mind map state
-│   │   ├── useModelsStore.ts      # LLM configurations
-│   │   └── useTaskStore.ts        # Background tasks
-│   ├── services/          # Frontend services
-│   │   ├── responseValidator.ts   # Response validation
-│   │   └── metadata-extractor.ts  # Music metadata
-│   ├── hooks/             # Global React hooks
-│   └── utils/             # Utilities and helpers
-│       ├── sseEventBus.ts # SSE connection management
-│       └── workspace-initializer.ts
-
-├── server/                 # Backend Express server
-│   ├── index.ts           # Main server entry point
-│   ├── agents/            # AI agent implementations
-│   │   ├── base-agent.ts  # Abstract base class
-│   │   ├── chat-agent.ts  # Standard chat
-│   │   ├── workflow-agent.ts      # Multi-step workflows
-│   │   └── mindmap-agent-iterative.ts  # Mind map generation
-│   ├── routes/            # API route handlers
-│   │   ├── local-llm.ts   # Local model management
-│   │   ├── model-scan.ts  # Model discovery
-│   │   └── tasks.ts       # Task tracking
-│   ├── utils/             # Server utilities
-│   │   ├── async-handler.ts       # Express error handling
-│   │   ├── content-filter.ts      # Content sanitization
-│   │   └── command-resolver.ts    # Command resolution
-│   ├── conversation-manager.ts    # Thread persistence
-│   ├── llm-config-manager.ts      # Model configuration
-│   ├── llm-scanner.ts             # Model discovery
-│   ├── mcp-manager.ts             # MCP tool integration
-│   ├── sse-manager.ts             # SSE broadcasting
-│   ├── local-llm-manager.ts       # Local model loading
-│   └── logger.ts                  # Winston logging
-
-├── electron/              # Desktop app
-│   ├── main.js           # Electron main process
-│   └── preload.js        # Preload script
-
-└── public/               # Static assets
-```
 
 ## Core Systems
 

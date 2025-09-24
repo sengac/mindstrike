@@ -92,7 +92,7 @@ export function CodeEditor({
     if (onChange && !readOnly) {
       subscriptionRef.current = editorRef.current.onDidChangeModelContent(
         () => {
-          const newValue = editorRef.current?.getValue() || '';
+          const newValue = editorRef.current?.getValue() ?? '';
           onChange(newValue);
         }
       );

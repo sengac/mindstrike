@@ -74,10 +74,10 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({
         )}
         <div className="flex-1 min-w-0">
           <div className="font-medium text-gray-900 truncate">
-            {metadata.title || 'Unknown Title'}
+            {metadata.title ?? 'Unknown Title'}
           </div>
           <div className="text-sm text-gray-500 truncate">
-            {metadata.artist || 'Unknown Artist'}
+            {metadata.artist ?? 'Unknown Artist'}
             {metadata.album && ` • ${metadata.album}`}
           </div>
         </div>
@@ -117,7 +117,7 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({
           <div className="space-y-2">
             <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
               <Music className="w-5 h-5" />
-              {metadata.title || 'Unknown Title'}
+              {metadata.title ?? 'Unknown Title'}
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">

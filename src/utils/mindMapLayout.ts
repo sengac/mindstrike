@@ -127,7 +127,7 @@ export class MindMapLayoutManager {
       ...node,
       data: {
         ...node.data,
-        level: levels.get(node.id) || 0,
+        level: levels.get(node.id) ?? 0,
         isRoot: node.id === rootId,
         hasChildren: nodeHasChildren(node.id),
         layout,
@@ -163,7 +163,7 @@ export class MindMapLayoutManager {
     const updatedNodes = await Promise.all(
       nodes.map(async node => {
         const dimensions = this.calculateNodeDimensions(
-          node.data.label || '',
+          node.data.label ?? '',
           node.data
         );
         return {
@@ -247,7 +247,7 @@ export class MindMapLayoutManager {
 
     // For TB/BT layouts, we need to calculate horizontal subtree widths
     const calculateSubtreeWidth = (nodeId: string): number => {
-      const nodeChildren = children.get(nodeId) || [];
+      const nodeChildren = children.get(nodeId) ?? [];
       const nodeWidth =
         nodeWidths.get(nodeId) || LAYOUT_CONSTANTS.DEFAULT_NODE_WIDTH;
 
@@ -270,7 +270,7 @@ export class MindMapLayoutManager {
 
     // Calculate subtree sizes for vertical layouts (LR/RL)
     const calculateSubtreeSize = (nodeId: string, depth: number): number => {
-      const nodeChildren = children.get(nodeId) || [];
+      const nodeChildren = children.get(nodeId) ?? [];
       const nodeHeight =
         nodeHeights.get(nodeId) || LAYOUT_CONSTANTS.DEFAULT_NODE_HEIGHT;
 
@@ -297,7 +297,7 @@ export class MindMapLayoutManager {
         depth: number,
         centerX: number
       ): number => {
-        const nodeChildren = children.get(nodeId) || [];
+        const nodeChildren = children.get(nodeId) ?? [];
         const nodeWidth =
           nodeWidths.get(nodeId) || LAYOUT_CONSTANTS.DEFAULT_NODE_WIDTH;
 
@@ -369,10 +369,6 @@ export class MindMapLayoutManager {
       // Radial layout: alternate direct children between LR and RL
 
       // Position root node at center
-      const rootWidth =
-        nodeWidths.get(rootId) || LAYOUT_CONSTANTS.DEFAULT_NODE_WIDTH;
-      const rootHeight =
-        nodeHeights.get(rootId) || LAYOUT_CONSTANTS.DEFAULT_NODE_HEIGHT;
       treeNodes.set(rootId, {
         id: rootId,
         depth: 0,
@@ -428,7 +424,7 @@ export class MindMapLayoutManager {
 
       // Helper to calculate subtree size recursively
       const calculateSubtreeSize = (nodeId: string, depth: number): number => {
-        const nodeChildren = children.get(nodeId) || [];
+        const nodeChildren = children.get(nodeId) ?? [];
         const nodeHeight =
           nodeHeights.get(nodeId) || LAYOUT_CONSTANTS.DEFAULT_NODE_HEIGHT;
 
@@ -452,7 +448,7 @@ export class MindMapLayoutManager {
         allocatedY: number,
         allocatedHeight: number
       ): void => {
-        const nodeChildren = children.get(nodeId) || [];
+        const nodeChildren = children.get(nodeId) ?? [];
         const nodeHeight =
           nodeHeights.get(nodeId) || LAYOUT_CONSTANTS.DEFAULT_NODE_HEIGHT;
 
@@ -526,7 +522,7 @@ export class MindMapLayoutManager {
         allocatedY: number,
         allocatedHeight: number
       ): void => {
-        const nodeChildren = children.get(nodeId) || [];
+        const nodeChildren = children.get(nodeId) ?? [];
         const nodeHeight =
           nodeHeights.get(nodeId) || LAYOUT_CONSTANTS.DEFAULT_NODE_HEIGHT;
 
@@ -632,7 +628,7 @@ export class MindMapLayoutManager {
           depth <= maxDepth;
           depth++
         ) {
-          const prevDepthNodes = nodesByDepth.get(depth - 1) || [];
+          const prevDepthNodes = nodesByDepth.get(depth - 1) ?? [];
           let maxHeightAtPrevDepth: number = DEFAULT_POSITION.Y;
 
           // Find the maximum height of nodes at the previous depth
@@ -653,7 +649,7 @@ export class MindMapLayoutManager {
         const depthHeights = new Map<number, number>();
 
         for (let depth = LAYOUT_CALC.ROOT_LEVEL; depth <= maxDepth; depth++) {
-          const depthNodes = nodesByDepth.get(depth) || [];
+          const depthNodes = nodesByDepth.get(depth) ?? [];
           let maxHeightAtDepth: number = DEFAULT_POSITION.Y;
 
           for (const nodeId of depthNodes) {
@@ -669,8 +665,7 @@ export class MindMapLayoutManager {
         // In BT layout: root is at bottom, children above
         const gap = LAYOUT_CONSTANTS.VERTICAL_LEVEL_GAP;
 
-        // Calculate cumulative heights from bottom to top
-        let cumulativeOffset = DEFAULT_POSITION.Y;
+        // Calculate positions from bottom to top
 
         // Position each depth level
         for (let depth = maxDepth; depth >= LAYOUT_CALC.ROOT_LEVEL; depth--) {
@@ -685,7 +680,6 @@ export class MindMapLayoutManager {
             const childHeight =
               depthHeights.get(depth + 1) ||
               LAYOUT_CONSTANTS.DEFAULT_NODE_HEIGHT;
-            cumulativeOffset += childHeight + gap;
             const childY = depthYPositions.get(depth + 1) || ROOT_Y;
             depthYPositions.set(depth, childY + childHeight + gap);
           }
@@ -716,7 +710,9 @@ export class MindMapLayoutManager {
 
       // Calculate bounds for each side based on direct children
       for (const node of treeNodes.values()) {
-        if (node.id === rootId) continue;
+        if (node.id === rootId) {
+          continue;
+        }
 
         // Find which direct child this node descends from
         let currentId = node.id;
@@ -778,7 +774,9 @@ export class MindMapLayoutManager {
         }
 
         const node = treeNodes.get(nodeId);
-        if (!node) return { x: 0, y: 0 };
+        if (!node) {
+          return { x: 0, y: 0 };
+        }
 
         const parentId = parentMap.get(nodeId);
         if (!parentId || !positions.has(parentId)) {
@@ -789,7 +787,7 @@ export class MindMapLayoutManager {
 
         // Find which direct child this node descends from
         let currentId = nodeId;
-        let ancestorId = parentId;
+        let ancestorId: string | undefined = parentId;
         while (ancestorId && ancestorId !== rootId) {
           currentId = ancestorId;
           ancestorId = parentMap.get(currentId);
@@ -910,7 +908,7 @@ export class MindMapLayoutManager {
 
         switch (direction) {
           case 'LR':
-            screenX = ROOT_X + (nodeSpacing.get(node.id) || 0);
+            screenX = ROOT_X + (nodeSpacing.get(node.id) ?? 0);
             screenY = ROOT_Y + node.y + yOffset;
             break;
           case 'RL':
@@ -918,11 +916,11 @@ export class MindMapLayoutManager {
             // Subtract node width so the right edge is at the calculated position
             const nodeWidth =
               nodeWidths.get(node.id) || LAYOUT_CONSTANTS.DEFAULT_NODE_WIDTH;
-            screenX = ROOT_X - (nodeSpacing.get(node.id) || 0) - nodeWidth;
+            screenX = ROOT_X - (nodeSpacing.get(node.id) ?? 0) - nodeWidth;
             screenY = ROOT_Y + node.y + yOffset;
             break;
           default:
-            screenX = ROOT_X + (nodeSpacing.get(node.id) || 0);
+            screenX = ROOT_X + (nodeSpacing.get(node.id) ?? 0);
             screenY = ROOT_Y + node.y + yOffset;
         }
 

@@ -1,4 +1,4 @@
-import { logger } from './logger.js';
+import { logger } from './logger';
 
 export interface AvailableLLMService {
   id: string;
@@ -122,7 +122,7 @@ export class LLMScanner {
               return data.models
                 .map(
                   (model: { name?: string; model?: string }) =>
-                    model.name || model.model || ''
+                    (model.name || model.model) ?? ''
                 )
                 .filter(Boolean);
             }
@@ -138,7 +138,7 @@ export class LLMScanner {
               return data.data
                 .map(
                   (model: { id?: string; model?: string }) =>
-                    model.id || model.model || ''
+                    (model.id || model.model) ?? ''
                 )
                 .filter(Boolean);
             }
@@ -153,8 +153,8 @@ export class LLMScanner {
               return data.data
                 .map(
                   (model: unknown) =>
-                    (model as { id?: string; name?: string }).id ||
-                    (model as { id?: string; name?: string }).name ||
+                    ((model as { id?: string; name?: string }).id ||
+                      (model as { id?: string; name?: string }).name) ??
                     ''
                 )
                 .filter(Boolean);

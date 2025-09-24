@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { asyncHandler } from '../asyncHandler.js';
+import { asyncHandler } from '../asyncHandler';
 import type { Request, Response, NextFunction } from 'express';
 
 describe('asyncHandler', () => {

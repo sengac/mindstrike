@@ -1,4 +1,4 @@
-import type { ConversationMessage, Thread } from '../src/types.js';
+import type { ConversationMessage, Thread } from '../src/types';
 import path from 'path';
 import fs from 'fs/promises';
 
@@ -37,7 +37,7 @@ export class ConversationManager {
 
     try {
       const data = await fs.readFile(this.conversationsPath, 'utf-8');
-      const threads: Thread[] = JSON.parse(data);
+      const threads: Thread[] = JSON.parse(data) as Thread[];
 
       this.conversations.clear();
       threads.forEach(thread => {
@@ -100,7 +100,7 @@ export class ConversationManager {
   }
 
   getThread(threadId: string): Thread | null {
-    return this.conversations.get(threadId) || null;
+    return this.conversations.get(threadId) ?? null;
   }
 
   getThreadMessages(threadId: string): ConversationMessage[] {
@@ -112,7 +112,7 @@ export class ConversationManager {
   async createThread(name?: string): Promise<Thread> {
     const thread: Thread = {
       id: Date.now().toString(),
-      name: name || `Conversation ${this.conversations.size + 1}`,
+      name: name ?? `Conversation ${this.conversations.size + 1}`,
       messages: [],
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -148,7 +148,7 @@ export class ConversationManager {
   ): Promise<boolean> {
     const thread = this.conversations.get(threadId);
     if (thread) {
-      thread.customPrompt = customPrompt || undefined;
+      thread.customPrompt = customPrompt ?? undefined;
       thread.updatedAt = new Date();
       await this.save(); // Auto-save on changes
       return true;
@@ -175,9 +175,7 @@ export class ConversationManager {
     let thread = this.conversations.get(threadId);
 
     // Create thread if it doesn't exist
-    if (!thread) {
-      thread = await this.createThread();
-    }
+    thread ??= await this.createThread();
 
     thread.messages.push(message);
     thread.updatedAt = new Date();

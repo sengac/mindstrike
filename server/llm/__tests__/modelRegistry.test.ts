@@ -7,7 +7,7 @@ import {
   afterEach,
   type MockedFunction,
 } from 'vitest';
-import { ModelRegistry } from '../modelRegistry.js';
+import { ModelRegistry } from '../modelRegistry';
 import type {
   LlamaModel,
   LlamaContext,
@@ -27,7 +27,7 @@ interface MockLlamaChatSession extends Partial<LlamaChatSession> {
   context: LlamaContext;
 }
 
-vi.mock('../../logger.js', () => ({
+vi.mock('../../logger', () => ({
   logger: {
     info: vi.fn(),
     warn: vi.fn(),

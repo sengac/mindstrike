@@ -239,8 +239,8 @@ beforeEach(() => {
 // @ts-ignore - Mocking DOM API
 Element.prototype.getBoundingClientRect = vi.fn(function (this: HTMLElement) {
   // Default size for text elements
-  const fontSize = parseInt(this.style.fontSize || '14');
-  const text = this.textContent || '';
+  const fontSize = parseInt(this.style.fontSize ?? '14');
+  const text = this.textContent ?? '';
   const lines =
     this.style.whiteSpace === 'normal' ? Math.ceil(text.length / 30) : 1;
 

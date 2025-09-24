@@ -8,14 +8,14 @@ import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import path from 'path';
 import fs from 'fs/promises';
 import EventEmitter from 'events';
-import { logger } from './logger.js';
+import { logger } from './logger';
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
-import { getMindstrikeDirectory } from './utils/settingsDirectory.js';
-import { sseManager } from './sseManager.js';
-import { CommandResolver } from './utils/commandResolver.js';
-import { lfsManager } from './lfsManager.js';
-import { SSEEventType } from '../src/types.js';
+import { getMindstrikeDirectory } from './utils/settingsDirectory';
+import { sseManager } from './sseManager';
+import { CommandResolver } from './utils/commandResolver';
+import { lfsManager } from './lfsManager';
+import { SSEEventType } from '../src/types';
 
 export interface MCPServerConfig {
   id: string;
@@ -160,7 +160,9 @@ export class MCPManager extends EventEmitter {
         `Config file size: ${configData.length} bytes`
       );
 
-      const config = JSON.parse(configData);
+      const config = JSON.parse(configData) as {
+        mcpServers?: Record<string, unknown>;
+      };
       this.logMCP(
         'manager',
         'info',
@@ -373,7 +375,7 @@ export class MCPManager extends EventEmitter {
         // Default to stdio transport - resolve command first
         const commandResolution = await CommandResolver.resolveCommand(
           processedConfig.command,
-          processedConfig.args || []
+          processedConfig.args ?? []
         );
 
         if (!commandResolution.available) {
@@ -409,9 +411,7 @@ export class MCPManager extends EventEmitter {
         );
 
         const filteredEnv = Object.fromEntries(
-          Object.entries(process.env).filter(
-            ([_, value]) => value !== undefined
-          )
+          Object.entries(process.env).filter(([, value]) => value !== undefined)
         ) as Record<string, string>;
 
         const transportParams: StdioServerParameters = {
@@ -523,8 +523,8 @@ export class MCPManager extends EventEmitter {
         for (const tool of listResult.tools) {
           const mcpTool: MCPTool = {
             name: tool.name,
-            description: tool.description || '',
-            inputSchema: tool.inputSchema || {},
+            description: tool.description ?? '',
+            inputSchema: tool.inputSchema ?? {},
             serverId: serverConfig.id,
           };
 
@@ -536,7 +536,7 @@ export class MCPManager extends EventEmitter {
       this.logMCP(
         serverConfig.id,
         'info',
-        `Connected successfully with ${listResult.tools?.length || 0} tools`
+        `Connected successfully with ${listResult.tools?.length ?? 0} tools`
       );
 
       // Broadcast server connected event via SSE
@@ -544,7 +544,7 @@ export class MCPManager extends EventEmitter {
         type: SSEEventType.MCP_SERVER_CONNECTED,
         serverId: serverConfig.id,
         pid: transport instanceof StdioClientTransport ? transport.pid : null,
-        toolsCount: listResult.tools?.length || 0,
+        toolsCount: listResult.tools?.length ?? 0,
         timestamp: Date.now(),
       });
 
@@ -627,7 +627,7 @@ export class MCPManager extends EventEmitter {
 
       const result = await client.callTool({
         name: toolName,
-        arguments: (args as Record<string, unknown> | null) || {},
+        arguments: (args as Record<string, unknown> | null) ?? {},
       });
 
       // Process result content and potentially store in LFS
@@ -884,7 +884,7 @@ export class MCPManager extends EventEmitter {
       for (const [id, server] of this.servers.entries()) {
         const serverConfig: Record<string, unknown> = {
           command: server.command,
-          args: server.args || [],
+          args: server.args ?? [],
         };
         if (server.env) {
           serverConfig.env = server.env;

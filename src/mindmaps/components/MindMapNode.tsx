@@ -368,11 +368,11 @@ export function MindMapNode({
   // Calculate node dimensions using sizing strategy
   useEffect(() => {
     if (!data.isDragging) {
-      const displayLabel = label || data.label || 'Untitled';
+      const displayLabel = (label || data.label) ?? 'Untitled';
 
       const dimensions = sizingStrategy.calculateNodeSize(displayLabel, {
         isEditing,
-        level: data.level || 0,
+        level: data.level ?? 0,
       });
 
       // Only update if dimensions changed significantly
@@ -659,7 +659,7 @@ export function MindMapNode({
     setIsEditing(true);
   };
 
-  const nodeLevel = data.level || 0;
+  const nodeLevel = data.level ?? 0;
 
   // Node color logic
   const isRootNode = nodeLevel === 0;
@@ -1116,10 +1116,8 @@ export function MindMapNode({
                   textarea.value.length > 0
                 ) {
                   // Place cursor at the click position
-                  const clickX = e.nativeEvent.offsetX;
-                  const clickY = e.nativeEvent.offsetY;
-
-                  // Simple approximation: place cursor at end
+                  // Click coordinates could be used for more precise cursor positioning
+                  // but for now we just place cursor at end
                   textarea.setSelectionRange(
                     textarea.value.length,
                     textarea.value.length
@@ -1136,7 +1134,7 @@ export function MindMapNode({
               style={styles.textLabel}
               onDoubleClick={() => setIsEditing(true)}
             >
-              {data.label || '\u00A0'}
+              {data.label ?? '\u00A0'}
             </span>
           )}
         </div>

@@ -1,6 +1,6 @@
 import type { Response } from 'express';
-import { logger } from './logger.js';
-import { SSEEventType } from '../src/types.js';
+import { logger } from './logger';
+import { SSEEventType } from '../src/types';
 
 interface SSEClient {
   id: string;
@@ -90,7 +90,7 @@ class SSEManager {
       const result = JSON.stringify(sanitized);
 
       // Verify the JSON can be parsed back
-      JSON.parse(result);
+      JSON.parse(result) as unknown;
       return result;
     } catch (error) {
       logger.error('Failed to stringify SSE data:', error);
@@ -214,7 +214,7 @@ class SSEManager {
 
   getClientCount(topic?: string): number {
     if (topic) {
-      return this.clientsByTopic.get(topic)?.size || 0;
+      return this.clientsByTopic.get(topic)?.size ?? 0;
     }
     return this.clients.size;
   }

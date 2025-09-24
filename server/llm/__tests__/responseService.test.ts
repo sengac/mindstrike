@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ResponseService } from '../responseService.js';
-import type { ModelRegistry } from '../modelRegistry.js';
-import type { LlamaSessionManager } from '../sessionManager.js';
-import type { ModelResponseGenerator } from '../responseGenerator.js';
-import type { ModelFileManager } from '../modelFileManager.js';
+import { ResponseService } from '../responseService';
+import type { ModelRegistry } from '../modelRegistry';
+import type { LlamaSessionManager } from '../sessionManager';
+import type { ModelResponseGenerator } from '../responseGenerator';
+import type { ModelFileManager } from '../modelFileManager';
 import type {
   LlamaChatSession,
   LlamaModel,

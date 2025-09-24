@@ -122,7 +122,7 @@ export function MindMapsPanel({
       console.debug('Received get-active-state event:', event.type);
 
       setInferenceChatNode(currentNode => {
-        const currentActiveNodeId = currentNode?.id || null;
+        const currentActiveNodeId = currentNode?.id ?? null;
 
         // Respond with current active state for the requesting node
         window.dispatchEvent(

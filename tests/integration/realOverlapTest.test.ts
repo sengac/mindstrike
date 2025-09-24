@@ -2,7 +2,7 @@
  * Real overlap detection test with actual DOM-like conditions
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { detectNodeOverlaps } from '../../src/utils/overlapDetection';
 
 // Create realistic mock elements that simulate the actual browser DOM

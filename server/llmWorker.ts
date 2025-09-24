@@ -3,9 +3,9 @@ import {
   LocalLLMManager,
   type ModelLoadingSettings,
   type StreamResponseOptions,
-} from './localLlmManager.js';
-import { logger } from './logger.js';
-import { SSEEventType } from '../src/types.js';
+} from './localLlmManager';
+import { logger } from './logger';
+import { SSEEventType } from '../src/types';
 
 // Worker thread for local LLM operations to prevent main thread crashes
 let llmManager: LocalLLMManager;
@@ -31,7 +31,7 @@ interface DeleteModelData {
 
 interface LoadModelData {
   modelIdOrName: string;
-  threadId: string;
+  threadId?: string;
 }
 
 interface UpdateSessionHistoryData {
@@ -119,9 +119,9 @@ function isLoadModelData(data: unknown): data is LoadModelData {
     typeof data === 'object' &&
     data !== null &&
     'modelIdOrName' in data &&
-    'threadId' in data &&
     typeof (data as LoadModelData).modelIdOrName === 'string' &&
-    typeof (data as LoadModelData).threadId === 'string'
+    (typeof (data as LoadModelData).threadId === 'string' ||
+      (data as LoadModelData).threadId === undefined)
   );
 }
 
@@ -380,7 +380,7 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
             message.data.messages as Parameters<
               typeof llmManager.generateStreamResponse
             >[1],
-            message.data.options as StreamResponseOptions | undefined
+            message.data.options
           );
 
           // Send chunks as they come
@@ -428,7 +428,7 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
         }
         await llmManager.setModelSettings(
           message.data.modelId,
-          message.data.settings as ModelLoadingSettings
+          message.data.settings
         );
         return { id: message.id, success: true };
 
@@ -528,7 +528,7 @@ if (parentPort) {
 
   // Handle all unhandled promise rejections
   process.on('unhandledRejection', (reason, promise) => {
-    logger.error('Unhandled Rejection in worker thread:', reason);
+    logger.error('Unhandled Rejection in worker thread:', reason, promise);
     // Send error to parent but DON'T exit
     if (parentPort) {
       parentPort.postMessage({

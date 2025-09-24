@@ -2,7 +2,7 @@ import { spawn, execSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { logger } from '../logger.js';
+import { logger } from '../logger';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,30 +35,30 @@ export class CommandResolver {
     win32: [
       'C:\\Program Files\\nodejs\\node.exe',
       'C:\\Program Files (x86)\\nodejs\\node.exe',
-      path.join(process.env.APPDATA || '', 'npm', 'node.exe'),
-      path.join(process.env.LOCALAPPDATA || '', 'npm', 'node.exe'),
+      path.join(process.env.APPDATA ?? '', 'npm', 'node.exe'),
+      path.join(process.env.LOCALAPPDATA ?? '', 'npm', 'node.exe'),
       // nvm-windows paths (Local AppData)
-      path.join(process.env.LOCALAPPDATA || '', 'nvm', 'current', 'node.exe'),
-      path.join(process.env.LOCALAPPDATA || '', 'nvm', '*', 'node.exe'),
-      path.join(process.env.APPDATA || '', 'nvm', 'current', 'node.exe'),
-      path.join(process.env.APPDATA || '', 'nvm', '*', 'node.exe'),
-      path.join(process.env.NVM_HOME || '', 'current', 'node.exe'),
-      path.join(process.env.NVM_HOME || '', '*', 'node.exe'),
+      path.join(process.env.LOCALAPPDATA ?? '', 'nvm', 'current', 'node.exe'),
+      path.join(process.env.LOCALAPPDATA ?? '', 'nvm', '*', 'node.exe'),
+      path.join(process.env.APPDATA ?? '', 'nvm', 'current', 'node.exe'),
+      path.join(process.env.APPDATA ?? '', 'nvm', '*', 'node.exe'),
+      path.join(process.env.NVM_HOME ?? '', 'current', 'node.exe'),
+      path.join(process.env.NVM_HOME ?? '', '*', 'node.exe'),
     ],
     darwin: [
       '/usr/local/bin/node',
       '/opt/homebrew/bin/node',
       '/usr/bin/node',
-      path.join(process.env.HOME || '', '.nvm/current/bin/node'),
-      path.join(process.env.HOME || '', '.volta/bin/node'),
+      path.join(process.env.HOME ?? '', '.nvm/current/bin/node'),
+      path.join(process.env.HOME ?? '', '.volta/bin/node'),
     ],
     linux: [
       '/usr/local/bin/node',
       '/usr/bin/node',
       '/opt/node/bin/node',
-      path.join(process.env.HOME || '', '.nvm/current/bin/node'),
-      path.join(process.env.HOME || '', '.volta/bin/node'),
-      path.join(process.env.HOME || '', '.local/bin/node'),
+      path.join(process.env.HOME ?? '', '.nvm/current/bin/node'),
+      path.join(process.env.HOME ?? '', '.volta/bin/node'),
+      path.join(process.env.HOME ?? '', '.local/bin/node'),
     ],
   };
 
@@ -66,30 +66,30 @@ export class CommandResolver {
     win32: [
       'C:\\Program Files\\nodejs\\npx.cmd',
       'C:\\Program Files (x86)\\nodejs\\npx.cmd',
-      path.join(process.env.APPDATA || '', 'npm', 'npx.cmd'),
-      path.join(process.env.LOCALAPPDATA || '', 'npm', 'npx.cmd'),
+      path.join(process.env.APPDATA ?? '', 'npm', 'npx.cmd'),
+      path.join(process.env.LOCALAPPDATA ?? '', 'npm', 'npx.cmd'),
       path.join(
-        process.env.USERPROFILE || '',
+        process.env.USERPROFILE ?? '',
         'AppData',
         'Roaming',
         'npm',
         'npx.cmd'
       ),
       // nvm-windows paths (Local AppData)
-      path.join(process.env.LOCALAPPDATA || '', 'nvm', 'current', 'npx.cmd'),
-      path.join(process.env.LOCALAPPDATA || '', 'nvm', '*', 'npx.cmd'),
-      path.join(process.env.APPDATA || '', 'nvm', 'current', 'npx.cmd'),
-      path.join(process.env.APPDATA || '', 'nvm', '*', 'npx.cmd'),
-      path.join(process.env.NVM_HOME || '', 'current', 'npx.cmd'),
-      path.join(process.env.NVM_HOME || '', '*', 'npx.cmd'),
+      path.join(process.env.LOCALAPPDATA ?? '', 'nvm', 'current', 'npx.cmd'),
+      path.join(process.env.LOCALAPPDATA ?? '', 'nvm', '*', 'npx.cmd'),
+      path.join(process.env.APPDATA ?? '', 'nvm', 'current', 'npx.cmd'),
+      path.join(process.env.APPDATA ?? '', 'nvm', '*', 'npx.cmd'),
+      path.join(process.env.NVM_HOME ?? '', 'current', 'npx.cmd'),
+      path.join(process.env.NVM_HOME ?? '', '*', 'npx.cmd'),
     ],
     darwin: [
       '/usr/local/bin/npx',
       '/opt/homebrew/bin/npx',
       '/usr/bin/npx',
-      path.join(process.env.HOME || '', '.nvm/current/bin/npx'),
-      path.join(process.env.HOME || '', '.volta/bin/npx'),
-      path.join(process.env.HOME || '', '.nvm/versions/node/*/bin/npx'),
+      path.join(process.env.HOME ?? '', '.nvm/current/bin/npx'),
+      path.join(process.env.HOME ?? '', '.volta/bin/npx'),
+      path.join(process.env.HOME ?? '', '.nvm/versions/node/*/bin/npx'),
       '/usr/local/lib/node_modules/npm/bin/npxCli.js',
       '/opt/homebrew/lib/node_modules/npm/bin/npxCli.js',
     ],
@@ -97,10 +97,10 @@ export class CommandResolver {
       '/usr/local/bin/npx',
       '/usr/bin/npx',
       '/opt/node/bin/npx',
-      path.join(process.env.HOME || '', '.nvm/current/bin/npx'),
-      path.join(process.env.HOME || '', '.volta/bin/npx'),
-      path.join(process.env.HOME || '', '.local/bin/npx'),
-      path.join(process.env.HOME || '', '.nvm/versions/node/*/bin/npx'),
+      path.join(process.env.HOME ?? '', '.nvm/current/bin/npx'),
+      path.join(process.env.HOME ?? '', '.volta/bin/npx'),
+      path.join(process.env.HOME ?? '', '.local/bin/npx'),
+      path.join(process.env.HOME ?? '', '.nvm/versions/node/*/bin/npx'),
     ],
   };
 
@@ -429,7 +429,7 @@ export class CommandResolver {
   private static async findCommandInPath(
     command: string
   ): Promise<string | undefined> {
-    const pathEnv = process.env.PATH || '';
+    const pathEnv = process.env.PATH ?? '';
     const pathSeparator = process.platform === 'win32' ? ';' : ':';
     const pathDirs = pathEnv
       .split(pathSeparator)

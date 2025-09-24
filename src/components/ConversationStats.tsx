@@ -20,7 +20,7 @@ export function ConversationStats({
 }: ConversationStatsProps) {
   const tokenCount = calculateConversationTokens(messages);
   const conversationSize = calculateConversationSize(messages);
-  const maxTokens = selectedModel?.contextLength || 0;
+  const maxTokens = selectedModel?.contextLength ?? 0;
   const usagePercentage = calculateContextUsage(tokenCount, maxTokens);
 
   // Don't show if no messages

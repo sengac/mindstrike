@@ -397,7 +397,7 @@ export function createEncodedSSEData(data: unknown): unknown {
     const encoded = btoa(
       encodeURIComponent(data).replace(
         /%([0-9A-F]{2})/g,
-        (match, p1: string) => String.fromCharCode(parseInt(p1, 16)) // match param required by replace() API
+        (_: string, p1: string) => String.fromCharCode(parseInt(p1, 16))
       )
     );
     const base64Data: SseDataWithBase64 = {

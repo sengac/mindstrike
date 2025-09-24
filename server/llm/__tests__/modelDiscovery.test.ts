@@ -1,13 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ModelDiscovery } from '../modelDiscovery.js';
-import type { ModelFileManager } from '../modelFileManager.js';
-import type { ModelDownloader } from '../modelDownloader.js';
-import type { ContextCalculator } from '../contextCalculator.js';
-import type {
-  LocalModelInfo,
-  ModelDownloadInfo,
-} from '../../localLlmManager.js';
-import type { DynamicModelInfo } from '../../modelFetcher.js';
+import { ModelDiscovery } from '../modelDiscovery';
+import type { ModelFileManager } from '../modelFileManager';
+import type { ModelDownloader } from '../modelDownloader';
+import type { ContextCalculator } from '../contextCalculator';
+import type { LocalModelInfo, ModelDownloadInfo } from '../../localLlmManager';
+import type { DynamicModelInfo } from '../../modelFetcher';
 
 describe('ModelDiscovery', () => {
   let modelDiscovery: ModelDiscovery;

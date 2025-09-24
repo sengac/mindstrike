@@ -30,7 +30,7 @@ export function detectNodeOverlaps(
   containerElement?: HTMLElement,
   throwOnOverlap: boolean = false
 ): OverlapResult {
-  const container = containerElement || document;
+  const container = containerElement ?? document;
 
   // Find all mindmap nodes - check for ReactFlow structure first, then fallback
   // ReactFlow creates wrapper elements, so we need to be precise about which elements we select
@@ -47,7 +47,7 @@ export function detectNodeOverlaps(
 
   nodeElements.forEach(el => {
     const rect = el.getBoundingClientRect();
-    const nodeId = el.getAttribute('data-id') || 'unknown';
+    const nodeId = el.getAttribute('data-id') ?? 'unknown';
 
     // Skip if we've already processed this node ID
     if (seenIds.has(nodeId)) {
@@ -71,7 +71,7 @@ export function detectNodeOverlaps(
         y: Math.round(rect.y),
         width: Math.round(rect.width),
         height: Math.round(rect.height),
-        label: el.textContent?.trim().substring(0, 50) || 'No label',
+        label: el.textContent?.trim().substring(0, 50) ?? 'No label',
       });
     }
   });
@@ -126,20 +126,9 @@ export function detectNodeOverlaps(
   };
 
   if (hasOverlaps) {
-    console.error('🚨 OVERLAP DETECTED:', result.message);
+    // Overlap detected - details available in result
 
-    // Log detailed overlap information for debugging
-    overlaps.forEach((overlap, index) => {
-      console.error(`OVERLAP ${index + 1}:`, {
-        node1: `"${overlap.node1.label.substring(0, 30)}..." (${overlap.node1.width}x${overlap.node1.height}) at (${overlap.node1.x}, ${overlap.node1.y})`,
-        node2: `"${overlap.node2.label.substring(0, 30)}..." (${overlap.node2.width}x${overlap.node2.height}) at (${overlap.node2.x}, ${overlap.node2.y})`,
-        overlapArea: overlap.overlapArea,
-        distance: Math.sqrt(
-          Math.pow(overlap.node2.x - overlap.node1.x, 2) +
-            Math.pow(overlap.node2.y - overlap.node1.y, 2)
-        ).toFixed(1),
-      });
-    });
+    // Store detailed overlap information for debugging - available in result.overlaps
 
     if (throwOnOverlap) {
       throw new Error(
@@ -161,8 +150,8 @@ export function startOverlapMonitoring(
   const intervalId = setInterval(() => {
     try {
       detectNodeOverlaps(undefined, throwOnOverlap);
-    } catch (error) {
-      console.error('Overlap monitoring error:', error);
+    } catch {
+      // Overlap monitoring error occurred - silently continue
     }
   }, intervalMs);
 

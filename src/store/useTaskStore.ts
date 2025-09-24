@@ -380,7 +380,7 @@ export const useTaskStore = create<TaskState>()(
 
       const currentTask =
         state.currentWorkflow.tasks[state.currentWorkflow.currentTaskIndex];
-      return currentTask || null;
+      return currentTask ?? null;
     },
   }))
 );
@@ -394,10 +394,35 @@ async function initializeTaskEventSubscriptions() {
     return; // Already subscribed
   }
 
-  const handleTaskEvent = async (event: { data: any }) => {
+  const handleTaskEvent = async (event: { data: unknown }) => {
     try {
       // Handle nested data structure from unified SSE - data is already decoded by event bus
-      const data = event.data.data || event.data;
+      const data = ((event.data as any).data || event.data) as {
+        type?: string;
+        workflowId?: string;
+        originalQuery?: string;
+        contextId?: string;
+        taskId?: string;
+        taskName?: string;
+        status?: string;
+        retryCount?: number;
+        message?: string;
+        result?: unknown;
+        totalChanges?: number;
+        error?: string;
+        tasks?: Array<{
+          id: string;
+          description: string;
+          priority?: string;
+          status?: string;
+        }>;
+        task?: {
+          id: string;
+          status: string;
+          result?: unknown;
+          error?: string;
+        };
+      };
 
       switch (data.type) {
         case 'workflow_started':
@@ -406,7 +431,7 @@ async function initializeTaskEventSubscriptions() {
               .getState()
               .startWorkflow(
                 data.workflowId,
-                data.originalQuery || '',
+                data.originalQuery ?? '',
                 data.contextId
               );
           }
@@ -414,23 +439,30 @@ async function initializeTaskEventSubscriptions() {
 
         case 'tasks_planned':
           if (isSseTasksPlannedData(data)) {
-            const tasks: Task[] = data.tasks.map((task: any) => ({
-              id: task.id,
-              type: 'analyze' as const,
-              description: task.description,
-              priority:
-                (task.priority as 'high' | 'medium' | 'low') || 'medium',
-              status:
-                (task.status as
-                  | 'todo'
-                  | 'in-progress'
-                  | 'completed'
-                  | 'failed') || 'todo',
-              createdAt: new Date(),
-            }));
+            const tasks: Task[] = data.tasks.map(
+              (task: {
+                id: string;
+                description: string;
+                priority?: string;
+                status?: string;
+              }) => ({
+                id: task.id,
+                type: 'analyze' as const,
+                description: task.description,
+                priority:
+                  (task.priority as 'high' | 'medium' | 'low') || 'medium',
+                status:
+                  (task.status as
+                    | 'todo'
+                    | 'in-progress'
+                    | 'completed'
+                    | 'failed') || 'todo',
+                createdAt: new Date(),
+              })
+            );
             useTaskStore
               .getState()
-              .setWorkflowTasks(data.workflowId || '', tasks);
+              .setWorkflowTasks(data.workflowId ?? '', tasks);
           }
           break;
 
@@ -439,7 +471,7 @@ async function initializeTaskEventSubscriptions() {
             useTaskStore
               .getState()
               .updateTaskStatus(
-                data.workflowId || '',
+                data.workflowId ?? '',
                 data.task.id,
                 data.task.status as
                   | 'todo'
@@ -457,7 +489,7 @@ async function initializeTaskEventSubscriptions() {
             useTaskStore
               .getState()
               .updateTaskStatus(
-                data.workflowId || '',
+                data.workflowId ?? '',
                 data.task.id,
                 'completed',
                 data.task.result,
@@ -470,7 +502,7 @@ async function initializeTaskEventSubscriptions() {
           useTaskStore
             .getState()
             .completeWorkflow(
-              data.workflowId || '',
+              data.workflowId ?? '',
               typeof data.totalChanges === 'number' ? data.totalChanges : 0
             );
           break;
@@ -479,7 +511,7 @@ async function initializeTaskEventSubscriptions() {
           useTaskStore
             .getState()
             .failWorkflow(
-              data.workflowId || '',
+              data.workflowId ?? '',
               typeof data.error === 'string' ? data.error : 'Unknown error'
             );
           break;

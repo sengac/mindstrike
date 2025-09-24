@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import type { Node, NodeDragHandler } from 'reactflow';
+import type { Node } from 'reactflow';
 import type { MindMapNodeData } from '../../src/types/mindMap';
 import { useMindMapDrag } from '../../src/mindmaps/hooks/useMindMapDrag';
 

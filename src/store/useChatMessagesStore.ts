@@ -125,14 +125,14 @@ export const useChatMessagesStore = create<ChatMessagesState>()(
     setStreaming: (isStreaming: boolean, threadId?: string) => {
       set({
         isStreaming,
-        streamingThreadId: isStreaming ? threadId || null : null,
+        streamingThreadId: isStreaming ? (threadId ?? null) : null,
       });
     },
 
     setLoading: (isLoading: boolean, threadId?: string) => {
       set({
         isLoading,
-        loadingThreadId: isLoading ? threadId || null : null,
+        loadingThreadId: isLoading ? (threadId ?? null) : null,
       });
     },
 

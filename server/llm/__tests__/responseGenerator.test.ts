@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ModelResponseGenerator } from '../responseGenerator.js';
+import { ModelResponseGenerator } from '../responseGenerator';
 import type { LlamaChatSession, ChatHistoryItem } from 'node-llama-cpp';
 import { parentPort } from 'worker_threads';
 
@@ -12,7 +12,7 @@ vi.mock('worker_threads', () => ({
   },
 }));
 
-vi.mock('../../logger.js', () => ({
+vi.mock('../../logger', () => ({
   logger: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -30,9 +30,9 @@ describe('ModelResponseGenerator', () => {
     generator = new ModelResponseGenerator();
 
     // Mock session
-    const chatHistory: any[] = [];
+    const chatHistory: unknown[] = [];
     const mockModel = {
-      detokenize: vi.fn((tokens: any[]) => {
+      detokenize: vi.fn((tokens: unknown[]) => {
         // For test purposes, just join the tokens as strings
         return tokens.map(t => String(t)).join('');
       }),
@@ -167,27 +167,29 @@ describe('ModelResponseGenerator', () => {
         return parentPort as any;
       });
 
-      vi.mocked(parentPort!.postMessage).mockImplementation((message: any) => {
-        if (message.type === 'getMCPTools') {
-          messageId = message.id;
-          // Immediately respond with tools
-          setTimeout(() => {
-            if (messageHandler && messageId) {
-              messageHandler({
-                type: 'mcpToolsResponse',
-                id: messageId,
-                data: [
-                  {
-                    name: 'testTool',
-                    description: 'Test tool',
-                    inputSchema: { type: 'object' },
-                  },
-                ],
-              });
-            }
-          }, 0);
+      vi.mocked(parentPort!.postMessage).mockImplementation(
+        (message: unknown) => {
+          if (message.type === 'getMCPTools') {
+            messageId = message.id;
+            // Immediately respond with tools
+            setTimeout(() => {
+              if (messageHandler && messageId) {
+                messageHandler({
+                  type: 'mcpToolsResponse',
+                  id: messageId,
+                  data: [
+                    {
+                      name: 'testTool',
+                      description: 'Test tool',
+                      inputSchema: { type: 'object' },
+                    },
+                  ],
+                });
+              }
+            }, 0);
+          }
         }
-      });
+      );
 
       // Start generation with functions enabled
       await generator.generateResponse(mockSession, 'Test', {
@@ -226,7 +228,7 @@ describe('ModelResponseGenerator', () => {
       });
 
       const receivedTokens: string[] = [];
-      let result: any = undefined;
+      let result: unknown = undefined;
 
       // Use the async iterator protocol properly
       const iterator = stream[Symbol.asyncIterator]();
@@ -377,7 +379,7 @@ describe('ModelResponseGenerator', () => {
 
       // Consume stream and capture the return value
       const tokens: string[] = [];
-      let finalResult: any = undefined;
+      let finalResult: unknown = undefined;
 
       try {
         // Use async iterator protocol to get both tokens and final result

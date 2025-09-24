@@ -183,10 +183,10 @@ async function startServer() {
   try {
     console.log('Starting embedded server...');
 
-    // Import the full server with all API routes
-    const serverPath = path.join(__dirname, '../dist/server/server/index.js');
+    // Import the bundled server
+    const serverPath = path.join(__dirname, '../dist/server/index.js');
     const serverModule = await import(pathToFileURL(serverPath).href);
-    const app = serverModule.default;
+    const app = serverModule.default || serverModule;
 
     if (!app || typeof app.listen !== 'function') {
       throw new Error('Server module did not export a valid Express app');

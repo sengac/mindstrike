@@ -31,7 +31,9 @@ export function useMindMapLoader({
   });
 
   const load = useCallback(async () => {
-    if (isLoadingRef.current) return;
+    if (isLoadingRef.current) {
+      return;
+    }
 
     isLoadingRef.current = true;
 

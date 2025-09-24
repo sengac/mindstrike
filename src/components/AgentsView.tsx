@@ -79,12 +79,12 @@ export function AgentsView() {
 
       if (serversRes.ok) {
         const data = await serversRes.json();
-        setMcpServers(data.servers || []);
+        setMcpServers(data.servers ?? []);
       }
 
       if (toolsRes.ok) {
         const data = await toolsRes.json();
-        setMcpTools(data.tools || []);
+        setMcpTools(data.tools ?? []);
       }
 
       if (statusRes.ok) {

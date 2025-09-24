@@ -381,7 +381,19 @@ export function isSseWorkflowStartedData(
 export function isSseTasksPlannedData(
   data: SseObjectData
 ): data is SseTasksPlannedData {
-  return data.type === 'tasks_planned' && Array.isArray(data.tasks);
+  return (
+    data.type === 'tasks_planned' &&
+    Array.isArray(data.tasks) &&
+    data.tasks.every(
+      (task): task is { id: string; description: string } =>
+        typeof task === 'object' &&
+        task !== null &&
+        'id' in task &&
+        'description' in task &&
+        typeof task.id === 'string' &&
+        typeof task.description === 'string'
+    )
+  );
 }
 
 export function isSseTaskProgressData(

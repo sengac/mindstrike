@@ -3,14 +3,14 @@ import { EventEmitter } from 'events';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'fs';
-import { logger } from './logger.js';
+import { logger } from './logger';
 import type {
   LocalModelInfo,
   ModelDownloadInfo,
   ModelLoadingSettings,
   ModelRuntimeInfo,
-} from './localLlmManager.js';
-import type { DynamicModelInfo } from './modelFetcher.js';
+} from './localLlmManager';
+import type { DynamicModelInfo } from './modelFetcher';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -68,27 +68,40 @@ export class LLMWorkerProxy extends EventEmitter {
 
   private initializeWorker() {
     try {
-      // Workers need JavaScript files, not TypeScript
-      // In development, we'll use the compiled version from dist if available
-      // Otherwise, skip worker initialization (local LLM features won't work)
+      let workerPath: string;
+      const workerOptions: Record<string, unknown> = {};
 
-      // Try development path first (when running via tsx)
-      let workerPath = join(__dirname, '../dist/server/server/llmWorker.js');
+      if (process.env.NODE_ENV === 'development') {
+        // In development, create a small ESM wrapper that uses tsx
+        const wrapperPath = join(__dirname, 'llmWorker.wrapper.mjs');
 
-      // If that doesn't exist, try the production path (when running compiled)
-      if (!existsSync(workerPath)) {
+        // Create ESM wrapper content
+        const wrapperLines = [
+          "import { register } from 'tsx/esm/api';",
+          'const unregister = register();',
+          "await import('./llmWorker.ts');",
+        ];
+        const wrapperContent = wrapperLines.join('\n');
+
+        // Create wrapper if it doesn't exist
+        if (!existsSync(wrapperPath)) {
+          import('fs').then(({ writeFileSync }) => {
+            writeFileSync(wrapperPath, wrapperContent, 'utf-8');
+          });
+        }
+
+        workerPath = wrapperPath;
+      } else {
+        // In production, use the compiled/bundled JavaScript
         workerPath = join(__dirname, 'llmWorker.js');
       }
 
-      // Check if compiled worker exists
       if (!existsSync(workerPath)) {
-        logger.warn(
-          'LLM worker not found, local LLM features disabled. Run "npm run build:server" to enable.'
-        );
+        logger.warn(`LLM worker not found at ${workerPath}`);
         return;
       }
 
-      this.worker = new Worker(workerPath);
+      this.worker = new Worker(workerPath, workerOptions);
 
       this.worker.on('message', (response: WorkerResponse) => {
         if (response.type === 'streamChunk') {
@@ -164,7 +177,7 @@ export class LLMWorkerProxy extends EventEmitter {
         }
       } else {
         pendingRequest.reject(
-          new Error(response.error || 'Unknown worker error')
+          new Error(response.error ?? 'Unknown worker error')
         );
       }
     }
@@ -172,7 +185,7 @@ export class LLMWorkerProxy extends EventEmitter {
 
   private async handleMCPToolsRequest(request: MCPToolsRequest): Promise<void> {
     try {
-      const { mcpManager } = await import('./mcpManager.js');
+      const { mcpManager } = await import('./mcpManager');
       const tools = mcpManager.getAvailableTools();
 
       this.worker?.postMessage({
@@ -193,7 +206,7 @@ export class LLMWorkerProxy extends EventEmitter {
     request: MCPToolExecutionRequest
   ): Promise<void> {
     try {
-      const { mcpManager } = await import('./mcpManager.js');
+      const { mcpManager } = await import('./mcpManager');
 
       const result = await mcpManager.executeTool(
         request.data.serverId,
@@ -216,12 +229,12 @@ export class LLMWorkerProxy extends EventEmitter {
   }
 
   private rejectAllPending(error: Error) {
-    for (const [id, request] of this.pendingRequests) {
+    for (const [, request] of this.pendingRequests) {
       request.reject(error);
     }
     this.pendingRequests.clear();
 
-    for (const [id, request] of this.streamingRequests) {
+    for (const [, request] of this.streamingRequests) {
       request.reject(error);
     }
     this.streamingRequests.clear();
@@ -351,7 +364,7 @@ export class LLMWorkerProxy extends EventEmitter {
       return;
     }
 
-    return new Promise((resolve, reject) => {
+    return new Promise(resolve => {
       const checkInit = () => {
         if (this.isInitialized) {
           resolve();

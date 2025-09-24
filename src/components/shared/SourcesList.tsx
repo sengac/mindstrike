@@ -60,9 +60,9 @@ export function SourcesList({ sources, onSourcesUpdate }: SourcesListProps) {
         id: `source-${Date.now()}`,
         name: newSource.name.trim(),
         directory: newSource.directory.trim(),
-        type: newSource.type || 'file',
+        type: newSource.type ?? 'file',
       };
-      const updatedSources = [...(sources || []), source];
+      const updatedSources = [...(sources ?? []), source];
 
       try {
         await onSourcesUpdate(updatedSources);
@@ -97,7 +97,7 @@ export function SourcesList({ sources, onSourcesUpdate }: SourcesListProps) {
       editingSource.directory?.trim() &&
       onSourcesUpdate
     ) {
-      const updatedSources = (sources || []).map(source =>
+      const updatedSources = (sources ?? []).map(source =>
         source.id === sourceId
           ? {
               ...source,
@@ -128,7 +128,7 @@ export function SourcesList({ sources, onSourcesUpdate }: SourcesListProps) {
 
   const handleDeleteSource = async (sourceId: string) => {
     if (onSourcesUpdate) {
-      const updatedSources = (sources || []).filter(
+      const updatedSources = (sources ?? []).filter(
         source => source.id !== sourceId
       );
 
@@ -152,7 +152,7 @@ export function SourcesList({ sources, onSourcesUpdate }: SourcesListProps) {
           <label className="block text-xs text-gray-400 mb-1">Name</label>
           <input
             type="text"
-            value={source.name || ''}
+            value={source.name ?? ''}
             onChange={e => onSourceChange({ name: e.target.value })}
             onKeyDown={e => {
               if (e.key === 'Enter') {
@@ -169,7 +169,7 @@ export function SourcesList({ sources, onSourcesUpdate }: SourcesListProps) {
         <div>
           <label className="block text-xs text-gray-400 mb-1">Type</label>
           <select
-            value={source.type || 'file'}
+            value={source.type ?? 'file'}
             onChange={e =>
               onSourceChange({ type: e.target.value as Source['type'] })
             }
@@ -188,7 +188,7 @@ export function SourcesList({ sources, onSourcesUpdate }: SourcesListProps) {
         </label>
         <input
           type="text"
-          value={source.directory || ''}
+          value={source.directory ?? ''}
           onChange={e => onSourceChange({ directory: e.target.value })}
           onKeyDown={e => {
             if (e.key === 'Enter') {
@@ -243,7 +243,7 @@ export function SourcesList({ sources, onSourcesUpdate }: SourcesListProps) {
               )}
 
             {/* Sources List */}
-            {(sources || []).map(source => {
+            {(sources ?? []).map(source => {
               const IconComponent = typeIcons[source.type] || FileText;
               const iconColor = typeColors[source.type] || 'text-gray-400';
 

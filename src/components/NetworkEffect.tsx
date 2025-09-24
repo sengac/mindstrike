@@ -37,7 +37,7 @@ export function NetworkEffect({
   const heartParticles = useRef<HeartParticle[]>([]);
   const musicNotes = useRef<MusicNote[]>([]);
   const noteSpawnTimer = useRef(0);
-  const [_audioData, setAudioData] = useState<{
+  const [, setAudioData] = useState<{
     frequency: Uint8Array;
     waveform: Uint8Array;
   } | null>(null);
@@ -45,7 +45,8 @@ export function NetworkEffect({
     frequency: Uint8Array;
     waveform: Uint8Array;
   } | null>(null);
-  const [_isConnected, setIsConnected] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  console.debug('NetworkEffect audio connected:', isConnected);
 
   // Beat detection state
   const beatDetectionRef = useRef({
@@ -100,7 +101,11 @@ export function NetworkEffect({
       return;
     }
 
-    const audioElement = (howl as any)._sounds[0]?._node;
+    // Access the internal audio node (Howler.js implementation detail)
+    const audioElement =
+      howl && '_sounds' in howl && Array.isArray(howl._sounds)
+        ? howl._sounds[0]?._node
+        : null;
     if (!audioElement) {
       logger.warn('NetworkEffect: No audio element found in Howler instance');
       return;
@@ -836,7 +841,7 @@ export function NetworkEffect({
       // Draw network effect in background
       if (networkAlpha > 0.01) {
         // Draw network connections
-        networkNodes.forEach((node, _index) => {
+        networkNodes.forEach(node => {
           node.connections.forEach(connectionIndex => {
             const connectedNode = networkNodes[connectionIndex];
 

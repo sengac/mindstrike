@@ -710,7 +710,7 @@ describe('MindMapCanvas', () => {
 
       await waitForMindMap();
       const lrButton = screen.getByTitle('Left to Right');
-      const classes = lrButton.getAttribute('class') || '';
+      const classes = lrButton.getAttribute('class') ?? '';
       expect(classes).toContain('bg-blue-600');
       expect(classes).toContain('border-blue-500');
     });
@@ -871,7 +871,7 @@ describe('MindMapCanvas', () => {
 
       const initialBindings = screen.getByTestId('initial-bindings');
       const bindingsText = initialBindings.textContent;
-      const bindings = JSON.parse(bindingsText ?? '{}');
+      const bindings = JSON.parse(bindingsText ?? '{}') as unknown;
 
       expect(bindings).toEqual({
         Tab: 'addChild',

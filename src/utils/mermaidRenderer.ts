@@ -56,11 +56,7 @@ function setupMermaidObserver(container: HTMLElement) {
       });
 
       // Check if text content changed in existing unrendered mermaid elements
-      if (
-        mutation.type === 'characterData' &&
-        mutation.target &&
-        mutation.target.parentElement
-      ) {
+      if (mutation.type === 'characterData' && mutation.target?.parentElement) {
         const target = mutation.target.parentElement;
         if (
           target.classList?.contains('mermaid') &&
@@ -79,6 +75,8 @@ function setupMermaidObserver(container: HTMLElement) {
           renderMermaidDiagramsDelayed(container, false, () => {
             // Dispatch a custom event when mermaid rendering completes
             container.dispatchEvent(new CustomEvent('mermaidRenderComplete'));
+          }).catch(() => {
+            // Silently handle rendering errors
           });
         }
       }, 100);
@@ -137,8 +135,8 @@ export async function renderMermaidDiagrams(
 
         // Get the mermaid code
         const code =
-          htmlElement.getAttribute('data-mermaid-code') ||
-          htmlElement.textContent ||
+          htmlElement.getAttribute('data-mermaid-code') ??
+          htmlElement.textContent ??
           '';
 
         if (!code.trim()) {
@@ -177,7 +175,7 @@ export async function renderMermaidDiagrams(
 
           // Show error state with original code
           const originalCode =
-            htmlElement.getAttribute('data-mermaid-code') || '';
+            htmlElement.getAttribute('data-mermaid-code') ?? '';
           htmlElement.innerHTML = `<pre class="text-red-400 bg-red-900/20 p-2 rounded"><code>${originalCode}</code></pre>`;
           htmlElement.setAttribute('data-rendered', 'error');
         }
@@ -206,7 +204,7 @@ export function renderMermaidDiagramsDelayed(
   return new Promise(resolve => {
     // Use requestAnimationFrame to ensure DOM is fully settled
     requestAnimationFrame(() => {
-      requestAnimationFrame(async () => {
+      requestAnimationFrame(() => {
         // If force is true, clear any existing render markers
         if (force) {
           const allMermaidElements = container.querySelectorAll('.mermaid');
@@ -215,8 +213,9 @@ export function renderMermaidDiagramsDelayed(
           });
         }
 
-        await renderMermaidDiagrams(container, onComplete);
-        resolve();
+        renderMermaidDiagrams(container, onComplete)
+          .then(() => resolve())
+          .catch(() => resolve()); // Resolve even on error to prevent hanging
       });
     });
   });

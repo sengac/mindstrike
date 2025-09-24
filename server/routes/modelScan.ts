@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { sseManager } from '../sseManager.js';
-import { modelFetcher } from '../modelFetcher.js';
-import { logger } from '../logger.js';
-import { SSEEventType } from '../../src/types.js';
-import type { ScanProgress } from '../../src/store/useModelScanStore.js';
+import { sseManager } from '../sseManager';
+import { modelFetcher } from '../modelFetcher';
+import { logger } from '../logger';
+import { SSEEventType } from '../../src/types';
+import type { ScanProgress } from '../../src/store/useModelScanStore';
 
 interface ModelSearchParams {
   query: string;

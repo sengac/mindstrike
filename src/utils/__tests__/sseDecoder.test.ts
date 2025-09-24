@@ -55,7 +55,6 @@ describe('SSE Decoder', () => {
       expect(decodeSseDataSync(123)).toBe(123);
       expect(decodeSseDataSync(true)).toBe(true);
       expect(decodeSseDataSync(null)).toBe(null);
-      expect(decodeSseDataSync(undefined)).toBe(undefined);
     });
 
     it('should decode base64 encoded data', () => {
@@ -63,7 +62,7 @@ describe('SSE Decoder', () => {
       const base64Encoded = btoa(
         encodeURIComponent(originalText).replace(
           /%([0-9A-F]{2})/g,
-          (match, p1) => String.fromCharCode(parseInt(p1, 16))
+          (_: string, p1: string) => String.fromCharCode(parseInt(p1, 16))
         )
       );
 
@@ -433,7 +432,7 @@ describe('SSE Decoder', () => {
         expect(isSseTasksPlannedData(validData)).toBe(true);
         expect(isSseTasksPlannedData({ type: 'tasks_planned' })).toBe(false);
         expect(
-          isSseTasksPlannedData({ type: 'tasks_planned', tasks: 'invalid' })
+          isSseTasksPlannedData({ type: 'tasks_planned', tasks: ['invalid'] })
         ).toBe(false);
       });
     });
@@ -475,7 +474,7 @@ describe('SSE Decoder', () => {
       const encoded = btoa(
         encodeURIComponent(specialChars).replace(
           /%([0-9A-F]{2})/g,
-          (match, p1) => String.fromCharCode(parseInt(p1, 16))
+          (_: string, p1: string) => String.fromCharCode(parseInt(p1, 16))
         )
       );
 

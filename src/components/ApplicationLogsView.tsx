@@ -19,6 +19,13 @@ import MCPIcon from './MCPIcon';
 import type { LogsTabType } from '../types/logs';
 import { MusicVisualization } from './MusicVisualization';
 
+interface MCPLog {
+  timestamp: number;
+  level?: string;
+  serverId: string;
+  message: string;
+}
+
 interface ApplicationLogsViewProps {
   initialTab?: LogsTabType;
 }
@@ -68,7 +75,7 @@ export function ApplicationLogsView({
     toast.success('Copied to clipboard');
   };
 
-  const copyMCPLog = (log: any) => {
+  const copyMCPLog = (log: MCPLog) => {
     const text = `[${new Date(log.timestamp).toLocaleString()}] [${log.level?.toUpperCase()}] [${log.serverId}]\n\n${log.message}`;
     navigator.clipboard.writeText(text);
     toast.success('Copied to clipboard');
@@ -116,7 +123,7 @@ export function ApplicationLogsView({
           if (depth === 0) {
             const jsonCandidate = text.slice(i, j);
             try {
-              const parsed = JSON.parse(jsonCandidate);
+              const parsed = JSON.parse(jsonCandidate) as unknown;
               results.push({
                 start: i,
                 end: j,
@@ -146,7 +153,7 @@ export function ApplicationLogsView({
     const parts = [];
     let lastIndex = 0;
 
-    jsonStructures.forEach((structure, _index) => {
+    jsonStructures.forEach(structure => {
       // Add text before the JSON
       if (structure.start > lastIndex) {
         parts.push(
@@ -334,7 +341,11 @@ export function ApplicationLogsView({
               <>
                 <select
                   value={filterType}
-                  onChange={e => setFilterType(e.target.value as any)}
+                  onChange={e =>
+                    setFilterType(
+                      e.target.value as 'all' | 'request' | 'response' | 'error'
+                    )
+                  }
                   className="bg-gray-700 text-white px-3 py-1 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="all">All Types</option>
@@ -594,8 +605,8 @@ export function ApplicationLogsView({
                               </span>
                               {/* Show expand/collapse icon for completed tasks with details/results */}
                               {task.status === 'completed' &&
-                                (task.details != null ||
-                                  task.result != null) && (
+                                (task.details !== null ||
+                                  task.result !== null) && (
                                   <span className="text-gray-400">
                                     {expandedTasks.has(task.id) ? (
                                       <ChevronDown size={16} />
@@ -612,7 +623,7 @@ export function ApplicationLogsView({
                             expandedTasks.has(task.id)) && (
                             <div className="mt-3 pl-8">
                               {/* Task Details */}
-                              {task.details != null && (
+                              {task.details !== null && (
                                 <div className="mt-2 p-3 bg-black/80 rounded border border-gray-600 text-xs">
                                   <span className="text-green-400 font-medium block mb-2">
                                     Details:
@@ -630,7 +641,7 @@ export function ApplicationLogsView({
                               )}
 
                               {/* Task Result */}
-                              {task.result != null && (
+                              {task.result !== null && (
                                 <div className="mt-2 p-3 bg-black/80 rounded border border-gray-600 text-xs">
                                   <span className="text-green-400 font-medium block mb-2">
                                     Result:
@@ -815,8 +826,8 @@ export function ApplicationLogsView({
 
                                       {/* Show expand/collapse icon for completed tasks with details/results */}
                                       {task.status === 'completed' &&
-                                        (task.details != null ||
-                                          task.result != null) && (
+                                        (task.details !== null ||
+                                          task.result !== null) && (
                                           <span className="text-gray-400">
                                             {expandedTasks.has(task.id) ? (
                                               <ChevronDown size={16} />
@@ -832,7 +843,7 @@ export function ApplicationLogsView({
                                       expandedTasks.has(task.id)) && (
                                       <div className="mt-3 pl-8">
                                         {/* Task Details */}
-                                        {task.details != null && (
+                                        {task.details !== null && (
                                           <div className="mt-2 p-3 bg-black/80 rounded border border-gray-600 text-xs">
                                             <span className="text-green-400 font-medium block mb-2">
                                               Details:
@@ -850,7 +861,7 @@ export function ApplicationLogsView({
                                         )}
 
                                         {/* Task Result */}
-                                        {task.result != null && (
+                                        {task.result !== null && (
                                           <div className="mt-2 p-3 bg-black/80 rounded border border-gray-600 text-xs">
                                             <span className="text-green-400 font-medium block mb-2">
                                               Result:
@@ -950,9 +961,9 @@ export function ApplicationLogsView({
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
                               <span
-                                className={`text-xs px-2 py-1 bg-gray-600 rounded uppercase font-mono ${getLevelColor(log.level || 'info')}`}
+                                className={`text-xs px-2 py-1 bg-gray-600 rounded uppercase font-mono ${getLevelColor(log.level ?? 'info')}`}
                               >
-                                {log.level || 'LOG'}
+                                {log.level ?? 'LOG'}
                               </span>
                               {log.serverId && (
                                 <span className="text-xs px-2 py-1 bg-green-600 text-white rounded font-mono">

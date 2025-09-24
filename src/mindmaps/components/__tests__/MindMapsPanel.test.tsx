@@ -727,7 +727,9 @@ describe('MindMapsPanel', () => {
       await waitFor(() => {
         expect(screen.getByTestId('chat-sources')).toBeTruthy();
         const sourcesElement = screen.getByTestId('chat-sources');
-        expect(JSON.parse(sourcesElement.textContent ?? '[]')).toEqual([]);
+        expect(
+          JSON.parse(sourcesElement.textContent ?? '[]') as unknown
+        ).toEqual([]);
       });
 
       // Update sources

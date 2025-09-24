@@ -2,10 +2,20 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createHash } from 'crypto';
 import { readGgufFileInfo } from 'node-llama-cpp';
-import { getLocalModelsDirectory } from '../utils/settingsDirectory.js';
-import type { LocalModelInfo } from '../localLlmManager.js';
-import { modelFetcher } from '../modelFetcher.js';
-import { DEFAULT_MODEL_PARAMS, MEMORY } from './constants.js';
+import { getLocalModelsDirectory } from '../utils/settingsDirectory';
+import type { LocalModelInfo } from '../localLlmManager';
+import { modelFetcher } from '../modelFetcher';
+import type {
+  VRAMEstimateInfo,
+  ModelArchitecture,
+  VRAMConfiguration,
+} from '../modelFetcher';
+import {
+  loadMetadataFromFile,
+  calculateVRAMEstimate,
+  type CacheType,
+} from '../utils/ggufVramCalculator';
+import { DEFAULT_MODEL_PARAMS, MEMORY } from './constants';
 
 export interface ModelMetadata {
   name?: string;
@@ -86,6 +96,72 @@ export class ModelFileManager {
         ? await contextSizeResolver(stats.size, requestedContextSize, filename)
         : requestedContextSize;
 
+      // Calculate VRAM estimates for local models
+      let vramEstimates: VRAMEstimateInfo[] | undefined;
+      let modelArchitecture: ModelArchitecture | undefined;
+      let hasVramData = false;
+      let vramError: string | undefined;
+
+      try {
+        const metadata = await loadMetadataFromFile(fullPath);
+
+        // Extract architecture info
+        modelArchitecture = {
+          layers: metadata.n_layers ?? 0,
+          kvHeads: metadata.n_kv_heads ?? 0,
+          embeddingDim: metadata.embedding_dim ?? 0,
+          contextLength: metadata.context_length ?? 0,
+          feedForwardDim: metadata.feed_forward_dim ?? 0,
+        };
+
+        // Calculate VRAM for different context sizes
+        const vramConfigs: VRAMConfiguration[] = [
+          {
+            gpuLayers: 999,
+            contextSize: 2048,
+            cacheType: 'fp16' as CacheType,
+            label: '2K context',
+          },
+          {
+            gpuLayers: 999,
+            contextSize: 4096,
+            cacheType: 'fp16' as CacheType,
+            label: '4K context',
+          },
+          {
+            gpuLayers: 999,
+            contextSize: 8192,
+            cacheType: 'fp16' as CacheType,
+            label: '8K context',
+          },
+          {
+            gpuLayers: 999,
+            contextSize: 16384,
+            cacheType: 'fp16' as CacheType,
+            label: '16K context',
+          },
+        ];
+
+        vramEstimates = vramConfigs.map(config => {
+          const estimate = calculateVRAMEstimate(
+            metadata,
+            config.gpuLayers,
+            config.contextSize,
+            config.cacheType
+          );
+          return {
+            ...estimate,
+            config,
+          };
+        });
+
+        hasVramData = true;
+      } catch (error) {
+        // Silently fail - VRAM data is optional
+        vramError =
+          error instanceof Error ? error.message : 'Failed to calculate VRAM';
+      }
+
       models.push({
         id,
         name:
@@ -104,6 +180,10 @@ export class ModelFileManager {
           matchingRemoteModel?.quantization ?? modelInfo.quantization,
         layerCount,
         maxContextLength,
+        vramEstimates,
+        modelArchitecture,
+        hasVramData,
+        vramError,
       });
     }
 

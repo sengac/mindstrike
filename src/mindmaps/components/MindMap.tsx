@@ -48,7 +48,7 @@ const nodeTypes = {
   mindMapNode: MindMapNode,
 };
 
-import type { NodeColorTheme } from '../constants/nodeColors';
+import type { NodeColorThemeType } from '../constants/nodeColors';
 
 export interface MindMapControls {
   undo: () => void;
@@ -59,7 +59,7 @@ export interface MindMapControls {
   canRedo: boolean;
   currentLayout: 'LR' | 'RL' | 'TB' | 'BT' | 'RD';
   selectedNodeId: string | null;
-  setNodeColors: (nodeId: string, theme: NodeColorTheme) => void;
+  setNodeColors: (nodeId: string, theme: NodeColorThemeType) => void;
   clearNodeColors: (nodeId: string) => void;
 }
 
@@ -218,7 +218,7 @@ function MindMapInner({
     const timeoutId = setTimeout(() => {
       try {
         const result = detectNodeOverlaps(
-          containerRef.current || undefined,
+          containerRef.current ?? undefined,
           false
         );
 
@@ -362,7 +362,7 @@ function MindMapInner({
   }, [redo, fitView]);
 
   const handleSetNodeColors = useCallback(
-    (nodeId: string, theme: NodeColorTheme) => {
+    (nodeId: string, theme: NodeColorThemeType) => {
       setNodeColors(nodeId, theme);
     },
     [setNodeColors]
@@ -857,7 +857,7 @@ function MindMapInner({
             return null;
           }
 
-          const nodeLevel = draggedNode.data.level || 0;
+          const nodeLevel = draggedNode.data.level ?? 0;
           const isRootNode = nodeLevel === LAYOUT_CALC.ROOT_LEVEL;
 
           // Get colors based on theme or defaults

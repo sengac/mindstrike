@@ -2,11 +2,7 @@ import { Play, Pause, SkipBack, SkipForward, X } from 'lucide-react';
 import { useAudioStore } from '../store/useAudioStore';
 import { useEffect, useState } from 'react';
 
-interface SidebarMusicControlsProps {
-  isMusicPlayerVisible: boolean;
-}
-
-export function SidebarMusicControls({}: SidebarMusicControlsProps) {
+export function SidebarMusicControls() {
   const {
     currentTrack,
     isPlaying,

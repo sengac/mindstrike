@@ -3,7 +3,7 @@ import { Howl } from 'howler';
 import toast from 'react-hot-toast';
 import { logger } from '../utils/logger';
 
-interface AudioFile {
+export interface AudioFile {
   id: number;
   title: string;
   artist: string;
@@ -161,7 +161,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
         if (currentTrack) {
           const album = currentTrack.album ? ` • ${currentTrack.album}` : '';
           const year = currentTrack.year ? ` (${currentTrack.year})` : '';
-          const toastContent = `${currentTrack.title}\n${currentTrack.artist || 'Unknown Artist'}${album}${year}`;
+          const toastContent = `${currentTrack.title}\n${currentTrack.artist ?? 'Unknown Artist'}${album}${year}`;
           toast(toastContent, {
             duration: 15000,
             icon: currentTrack.coverArtUrl ? (
@@ -197,7 +197,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
         // Auto-play next track
         get().nextTrack();
       },
-      onloaderror: (error: any) => {
+      onloaderror: (error: unknown) => {
         logger.error('Audio error:', error);
         set({ isLoading: false, isPlaying: false });
       },
@@ -297,7 +297,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
   updateCurrentTime: () => {
     const { howl } = get();
     if (howl && get().isPlaying) {
-      const currentTime = howl.seek() || 0;
+      const currentTime = howl.seek() ?? 0;
       set({ currentTime: typeof currentTime === 'number' ? currentTime : 0 });
     }
   },

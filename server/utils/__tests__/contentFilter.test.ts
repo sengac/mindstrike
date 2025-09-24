@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { stripThinkTags, cleanContentForLLM } from '../contentFilter.js';
+import { stripThinkTags, cleanContentForLLM } from '../contentFilter';
 
 describe('ContentFilter', () => {
   describe('stripThinkTags', () => {

@@ -158,8 +158,8 @@ describe('MindMapLayoutManager - Recursive Space Allocation Algorithm', () => {
       const allNodes = [rootNode, child1, child2, child3];
 
       // Find tree bounds
-      let minX = Math.min(...allNodes.map(n => n.position.x));
-      let maxX = Math.max(
+      const minX = Math.min(...allNodes.map(n => n.position.x));
+      const maxX = Math.max(
         ...allNodes.map(n => n.position.x + (n.data.width || 120))
       );
       const treeWidth = maxX - minX;
@@ -254,13 +254,10 @@ describe('MindMapLayoutManager - Recursive Space Allocation Algorithm', () => {
         'TB'
       );
 
-      const rootNarrow = resultNarrow.nodes.find(n => n.id === 'root')!;
-      const rootWide = resultWide.nodes.find(n => n.id === 'root')!;
-
       // Trees should maintain center position
       const getTreeCenter = (nodes: Node<MindMapNodeData>[]) => {
-        let minX = Math.min(...nodes.map(n => n.position.x));
-        let maxX = Math.max(
+        const minX = Math.min(...nodes.map(n => n.position.x));
+        const maxX = Math.max(
           ...nodes.map(n => n.position.x + (n.data.width || 120))
         );
         return minX + (maxX - minX) / 2;
@@ -425,8 +422,6 @@ describe('MindMapLayoutManager - Recursive Space Allocation Algorithm', () => {
 
       // Child1's subtree needs space for both grandchildren
       // Expected subtree width: gc1(80) + gap(80) + gc2(80) = 240
-      const expectedChild1SubtreeWidth =
-        80 + LAYOUT_CONSTANTS.HORIZONTAL_SIBLING_GAP + 80;
 
       // Child2 should be positioned far enough to avoid overlap with child1's subtree
       const child1SubtreeRight = Math.max(
@@ -544,8 +539,8 @@ describe('MindMapLayoutManager - Recursive Space Allocation Algorithm', () => {
       const allNodes = [rootNode, child1, child2];
 
       // Find tree bounds
-      let minX = Math.min(...allNodes.map(n => n.position.x));
-      let maxX = Math.max(
+      const minX = Math.min(...allNodes.map(n => n.position.x));
+      const maxX = Math.max(
         ...allNodes.map(n => n.position.x + (n.data.width || 120))
       );
       const treeWidth = maxX - minX;
@@ -1200,7 +1195,6 @@ describe('MindMapLayoutManager - Recursive Space Allocation Algorithm', () => {
 
     const result = await layoutManager.arrangeNodes(nodes, edges, 'root', 'LR');
 
-    const parent1 = result.find(n => n.id === 'parent1')!;
     const parent2 = result.find(n => n.id === 'parent2')!;
     const leaf2 = result.find(n => n.id === 'leaf2')!;
     const leaf3 = result.find(n => n.id === 'leaf3')!;

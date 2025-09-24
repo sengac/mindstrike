@@ -1,9 +1,9 @@
-import type { StreamResponseOptions } from '../localLlmManager.js';
-import type { ModelRegistry, ModelRuntimeInfo } from './modelRegistry.js';
-import type { LlamaSessionManager } from './sessionManager.js';
-import type { ModelResponseGenerator } from './responseGenerator.js';
-import type { ModelFileManager } from './modelFileManager.js';
-import { PROGRESS } from './constants.js';
+import type { StreamResponseOptions } from '../localLlmManager';
+import type { ModelRegistry, ModelRuntimeInfo } from './modelRegistry';
+import type { LlamaSessionManager } from './sessionManager';
+import type { ModelResponseGenerator } from './responseGenerator';
+import type { ModelFileManager } from './modelFileManager';
+import { PROGRESS } from './constants';
 
 /**
  * Handles response generation and session management
@@ -23,7 +23,11 @@ export class ResponseService {
     modelIdOrName: string,
     threadId: string
   ): Promise<void> {
-    // threadId parameter required for interface compatibility
+    // Log session update for debugging and future thread-specific functionality
+    console.debug(
+      `Updating session history for model: ${modelIdOrName}, thread: ${threadId}`
+    );
+
     // First try to use it as an ID
     let activeModel = this.registry.getModelRuntimeInfo(modelIdOrName);
 
@@ -154,7 +158,11 @@ export class ResponseService {
    * Find an active model by ID or name (matches original logic)
    */
   private async findActiveModel(modelIdOrName: string, threadId?: string) {
-    // threadId parameter required for method signature compatibility
+    // Log model search for debugging and future thread-specific functionality
+    console.debug(
+      `Finding active model: ${modelIdOrName}${threadId ? ` for thread: ${threadId}` : ''}`
+    );
+
     // First try to use it as an ID
     let activeModel = this.registry.getModelRuntimeInfo(modelIdOrName);
 

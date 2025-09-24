@@ -87,7 +87,7 @@ const getSupportedLanguage = (language?: string): string => {
   const lowerLang = language.toLowerCase();
 
   // Return mapped language or original if it exists in common languages
-  return languageMap[lowerLang] || language || 'text';
+  return (languageMap[lowerLang] || language) ?? 'text';
 };
 
 interface ChatMessageProps {
@@ -888,7 +888,7 @@ function ChatMessageComponent({
                       <div className="text-gray-300">
                         {(result.result as { success?: boolean }).success ? (
                           <pre className="overflow-x-auto whitespace-pre-wrap break-all">
-                            {(result.result as { output?: string }).output ||
+                            {(result.result as { output?: string }).output ??
                               'Success'}
                           </pre>
                         ) : (

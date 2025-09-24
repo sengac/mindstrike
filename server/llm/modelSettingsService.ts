@@ -1,9 +1,9 @@
-import type { ModelLoadingSettings } from '../localLlmManager.js';
-import { modelSettingsManager } from '../utils/modelSettingsManager.js';
-import type { ContextCalculator } from './contextCalculator.js';
-import type { ModelRegistry } from './modelRegistry.js';
-import type { ModelDiscovery } from './modelDiscovery.js';
-import { logger } from '../logger.js';
+import type { ModelLoadingSettings } from '../localLlmManager';
+import { modelSettingsManager } from '../utils/modelSettingsManager';
+import type { ContextCalculator } from './contextCalculator';
+import type { ModelRegistry } from './modelRegistry';
+import type { ModelDiscovery } from './modelDiscovery';
+import { logger } from '../logger';
 
 // Serializable runtime info that matches the original API
 export interface SerializableModelRuntimeInfo {

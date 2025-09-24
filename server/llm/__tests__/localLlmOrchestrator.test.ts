@@ -1,24 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { LocalLLMOrchestrator } from '../localLlmOrchestrator.js';
-import { logger } from '../../logger.js';
+import { LocalLLMOrchestrator } from '../localLlmOrchestrator';
+import { logger } from '../../logger';
 import type {
   LocalModelInfo,
   ModelDownloadInfo,
   ModelLoadingSettings,
-} from '../../localLlmManager.js';
-import type { DynamicModelInfo } from '../../modelFetcher.js';
-import {
-  TEST_VALUES,
-  DEFAULT_MODEL_PARAMS,
-  GPU_LAYERS,
-  PROGRESS,
-} from '../constants.js';
+} from '../../localLlmManager';
+import type { DynamicModelInfo } from '../../modelFetcher';
+import { TEST_VALUES, DEFAULT_MODEL_PARAMS } from '../constants';
 
 // Mock the logger
-vi.mock('../../logger.js');
+vi.mock('../../logger');
 
 // Mock all llama dependencies
-vi.mock('../../sharedLlamaInstance.js', () => ({
+vi.mock('../../sharedLlamaInstance', () => ({
   getLlama: vi.fn().mockResolvedValue({
     createModel: vi.fn(),
   }),

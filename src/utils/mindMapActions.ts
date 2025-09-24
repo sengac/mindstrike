@@ -63,7 +63,7 @@ export class MindMapActionsManager {
         isRoot: false,
         parentId: parentNodeId,
         isEditing: true,
-        level: (parentNode.data.level || 0) + 1,
+        level: (parentNode.data.level ?? 0) + 1,
       },
     };
 
@@ -112,7 +112,7 @@ export class MindMapActionsManager {
         isRoot: false,
         parentId: parentNodeId,
         isEditing: true,
-        level: siblingNode.data.level || 0,
+        level: siblingNode.data.level ?? 0,
       },
     };
 

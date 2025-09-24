@@ -170,7 +170,6 @@ function App() {
     mindMaps,
     activeMindMapId,
     activeMindMap,
-    isLoaded: _mindMapsLoaded,
     loadMindMaps,
     createMindMap,
     deleteMindMap,
@@ -237,7 +236,7 @@ function App() {
           <ChatView
             ref={chatPanelRef}
             threads={threads}
-            activeThreadId={threadsActiveThreadId || undefined}
+            activeThreadId={threadsActiveThreadId ?? undefined}
             onThreadSelect={selectThread}
             onThreadCreate={handleNewThread}
             onThreadRename={renameThread}
@@ -257,8 +256,8 @@ function App() {
         {activeView === 'mindmaps' && (
           <MindMapsView
             mindMaps={mindMaps}
-            activeMindMapId={activeMindMapId || undefined}
-            activeMindMap={activeMindMap || null}
+            activeMindMapId={activeMindMapId ?? undefined}
+            activeMindMap={activeMindMap ?? null}
             threads={threads}
             onMindMapSelect={selectMindMap}
             onMindMapCreate={handleNewMindMap}
@@ -339,13 +338,12 @@ function App() {
           isOpen={showPromptsModal}
           onClose={() => setShowPromptsModal(false)}
           currentPrompt={
-            activeThread?.customPrompt ||
-            defaultCustomPrompt ||
+            (activeThread?.customPrompt || defaultCustomPrompt) ??
             'You are a helpful AI assistant.'
           }
           defaultPrompt="You are a helpful AI assistant."
           onPromptChange={async (customPrompt?: string) => {
-            const currentThreadId = threadsActiveThreadId || 'default';
+            const currentThreadId = threadsActiveThreadId ?? 'default';
             await updateThreadPrompt(currentThreadId, customPrompt);
           }}
         />

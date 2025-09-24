@@ -1,20 +1,20 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ModelSettingsService } from '../modelSettingsService.js';
-import type { ContextCalculator } from '../contextCalculator.js';
-import type { ModelRegistry } from '../modelRegistry.js';
-import type { ModelDiscovery } from '../modelDiscovery.js';
+import { ModelSettingsService } from '../modelSettingsService';
+import type { ContextCalculator } from '../contextCalculator';
+import type { ModelRegistry } from '../modelRegistry';
+import type { ModelDiscovery } from '../modelDiscovery';
 import type {
   LocalModelInfo,
   ModelLoadingSettings,
-} from '../../localLlmManager.js';
-import { modelSettingsManager } from '../../utils/modelSettingsManager.js';
+} from '../../localLlmManager';
+import { modelSettingsManager } from '../../utils/modelSettingsManager';
 import type {
   LlamaModel,
   LlamaContext,
   LlamaChatSession,
 } from 'node-llama-cpp';
 
-vi.mock('../../utils/modelSettingsManager.js', () => ({
+vi.mock('../../utils/modelSettingsManager', () => ({
   modelSettingsManager: {
     saveModelSettings: vi.fn(),
     loadModelSettings: vi.fn(),

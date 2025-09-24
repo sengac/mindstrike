@@ -50,7 +50,7 @@ export function MCPMonitoringPanel({
     return pid ? `PID: ${pid}` : 'No PID';
   };
 
-  const getProcessStatusIcon = (process: any) => {
+  const getProcessStatusIcon = (process: { isConnected?: boolean }) => {
     if (process.isConnected) {
       return <CheckCircle size={14} className="text-green-400" />;
     }

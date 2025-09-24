@@ -21,12 +21,14 @@ export function InferenceChatPopup({
   isOpen,
   onClose,
   nodeLabel,
-  nodeId: _nodeId,
+  nodeId,
   position,
 }: InferenceChatPopupProps) {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  console.debug('InferenceChatPopup initialized for node:', nodeId);
   const [, forceUpdate] = useState({});
   const { shouldRender, isVisible, handleClose } = useDialogAnimation(
     isOpen,
@@ -136,8 +138,7 @@ export function InferenceChatPopup({
 
       const result = await response.json();
       const assistantMessage =
-        result.content ||
-        result.message ||
+        (result.content || result.message) ??
         'I apologize, but I could not generate a response at this time.';
 
       setChatMessages([

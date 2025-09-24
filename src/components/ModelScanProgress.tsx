@@ -166,7 +166,7 @@ export function ModelScanProgress({
         <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
           <span>Items processed</span>
           <span>
-            {progress.completedItems || 0} / {progress.totalItems}
+            {progress.completedItems ?? 0} / {progress.totalItems}
           </span>
         </div>
       )}

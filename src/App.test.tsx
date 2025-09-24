@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, waitFor, act } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import App from './App';
 
 // Define proper types for MindMapsView props (simplified after refactoring)
@@ -108,7 +108,7 @@ beforeEach(() => {
   vi.mocked(MindMapsView).mockImplementation((props: unknown) => {
     // Store the props for testing
     lastMindMapsViewProps = props as MindMapsViewProps;
-    return null;
+    return <div data-testid="mock-mindmaps-view" />;
   });
 });
 

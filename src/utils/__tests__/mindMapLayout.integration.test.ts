@@ -706,8 +706,8 @@ describe('MindMapLayoutManager Integration Tests', () => {
       const allNodes = [rootNode, child1, child2, child3];
 
       // Find tree bounds
-      let minX = Math.min(...allNodes.map(n => n.position.x));
-      let maxX = Math.max(
+      const minX = Math.min(...allNodes.map(n => n.position.x));
+      const maxX = Math.max(
         ...allNodes.map(n => n.position.x + (n.data.width || 120))
       );
       const treeWidth = maxX - minX;
@@ -804,8 +804,8 @@ describe('MindMapLayoutManager Integration Tests', () => {
 
       // Trees should maintain center position
       const getTreeCenter = (nodes: Node<MindMapNodeData>[]) => {
-        let minX = Math.min(...nodes.map(n => n.position.x));
-        let maxX = Math.max(
+        const minX = Math.min(...nodes.map(n => n.position.x));
+        const maxX = Math.max(
           ...nodes.map(n => n.position.x + (n.data.width || 120))
         );
         return minX + (maxX - minX) / 2;
@@ -918,8 +918,8 @@ describe('MindMapLayoutManager Integration Tests', () => {
       const allNodes = [rootNode, child1, child2];
 
       // Find tree bounds
-      let minX = Math.min(...allNodes.map(n => n.position.x));
-      let maxX = Math.max(
+      const minX = Math.min(...allNodes.map(n => n.position.x));
+      const maxX = Math.max(
         ...allNodes.map(n => n.position.x + (n.data.width || 120))
       );
       const treeWidth = maxX - minX;

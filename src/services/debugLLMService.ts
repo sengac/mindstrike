@@ -134,7 +134,7 @@ Respond with only the corrected LaTeX:
           basePrompt +
           `
 
-Common ${request.language || 'code'} issues to check:
+Common ${request.language ?? 'code'} issues to check:
 - Syntax errors
 - Missing brackets, parentheses, or quotes
 - Invalid indentation
@@ -142,7 +142,7 @@ Common ${request.language || 'code'} issues to check:
 - Missing semicolons or other required punctuation
 
 Respond with only the corrected code:
-\`\`\`${request.language || 'text'}
+\`\`\`${request.language ?? 'text'}
 [corrected code here]
 \`\`\``
         );

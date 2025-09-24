@@ -116,7 +116,7 @@ export function useGenerationStreaming() {
 
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.error || 'Generation failed');
+          throw new Error(errorData.error ?? 'Generation failed');
         }
 
         // Get the stream ID and workflow ID from response

@@ -86,7 +86,7 @@ export function calculateTextDimensions(
   } = options;
 
   // Create cache key including all relevant parameters
-  const cacheKey = `${text}|${fontSize}|${fontFamily}|${fontWeight}|${maxWidth || 'none'}|${padding.left},${padding.right},${padding.top},${padding.bottom}|${minWidth}`;
+  const cacheKey = `${text}|${fontSize}|${fontFamily}|${fontWeight}|${maxWidth ?? 'none'}|${padding.left},${padding.right},${padding.top},${padding.bottom}|${minWidth}`;
 
   // Check cache first
   const cached = measurementCache.get(cacheKey);

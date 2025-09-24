@@ -1,9 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import type { DynamicModelInfo } from '../modelFetcher.js';
-import { modelFetcher } from '../modelFetcher.js';
-import { logger } from '../logger.js';
-import { getMindstrikeDirectory } from '../utils/settingsDirectory.js';
+import type { DynamicModelInfo } from '../modelFetcher';
+import { modelFetcher } from '../modelFetcher';
+import { logger } from '../logger';
+import { getMindstrikeDirectory } from '../utils/settingsDirectory';
 import {
   HTTP_STATUS,
   USER_AGENT,
@@ -12,7 +12,7 @@ import {
   MEMORY,
   SPEED_FORMAT,
   CALCULATION,
-} from './constants.js';
+} from './constants';
 
 export interface DownloadProgress {
   progress: number;

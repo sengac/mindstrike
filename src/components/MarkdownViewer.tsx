@@ -67,7 +67,7 @@ const getSupportedLanguage = (language?: string): string => {
   const lowerLang = language.toLowerCase();
 
   // Return mapped language or original if it exists in common languages
-  return languageMap[lowerLang] || language || 'text';
+  return (languageMap[lowerLang] || language) ?? 'text';
 };
 
 export function MarkdownViewer({ content }: MarkdownViewerProps) {

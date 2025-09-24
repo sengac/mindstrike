@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useThreadsStore } from '../../store/useThreadsStore';
-import { useChatThreadStore } from '../../store/useChatThreadStore';
+import { getChatThreadStore } from '../../store/useChatThreadStore';
 
 export function useThreads() {
   const {
@@ -21,7 +21,7 @@ export function useThreads() {
   const selectThreadAndLoadMessages = useCallback(
     async (threadId: string) => {
       selectThread(threadId);
-      const threadStore = useChatThreadStore(threadId);
+      const threadStore = getChatThreadStore(threadId);
       await threadStore.getState().loadMessages();
     },
     [selectThread]
@@ -31,7 +31,7 @@ export function useThreads() {
     async (name?: string): Promise<string> => {
       const threadId = await createThread(name);
       // Clear current messages and load new (empty) thread - handled by thread switching
-      const threadStore = useChatThreadStore(threadId);
+      const threadStore = getChatThreadStore(threadId);
       await threadStore.getState().loadMessages();
       return threadId;
     },
@@ -44,7 +44,7 @@ export function useThreads() {
       // If the deleted thread was active, the store will auto-select the next one
       const newActiveThreadId = useThreadsStore.getState().activeThreadId;
       if (newActiveThreadId) {
-        const threadStore = useChatThreadStore(newActiveThreadId);
+        const threadStore = getChatThreadStore(newActiveThreadId);
         await threadStore.getState().loadMessages();
       }
       // If no active thread, the UI will handle showing empty state
@@ -57,7 +57,7 @@ export function useThreads() {
       await clearThread(threadId);
       // Reload messages if this is the active thread
       if (threadId === activeThreadId) {
-        const threadStore = useChatThreadStore(threadId);
+        const threadStore = getChatThreadStore(threadId);
         await threadStore.getState().loadMessages();
       }
     },
@@ -65,7 +65,7 @@ export function useThreads() {
   );
 
   const getActiveThread = useCallback(() => {
-    return threads.find(t => t.id === activeThreadId) || null;
+    return threads.find(t => t.id === activeThreadId) ?? null;
   }, [threads, activeThreadId]);
 
   return {

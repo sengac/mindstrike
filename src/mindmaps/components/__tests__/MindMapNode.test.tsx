@@ -114,7 +114,7 @@ describe('MindMapNode', () => {
       // Find the main node container by looking for the styled div
       const allDivs = Array.from(document.querySelectorAll('div'));
       const nodeContainer = allDivs.find(div => {
-        const style = div.getAttribute('style') || '';
+        const style = div.getAttribute('style') ?? '';
         return (
           style.includes('padding:') &&
           style.includes('border-radius:') &&
@@ -123,7 +123,7 @@ describe('MindMapNode', () => {
       });
 
       expect(nodeContainer).toBeTruthy();
-      const style = nodeContainer?.getAttribute('style') || '';
+      const style = nodeContainer?.getAttribute('style') ?? '';
       expect(style).toContain('transform: scale(1.1)');
       expect(style).toContain('box-shadow:');
     });
@@ -139,7 +139,7 @@ describe('MindMapNode', () => {
       // Find the main node container
       const allDivs = Array.from(document.querySelectorAll('div'));
       const nodeContainer = allDivs.find(div => {
-        const style = div.getAttribute('style') || '';
+        const style = div.getAttribute('style') ?? '';
         return (
           style.includes('padding:') &&
           style.includes('border-radius:') &&
@@ -147,7 +147,7 @@ describe('MindMapNode', () => {
         );
       });
 
-      const style = nodeContainer?.getAttribute('style') || '';
+      const style = nodeContainer?.getAttribute('style') ?? '';
       // Selected nodes have a specific box shadow
       expect(style).toContain('box-shadow');
       expect(style).toContain('0 0 0 2px');
@@ -167,7 +167,7 @@ describe('MindMapNode', () => {
       // Find the main node container
       const allDivs = Array.from(document.querySelectorAll('div'));
       const nodeContainer = allDivs.find(div => {
-        const style = div.getAttribute('style') || '';
+        const style = div.getAttribute('style') ?? '';
         return (
           style.includes('padding:') &&
           style.includes('border-radius:') &&
@@ -175,7 +175,7 @@ describe('MindMapNode', () => {
         );
       });
 
-      const style = nodeContainer?.getAttribute('style') || '';
+      const style = nodeContainer?.getAttribute('style') ?? '';
       expect(style).toContain('background-color: rgb(59, 130, 246)');
       expect(style).toContain('border-color: rgb(37, 99, 235)');
       expect(style).toContain('color: rgb(255, 255, 255)');
@@ -191,7 +191,7 @@ describe('MindMapNode', () => {
       // Find the main node container
       const allDivs = Array.from(document.querySelectorAll('div'));
       const nodeContainer = allDivs.find(div => {
-        const style = div.getAttribute('style') || '';
+        const style = div.getAttribute('style') ?? '';
         return (
           style.includes('padding:') &&
           style.includes('border-radius:') &&
@@ -199,7 +199,7 @@ describe('MindMapNode', () => {
         );
       });
 
-      const style = nodeContainer?.getAttribute('style') || '';
+      const style = nodeContainer?.getAttribute('style') ?? '';
       expect(style).toContain('opacity: 0.3');
       expect(style).toContain('transform: scale(0.95)');
       expect(style).toContain(
@@ -224,7 +224,7 @@ describe('MindMapNode', () => {
       const dropIndicator = Array.from(
         containerAbove.querySelectorAll('div')
       ).find(div => {
-        const style = div.getAttribute('style') || '';
+        const style = div.getAttribute('style') ?? '';
         return style.includes('background-color: rgb(74, 222, 128)');
       });
       expect(dropIndicator).toBeTruthy();
@@ -244,7 +244,7 @@ describe('MindMapNode', () => {
       const dropIndicatorBelow = Array.from(
         containerBelow.querySelectorAll('div')
       ).find(div => {
-        const style = div.getAttribute('style') || '';
+        const style = div.getAttribute('style') ?? '';
         return style.includes('background-color: rgb(74, 222, 128)');
       });
       expect(dropIndicatorBelow).toBeTruthy();
@@ -265,7 +265,7 @@ describe('MindMapNode', () => {
       const nodeContainer = Array.from(
         containerOver.querySelectorAll('div')
       ).find(div => {
-        const style = div.getAttribute('style') || '';
+        const style = div.getAttribute('style') ?? '';
         return (
           style.includes('padding:') &&
           style.includes('border-radius:') &&
@@ -273,7 +273,7 @@ describe('MindMapNode', () => {
         );
       });
 
-      const style = nodeContainer?.getAttribute('style') || '';
+      const style = nodeContainer?.getAttribute('style') ?? '';
       expect(style).toContain(
         'box-shadow: 0 0 0 2px #4ade80, 0 0 0 4px #111827'
       );
@@ -292,8 +292,8 @@ describe('MindMapNode', () => {
       expect(chatIcon).toBeTruthy();
 
       // Check the parent div's style
-      const chatIconDiv = chatIcon as HTMLElement;
-      const style = chatIconDiv.getAttribute('style') || '';
+      const chatIconDiv = chatIcon;
+      const style = chatIconDiv.getAttribute('style') ?? '';
       expect(style).toContain('background-color: rgb(16, 185, 129)');
     });
 
@@ -307,8 +307,8 @@ describe('MindMapNode', () => {
       const notesIcon = screen.getByTitle('View notes');
       expect(notesIcon).toBeTruthy();
 
-      const notesIconDiv = notesIcon as HTMLElement;
-      const style = notesIconDiv.getAttribute('style') || '';
+      const notesIconDiv = notesIcon;
+      const style = notesIconDiv.getAttribute('style') ?? '';
       expect(style).toContain('background-color: rgb(239, 68, 68)');
     });
 
@@ -322,8 +322,8 @@ describe('MindMapNode', () => {
       const sourcesIcon = screen.getByTitle('View sources');
       expect(sourcesIcon).toBeTruthy();
 
-      const sourcesIconDiv = sourcesIcon as HTMLElement;
-      const style = sourcesIconDiv.getAttribute('style') || '';
+      const sourcesIconDiv = sourcesIcon;
+      const style = sourcesIconDiv.getAttribute('style') ?? '';
       expect(style).toContain('background-color: rgb(249, 115, 22)');
     });
 
@@ -452,9 +452,7 @@ describe('MindMapNode', () => {
         vi.advanceTimersByTime(100);
       });
 
-      const input = screen.getByPlaceholderText(
-        'Enter text...'
-      ) as HTMLTextAreaElement;
+      const input = screen.getByPlaceholderText('Enter text...');
       expect(document.activeElement).toBe(input);
     });
   });
@@ -470,7 +468,7 @@ describe('MindMapNode', () => {
       // Find the main node container
       const allDivs = Array.from(document.querySelectorAll('div'));
       const nodeContainer = allDivs.find(div => {
-        const style = div.getAttribute('style') || '';
+        const style = div.getAttribute('style') ?? '';
         return (
           style.includes('padding:') &&
           style.includes('border-radius:') &&
@@ -540,7 +538,7 @@ describe('MindMapNode', () => {
       // Find the main node container
       const allDivs = Array.from(document.querySelectorAll('div'));
       const nodeContainer = allDivs.find(div => {
-        const style = div.getAttribute('style') || '';
+        const style = div.getAttribute('style') ?? '';
         return (
           style.includes('padding:') &&
           style.includes('border-radius:') &&
@@ -574,7 +572,7 @@ describe('MindMapNode', () => {
       // Find the main node container
       const allDivs = Array.from(document.querySelectorAll('div'));
       const nodeContainer = allDivs.find(div => {
-        const style = div.getAttribute('style') || '';
+        const style = div.getAttribute('style') ?? '';
         return (
           style.includes('padding:') &&
           style.includes('border-radius:') &&
@@ -606,7 +604,7 @@ describe('MindMapNode', () => {
       // Find the main node container
       const allDivs = Array.from(document.querySelectorAll('div'));
       const nodeContainer = allDivs.find(div => {
-        const style = div.getAttribute('style') || '';
+        const style = div.getAttribute('style') ?? '';
         return (
           style.includes('padding:') &&
           style.includes('border-radius:') &&
@@ -636,7 +634,7 @@ describe('MindMapNode', () => {
       // Find the main node container
       const allDivs = Array.from(document.querySelectorAll('div'));
       const nodeContainer = allDivs.find(div => {
-        const style = div.getAttribute('style') || '';
+        const style = div.getAttribute('style') ?? '';
         return (
           style.includes('padding:') &&
           style.includes('border-radius:') &&
@@ -688,7 +686,7 @@ describe('MindMapNode', () => {
       // Find the main node container
       const allDivs = Array.from(document.querySelectorAll('div'));
       const nodeContainer = allDivs.find(div => {
-        const style = div.getAttribute('style') || '';
+        const style = div.getAttribute('style') ?? '';
         return (
           style.includes('padding:') &&
           style.includes('border-radius:') &&
@@ -728,7 +726,7 @@ describe('MindMapNode', () => {
       // Find the main node container
       const allDivs = Array.from(document.querySelectorAll('div'));
       const nodeContainer = allDivs.find(div => {
-        const style = div.getAttribute('style') || '';
+        const style = div.getAttribute('style') ?? '';
         return (
           style.includes('padding:') &&
           style.includes('border-radius:') &&
@@ -850,7 +848,7 @@ describe('MindMapNode', () => {
       // Find the main node container
       const allDivs = Array.from(container.querySelectorAll('div'));
       const nodeContainer = allDivs.find(div => {
-        const style = div.getAttribute('style') || '';
+        const style = div.getAttribute('style') ?? '';
         return (
           style.includes('padding:') &&
           style.includes('border-radius:') &&
@@ -871,7 +869,7 @@ describe('MindMapNode', () => {
       // Find the main node container
       const allDivs = Array.from(container.querySelectorAll('div'));
       const nodeContainer = allDivs.find(div => {
-        const style = div.getAttribute('style') || '';
+        const style = div.getAttribute('style') ?? '';
         return (
           style.includes('padding:') &&
           style.includes('border-radius:') &&
@@ -894,7 +892,7 @@ describe('MindMapNode', () => {
       // Find the main node container
       const allDivs = Array.from(container.querySelectorAll('div'));
       const nodeContainer = allDivs.find(div => {
-        const style = div.getAttribute('style') || '';
+        const style = div.getAttribute('style') ?? '';
         return (
           style.includes('padding:') &&
           style.includes('border-radius:') &&
@@ -910,9 +908,7 @@ describe('MindMapNode', () => {
       fireEvent.doubleClick(labelElement);
 
       // Mock scrollHeight for textarea to prevent it from being 0
-      const textarea = screen.getByPlaceholderText(
-        'Enter text...'
-      ) as HTMLTextAreaElement;
+      const textarea = screen.getByPlaceholderText('Enter text...');
       Object.defineProperty(textarea, 'scrollHeight', {
         value: 21, // Single line height matching the span
         configurable: true,
@@ -941,12 +937,10 @@ describe('MindMapNode', () => {
       const labelElement = getVisibleText('First Child');
       fireEvent.doubleClick(labelElement);
 
-      const textarea = screen.getByPlaceholderText(
-        'Enter text...'
-      ) as HTMLTextAreaElement;
+      const textarea = screen.getByPlaceholderText('Enter text...');
 
       // Check that textarea has correct inline styles
-      const style = textarea.getAttribute('style') || '';
+      const style = textarea.getAttribute('style') ?? '';
       expect(style).toContain('line-height: 21px');
       expect(style).toContain('height: 21px');
       expect(style).toContain('padding: 0');
@@ -964,9 +958,7 @@ describe('MindMapNode', () => {
       const labelElement = getVisibleText('First Child');
       fireEvent.doubleClick(labelElement);
 
-      const textarea = screen.getByPlaceholderText(
-        'Enter text...'
-      ) as HTMLTextAreaElement;
+      const textarea = screen.getByPlaceholderText('Enter text...');
 
       // Mock scrollHeight for multi-line content (3 lines * 21px)
       Object.defineProperty(textarea, 'scrollHeight', {
@@ -980,7 +972,7 @@ describe('MindMapNode', () => {
 
       // The auto-resize should have been triggered
       // Check that height is now 3 * 21px = 63px
-      const style = textarea.getAttribute('style') || '';
+      const style = textarea.getAttribute('style') ?? '';
       expect(style).toContain('height: 63px');
     });
 
@@ -995,9 +987,7 @@ describe('MindMapNode', () => {
       const labelElement = getVisibleText('First Child');
       fireEvent.doubleClick(labelElement);
 
-      const textarea = screen.getByPlaceholderText(
-        'Enter text...'
-      ) as HTMLTextAreaElement;
+      const textarea = screen.getByPlaceholderText('Enter text...');
 
       // Mock initial selection (text is fully selected)
       Object.defineProperty(textarea, 'selectionStart', {
@@ -1005,21 +995,22 @@ describe('MindMapNode', () => {
         configurable: true,
       });
       Object.defineProperty(textarea, 'selectionEnd', {
-        value: textarea.value.length,
+        value: (textarea as HTMLTextAreaElement).value.length,
         configurable: true,
       });
 
       // Mock setSelectionRange
       const setSelectionRangeSpy = vi.fn();
-      textarea.setSelectionRange = setSelectionRangeSpy;
+      (textarea as HTMLTextAreaElement).setSelectionRange =
+        setSelectionRangeSpy;
 
       // Click on the textarea
       fireEvent.click(textarea);
 
       // Verify that setSelectionRange was called to unselect text
       expect(setSelectionRangeSpy).toHaveBeenCalledWith(
-        textarea.value.length,
-        textarea.value.length
+        (textarea as HTMLTextAreaElement).value.length,
+        (textarea as HTMLTextAreaElement).value.length
       );
     });
 
@@ -1034,9 +1025,7 @@ describe('MindMapNode', () => {
       const labelElement = getVisibleText('First Child');
       fireEvent.doubleClick(labelElement);
 
-      const textarea = screen.getByPlaceholderText(
-        'Enter text...'
-      ) as HTMLTextAreaElement;
+      const textarea = screen.getByPlaceholderText('Enter text...');
 
       // Mock partial selection
       Object.defineProperty(textarea, 'selectionStart', {
@@ -1050,7 +1039,8 @@ describe('MindMapNode', () => {
 
       // Mock setSelectionRange
       const setSelectionRangeSpy = vi.fn();
-      textarea.setSelectionRange = setSelectionRangeSpy;
+      (textarea as HTMLTextAreaElement).setSelectionRange =
+        setSelectionRangeSpy;
 
       // Click on the textarea
       fireEvent.click(textarea);
@@ -1179,7 +1169,7 @@ describe('MindMapNode', () => {
       const dropIndicator = Array.from(
         containerLR.querySelectorAll('div')
       ).find(div => {
-        const style = div.getAttribute('style') || '';
+        const style = div.getAttribute('style') ?? '';
         return style.includes('background-color: rgb(74, 222, 128)');
       });
       expect(dropIndicator).toBeTruthy();
@@ -1200,7 +1190,7 @@ describe('MindMapNode', () => {
       const dropIndicatorTB = Array.from(
         containerTB.querySelectorAll('div')
       ).find(div => {
-        const style = div.getAttribute('style') || '';
+        const style = div.getAttribute('style') ?? '';
         return (
           style.includes('background-color: rgb(74, 222, 128)') &&
           style.includes('left: -8px')

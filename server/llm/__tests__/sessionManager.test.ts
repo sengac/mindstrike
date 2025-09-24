@@ -7,7 +7,7 @@ import {
   afterEach,
   type MockedFunction,
 } from 'vitest';
-import { LlamaSessionManager } from '../sessionManager.js';
+import { LlamaSessionManager } from '../sessionManager';
 import type {
   LlamaModel,
   LlamaContext,
@@ -28,7 +28,7 @@ interface MockLlamaChatSession {
 }
 
 // Mock logger
-vi.mock('../../logger.js', () => ({
+vi.mock('../../logger', () => ({
   logger: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -186,9 +186,7 @@ describe('LlamaSessionManager', () => {
       } as LlamaChatSession;
 
       // Update mock to return new session on next instantiation
-      mockLlamaChatSession.mockImplementation(
-        () => newMockSession as LlamaChatSession
-      );
+      mockLlamaChatSession.mockImplementation(() => newMockSession);
 
       // Recreate with new config
       await manager.recreateSession(

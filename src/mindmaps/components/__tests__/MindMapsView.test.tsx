@@ -4,7 +4,6 @@ import userEvent from '@testing-library/user-event';
 import { MindMapsView } from '../MindMapsView';
 import type { MindMap } from '../../hooks/useMindMaps';
 import type { ThreadMetadata } from '../../../store/useThreadsStore';
-import { mockSources } from '../../__fixtures__/mindMapData';
 
 // Mock the AppBar component
 vi.mock('../../../components/AppBar', () => ({
@@ -277,7 +276,7 @@ describe('MindMapsView', () => {
         '.flex.flex-col.h-full'
       ) as HTMLElement;
       expect(mainContainer).toBeTruthy();
-      const mainClasses = mainContainer.getAttribute('class') || '';
+      const mainClasses = mainContainer.getAttribute('class') ?? '';
       expect(mainClasses).toContain('flex');
       expect(mainClasses).toContain('flex-col');
       expect(mainClasses).toContain('h-full');
@@ -287,7 +286,7 @@ describe('MindMapsView', () => {
         '.flex.flex-1.min-h-0'
       ) as HTMLElement;
       expect(contentArea).toBeTruthy();
-      const contentClasses = contentArea.getAttribute('class') || '';
+      const contentClasses = contentArea.getAttribute('class') ?? '';
       expect(contentClasses).toContain('flex');
       expect(contentClasses).toContain('flex-1');
       expect(contentClasses).toContain('min-h-0');

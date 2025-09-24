@@ -68,7 +68,7 @@ export function useResponseValidation(): UseResponseValidationReturn {
     try {
       const saved = localStorage.getItem('responseValidationEnabled');
       if (saved !== null) {
-        const enabled = JSON.parse(saved);
+        const enabled = JSON.parse(saved) as boolean;
         setValidationEnabledState(enabled);
       }
     } catch (error) {

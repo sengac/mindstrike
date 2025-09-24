@@ -1,9 +1,9 @@
-import type { LocalModelInfo, ModelDownloadInfo } from '../localLlmManager.js';
-import type { DynamicModelInfo } from '../modelFetcher.js';
-import type { ModelFileManager } from './modelFileManager.js';
-import type { ModelDownloader } from './modelDownloader.js';
-import type { ContextCalculator } from './contextCalculator.js';
-import { logger } from '../logger.js';
+import type { LocalModelInfo, ModelDownloadInfo } from '../localLlmManager';
+import type { DynamicModelInfo } from '../modelFetcher';
+import type { ModelFileManager } from './modelFileManager';
+import type { ModelDownloader } from './modelDownloader';
+import type { ContextCalculator } from './contextCalculator';
+import { logger } from '../logger';
 
 /**
  * Handles model discovery, searching, and downloading

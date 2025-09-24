@@ -1,6 +1,6 @@
-import { sseManager } from './sseManager.js';
-import { logger } from './logger.js';
-import { SSEEventType } from '../src/types.js';
+import { sseManager } from './sseManager';
+import { logger } from './logger';
+import { SSEEventType } from '../src/types';
 
 interface DebugEntry {
   entryType: 'request' | 'response' | 'error';

@@ -236,7 +236,7 @@ export function LCDCanvas({
 
           // Render each row of the character
           for (let rowIndex = 0; rowIndex < 8; rowIndex++) {
-            const row = pattern[rowIndex] || 0;
+            const row = pattern[rowIndex] ?? 0;
             const rowY = lineY + rowIndex * dotSize;
 
             // Render each dot in the row
@@ -260,7 +260,7 @@ export function LCDCanvas({
 
         // Render each segment
         for (const segment of segments) {
-          const startPos = Math.min(segment.position || 0, effectiveWidth - 1);
+          const startPos = Math.min(segment.position ?? 0, effectiveWidth - 1);
 
           for (
             let charIndex = 0;
@@ -277,7 +277,7 @@ export function LCDCanvas({
 
             // Render each row of the character
             for (let rowIndex = 0; rowIndex < 8; rowIndex++) {
-              const row = pattern[rowIndex] || 0;
+              const row = pattern[rowIndex] ?? 0;
               const rowY = lineY + rowIndex * dotSize;
 
               // Render each dot in the row

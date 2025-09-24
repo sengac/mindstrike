@@ -55,8 +55,9 @@ export async function initializeWorkspace() {
         });
 
         if (response.ok) {
-          const data = await response.json();
-          useAppStore.getState().setWorkspaceRoot(data.workspaceRoot);
+          const data: unknown = await response.json();
+          const workspaceData = data as { workspaceRoot?: string };
+          useAppStore.getState().setWorkspaceRoot(workspaceData.workspaceRoot);
         } else {
           logger.error(
             'Failed to set initial workspace:',

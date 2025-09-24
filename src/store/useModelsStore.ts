@@ -31,7 +31,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
     const defaultModel = models.find(m => m.isDefault);
     set({
       models,
-      defaultModelId: defaultModel?.id || null,
+      defaultModelId: defaultModel?.id ?? null,
       error: null,
     });
   },

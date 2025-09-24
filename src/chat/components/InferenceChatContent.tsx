@@ -15,12 +15,14 @@ interface InferenceChatContentProps {
 
 export function InferenceChatContent({
   nodeLabel,
-  nodeId: _nodeId,
+  nodeId,
 }: InferenceChatContentProps) {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const chatInputRef = useRef<HTMLInputElement>(null);
+
+  console.debug('InferenceChatContent initialized for node:', nodeId);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Initialize chat when component mounts
@@ -82,8 +84,7 @@ export function InferenceChatContent({
 
       const result = await response.json();
       const assistantMessage =
-        result.content ||
-        result.message ||
+        (result.content || result.message) ??
         'I apologize, but I could not generate a response at this time.';
 
       setChatMessages([

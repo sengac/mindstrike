@@ -1,11 +1,11 @@
-import type { LocalModelInfo } from '../localLlmManager.js';
-import { sharedLlamaInstance } from '../sharedLlamaInstance.js';
-import { logger } from '../logger.js';
-import { GPU_LAYERS } from './constants.js';
-import type { ModelRegistry } from './modelRegistry.js';
-import type { LlamaSessionManager } from './sessionManager.js';
-import type { ModelSettingsService } from './modelSettingsService.js';
-import type { ModelDiscovery } from './modelDiscovery.js';
+import type { LocalModelInfo } from '../localLlmManager';
+import { sharedLlamaInstance } from '../sharedLlamaInstance';
+import { logger } from '../logger';
+import { GPU_LAYERS } from './constants';
+import type { ModelRegistry } from './modelRegistry';
+import type { LlamaSessionManager } from './sessionManager';
+import type { ModelSettingsService } from './modelSettingsService';
+import type { ModelDiscovery } from './modelDiscovery';
 
 /**
  * Handles model loading and unloading operations

@@ -14,15 +14,15 @@ import type { DynamicStructuredTool } from '@langchain/core/tools';
 import { AgentExecutor, createToolCallingAgent } from 'langchain/agents';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 
-import { ChatLocalLLM } from './chatLocalLlm.js';
-import { logger } from '../logger.js';
-import { cleanContentForLLM } from '../utils/contentFilter.js';
-import { LLMConfigManager } from '../llmConfigManager.js';
-import { serverDebugLogger } from '../debugLogger.js';
-import { sseManager } from '../sseManager.js';
-import { ConversationManager } from '../conversationManager.js';
-import { mcpManager } from '../mcpManager.js';
-import { lfsManager } from '../lfsManager.js';
+import { ChatLocalLLM } from './chatLocalLlm';
+import { logger } from '../logger';
+import { cleanContentForLLM } from '../utils/contentFilter';
+import { LLMConfigManager } from '../llmConfigManager';
+import { serverDebugLogger } from '../debugLogger';
+import { sseManager } from '../sseManager';
+import { ConversationManager } from '../conversationManager';
+import { mcpManager } from '../mcpManager';
+import { lfsManager } from '../lfsManager';
 
 export interface AgentConfig {
   workspaceRoot: string;
@@ -46,6 +46,17 @@ export interface AgentConfig {
   customPrompt?: string;
   disableFunctions?: boolean;
   disableChatHistory?: boolean;
+}
+
+// MCP Result types for type-safe handling
+interface MCPTextContent {
+  type: 'text';
+  text: string;
+}
+
+interface MCPContentWithText {
+  text: string;
+  [key: string]: unknown;
 }
 
 export interface ImageAttachment {
@@ -101,9 +112,40 @@ export abstract class BaseAgent {
     return this.config.llmConfig;
   }
 
+  // Helper methods for type-safe MCP result handling
+  private isStringContent(item: unknown): item is string {
+    return typeof item === 'string';
+  }
+
+  private isTextContent(item: unknown): item is MCPTextContent {
+    return (
+      typeof item === 'object' &&
+      item !== null &&
+      'type' in item &&
+      (item as MCPTextContent).type === 'text' &&
+      'text' in item
+    );
+  }
+
+  private isContentWithText(item: unknown): item is MCPContentWithText {
+    return typeof item === 'object' && item !== null && 'text' in item;
+  }
+
+  private extractTextFromMCPItem(item: unknown): string {
+    if (this.isStringContent(item)) {
+      return item;
+    } else if (this.isTextContent(item)) {
+      return item.text ?? '';
+    } else if (this.isContentWithText(item)) {
+      return typeof item.text === 'string' ? item.text : '';
+    } else {
+      return JSON.stringify(item);
+    }
+  }
+
   constructor(config: AgentConfig, agentId?: string) {
     this.config = config;
-    this.agentId = agentId || this.generateId();
+    this.agentId = agentId ?? this.generateId();
 
     // Initialize chat model based on type
     this.chatModel = this.createChatModel(config.llmConfig);
@@ -129,7 +171,9 @@ export abstract class BaseAgent {
     ]);
 
     // Initialize agent executor
-    this.initializeAgentExecutor();
+    this.initializeAgentExecutor().catch(error => {
+      logger.error('Failed to initialize agent executor:', error);
+    });
   }
 
   // Abstract methods that must be implemented by derived classes
@@ -146,8 +190,8 @@ export abstract class BaseAgent {
     threadId?: string
   ): BaseChatModel {
     const baseConfig = {
-      temperature: llmConfig.temperature || 0.7,
-      maxTokens: llmConfig.maxTokens || 4000,
+      temperature: llmConfig.temperature ?? 0.7,
+      maxTokens: llmConfig.maxTokens ?? 4000,
     };
 
     switch (llmConfig.type) {
@@ -200,12 +244,12 @@ export abstract class BaseAgent {
       default: {
         // Convert relative URLs to full URLs for local models
         let baseURL = llmConfig.baseURL;
-        if (baseURL && baseURL.startsWith('/api/')) {
+        if (baseURL?.startsWith('/api/')) {
           baseURL = `http://localhost:3001${baseURL}`;
         }
 
         return new ChatOpenAI({
-          openAIApiKey: llmConfig.apiKey || 'dummy-key',
+          openAIApiKey: llmConfig.apiKey ?? 'dummy-key',
           modelName: llmConfig.model,
           configuration: {
             baseURL: baseURL,
@@ -374,7 +418,7 @@ export abstract class BaseAgent {
               }> = [];
 
               // Add text content if present
-              if (content && content.trim()) {
+              if (content?.trim()) {
                 contentArray.push({
                   type: 'text',
                   text: content,
@@ -383,8 +427,8 @@ export abstract class BaseAgent {
 
               // Add images - use full-size image for better LLM analysis
               for (const image of msg.images) {
-                let imageData = image.fullImage || image.thumbnail;
-                let mediaType = image.mimeType || 'image/jpeg';
+                let imageData = image.fullImage ?? image.thumbnail;
+                let mediaType = image.mimeType ?? 'image/jpeg';
 
                 // Extract base64 data if it's a data URL
                 if (imageData.startsWith('data:')) {
@@ -438,7 +482,7 @@ export abstract class BaseAgent {
               }> = [];
 
               // Add text content if present
-              if (content && content.trim()) {
+              if (content?.trim()) {
                 contentArray.push({
                   type: 'text',
                   text: content,
@@ -467,13 +511,13 @@ export abstract class BaseAgent {
 
               // Handle text content and notes
               let textContent = content;
-              if (msg.notes && msg.notes.length > 0) {
+              if (msg.notes?.length) {
                 const notesText = this.formatAttachedNotes(msg.notes);
                 textContent += notesText;
               }
 
               // Add text content if present
-              if (textContent && textContent.trim()) {
+              if (textContent?.trim()) {
                 contentArray.push({
                   type: 'text',
                   text: textContent,
@@ -482,11 +526,11 @@ export abstract class BaseAgent {
 
               // Add images - use proper data URL format for LangChain
               for (const image of msg.images) {
-                let imageUrl = image.fullImage || image.thumbnail;
+                let imageUrl = image.fullImage ?? image.thumbnail;
 
                 // Ensure it's a proper data URL
                 if (!imageUrl.startsWith('data:')) {
-                  const mimeType = image.mimeType || 'image/jpeg';
+                  const mimeType = image.mimeType ?? 'image/jpeg';
                   imageUrl = `data:${mimeType};base64,${imageUrl}`;
                 }
 
@@ -506,7 +550,7 @@ export abstract class BaseAgent {
               }> = [];
 
               // Add text content if present
-              if (content && content.trim()) {
+              if (content?.trim()) {
                 contentArray.push({
                   type: 'text',
                   text: content,
@@ -515,11 +559,11 @@ export abstract class BaseAgent {
 
               // Add images - use full-size image for better LLM analysis
               for (const image of msg.images) {
-                let imageUrl = image.fullImage || image.thumbnail;
+                let imageUrl = image.fullImage ?? image.thumbnail;
 
                 // Ensure it's a proper data URL
                 if (!imageUrl.startsWith('data:')) {
-                  imageUrl = `data:${image.mimeType || 'image/jpeg'};base64,${imageUrl}`;
+                  imageUrl = `data:${image.mimeType ?? 'image/jpeg'};base64,${imageUrl}`;
                 }
 
                 contentArray.push({
@@ -551,7 +595,7 @@ export abstract class BaseAgent {
             }
           } else {
             // No images, just handle text and notes
-            let userContent = content || '';
+            let userContent = content ?? '';
             if (msg.notes && msg.notes.length > 0) {
               const notesText = this.formatAttachedNotes(msg.notes);
               userContent += notesText;
@@ -559,9 +603,9 @@ export abstract class BaseAgent {
             return new HumanMessage(userContent);
           }
         case 'assistant':
-          return new AIMessage(content || '');
+          return new AIMessage(content ?? '');
         default:
-          return new HumanMessage(content || '');
+          return new HumanMessage(content ?? '');
       }
     });
 
@@ -588,15 +632,15 @@ export abstract class BaseAgent {
     if (reorderedMessages.length === 0) {
       // Create a fallback system message if no messages exist
       const fallbackMessage = new SystemMessage(
-        this.systemPrompt ||
-          this.createSystemPrompt() ||
+        this.systemPrompt ??
+          this.createSystemPrompt() ??
           'You are a helpful AI assistant.'
       );
       return [fallbackMessage];
     }
 
     // Add system message at the beginning
-    const systemPromptContent = this.systemPrompt || this.createSystemPrompt();
+    const systemPromptContent = this.systemPrompt ?? this.createSystemPrompt();
     const systemMessage = new SystemMessage(systemPromptContent);
     const finalMessages = [systemMessage, ...reorderedMessages];
 
@@ -700,7 +744,7 @@ export abstract class BaseAgent {
       userMessageId,
       includePriorConversation = true,
       signal,
-    } = options || {};
+    } = options ?? {};
     // Initialize conversation manager and load existing data
     await this.conversationManager.load();
 
@@ -712,7 +756,7 @@ export abstract class BaseAgent {
     }
 
     // Ensure we have a valid system prompt but don't persist it
-    const systemPromptContent = this.systemPrompt || this.createSystemPrompt();
+    const systemPromptContent = this.systemPrompt ?? this.createSystemPrompt();
 
     if (!systemPromptContent || systemPromptContent.trim() === '') {
       throw new Error(
@@ -748,13 +792,13 @@ export abstract class BaseAgent {
     // Only add user message if it doesn't already exist
     if (!userMsg) {
       userMsg = {
-        id: userMessageId || this.generateId(),
+        id: userMessageId ?? this.generateId(),
         role: 'user',
         content: userMessage,
         timestamp: new Date(),
         status: 'completed',
-        images: images || [],
-        notes: notes || [],
+        images: images ?? [],
+        notes: notes ?? [],
       };
 
       await this.conversationManager.addMessage(threadId, userMsg);
@@ -781,7 +825,7 @@ export abstract class BaseAgent {
         content: '',
         timestamp: new Date(),
         status: 'processing',
-        model: this.config.llmConfig.displayName || this.config.llmConfig.model,
+        model: this.config.llmConfig.displayName ?? this.config.llmConfig.model,
       };
       await this.conversationManager.addMessage(threadId, assistantMsg);
 
@@ -883,24 +927,22 @@ export abstract class BaseAgent {
           accumulatedMessage = {
             tool_calls:
               chunk.tool_calls?.map(tc => ({
-                id: tc.id || '',
+                id: tc.id ?? '',
                 name: tc.name,
                 args: tc.args,
-              })) || [],
+              })) ?? [],
             tool_call_chunks:
               chunk.tool_call_chunks?.map(tcc => ({
-                index: tcc.index || 0,
+                index: tcc.index ?? 0,
                 id: tcc.id,
                 name: tcc.name,
                 args: tcc.args,
-              })) || [],
+              })) ?? [],
           };
         } else {
           // Simple manual concatenation for tool call chunks
           if (chunk.tool_call_chunks && chunk.tool_call_chunks.length > 0) {
-            if (!accumulatedMessage.tool_call_chunks) {
-              accumulatedMessage.tool_call_chunks = [];
-            }
+            accumulatedMessage.tool_call_chunks ??= [];
             // Merge tool call chunks by index
             for (const newChunk of chunk.tool_call_chunks) {
               const existingIndex =
@@ -910,7 +952,7 @@ export abstract class BaseAgent {
                     id?: string;
                     name?: string;
                     args?: string;
-                  }) => existing.index === (newChunk.index || 0)
+                  }) => existing.index === (newChunk.index ?? 0)
                 );
               if (existingIndex >= 0) {
                 // Merge existing chunk
@@ -918,14 +960,14 @@ export abstract class BaseAgent {
                   accumulatedMessage.tool_call_chunks[existingIndex];
                 accumulatedMessage.tool_call_chunks[existingIndex] = {
                   ...existing,
-                  name: newChunk.name || existing.name,
-                  args: (existing.args || '') + (newChunk.args || ''),
-                  id: newChunk.id || existing.id,
+                  name: newChunk.name ?? existing.name,
+                  args: (existing.args ?? '') + (newChunk.args ?? ''),
+                  id: newChunk.id ?? existing.id,
                 };
               } else {
                 // Add new chunk
                 accumulatedMessage.tool_call_chunks.push({
-                  index: newChunk.index || 0,
+                  index: newChunk.index ?? 0,
                   id: newChunk.id,
                   name: newChunk.name,
                   args: newChunk.args,
@@ -945,14 +987,14 @@ export abstract class BaseAgent {
             .map((item: unknown) =>
               typeof item === 'string'
                 ? item
-                : (item as { text?: string }).text || ''
+                : ((item as { text?: string }).text ?? '')
             )
             .join('');
         } else if (chunk.content && typeof chunk.content === 'object') {
           // Handle content objects
           chunkContent =
-            (chunk.content as { text?: string; content?: string }).text ||
-            (chunk.content as { text?: string; content?: string }).content ||
+            (chunk.content as { text?: string; content?: string }).text ??
+            (chunk.content as { text?: string; content?: string }).content ??
             '';
         }
 
@@ -1017,26 +1059,31 @@ export abstract class BaseAgent {
         accumulatedMessage.tool_calls.length > 0
       ) {
         // Convert LangChain tool calls to our format
-        toolCalls = accumulatedMessage.tool_calls.map(
-          (toolCall: {
-            id?: string;
-            name: string;
-            args: string | Record<string, unknown>;
-          }) => ({
-            id: toolCall.id || this.generateId(),
-            name: toolCall.name,
-            parameters:
-              typeof toolCall.args === 'string'
-                ? JSON.parse(toolCall.args)
-                : toolCall.args,
-          })
+        toolCalls.push(
+          ...accumulatedMessage.tool_calls.map(
+            (toolCall: {
+              id?: string;
+              name: string;
+              args: string | Record<string, unknown>;
+            }) => ({
+              id: toolCall.id ?? this.generateId(),
+              name: toolCall.name,
+              parameters:
+                typeof toolCall.args === 'string'
+                  ? (JSON.parse(toolCall.args) as Record<string, unknown>)
+                  : toolCall.args,
+            })
+          )
         );
-      } else if (
+      }
+
+      // Also check for tool call chunks
+      if (
         accumulatedMessage?.tool_call_chunks &&
         accumulatedMessage.tool_call_chunks.length > 0
       ) {
         // Convert tool call chunks to our format
-        toolCalls = accumulatedMessage.tool_call_chunks
+        const chunkToolCalls = accumulatedMessage.tool_call_chunks
           .filter(
             (chunk: {
               index: number;
@@ -1052,18 +1099,21 @@ export abstract class BaseAgent {
               name?: string;
               args?: string;
             }) => ({
-              id: chunk.id || this.generateId(),
+              id: chunk.id ?? this.generateId(),
               name: chunk.name!,
               parameters:
                 typeof chunk.args === 'string'
-                  ? JSON.parse(chunk.args)
-                  : chunk.args,
+                  ? (JSON.parse(chunk.args) as Record<string, unknown>)
+                  : (chunk.args ?? {}),
             })
           );
-      } else {
-        // Fallback to text parsing for models that don't support tool call streaming
+        toolCalls.push(...chunkToolCalls);
+      }
+
+      // Fallback to text parsing if no streaming tool calls found
+      if (toolCalls.length === 0) {
         const { toolCalls: parsedToolCalls } = this.parseToolCalls(fullContent);
-        toolCalls = parsedToolCalls || [];
+        toolCalls = parsedToolCalls ?? [];
       }
 
       // Log the response for debugging
@@ -1162,9 +1212,7 @@ export abstract class BaseAgent {
         const followUpMessages = [
           ...messages,
           // Only include the assistant message if it has content
-          ...(fullContent && fullContent.trim()
-            ? [new AIMessage(fullContent)]
-            : []),
+          ...(fullContent?.trim() ? [new AIMessage(fullContent)] : []),
           new HumanMessage(
             `Tool execution results:\n${toolResultContent}\n\nPlease respond to the user with the relevant information from the tool results. Include the actual content/data from the tools when it's helpful to the user.`
           ),
@@ -1206,13 +1254,13 @@ export abstract class BaseAgent {
               .map((item: unknown) =>
                 typeof item === 'string'
                   ? item
-                  : (item as { text?: string }).text || ''
+                  : ((item as { text?: string }).text ?? '')
               )
               .join('');
           } else if (chunk.content && typeof chunk.content === 'object') {
             chunkContent =
-              (chunk.content as { text?: string; content?: string }).text ||
-              (chunk.content as { text?: string; content?: string }).content ||
+              (chunk.content as { text?: string; content?: string }).text ??
+              (chunk.content as { text?: string; content?: string }).content ??
               '';
           }
 
@@ -1413,7 +1461,7 @@ export abstract class BaseAgent {
             .map((item: unknown) =>
               typeof item === 'string'
                 ? item
-                : (item as { text?: string }).text || ''
+                : ((item as { text?: string }).text ?? '')
             )
             .join('');
         } else if (chunk.content && typeof chunk.content === 'object') {
@@ -1421,7 +1469,7 @@ export abstract class BaseAgent {
             text?: string;
             content?: string;
           };
-          result += contentObj.text || contentObj.content || '';
+          result += contentObj.text ?? contentObj.content ?? '';
         }
       }
       return result;
@@ -1446,10 +1494,10 @@ export abstract class BaseAgent {
     if (deleted) {
       // Update LLM session history for all provider types
       try {
-        const { globalSessionManager } = await import('../sessionManager.js');
+        const { globalSessionManager } = await import('../sessionManager');
         await globalSessionManager.updateSessionHistory(
-          this.config.llmConfig.type || 'openai',
-          this.config.llmConfig.model || 'gpt-4',
+          this.config.llmConfig.type ?? 'openai',
+          this.config.llmConfig.model ?? 'gpt-4',
           threadId,
           []
         );
@@ -1513,7 +1561,9 @@ export abstract class BaseAgent {
   updateLLMConfig(newLlmConfig: AgentConfig['llmConfig']): void {
     this.config.llmConfig = newLlmConfig;
     this.chatModel = this.createChatModel(newLlmConfig);
-    this.initializeAgentExecutor(); // Reinitialize agent executor with new model
+    this.initializeAgentExecutor().catch(error => {
+      logger.error('Failed to reinitialize agent executor:', error);
+    }); // Reinitialize agent executor with new model
   }
 
   updateWorkspaceRoot(newWorkspaceRoot: string): void {
@@ -1527,11 +1577,16 @@ export abstract class BaseAgent {
 
     // System messages are now handled dynamically, no need to update stored messages
     // Reinitialize agent executor with new system prompt
-    this.initializeAgentExecutor();
+    this.initializeAgentExecutor().catch(error => {
+      logger.error(
+        'Failed to reinitialize agent executor with new prompt:',
+        error
+      );
+    });
   }
 
   getCurrentPrompt(): string {
-    return this.config.customPrompt || this.getDefaultPrompt();
+    return this.config.customPrompt ?? this.getDefaultPrompt();
   }
 
   protected generateId(): string {
@@ -1598,17 +1653,7 @@ export abstract class BaseAgent {
             if (Array.isArray(mcpResult)) {
               // MCP returns array of content objects
               content = mcpResult
-                .map(item => {
-                  if (typeof item === 'string') {
-                    return item;
-                  } else if (item.text) {
-                    return item.text;
-                  } else if (item.type === 'text') {
-                    return item.text || '';
-                  } else {
-                    return JSON.stringify(item);
-                  }
-                })
+                .map(item => this.extractTextFromMCPItem(item))
                 .join('\n');
             } else if (typeof mcpResult === 'string') {
               content = mcpResult;
@@ -1634,7 +1679,7 @@ export abstract class BaseAgent {
               } else {
                 // Fallback to original content if no summary available
                 const retrievedContent = lfsManager.retrieveContent(content);
-                content = retrievedContent || content;
+                content = retrievedContent ?? content;
               }
             }
 
@@ -1699,7 +1744,11 @@ export abstract class BaseAgent {
       logger.debug('Found JSON block:', { jsonBlock: match[1] });
       try {
         const jsonStr = match[1];
-        const parsed = JSON.parse(jsonStr);
+        const parsed = JSON.parse(jsonStr) as {
+          tool?: string;
+          parameters?: Record<string, unknown>;
+          [key: string]: unknown;
+        };
 
         // Handle correct format: {"tool": "name", "parameters": {...}}
         if (parsed.tool && parsed.parameters) {
@@ -1773,7 +1822,10 @@ export abstract class BaseAgent {
         const trimmed = content.trim();
         if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
           logger.debug('Found standalone JSON:', { json: trimmed });
-          const parsed = JSON.parse(trimmed);
+          const parsed = JSON.parse(trimmed) as {
+            tool?: string;
+            parameters?: Record<string, unknown>;
+          };
           if (parsed.tool && parsed.parameters) {
             logger.debug('Parsed standalone tool call:', {
               tool: parsed.tool,
@@ -1784,7 +1836,8 @@ export abstract class BaseAgent {
               name: parsed.tool,
               parameters: parsed.parameters,
             });
-            cleanContent = '';
+            // For standalone JSON, keep the original content as fallback
+            cleanContent = content;
           }
         }
       } catch (e) {
@@ -1800,7 +1853,7 @@ export abstract class BaseAgent {
     cleanContent = cleanContent.replace(/\n\s*\n\s*\n/g, '\n\n').trim();
 
     return {
-      content: cleanContent || content,
+      content: cleanContent ?? content,
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
     };
   }
