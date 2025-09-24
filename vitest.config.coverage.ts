@@ -12,6 +12,10 @@ export default defineConfig({
         fileURLToPath(new URL('.', import.meta.url)),
         'server'
       ),
+      'monaco-editor': resolve(
+        fileURLToPath(new URL('.', import.meta.url)),
+        'src/__mocks__/monaco-editor.ts'
+      ),
     },
   },
   test: {
@@ -20,12 +24,13 @@ export default defineConfig({
     environmentMatchGlobs: [
       ['src/**', 'jsdom'],
       ['server/**', 'node'],
-      ['tests/integration/**', 'node'],
+      ['tests/integration/**/*.ts', 'node'],
+      ['tests/integration/**/*.tsx', 'jsdom'], // tsx files need jsdom for React components
     ],
-    setupFiles: ['./tests/setup-coverage.ts'],
+    setupFiles: ['./tests/setupCoverage.ts'],
     include: [
       'server/**/*.{test,spec}.{js,ts}',
-      'tests/integration/**/*.{test,spec}.{js,ts}',
+      'tests/integration/**/*.{test,spec}.{js,ts,tsx}',
       'src/**/*.{test,spec}.{js,ts,jsx,tsx}',
     ],
     exclude: ['node_modules/**', 'dist/**', 'tests/e2e/**'],
@@ -47,7 +52,7 @@ export default defineConfig({
         '**/vitest.config*.ts',
         'electron/**',
         'scripts/**',
-        'playwright-ct.config.ts',
+        'playwrightCt.config.ts',
         'playwright.config.ts',
         'postcss.config.js',
         'tailwind.config.js',

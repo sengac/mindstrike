@@ -93,11 +93,24 @@ export class ModelSettingsService {
       return undefined;
     }
 
+    // Determine GPU type based on platform
+    let gpuType = 'cpu';
+    if (info.gpuLayers > 0) {
+      const platform = process.platform;
+      if (platform === 'darwin') {
+        gpuType = 'metal';
+      } else if (platform === 'linux' || platform === 'win32') {
+        // Could be cuda or rocm, defaulting to cuda for now
+        // TODO: Detect actual GPU vendor (NVIDIA vs AMD)
+        gpuType = 'cuda';
+      }
+    }
+
     // Return only serializable data that matches the original ModelRuntimeInfo interface
     // Original interface only had: actualGpuLayers, gpuType, memoryUsage, loadingTime
     return {
       actualGpuLayers: info.gpuLayers,
-      gpuType: 'cuda', // TODO: Get actual GPU type from model metadata
+      gpuType,
       loadingTime: Date.now() - info.loadedAt.getTime(),
       // TODO: Add memoryUsage if needed
     };

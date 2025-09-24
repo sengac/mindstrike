@@ -2,8 +2,8 @@
  * Tests for overlap detection functionality
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { detectNodeOverlaps, type NodePosition } from '../overlapDetection';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { detectNodeOverlaps } from '../overlapDetection';
 
 // Mock DOM setup
 const createMockElement = (

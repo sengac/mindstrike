@@ -927,32 +927,6 @@ describe('MindMapCanvas', () => {
     });
   });
 
-  describe('external node updates', () => {
-    it('should pass external node updates to MindMap component', async () => {
-      const pendingUpdate = {
-        nodeId: 'test-node',
-        chatId: 'new-chat-id',
-        notes: 'Updated notes',
-        sources: [],
-        timestamp: Date.now(),
-      };
-
-      render(
-        <MindMapCanvas
-          activeMindMap={mockActiveMindMap}
-          loadMindMaps={mockLoadMindMaps}
-          pendingNodeUpdate={pendingUpdate}
-        />
-      );
-
-      await waitForMindMap();
-
-      // The MindMap component should receive the external updates
-      const mindMapElement = screen.getByTestId('mind-map');
-      expect(mindMapElement).toBeTruthy();
-    });
-  });
-
   describe('error handling', () => {
     it('should handle missing controls gracefully', async () => {
       // Override the MindMap mock temporarily for this test

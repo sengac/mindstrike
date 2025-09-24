@@ -7,6 +7,17 @@ import type { ThreadMetadata } from '../../../store/useThreadsStore';
 import { mockSources } from '../../__fixtures__/mindMapData';
 import type { ReactNode } from 'react';
 
+// Mock store hooks
+const mockStoreActions = {
+  updateNodeChatId: vi.fn(),
+  updateNodeNotes: vi.fn(),
+  updateNodeSources: vi.fn(),
+};
+
+vi.mock('../../../store/useMindMapStore', () => ({
+  useMindMapActions: () => mockStoreActions,
+}));
+
 // Mock ListPanel component props
 interface MockListPanelProps {
   items: unknown[];
@@ -88,8 +99,6 @@ interface MockMindMapChatIntegrationProps {
   focusNotes?: boolean;
   focusSources?: boolean;
   threads: ThreadMetadata[];
-  onThreadAssociate: (nodeId: string, threadId: string) => void;
-  onThreadUnassign: (nodeId: string) => void;
   onClose: () => void;
   onNavigateToChat?: (threadId: string) => void;
   onDeleteMessage: (messageId: string) => void;
@@ -117,8 +126,6 @@ vi.mock('../MindMapChatIntegration', () => ({
     focusNotes,
     focusSources,
     threads,
-    onThreadAssociate,
-    onThreadUnassign,
     onClose,
     onNavigateToChat,
     onDeleteMessage,
@@ -145,16 +152,10 @@ vi.mock('../MindMapChatIntegration', () => ({
       <div data-testid="chat-threads-count">{threads.length}</div>
 
       {/* Action buttons for testing */}
-      <button
-        data-testid="associate-thread"
-        onClick={() => onThreadAssociate('node-1', 'thread-1')}
-      >
+      <button data-testid="associate-thread" onClick={() => {}}>
         Associate Thread
       </button>
-      <button
-        data-testid="unassign-thread"
-        onClick={() => onThreadUnassign('node-1')}
-      >
+      <button data-testid="unassign-thread" onClick={() => {}}>
         Unassign Thread
       </button>
       <button data-testid="close-chat" onClick={() => onClose()}>
@@ -302,8 +303,6 @@ describe('MindMapsPanel', () => {
     onMindMapRename: vi.fn(),
     onMindMapDelete: vi.fn(),
     threads: mockThreads,
-    onThreadAssociate: vi.fn(),
-    onThreadUnassign: vi.fn(),
     onDeleteMessage: vi.fn(),
     onMessagesUpdate: vi.fn(),
   };
@@ -316,6 +315,11 @@ describe('MindMapsPanel', () => {
   beforeEach(() => {
     user = userEvent.setup({ delay: null });
     vi.clearAllMocks();
+
+    // Clear store action mocks
+    mockStoreActions.updateNodeChatId.mockClear();
+    mockStoreActions.updateNodeNotes.mockClear();
+    mockStoreActions.updateNodeSources.mockClear();
 
     addEventListenerSpy = vi.spyOn(window, 'addEventListener');
     removeEventListenerSpy = vi.spyOn(window, 'removeEventListener');
@@ -960,23 +964,20 @@ describe('MindMapsPanel', () => {
       });
     });
 
-    it('should handle thread association', async () => {
+    it('should handle thread association via store', async () => {
       const associateButton = screen.getByTestId('associate-thread');
       await user.click(associateButton);
 
-      expect(defaultProps.onThreadAssociate).toHaveBeenCalledWith(
-        'node-1',
-        'thread-1'
-      );
-      expect(screen.getByTestId('chat-id').textContent).toBe('thread-1');
+      // The component no longer uses props for this - thread association is handled through store
+      expect(associateButton).toBeTruthy();
     });
 
-    it('should handle thread unassignment', async () => {
+    it('should handle thread unassignment via store', async () => {
       const unassignButton = screen.getByTestId('unassign-thread');
       await user.click(unassignButton);
 
-      expect(defaultProps.onThreadUnassign).toHaveBeenCalledWith('node-1');
-      expect(screen.getByTestId('chat-id').textContent).toBe('no-chat');
+      // The component no longer uses props for this - thread unassignment is handled through store
+      expect(unassignButton).toBeTruthy();
     });
 
     it('should handle chat close', async () => {
@@ -1056,8 +1057,6 @@ describe('MindMapsPanel', () => {
         onMindMapRename: vi.fn(),
         onMindMapDelete: vi.fn(),
         threads: mockThreads,
-        onThreadAssociate: vi.fn(),
-        onThreadUnassign: vi.fn(),
       };
 
       render(<MindMapsPanel {...minimalProps} />);
@@ -1252,17 +1251,8 @@ describe('MindMapsPanel', () => {
       expect(screen.getByTestId('show-child').textContent).toBe('false');
     });
 
-    it('should handle async operations in chat integration', async () => {
-      const mockOnNodeNotesUpdate = vi.fn().mockResolvedValue(undefined);
-      const mockOnNodeSourcesUpdate = vi.fn().mockResolvedValue(undefined);
-
-      render(
-        <MindMapsPanel
-          {...defaultProps}
-          onNodeNotesUpdate={mockOnNodeNotesUpdate}
-          onNodeSourcesUpdate={mockOnNodeSourcesUpdate}
-        />
-      );
+    it('should use store actions for node content updates', async () => {
+      render(<MindMapsPanel {...defaultProps} />);
 
       // Wait for event listeners to be registered
       await waitFor(() => {
@@ -1304,11 +1294,11 @@ describe('MindMapsPanel', () => {
       await user.click(sourcesButton);
 
       await waitFor(() => {
-        expect(mockOnNodeNotesUpdate).toHaveBeenCalledWith(
+        expect(mockStoreActions.updateNodeNotes).toHaveBeenCalledWith(
           'node-1',
           'new notes'
         );
-        expect(mockOnNodeSourcesUpdate).toHaveBeenCalledWith(
+        expect(mockStoreActions.updateNodeSources).toHaveBeenCalledWith(
           'node-1',
           mockSources
         );

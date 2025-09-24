@@ -27,7 +27,7 @@ export interface MindMapNodeData {
   isDragging?: boolean;
   isDropTarget?: boolean;
   dropPosition?: 'above' | 'below' | 'over' | null;
-  layout?: 'LR' | 'RL' | 'TB' | 'BT';
+  layout?: 'LR' | 'RL' | 'TB' | 'BT' | 'RD';
   width?: number; // Calculated width of the node
   height?: number; // Calculated height of the node
   colorTheme?: NodeColorTheme | null;

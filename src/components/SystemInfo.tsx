@@ -1,5 +1,5 @@
 import React from 'react';
-import { useSystemInformationStore } from '../store/use-system-information-store';
+import { useSystemInformationStore } from '../store/useSystemInformationStore';
 import { MemoryStick, HardDrive, Cpu, Zap } from 'lucide-react';
 import { formatBytes } from '../utils/formatUtils';
 

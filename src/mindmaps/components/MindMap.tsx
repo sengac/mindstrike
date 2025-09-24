@@ -13,11 +13,20 @@ import { detectNodeOverlaps } from '../../utils/overlapDetection';
 import { MindMapNode } from './MindMapNode';
 import { MusicVisualization } from '../../components/MusicVisualization';
 import type { MindMapNodeData } from '../types/mindMap';
-import type { Source } from '../types/mindMap';
 import { GenerateDialog } from '../../components/shared/GenerateDialog';
 import { useGenerationStreaming } from '../../hooks/useGenerationStreaming';
 import { useIterativeGeneration } from '../../hooks/useIterativeGeneration';
 import { NODE_COLORS, DEFAULT_NODE_COLORS } from '../constants/nodeColors';
+import {
+  Z_INDEX_LAYERS,
+  ICON_SIZES,
+  DEFAULT_POSITION,
+  DEFAULT_VIEWPORT,
+  ARRAY_NAVIGATION,
+  FIT_VIEW_SETTINGS,
+  TIMING_DELAYS,
+  LAYOUT_CALC,
+} from '../constants/magicNumbers';
 
 import { useMindMapDrag } from '../hooks/useMindMapDrag';
 import type { MindMapData } from '../../utils/mindMapData';
@@ -45,10 +54,10 @@ export interface MindMapControls {
   undo: () => void;
   redo: () => void;
   resetLayout: () => void;
-  changeLayout: (layout: 'LR' | 'RL' | 'TB' | 'BT') => void;
+  changeLayout: (layout: 'LR' | 'RL' | 'TB' | 'BT' | 'RD') => void;
   canUndo: boolean;
   canRedo: boolean;
-  currentLayout: 'LR' | 'RL' | 'TB' | 'BT';
+  currentLayout: 'LR' | 'RL' | 'TB' | 'BT' | 'RD';
   selectedNodeId: string | null;
   setNodeColors: (nodeId: string, theme: NodeColorTheme) => void;
   clearNodeColors: (nodeId: string) => void;
@@ -60,14 +69,6 @@ interface MindMapProps {
   initialData?: MindMapData;
   onControlsReady?: (controls: MindMapControls) => void;
   keyBindings?: Record<string, string>;
-  // Props for external updates instead of imperative functions
-  externalNodeUpdates?: {
-    nodeId: string;
-    chatId?: string | null;
-    notes?: string | null;
-    sources?: Source[];
-    timestamp: number; // to ensure React detects changes
-  };
 }
 
 function MindMapInner({
@@ -76,7 +77,6 @@ function MindMapInner({
   initialData,
   onControlsReady,
   keyBindings = {},
-  externalNodeUpdates,
 }: MindMapProps) {
   const reactFlowInstance = useReactFlow();
   const nodesInitialized = useNodesInitialized();
@@ -97,7 +97,7 @@ function MindMapInner({
     useMindMapGeneration();
 
   // Filter visible nodes and edges based on collapse state
-  const nodes = React.useMemo(() => {
+  const visibleNodes = React.useMemo(() => {
     if (!layoutManager) {
       return allNodes;
     }
@@ -120,14 +120,49 @@ function MindMapInner({
     updateNodeLabelWithLayout,
     toggleNodeCollapse,
     moveNode,
-    updateNodeChatId,
-    updateNodeNotes,
-    updateNodeSources,
     setNodeColors,
     clearNodeColors,
     changeLayout,
     resetLayout,
   } = useMindMapActions();
+
+  // Define handleMoveNode before using it in useMindMapDrag
+  const handleMoveNode = useCallback(
+    async (nodeId: string, newParentId: string, insertIndex?: number) => {
+      await moveNode(nodeId, newParentId, insertIndex);
+    },
+    [moveNode]
+  );
+
+  // Initialize drag & drop before using its state
+  const {
+    draggedNodeId,
+    closestDropTarget,
+    dropPosition,
+    hasDraggedSignificantly,
+    dragCursorPosition,
+    onNodeDragStart,
+    onNodeDrag,
+    onNodeDragStop,
+  } = useMindMapDrag({
+    nodes: allNodes, // Use all nodes for drag logic, not just visible ones
+    rootNodeId: useMindMapStore(state => state.rootNodeId),
+    layout,
+    moveNode: handleMoveNode,
+  });
+
+  // Map visible nodes with drag state
+  const nodes = React.useMemo(() => {
+    return visibleNodes.map(node => ({
+      ...node,
+      data: {
+        ...node.data,
+        isDragging: node.id === draggedNodeId,
+        isDropTarget: node.id === closestDropTarget,
+        dropPosition: node.id === closestDropTarget ? dropPosition : null,
+      },
+    }));
+  }, [visibleNodes, draggedNodeId, closestDropTarget, dropPosition]);
 
   // Local UI state that doesn't belong in global store
   const [showGenerativePanel, setShowGenerativePanel] = React.useState(false);
@@ -172,33 +207,6 @@ function MindMapInner({
       initializeMindMap(mindMapId, initialData, onSave);
     }
   }, [mindMapId, initialData, onSave, initializeMindMap]);
-
-  // Handle external node updates via props
-  useEffect(() => {
-    if (!externalNodeUpdates || !isInitialized) {
-      return;
-    }
-
-    const { nodeId, chatId, notes, sources } = externalNodeUpdates;
-
-    if (chatId !== undefined) {
-      updateNodeChatId(nodeId, chatId);
-    }
-
-    if (notes !== undefined) {
-      updateNodeNotes(nodeId, notes);
-    }
-
-    if (sources !== undefined) {
-      updateNodeSources(nodeId, sources);
-    }
-  }, [
-    externalNodeUpdates,
-    updateNodeChatId,
-    updateNodeNotes,
-    updateNodeSources,
-    isInitialized,
-  ]);
 
   // Overlap detection - runs after nodes are positioned
   useEffect(() => {
@@ -329,15 +337,8 @@ function MindMapInner({
     [toggleNodeCollapse]
   );
 
-  const handleMoveNode = useCallback(
-    async (nodeId: string, newParentId: string, insertIndex?: number) => {
-      await moveNode(nodeId, newParentId, insertIndex);
-    },
-    [moveNode]
-  );
-
   const handleChangeLayout = useCallback(
-    async (newLayout: 'LR' | 'RL' | 'TB' | 'BT') => {
+    async (newLayout: 'LR' | 'RL' | 'TB' | 'BT' | 'RD') => {
       await changeLayout(newLayout);
       // Fit view after layout change
       setTimeout(() => fitView({}), 200);
@@ -373,23 +374,6 @@ function MindMapInner({
     },
     [clearNodeColors]
   );
-
-  // Initialize drag & drop
-  const {
-    draggedNodeId,
-    closestDropTarget,
-    dropPosition,
-    hasDraggedSignificantly,
-    dragCursorPosition,
-    onNodeDragStart,
-    onNodeDrag,
-    onNodeDragStop,
-  } = useMindMapDrag({
-    nodes: allNodes, // Use all nodes for drag logic, not just visible ones
-    rootNodeId: useMindMapStore(state => state.rootNodeId),
-    layout,
-    moveNode: handleMoveNode,
-  });
 
   // Note: Task processing is now handled by SSE in the mindmap store
   // This eliminates the issue where closing the dialog would disconnect task processing
@@ -433,7 +417,7 @@ function MindMapInner({
     }
 
     let resizeTimeout: NodeJS.Timeout;
-    let lastSize = { width: 0, height: 0 };
+    let lastSize = { width: DEFAULT_POSITION.X, height: DEFAULT_POSITION.Y };
 
     const resizeObserver = new ResizeObserver(entries => {
       for (const entry of entries) {
@@ -446,15 +430,18 @@ function MindMapInner({
             clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(() => {
               if (nodesInitialized && allNodes.length > 0) {
-                const padding = allNodes.length <= 3 ? 0.8 : 0.2;
+                const padding =
+                  allNodes.length <= FIT_VIEW_SETTINGS.SMALL_MAP_THRESHOLD
+                    ? FIT_VIEW_SETTINGS.PADDING_SMALL_MAP
+                    : FIT_VIEW_SETTINGS.PADDING_LARGE_MAP;
 
                 fitView({
                   padding,
-                  maxZoom: 1.2,
-                  minZoom: 0.5,
+                  maxZoom: FIT_VIEW_SETTINGS.MAX_ZOOM,
+                  minZoom: FIT_VIEW_SETTINGS.MIN_ZOOM,
                 });
               }
-            }, 150);
+            }, TIMING_DELAYS.RESIZE_DEBOUNCE);
           }
         }
       }
@@ -511,6 +498,10 @@ function MindMapInner({
           'Ctrl+Z': 'undo',
           'Ctrl+y': 'redo',
           'Ctrl+Y': 'redo',
+          'Shift+Ctrl+z': 'redo',
+          'Shift+Ctrl+Z': 'redo',
+          'Ctrl+Shift+z': 'redo',
+          'Ctrl+Shift+Z': 'redo',
           '.': 'openInference',
           '/': 'openGenerative',
         };
@@ -594,7 +585,9 @@ function MindMapInner({
       } else if (direction === 'next') {
         // Go to next node in traversal order (wrap to beginning if at end)
         const nextIndex =
-          currentIndex < traversalOrder.length - 1 ? currentIndex + 1 : 0;
+          currentIndex < traversalOrder.length - ARRAY_NAVIGATION.INCREMENT
+            ? currentIndex + ARRAY_NAVIGATION.INCREMENT
+            : ARRAY_NAVIGATION.FIRST_INDEX;
         targetNode = traversalOrder[nextIndex];
       }
 
@@ -705,6 +698,30 @@ function MindMapInner({
         return key;
       };
 
+      const normalizeKeyString = (keyStr: string) => {
+        // Split the key string into parts
+        const parts = keyStr.split('+');
+        const modifiers: string[] = [];
+        let mainKey = '';
+
+        // Separate modifiers from the main key
+        parts.forEach(part => {
+          if (['Ctrl', 'Shift', 'Alt', 'Meta'].includes(part)) {
+            modifiers.push(part);
+          } else {
+            mainKey = part;
+          }
+        });
+
+        // Sort modifiers to ensure consistent order
+        modifiers.sort();
+
+        // Rebuild the key string with sorted modifiers
+        return modifiers.length > 0
+          ? `${modifiers.join('+')}+${mainKey}`
+          : mainKey;
+      };
+
       const keyString = getKeyString(event);
 
       // Check if this key matches any binding
@@ -713,9 +730,15 @@ function MindMapInner({
         const normalizedBindingKey = normalizeKeyForComparison(bindingKey);
         const normalizedKeyString = normalizeKeyForComparison(keyString);
 
+        // Normalize both key strings to handle modifier order
+        const normalizedBindingKeyString = normalizeKeyString(bindingKey);
+        const normalizedPressedKeyString = normalizeKeyString(keyString);
+
         if (
           bindingKey.toLowerCase() === keyString.toLowerCase() ||
-          normalizedBindingKey === normalizedKeyString
+          normalizedBindingKey === normalizedKeyString ||
+          normalizedBindingKeyString.toLowerCase() ===
+            normalizedPressedKeyString.toLowerCase()
         ) {
           event.preventDefault();
 
@@ -765,7 +788,10 @@ function MindMapInner({
                         chatId: selectedNode.data.chatId,
                         notes: selectedNode.data.notes,
                         sources: selectedNode.data.sources,
-                        position: { x: 0, y: 0 }, // Default position since we don't have mouse position
+                        position: {
+                          x: DEFAULT_POSITION.X,
+                          y: DEFAULT_POSITION.Y,
+                        }, // Default position since we don't have mouse position
                       },
                     })
                   );
@@ -832,7 +858,7 @@ function MindMapInner({
           }
 
           const nodeLevel = draggedNode.data.level || 0;
-          const isRootNode = nodeLevel === 0;
+          const isRootNode = nodeLevel === LAYOUT_CALC.ROOT_LEVEL;
 
           // Get colors based on theme or defaults
           let colors: {
@@ -917,7 +943,11 @@ function MindMapInner({
         zoomOnPinch={true}
         minZoom={0.1}
         maxZoom={2}
-        defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+        defaultViewport={{
+          x: DEFAULT_VIEWPORT.X,
+          y: DEFAULT_VIEWPORT.Y,
+          zoom: DEFAULT_VIEWPORT.ZOOM,
+        }}
       >
         {/* Node editing handlers */}
         {nodes.map(node => {
@@ -929,7 +959,7 @@ function MindMapInner({
                   position: 'absolute',
                   left: node.position.x,
                   top: node.position.y,
-                  zIndex: 1000,
+                  zIndex: Z_INDEX_LAYERS.CONTROLS,
                   pointerEvents: 'none',
                 }}
               >
@@ -940,10 +970,10 @@ function MindMapInner({
           return null;
         })}
 
-        {/* Drag and drop overlay */}
+        {/* Drag and drop overlay - Removed duplicate indicators as they are now handled by MindMapNode component
         {draggedNodeId && (
           <div className="absolute inset-0 pointer-events-none z-50">
-            {/* Visual feedback for drag operations */}
+            {/* Visual feedback for drag operations }
             {closestDropTarget &&
               (() => {
                 const targetNode = nodes.find(n => n.id === closestDropTarget);
@@ -960,15 +990,19 @@ function MindMapInner({
                 }
 
                 const targetRect = targetElement.getBoundingClientRect();
-                const containerRect =
-                  containerRef.current?.getBoundingClientRect();
-                if (!containerRect) {
+
+                // The overlay div is positioned absolute inside ReactFlow
+                // We need to get the position relative to the ReactFlow component, not the outer container
+                const reactFlowElement =
+                  containerRef.current?.querySelector('.react-flow');
+                if (!reactFlowElement) {
                   return null;
                 }
+                const reactFlowRect = reactFlowElement.getBoundingClientRect();
 
-                // Calculate position relative to the ReactFlow container
-                const relativeLeft = targetRect.left - containerRect.left;
-                const relativeTop = targetRect.top - containerRect.top;
+                // Calculate position relative to the ReactFlow component
+                const relativeLeft = targetRect.left - reactFlowRect.left;
+                const relativeTop = targetRect.top - reactFlowRect.top;
                 const nodeWidth = targetRect.width;
                 const nodeHeight = targetRect.height;
 
@@ -994,7 +1028,7 @@ function MindMapInner({
                         left: relativeLeft - 10,
                         top: relativeTop - 6,
                         width: nodeWidth + 20,
-                        height: 4,
+                        height: UI_DIMENSIONS.DROP_INDICATOR_HEIGHT,
                       }}
                     >
                       <div className="w-full h-full bg-green-400 rounded-full shadow-lg animate-pulse" />
@@ -1015,7 +1049,7 @@ function MindMapInner({
                         left: relativeLeft - 10,
                         top: relativeTop + nodeHeight + 2,
                         width: nodeWidth + 20,
-                        height: 4,
+                        height: UI_DIMENSIONS.DROP_INDICATOR_HEIGHT,
                       }}
                     >
                       <div className="w-full h-full bg-green-400 rounded-full shadow-lg animate-pulse" />
@@ -1032,7 +1066,7 @@ function MindMapInner({
                 return null;
               })()}
           </div>
-        )}
+        )} */}
       </ReactFlow>
 
       {/* Unified Generate Dialog */}
@@ -1059,7 +1093,7 @@ function MindMapInner({
             className="p-3 bg-blue-600 hover:bg-blue-700 rounded-full shadow-lg transition-colors text-white"
             title="Add child node"
           >
-            <Plus size={20} />
+            <Plus size={ICON_SIZES.XLARGE} />
           </button>
 
           {/* Generative Button */}
@@ -1073,7 +1107,7 @@ function MindMapInner({
             className="generative-button p-3 rounded-full"
             title="Generate"
           >
-            <Sparkles size={20} className="generative-icon" />
+            <Sparkles size={ICON_SIZES.XLARGE} className="generative-icon" />
           </button>
 
           {/* Remove Button */}
@@ -1086,7 +1120,7 @@ function MindMapInner({
             className="p-3 bg-red-600 hover:bg-red-700 rounded-full shadow-lg transition-colors text-white"
             title="Delete node"
           >
-            <Trash2 size={20} />
+            <Trash2 size={ICON_SIZES.XLARGE} />
           </button>
         </div>
       )}

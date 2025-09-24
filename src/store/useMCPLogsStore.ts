@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { sseEventBus } from '../utils/sseEventBus';
 import { SSEEventType } from '../types';
-import { isSSELogEvent } from '../types/sse-events';
+import { isSSELogEvent } from '../types/sseEvents';
 import { logger } from '../utils/logger';
 
 export interface MCPLogEntry {

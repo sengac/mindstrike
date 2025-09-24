@@ -1,6 +1,7 @@
 import type { Node, Edge } from 'reactflow';
 import type { MindMapNodeData, Source } from '../types/mindMap';
 import type { NodeColorTheme } from '../mindmaps/constants/nodeColors';
+import { RadialLayoutCalculator } from './radialLayoutCalculator';
 import {
   needsColorMigration,
   migrateNodeData,
@@ -29,7 +30,12 @@ export interface MindMapNode {
 
 export interface MindMapData {
   root: MindMapNode & {
-    layout: 'graph-left' | 'graph-right' | 'graph-top' | 'graph-bottom';
+    layout:
+      | 'graph-left'
+      | 'graph-right'
+      | 'graph-top'
+      | 'graph-bottom'
+      | 'graph-radial';
   };
 }
 
@@ -38,11 +44,12 @@ export class MindMapDataManager {
   convertTreeToNodes(treeData: MindMapData) {
     const { root } = treeData;
 
-    const layoutMap: Record<string, 'LR' | 'RL' | 'TB' | 'BT'> = {
+    const layoutMap: Record<string, 'LR' | 'RL' | 'TB' | 'BT' | 'RD'> = {
       'graph-right': 'LR',
       'graph-left': 'RL',
       'graph-bottom': 'TB',
       'graph-top': 'BT',
+      'graph-radial': 'RD',
     };
 
     const detectedLayout = layoutMap[root.layout] || 'LR';
@@ -102,7 +109,7 @@ export class MindMapDataManager {
   convertNodesToTree(
     nodes: Node<MindMapNodeData>[],
     rootNodeId: string,
-    layout: 'LR' | 'RL' | 'TB' | 'BT'
+    layout: 'LR' | 'RL' | 'TB' | 'BT' | 'RD'
   ): MindMapData {
     const rootNode = nodes.find(n => n.id === rootNodeId);
     if (!rootNode) {
@@ -111,12 +118,17 @@ export class MindMapDataManager {
 
     const layoutMap: Record<
       string,
-      'graph-left' | 'graph-right' | 'graph-top' | 'graph-bottom'
+      | 'graph-left'
+      | 'graph-right'
+      | 'graph-top'
+      | 'graph-bottom'
+      | 'graph-radial'
     > = {
       LR: 'graph-right',
       RL: 'graph-left',
       TB: 'graph-bottom',
       BT: 'graph-top',
+      RD: 'graph-radial',
     };
 
     const buildTree = (nodeId: string): MindMapNode => {
@@ -172,43 +184,80 @@ export class MindMapDataManager {
   // Generate edges from node hierarchy
   generateEdges(
     nodes: Node<MindMapNodeData>[],
-    layout: 'LR' | 'RL' | 'TB' | 'BT' = 'LR'
+    layout: 'LR' | 'RL' | 'TB' | 'BT' | 'RD' = 'LR'
   ): Edge[] {
     const edges: Edge[] = [];
 
-    let sourceHandle: string, targetHandle: string;
-    switch (layout) {
-      case 'LR':
-        sourceHandle = 'right-source';
-        targetHandle = 'left';
-        break;
-      case 'RL':
-        sourceHandle = 'left-source';
-        targetHandle = 'right';
-        break;
-      case 'TB':
-        sourceHandle = 'bottom-source';
-        targetHandle = 'top';
-        break;
-      case 'BT':
-        sourceHandle = 'top-source';
-        targetHandle = 'bottom';
-        break;
-    }
-
-    nodes.forEach(node => {
-      if (node.data.parentId) {
-        edges.push({
-          id: `edge-${node.data.parentId}-${node.id}`,
-          source: node.data.parentId,
-          target: node.id,
-          sourceHandle,
-          targetHandle,
-          type: 'default',
-          style: { stroke: '#64748b', strokeWidth: 2 },
-        });
+    if (layout === 'RD') {
+      // Radial layout: handle edges based on each node's effective direction
+      const rootNodeId = nodes.find(n => n.data.isRoot)?.id;
+      if (!rootNodeId) {
+        return edges;
       }
-    });
+
+      nodes.forEach(node => {
+        if (node.data.parentId) {
+          // Determine edge direction based on node's effective layout
+          const effectiveLayout = RadialLayoutCalculator.getNodeEffectiveLayout(
+            node.id,
+            nodes,
+            rootNodeId
+          );
+
+          const sourceHandle =
+            effectiveLayout === 'LR' ? 'right-source' : 'left-source';
+          const targetHandle = effectiveLayout === 'LR' ? 'left' : 'right';
+
+          edges.push({
+            id: `edge-${node.data.parentId}-${node.id}`,
+            source: node.data.parentId,
+            target: node.id,
+            sourceHandle,
+            targetHandle,
+            type: 'default',
+            style: { stroke: '#64748b', strokeWidth: 2 },
+          });
+        }
+      });
+    } else {
+      // Standard layouts
+      let sourceHandle: string, targetHandle: string;
+      switch (layout) {
+        case 'LR':
+          sourceHandle = 'right-source';
+          targetHandle = 'left';
+          break;
+        case 'RL':
+          sourceHandle = 'left-source';
+          targetHandle = 'right';
+          break;
+        case 'TB':
+          sourceHandle = 'bottom-source';
+          targetHandle = 'top';
+          break;
+        case 'BT':
+          sourceHandle = 'top-source';
+          targetHandle = 'bottom';
+          break;
+        default:
+          sourceHandle = 'right-source';
+          targetHandle = 'left';
+      }
+
+      nodes.forEach(node => {
+        if (node.data.parentId) {
+          edges.push({
+            id: `edge-${node.data.parentId}-${node.id}`,
+            source: node.data.parentId,
+            target: node.id,
+            sourceHandle,
+            targetHandle,
+            type: 'default',
+            style: { stroke: '#64748b', strokeWidth: 2 },
+          });
+        }
+      });
+    }
 
     return edges;
   }
@@ -221,7 +270,7 @@ export class MindMapDataManager {
     nodes: Node<MindMapNodeData>[];
     edges: Edge[];
     rootNodeId: string;
-    layout: 'LR' | 'RL' | 'TB' | 'BT';
+    layout: 'LR' | 'RL' | 'TB' | 'BT' | 'RD';
   }> {
     if (initialData && initialData.root) {
       const { nodes, rootNodeId, layout } =
@@ -245,7 +294,7 @@ export class MindMapDataManager {
 
       const nodes = [rootNode];
       const edges: Edge[] = [];
-      const layout: 'LR' | 'RL' | 'TB' | 'BT' = 'LR';
+      const layout: 'LR' | 'RL' | 'TB' | 'BT' | 'RD' = 'LR';
 
       return { nodes, edges, rootNodeId: rootId, layout };
     }

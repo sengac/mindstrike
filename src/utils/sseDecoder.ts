@@ -1,4 +1,5 @@
 import { logger } from './logger';
+import { SSE_CONFIG, ERROR_MESSAGES } from '../constants/sse.constants';
 
 /**
  * Shared utilities for encoding/decoding SSE data with base64 and large content support
@@ -7,12 +8,12 @@ import { logger } from './logger';
 /**
  * Decode base64 encoded SSE data, handling UTF-8 properly
  */
-interface SseDataWithBase64 {
+export interface SseDataWithBase64 {
   _base64: true;
   data: string;
 }
 
-interface SseDataWithLargeContent {
+export interface SseDataWithLargeContent {
   _large_content: true;
   contentId: string;
   length: number;
@@ -410,7 +411,7 @@ export async function decodeSseEventData(obj: unknown): Promise<SseObjectData> {
     return decoded;
   }
   // This shouldn't happen for valid SSE data, but provide a fallback
-  return { _rawData: decoded } as SseObjectData;
+  return { rawData: decoded } as SseObjectData;
 }
 
 export async function decodeSseData(
@@ -428,7 +429,9 @@ export async function decodeSseData(
 
   if ('_large_content' in obj && obj._large_content && obj.contentId) {
     try {
-      const response = await fetch(`/api/large-content/${obj.contentId}`);
+      const response = await fetch(
+        `${SSE_CONFIG.LARGE_CONTENT_ENDPOINT}/${obj.contentId}`
+      );
       if (response.ok) {
         const data = await response.json();
         return data.content;
@@ -436,7 +439,7 @@ export async function decodeSseData(
         return `[Large content not available - ${obj.length} characters]`;
       }
     } catch (error) {
-      logger.error('Failed to fetch large content:', error);
+      logger.error(ERROR_MESSAGES.LARGE_CONTENT_FETCH_ERROR, error);
       return `[Large content error - ${obj.length} characters]`;
     }
   }

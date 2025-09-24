@@ -5,8 +5,8 @@ import type { ConversationMessage } from '../../types';
 import type { ThreadMetadata } from '../../store/useThreadsStore';
 import { ListPanel } from '../../components/shared/ListPanel';
 import { MindMapChatIntegration } from './MindMapChatIntegration';
+import { useMindMapActions } from '../../store/useMindMapStore';
 import type { Source } from '../types/mindMap';
-
 interface MindMapsPanelProps {
   mindMaps: MindMap[];
   activeMindMapId?: string;
@@ -16,8 +16,6 @@ interface MindMapsPanelProps {
   onMindMapDelete: (mindMapId: string) => void;
   // Thread-related props
   threads: ThreadMetadata[];
-  onThreadAssociate: (nodeId: string, threadId: string) => void;
-  onThreadUnassign: (nodeId: string) => void;
   onThreadCreate?: () => void;
   onThreadRename?: (threadId: string, newName: string) => void;
   onThreadDelete?: (threadId: string) => void;
@@ -30,8 +28,6 @@ interface MindMapsPanelProps {
   onFirstMessage?: () => void;
   onPromptUpdate?: (threadId: string, customPrompt?: string) => void;
   onCustomizePrompts?: () => void;
-  onNodeNotesUpdate?: (nodeId: string, notes: string) => Promise<void>;
-  onNodeSourcesUpdate?: (nodeId: string, sources: Source[]) => Promise<void>;
   // MindMap node operations
   onNodeAdd?: (parentId: string, text: string) => Promise<void>;
   onNodeUpdate?: (nodeId: string, text: string) => Promise<void>;
@@ -46,8 +42,6 @@ export function MindMapsPanel({
   onMindMapRename,
   onMindMapDelete,
   threads,
-  onThreadAssociate,
-  onThreadUnassign,
   onThreadCreate,
   onThreadRename,
   onThreadDelete,
@@ -57,12 +51,14 @@ export function MindMapsPanel({
   onFirstMessage,
   onPromptUpdate,
   onCustomizePrompts,
-  onNodeNotesUpdate,
-  onNodeSourcesUpdate,
   onNodeAdd,
   onNodeUpdate,
   onNodeDelete,
 }: MindMapsPanelProps) {
+  // Get mind map actions from store
+  const { updateNodeChatId, updateNodeNotes, updateNodeSources } =
+    useMindMapActions();
+
   const [showInferenceChat, setShowInferenceChat] = useState(false);
   const [inferenceChatNode, setInferenceChatNode] = useState<{
     id: string;
@@ -275,8 +271,8 @@ export function MindMapsPanel({
   };
 
   const handleThreadAssociate = (nodeId: string, threadId: string) => {
-    // Update the mindmap node with the chatId
-    onThreadAssociate(nodeId, threadId);
+    // Update the mindmap node with the chatId using store action
+    updateNodeChatId(nodeId, threadId);
 
     // Update local state to reflect the new chatId
     if (inferenceChatNode && inferenceChatNode.id === nodeId) {
@@ -288,8 +284,8 @@ export function MindMapsPanel({
   };
 
   const handleThreadUnassign = (nodeId: string) => {
-    // Update the mindmap node to remove the chatId
-    onThreadUnassign(nodeId);
+    // Update the mindmap node to remove the chatId using store action
+    updateNodeChatId(nodeId, null);
 
     // Update local state to reflect the removed chatId
     if (inferenceChatNode && inferenceChatNode.id === nodeId) {
@@ -388,14 +384,10 @@ export function MindMapsPanel({
             onThreadRename={onThreadRename}
             onThreadDelete={onThreadDelete}
             onNotesUpdate={async (nodeId, notes) => {
-              if (onNodeNotesUpdate) {
-                await onNodeNotesUpdate(nodeId, notes);
-              }
+              updateNodeNotes(nodeId, notes);
             }}
             onSourcesUpdate={async (nodeId, sources) => {
-              if (onNodeSourcesUpdate) {
-                await onNodeSourcesUpdate(nodeId, sources);
-              }
+              updateNodeSources(nodeId, sources);
             }}
             onNodeAdd={onNodeAdd}
             onNodeUpdate={onNodeUpdate}

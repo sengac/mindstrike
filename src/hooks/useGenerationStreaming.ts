@@ -8,7 +8,7 @@ import {
   isSSEStatusEvent,
   isSSEResultEvent,
   isSSEErrorEvent,
-} from '../types/sse-events';
+} from '../types/sseEvents';
 
 interface GenerationStats {
   tokensPerSecond: number;

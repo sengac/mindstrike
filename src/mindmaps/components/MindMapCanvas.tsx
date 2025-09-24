@@ -9,6 +9,7 @@ import {
   ArrowDown,
   ArrowUp,
   Settings,
+  GitBranch,
 } from 'lucide-react';
 import type { MindMap as MindMapType } from '../hooks/useMindMaps';
 import type { MindMapControls } from './MindMap';
@@ -16,10 +17,10 @@ import { MindMap } from './MindMap';
 import { ControlsModal } from '../../components/ControlsModal';
 import { ColorPalette } from '../../components/ColorPalette';
 import { useAppStore } from '../../store/useAppStore';
-import type { Source } from '../types/mindMap';
 import type { MindMapData } from '../../utils/mindMapData';
 import { logger } from '../../utils/logger';
 import type { NodeColorTheme } from '../constants/nodeColors';
+import { ICON_SIZES } from '../constants/magicNumbers';
 
 // Import the new store hooks
 import {
@@ -31,20 +32,11 @@ import {
 interface MindMapCanvasProps {
   activeMindMap: MindMapType | null;
   loadMindMaps: (preserveActiveId?: boolean) => Promise<void>;
-  // Props for external node updates
-  pendingNodeUpdate?: {
-    nodeId: string;
-    chatId?: string | null;
-    notes?: string | null;
-    sources?: Source[];
-    timestamp: number;
-  };
 }
 
 export function MindMapCanvas({
   activeMindMap,
   loadMindMaps,
-  pendingNodeUpdate,
 }: MindMapCanvasProps) {
   const [mindMapData, setMindMapData] = useState<MindMapData | undefined>();
   const [loadedMindMapId, setLoadedMindMapId] = useState<string | null>(null);
@@ -182,7 +174,7 @@ export function MindMapCanvas({
   }, [mindMapControls]);
 
   const handleChangeLayout = useCallback(
-    async (newLayout: 'LR' | 'RL' | 'TB' | 'BT') => {
+    async (newLayout: 'LR' | 'RL' | 'TB' | 'BT' | 'RD') => {
       if (mindMapControls?.changeLayout) {
         mindMapControls.changeLayout(newLayout);
       }
@@ -238,7 +230,7 @@ export function MindMapCanvas({
                       className="p-1.5 bg-gray-700 border border-gray-600 rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-gray-300"
                       title="Undo (Ctrl+Z)"
                     >
-                      <Undo2 size={14} />
+                      <Undo2 size={ICON_SIZES.MEDIUM} />
                     </button>
                     <button
                       onClick={handleRedo}
@@ -246,21 +238,21 @@ export function MindMapCanvas({
                       className="p-1.5 bg-gray-700 border border-gray-600 rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-gray-300"
                       title="Redo (Ctrl+Shift+Z)"
                     >
-                      <Redo2 size={14} />
+                      <Redo2 size={ICON_SIZES.MEDIUM} />
                     </button>
                     <button
                       onClick={handleResetLayout}
                       className="p-1.5 bg-gray-700 border border-gray-600 rounded hover:bg-gray-600 text-gray-300"
                       title="Reset Layout"
                     >
-                      <RotateCcw size={14} />
+                      <RotateCcw size={ICON_SIZES.MEDIUM} />
                     </button>
                     <button
                       onClick={() => setShowControlsModal(true)}
                       className="p-1.5 bg-gray-700 border border-gray-600 rounded hover:bg-gray-600 text-gray-300"
                       title="Controls & Keyboard Shortcuts"
                     >
-                      <Settings size={14} />
+                      <Settings size={ICON_SIZES.MEDIUM} />
                     </button>
 
                     {/* Color Palette */}
@@ -294,7 +286,7 @@ export function MindMapCanvas({
                         }`}
                         title="Left to Right"
                       >
-                        <ArrowRight size={12} />
+                        <ArrowRight size={ICON_SIZES.SMALL} />
                       </button>
                       <button
                         onClick={() => handleChangeLayout('RL')}
@@ -305,7 +297,7 @@ export function MindMapCanvas({
                         }`}
                         title="Right to Left"
                       >
-                        <ArrowLeft size={12} />
+                        <ArrowLeft size={ICON_SIZES.SMALL} />
                       </button>
                       <button
                         onClick={() => handleChangeLayout('TB')}
@@ -316,7 +308,7 @@ export function MindMapCanvas({
                         }`}
                         title="Top to Bottom"
                       >
-                        <ArrowDown size={12} />
+                        <ArrowDown size={ICON_SIZES.SMALL} />
                       </button>
                       <button
                         onClick={() => handleChangeLayout('BT')}
@@ -327,7 +319,18 @@ export function MindMapCanvas({
                         }`}
                         title="Bottom to Top"
                       >
-                        <ArrowUp size={12} />
+                        <ArrowUp size={ICON_SIZES.SMALL} />
+                      </button>
+                      <button
+                        onClick={() => handleChangeLayout('RD')}
+                        className={`p-1.5 border border-gray-600 rounded hover:bg-gray-600 text-gray-300 ${
+                          mindMapControls?.currentLayout === 'RD'
+                            ? 'bg-blue-600 border-blue-500'
+                            : 'bg-gray-700'
+                        }`}
+                        title="Radial"
+                      >
+                        <GitBranch size={ICON_SIZES.SMALL} />
                       </button>
                     </div>
                   </div>
@@ -344,7 +347,6 @@ export function MindMapCanvas({
                 onSave={saveMindMapData}
                 initialData={mindMapData}
                 keyBindings={mindMapKeyBindings || {}}
-                externalNodeUpdates={pendingNodeUpdate}
                 onControlsReady={setMindMapControls}
               />
             ) : (
@@ -357,7 +359,10 @@ export function MindMapCanvas({
       ) : (
         <div className="flex items-center justify-center h-full text-gray-500">
           <div className="text-center">
-            <Network size={48} className="mx-auto mb-4 opacity-50" />
+            <Network
+              size={ICON_SIZES.XXLARGE}
+              className="mx-auto mb-4 opacity-50"
+            />
             <p className="text-lg">Select a MindMap to get started</p>
             <p className="text-sm mt-2">
               Choose from the list on the left or create a new MindMap

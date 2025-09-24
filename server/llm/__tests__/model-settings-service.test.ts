@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ModelSettingsService } from '../model-settings-service.js';
 import type { ContextCalculator } from '../context-calculator.js';
 import type { ModelRegistry } from '../model-registry.js';
@@ -43,9 +43,9 @@ describe('ModelSettingsService', () => {
   };
 
   const mockRuntimeInfo = {
-    model: {} as any,
-    context: {} as any,
-    session: {} as any,
+    model: {} as unknown,
+    context: {} as unknown,
+    session: {} as unknown,
     modelPath: '/models/test-model.gguf',
     contextSize: 4096,
     gpuLayers: 24,
@@ -153,17 +153,248 @@ describe('ModelSettingsService', () => {
   });
 
   describe('getModelRuntimeInfo', () => {
-    it('should return formatted runtime info', () => {
-      mockRegistry.getModelRuntimeInfo = vi
-        .fn()
-        .mockReturnValue(mockRuntimeInfo);
+    // Store original platform
+    const originalPlatform = process.platform;
 
-      const result = settingsService.getModelRuntimeInfo('model1');
+    afterEach(() => {
+      // Restore original platform after each test
+      Object.defineProperty(process, 'platform', {
+        value: originalPlatform,
+        configurable: true,
+      });
+    });
 
-      expect(result).toEqual({
-        actualGpuLayers: mockRuntimeInfo.gpuLayers,
-        gpuType: 'cuda',
-        loadingTime: expect.any(Number),
+    describe('GPU type detection by platform', () => {
+      it('should return "metal" GPU type on macOS (darwin) with GPU layers', () => {
+        Object.defineProperty(process, 'platform', {
+          value: 'darwin',
+          configurable: true,
+        });
+
+        mockRegistry.getModelRuntimeInfo = vi
+          .fn()
+          .mockReturnValue(mockRuntimeInfo);
+
+        const result = settingsService.getModelRuntimeInfo('model1');
+
+        expect(result).toEqual({
+          actualGpuLayers: mockRuntimeInfo.gpuLayers,
+          gpuType: 'metal',
+          loadingTime: expect.any(Number),
+        });
+      });
+
+      it('should return "cuda" GPU type on Linux with GPU layers', () => {
+        Object.defineProperty(process, 'platform', {
+          value: 'linux',
+          configurable: true,
+        });
+
+        mockRegistry.getModelRuntimeInfo = vi
+          .fn()
+          .mockReturnValue(mockRuntimeInfo);
+
+        const result = settingsService.getModelRuntimeInfo('model1');
+
+        expect(result).toEqual({
+          actualGpuLayers: mockRuntimeInfo.gpuLayers,
+          gpuType: 'cuda',
+          loadingTime: expect.any(Number),
+        });
+      });
+
+      it('should return "cuda" GPU type on Windows with GPU layers', () => {
+        Object.defineProperty(process, 'platform', {
+          value: 'win32',
+          configurable: true,
+        });
+
+        mockRegistry.getModelRuntimeInfo = vi
+          .fn()
+          .mockReturnValue(mockRuntimeInfo);
+
+        const result = settingsService.getModelRuntimeInfo('model1');
+
+        expect(result).toEqual({
+          actualGpuLayers: mockRuntimeInfo.gpuLayers,
+          gpuType: 'cuda',
+          loadingTime: expect.any(Number),
+        });
+      });
+
+      it('should return "cpu" GPU type when no GPU layers are used (0 layers)', () => {
+        Object.defineProperty(process, 'platform', {
+          value: 'darwin',
+          configurable: true,
+        });
+
+        const cpuOnlyRuntimeInfo = {
+          ...mockRuntimeInfo,
+          gpuLayers: 0,
+        };
+
+        mockRegistry.getModelRuntimeInfo = vi
+          .fn()
+          .mockReturnValue(cpuOnlyRuntimeInfo);
+
+        const result = settingsService.getModelRuntimeInfo('model1');
+
+        expect(result).toEqual({
+          actualGpuLayers: 0,
+          gpuType: 'cpu',
+          loadingTime: expect.any(Number),
+        });
+      });
+
+      it('should return "cpu" GPU type on any platform when GPU layers is 0', () => {
+        const platforms = ['darwin', 'linux', 'win32', 'freebsd', 'openbsd'];
+        const cpuOnlyRuntimeInfo = {
+          ...mockRuntimeInfo,
+          gpuLayers: 0,
+        };
+
+        platforms.forEach(platform => {
+          Object.defineProperty(process, 'platform', {
+            value: platform,
+            configurable: true,
+          });
+
+          mockRegistry.getModelRuntimeInfo = vi
+            .fn()
+            .mockReturnValue(cpuOnlyRuntimeInfo);
+
+          const result = settingsService.getModelRuntimeInfo('model1');
+
+          expect(result?.gpuType).toBe('cpu');
+        });
+      });
+
+      it('should handle unknown platforms by defaulting to "cpu" when no GPU match', () => {
+        Object.defineProperty(process, 'platform', {
+          value: 'freebsd',
+          configurable: true,
+        });
+
+        mockRegistry.getModelRuntimeInfo = vi
+          .fn()
+          .mockReturnValue(mockRuntimeInfo);
+
+        const result = settingsService.getModelRuntimeInfo('model1');
+
+        expect(result).toEqual({
+          actualGpuLayers: mockRuntimeInfo.gpuLayers,
+          gpuType: 'cpu',
+          loadingTime: expect.any(Number),
+        });
+      });
+    });
+
+    describe('edge cases', () => {
+      it('should handle negative GPU layers as CPU mode', () => {
+        const negativeGpuRuntimeInfo = {
+          ...mockRuntimeInfo,
+          gpuLayers: -1,
+        };
+
+        mockRegistry.getModelRuntimeInfo = vi
+          .fn()
+          .mockReturnValue(negativeGpuRuntimeInfo);
+
+        const result = settingsService.getModelRuntimeInfo('model1');
+
+        expect(result).toEqual({
+          actualGpuLayers: -1,
+          gpuType: 'cpu',
+          loadingTime: expect.any(Number),
+        });
+      });
+
+      it('should handle very large GPU layer counts correctly on macOS', () => {
+        Object.defineProperty(process, 'platform', {
+          value: 'darwin',
+          configurable: true,
+        });
+
+        const largeGpuRuntimeInfo = {
+          ...mockRuntimeInfo,
+          gpuLayers: 128,
+        };
+
+        mockRegistry.getModelRuntimeInfo = vi
+          .fn()
+          .mockReturnValue(largeGpuRuntimeInfo);
+
+        const result = settingsService.getModelRuntimeInfo('model1');
+
+        expect(result).toEqual({
+          actualGpuLayers: 128,
+          gpuType: 'metal',
+          loadingTime: expect.any(Number),
+        });
+      });
+
+      it('should handle missing GPU layers property', () => {
+        // Create runtime info without gpuLayers property
+        const { gpuLayers, ...runtimeInfoWithoutGpuLayers } = mockRuntimeInfo;
+        const incompleteRuntimeInfo = {
+          ...runtimeInfoWithoutGpuLayers,
+          // gpuLayers is intentionally omitted
+        };
+
+        mockRegistry.getModelRuntimeInfo = vi
+          .fn()
+          .mockReturnValue(incompleteRuntimeInfo);
+
+        const result = settingsService.getModelRuntimeInfo('model1');
+
+        expect(result).toEqual({
+          actualGpuLayers: undefined,
+          gpuType: 'cpu',
+          loadingTime: expect.any(Number),
+        });
+      });
+
+      it('should handle fractional GPU layers', () => {
+        Object.defineProperty(process, 'platform', {
+          value: 'linux',
+          configurable: true,
+        });
+
+        const fractionalGpuRuntimeInfo = {
+          ...mockRuntimeInfo,
+          gpuLayers: 0.5,
+        };
+
+        mockRegistry.getModelRuntimeInfo = vi
+          .fn()
+          .mockReturnValue(fractionalGpuRuntimeInfo);
+
+        const result = settingsService.getModelRuntimeInfo('model1');
+
+        expect(result).toEqual({
+          actualGpuLayers: 0.5,
+          gpuType: 'cuda',
+          loadingTime: expect.any(Number),
+        });
+      });
+
+      it('should handle empty platform string', () => {
+        Object.defineProperty(process, 'platform', {
+          value: '',
+          configurable: true,
+        });
+
+        mockRegistry.getModelRuntimeInfo = vi
+          .fn()
+          .mockReturnValue(mockRuntimeInfo);
+
+        const result = settingsService.getModelRuntimeInfo('model1');
+
+        expect(result).toEqual({
+          actualGpuLayers: mockRuntimeInfo.gpuLayers,
+          gpuType: 'cpu',
+          loadingTime: expect.any(Number),
+        });
       });
     });
 
@@ -177,7 +408,6 @@ describe('ModelSettingsService', () => {
       // Verify no native objects are included
       expect(result).toBeDefined();
       expect(result?.actualGpuLayers).toBe(24);
-      expect(result?.gpuType).toBe('cuda');
       expect(result?.loadingTime).toBeGreaterThanOrEqual(0);
 
       // Ensure native objects are NOT included
@@ -195,6 +425,23 @@ describe('ModelSettingsService', () => {
       const result = settingsService.getModelRuntimeInfo('model1');
 
       expect(result).toBeUndefined();
+    });
+
+    it('should calculate loading time correctly', () => {
+      const fiveSecondsAgo = new Date(Date.now() - 5000);
+      const runtimeInfoWithOldLoadTime = {
+        ...mockRuntimeInfo,
+        loadedAt: fiveSecondsAgo,
+      };
+
+      mockRegistry.getModelRuntimeInfo = vi
+        .fn()
+        .mockReturnValue(runtimeInfoWithOldLoadTime);
+
+      const result = settingsService.getModelRuntimeInfo('model1');
+
+      expect(result?.loadingTime).toBeGreaterThanOrEqual(5000);
+      expect(result?.loadingTime).toBeLessThan(6000); // Allow some margin
     });
   });
 

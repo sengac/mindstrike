@@ -7,6 +7,7 @@ import type { ChatResult } from '@langchain/core/outputs';
 import { ChatGenerationChunk } from '@langchain/core/outputs';
 import type { DynamicStructuredTool } from '@langchain/core/tools';
 import { getLocalLLMManager } from '../local-llm-singleton.js';
+import { DEFAULT_MODEL_PARAMS } from '../llm/constants.js';
 
 interface LocalLLMManagerInterface {
   loadModel: (modelName: string, threadId?: string) => Promise<void>;
@@ -56,8 +57,8 @@ export class ChatLocalLLM extends BaseChatModel {
   constructor(fields: ChatLocalLLMInput) {
     super(fields);
     this.modelName = fields.modelName;
-    this.temperature = fields.temperature ?? 0.7;
-    this.maxTokens = fields.maxTokens ?? 4000;
+    this.temperature = fields.temperature ?? DEFAULT_MODEL_PARAMS.TEMPERATURE;
+    this.maxTokens = fields.maxTokens ?? DEFAULT_MODEL_PARAMS.MAX_TOKENS;
     this.threadId = fields.threadId;
     this.disableFunctions = fields.disableFunctions;
     this.disableChatHistory = fields.disableChatHistory;

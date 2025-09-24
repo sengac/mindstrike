@@ -1,4 +1,4 @@
-import { ChatAgent } from './agents/chat-agent.js';
+import { ChatAgent } from './agents/chatAgent.js';
 
 // Re-export types and interfaces for backward compatibility
 export type {
@@ -6,7 +6,7 @@ export type {
   ImageAttachment,
   NotesAttachment,
   ConversationMessage,
-} from './agents/base-agent.js';
+} from './agents/baseAgent.js';
 
 // Agent class is now an alias for ChatAgent to maintain backward compatibility
 export class Agent extends ChatAgent {}

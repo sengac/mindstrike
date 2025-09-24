@@ -3,6 +3,7 @@ import type { ModelRegistry, ModelRuntimeInfo } from './model-registry.js';
 import type { LlamaSessionManager } from './session-manager.js';
 import type { ModelResponseGenerator } from './response-generator.js';
 import type { ModelFileManager } from './model-file-manager.js';
+import { PROGRESS } from './constants.js';
 
 /**
  * Handles response generation and session management
@@ -20,9 +21,9 @@ export class ResponseService {
    */
   async updateSessionHistory(
     modelIdOrName: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _threadId: string
+    threadId: string
   ): Promise<void> {
+    // threadId parameter required for interface compatibility
     // First try to use it as an ID
     let activeModel = this.registry.getModelRuntimeInfo(modelIdOrName);
 
@@ -132,7 +133,7 @@ export class ResponseService {
       }
     );
 
-    let tokensGenerated = 0;
+    let tokensGenerated = PROGRESS.INITIAL;
     for await (const chunk of generator) {
       tokensGenerated++;
       yield chunk;
@@ -152,11 +153,8 @@ export class ResponseService {
   /**
    * Find an active model by ID or name (matches original logic)
    */
-  private async findActiveModel(
-    modelIdOrName: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _threadId?: string
-  ) {
+  private async findActiveModel(modelIdOrName: string, threadId?: string) {
+    // threadId parameter required for method signature compatibility
     // First try to use it as an ID
     let activeModel = this.registry.getModelRuntimeInfo(modelIdOrName);
 

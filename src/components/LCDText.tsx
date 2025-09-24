@@ -1,5 +1,5 @@
 import { LCDCanvas } from './LCDCanvas';
-import { type LCDSize } from '../constants/lcd-common';
+import { type LCDSize } from '../constants/lcdCommon';
 
 interface LCDTextProps {
   text: string;

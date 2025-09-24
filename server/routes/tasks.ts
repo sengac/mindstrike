@@ -1,5 +1,5 @@
 import express from 'express';
-import { sseManager } from '../sse-manager.js';
+import { sseManager } from '../sseManager.js';
 import { logger } from '../logger.js';
 
 const router = express.Router();

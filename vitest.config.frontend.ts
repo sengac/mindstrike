@@ -12,6 +12,10 @@ export default defineConfig({
         fileURLToPath(new URL('.', import.meta.url)),
         'server'
       ),
+      'monaco-editor': resolve(
+        fileURLToPath(new URL('.', import.meta.url)),
+        'src/__mocks__/monaco-editor.ts'
+      ),
     },
   },
   test: {
@@ -23,7 +27,7 @@ export default defineConfig({
       'node_modules/**',
       'dist/**',
       'server/**/*.{test,spec}.{js,ts}',
-      'tests/integration/**/*.{test,spec}.{js,ts}',
+      'tests/integration/**/*.{test,spec}.{js,ts,tsx}',
       'tests/e2e/**',
     ],
     css: true,

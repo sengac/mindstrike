@@ -15,7 +15,7 @@ export class MindMapActionsManager {
     nodes: Node<MindMapNodeData>[],
     edges: Edge[],
     rootNodeId: string,
-    layout: 'LR' | 'RL' | 'TB' | 'BT'
+    layout: 'LR' | 'RL' | 'TB' | 'BT' | 'RD'
   ): Promise<{
     nodes: Node<MindMapNodeData>[];
     edges: Edge[];
@@ -37,7 +37,7 @@ export class MindMapActionsManager {
     nodes: Node<MindMapNodeData>[],
     _edges: Edge[],
     rootNodeId: string,
-    layout: 'LR' | 'RL' | 'TB' | 'BT',
+    layout: 'LR' | 'RL' | 'TB' | 'BT' | 'RD',
     parentNodeId: string
   ): Promise<{
     nodes: Node<MindMapNodeData>[];
@@ -85,7 +85,7 @@ export class MindMapActionsManager {
     nodes: Node<MindMapNodeData>[],
     _edges: Edge[],
     rootNodeId: string,
-    layout: 'LR' | 'RL' | 'TB' | 'BT',
+    layout: 'LR' | 'RL' | 'TB' | 'BT' | 'RD',
     siblingNodeId: string
   ): Promise<{
     nodes: Node<MindMapNodeData>[];
@@ -141,7 +141,7 @@ export class MindMapActionsManager {
     nodes: Node<MindMapNodeData>[],
     _edges: Edge[],
     rootNodeId: string,
-    layout: 'LR' | 'RL' | 'TB' | 'BT',
+    layout: 'LR' | 'RL' | 'TB' | 'BT' | 'RD',
     nodeIdToDelete: string
   ): Promise<{
     nodes: Node<MindMapNodeData>[];
@@ -206,7 +206,7 @@ export class MindMapActionsManager {
     nodes: Node<MindMapNodeData>[],
     edges: Edge[],
     rootNodeId: string,
-    layout: 'LR' | 'RL' | 'TB' | 'BT',
+    layout: 'LR' | 'RL' | 'TB' | 'BT' | 'RD',
     nodeId: string,
     newLabel: string
   ): Promise<{
@@ -227,7 +227,7 @@ export class MindMapActionsManager {
     nodes: Node<MindMapNodeData>[],
     edges: Edge[],
     rootNodeId: string,
-    layout: 'LR' | 'RL' | 'TB' | 'BT',
+    layout: 'LR' | 'RL' | 'TB' | 'BT' | 'RD',
     nodeId: string
   ): Promise<{
     nodes: Node<MindMapNodeData>[];
@@ -255,7 +255,7 @@ export class MindMapActionsManager {
     nodes: Node<MindMapNodeData>[],
     _edges: Edge[],
     rootNodeId: string,
-    layout: 'LR' | 'RL' | 'TB' | 'BT',
+    layout: 'LR' | 'RL' | 'TB' | 'BT' | 'RD',
     nodeId: string,
     newParentId: string,
     insertIndex?: number
@@ -324,7 +324,7 @@ export class MindMapActionsManager {
     nodes: Node<MindMapNodeData>[],
     _edges: Edge[],
     rootNodeId: string,
-    newLayout: 'LR' | 'RL' | 'TB' | 'BT'
+    newLayout: 'LR' | 'RL' | 'TB' | 'BT' | 'RD'
   ): Promise<{
     nodes: Node<MindMapNodeData>[];
     edges: Edge[];
@@ -344,7 +344,7 @@ export class MindMapActionsManager {
     nodes: Node<MindMapNodeData>[],
     edges: Edge[],
     rootNodeId: string,
-    layout: 'LR' | 'RL' | 'TB' | 'BT'
+    layout: 'LR' | 'RL' | 'TB' | 'BT' | 'RD'
   ): Promise<{
     nodes: Node<MindMapNodeData>[];
     edges: Edge[];

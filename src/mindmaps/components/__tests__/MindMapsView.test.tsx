@@ -37,16 +37,12 @@ vi.mock('../MindMapsPanel', () => ({
     onMindMapRename,
     onMindMapDelete,
     threads,
-    onThreadAssociate,
-    onThreadUnassign,
     onThreadCreate,
     onThreadRename,
     onThreadDelete,
     onNavigateToChat,
     onPromptUpdate,
     onCustomizePrompts,
-    onNodeNotesUpdate,
-    onNodeSourcesUpdate,
   }: {
     mindMaps: unknown[];
     activeMindMapId?: string;
@@ -55,16 +51,12 @@ vi.mock('../MindMapsPanel', () => ({
     onMindMapRename: (id: string, name: string) => void;
     onMindMapDelete: (id: string) => void;
     threads: unknown[];
-    onThreadAssociate: (nodeId: string, threadId: string) => void;
-    onThreadUnassign: (threadId: string) => void;
     onThreadCreate: () => void;
     onThreadRename: (id: string, name: string) => void;
     onThreadDelete: (id: string) => void;
     onNavigateToChat: (threadId: string) => void;
     onPromptUpdate: (threadId: string, customPrompt?: string) => void;
     onCustomizePrompts: () => void;
-    onNodeNotesUpdate: (nodeId: string, notes: string | null) => Promise<void>;
-    onNodeSourcesUpdate: (nodeId: string, sources: unknown[]) => Promise<void>;
   }) => (
     <div data-testid="mindmaps-panel">
       <div data-testid="panel-mindmaps-count">{mindMaps.length}</div>
@@ -95,18 +87,6 @@ vi.mock('../MindMapsPanel', () => ({
         onClick={() => onMindMapDelete('mindmap-1')}
       >
         Delete MindMap
-      </button>
-      <button
-        data-testid="panel-associate-thread"
-        onClick={() => onThreadAssociate('node-1', 'thread-1')}
-      >
-        Associate Thread
-      </button>
-      <button
-        data-testid="panel-unassign-thread"
-        onClick={() => onThreadUnassign('node-1')}
-      >
-        Unassign Thread
       </button>
       <button
         data-testid="panel-create-thread"
@@ -144,18 +124,6 @@ vi.mock('../MindMapsPanel', () => ({
       >
         Customize Prompts
       </button>
-      <button
-        data-testid="panel-update-notes"
-        onClick={() => onNodeNotesUpdate('node-1', 'updated notes')}
-      >
-        Update Notes
-      </button>
-      <button
-        data-testid="panel-update-sources"
-        onClick={() => onNodeSourcesUpdate('node-1', mockSources)}
-      >
-        Update Sources
-      </button>
     </div>
   ),
 }));
@@ -165,11 +133,9 @@ vi.mock('../MindMapCanvas', () => ({
   MindMapCanvas: ({
     activeMindMap,
     loadMindMaps,
-    pendingNodeUpdate,
   }: {
     activeMindMap?: { id: string; name: string; data?: unknown };
     loadMindMaps: (preserveActiveId?: boolean) => Promise<void>;
-    pendingNodeUpdate?: { nodeId: string; chatId?: string };
   }) => (
     <div data-testid="mindmap-canvas">
       <div data-testid="canvas-active-mindmap">
@@ -177,9 +143,6 @@ vi.mock('../MindMapCanvas', () => ({
       </div>
       <div data-testid="canvas-active-mindmap-name">
         {activeMindMap?.name ?? 'no-name'}
-      </div>
-      <div data-testid="canvas-pending-update">
-        {pendingNodeUpdate ? JSON.stringify(pendingNodeUpdate) : 'no-update'}
       </div>
 
       {/* Action button for testing prop forwarding */}
@@ -250,14 +213,6 @@ describe('MindMapsView', () => {
     updatedAt: new Date('2024-01-02'),
   };
 
-  const mockPendingUpdate = {
-    nodeId: 'node-123',
-    chatId: 'chat-456',
-    notes: 'Updated notes',
-    sources: mockSources,
-    timestamp: Date.now(),
-  };
-
   const defaultProps = {
     mindMaps: mockMindMaps,
     activeMindMapId: 'mindmap-1',
@@ -267,18 +222,13 @@ describe('MindMapsView', () => {
     onMindMapCreate: vi.fn(),
     onMindMapRename: vi.fn(),
     onMindMapDelete: vi.fn(),
-    onThreadAssociate: vi.fn(),
-    onThreadUnassign: vi.fn(),
     onThreadCreate: vi.fn(),
     onThreadRename: vi.fn(),
     onThreadDelete: vi.fn(),
     onNavigateToChat: vi.fn(),
     onPromptUpdate: vi.fn(),
     onCustomizePrompts: vi.fn(),
-    onNodeNotesUpdate: vi.fn().mockResolvedValue(undefined),
-    onNodeSourcesUpdate: vi.fn().mockResolvedValue(undefined),
     loadMindMaps: vi.fn().mockResolvedValue(undefined),
-    pendingNodeUpdate: mockPendingUpdate,
   };
 
   beforeEach(() => {
@@ -412,31 +362,6 @@ describe('MindMapsView', () => {
         'Active Mind Map'
       );
     });
-
-    it('should pass pending node update to MindMapCanvas', async () => {
-      render(<MindMapsView {...defaultProps} />);
-
-      await waitFor(() => {
-        expect(screen.getByTestId('canvas-pending-update')).toBeTruthy();
-      });
-
-      const pendingUpdateElement = screen.getByTestId('canvas-pending-update');
-      const updateData = JSON.parse(pendingUpdateElement.textContent ?? '{}');
-
-      expect(updateData.nodeId).toBe('node-123');
-      expect(updateData.chatId).toBe('chat-456');
-      expect(updateData.notes).toBe('Updated notes');
-    });
-
-    it('should handle missing pending update gracefully', async () => {
-      render(<MindMapsView {...defaultProps} pendingNodeUpdate={undefined} />);
-
-      await waitFor(() => {
-        expect(screen.getByTestId('canvas-pending-update').textContent).toBe(
-          'no-update'
-        );
-      });
-    });
   });
 
   describe('mind map operations', () => {
@@ -490,27 +415,6 @@ describe('MindMapsView', () => {
   });
 
   describe('thread operations', () => {
-    it('should handle thread association', async () => {
-      render(<MindMapsView {...defaultProps} />);
-
-      const associateButton = screen.getByTestId('panel-associate-thread');
-      await user.click(associateButton);
-
-      expect(defaultProps.onThreadAssociate).toHaveBeenCalledWith(
-        'node-1',
-        'thread-1'
-      );
-    });
-
-    it('should handle thread unassignment', async () => {
-      render(<MindMapsView {...defaultProps} />);
-
-      const unassignButton = screen.getByTestId('panel-unassign-thread');
-      await user.click(unassignButton);
-
-      expect(defaultProps.onThreadUnassign).toHaveBeenCalledWith('node-1');
-    });
-
     it('should handle thread creation', async () => {
       render(<MindMapsView {...defaultProps} />);
 
@@ -572,62 +476,6 @@ describe('MindMapsView', () => {
     });
   });
 
-  describe('node content operations', () => {
-    it('should handle node notes updates', async () => {
-      render(<MindMapsView {...defaultProps} />);
-
-      const updateButton = screen.getByTestId('panel-update-notes');
-      await user.click(updateButton);
-
-      await waitFor(() => {
-        expect(defaultProps.onNodeNotesUpdate).toHaveBeenCalledWith(
-          'node-1',
-          'updated notes'
-        );
-      });
-    });
-
-    it('should handle node sources updates', async () => {
-      render(<MindMapsView {...defaultProps} />);
-
-      const updateButton = screen.getByTestId('panel-update-sources');
-      await user.click(updateButton);
-
-      await waitFor(() => {
-        expect(defaultProps.onNodeSourcesUpdate).toHaveBeenCalledWith(
-          'node-1',
-          mockSources
-        );
-      });
-    });
-
-    it('should handle async operations in node updates', async () => {
-      const mockAsyncNotesUpdate = vi
-        .fn()
-        .mockImplementation(async (nodeId, notes) => {
-          await new Promise(resolve => setTimeout(resolve, 10));
-          return { success: true, nodeId, notes };
-        });
-
-      render(
-        <MindMapsView
-          {...defaultProps}
-          onNodeNotesUpdate={mockAsyncNotesUpdate}
-        />
-      );
-
-      const updateButton = screen.getByTestId('panel-update-notes');
-      await user.click(updateButton);
-
-      await waitFor(() => {
-        expect(mockAsyncNotesUpdate).toHaveBeenCalledWith(
-          'node-1',
-          'updated notes'
-        );
-      });
-    });
-  });
-
   describe('prop forwarding', () => {
     it('should forward all props correctly to MindMapsPanel', () => {
       const testProps = {
@@ -655,21 +503,7 @@ describe('MindMapsView', () => {
         updatedAt: new Date('2024-01-02'),
       };
 
-      const customUpdate = {
-        nodeId: 'custom-node',
-        chatId: 'custom-chat',
-        notes: 'Custom notes',
-        sources: [],
-        timestamp: 12345,
-      };
-
-      render(
-        <MindMapsView
-          {...defaultProps}
-          activeMindMap={customMindMap}
-          pendingNodeUpdate={customUpdate}
-        />
-      );
+      render(<MindMapsView {...defaultProps} activeMindMap={customMindMap} />);
 
       expect(screen.getByTestId('canvas-active-mindmap').textContent).toBe(
         'custom-map'
@@ -677,11 +511,6 @@ describe('MindMapsView', () => {
       expect(screen.getByTestId('canvas-active-mindmap-name').textContent).toBe(
         'Custom Map'
       );
-
-      const pendingUpdateElement = screen.getByTestId('canvas-pending-update');
-      const updateData = JSON.parse(pendingUpdateElement.textContent ?? '{}');
-      expect(updateData.nodeId).toBe('custom-node');
-      expect(updateData.timestamp).toBe(12345);
     });
   });
 
@@ -696,18 +525,13 @@ describe('MindMapsView', () => {
         onMindMapCreate: vi.fn(),
         onMindMapRename: vi.fn(),
         onMindMapDelete: vi.fn(),
-        onThreadAssociate: vi.fn(),
-        onThreadUnassign: vi.fn(),
         onThreadCreate: vi.fn(),
         onThreadRename: vi.fn(),
         onThreadDelete: vi.fn(),
         onNavigateToChat: vi.fn(),
         onPromptUpdate: vi.fn(),
         onCustomizePrompts: vi.fn(),
-        onNodeNotesUpdate: vi.fn().mockResolvedValue(undefined),
-        onNodeSourcesUpdate: vi.fn().mockResolvedValue(undefined),
         loadMindMaps: vi.fn().mockResolvedValue(undefined),
-        pendingNodeUpdate: undefined,
       };
 
       render(<MindMapsView {...minimalProps} />);
@@ -841,22 +665,22 @@ describe('MindMapsView', () => {
     it('should handle async callback rejections', async () => {
       const errorProps = {
         ...defaultProps,
-        onNodeNotesUpdate: vi
-          .fn()
-          .mockRejectedValue(new Error('Update failed')),
+        onMindMapSelect: vi.fn().mockImplementation(() => {
+          throw new Error('Selection failed');
+        }),
       };
 
       render(<MindMapsView {...errorProps} />);
 
-      const updateButton = screen.getByTestId('panel-update-notes');
+      const selectButton = screen.getByTestId('panel-select-mindmap');
 
-      // Should handle promise rejection gracefully
+      // Should handle synchronous errors gracefully
       expect(async () => {
-        await user.click(updateButton);
+        await user.click(selectButton);
       }).not.toThrow();
 
       await waitFor(() => {
-        expect(errorProps.onNodeNotesUpdate).toHaveBeenCalled();
+        expect(errorProps.onMindMapSelect).toHaveBeenCalled();
       });
     });
   });

@@ -1,5 +1,10 @@
 import { decodeSseDataSync } from './sseDecoder';
 import { logger } from './logger';
+import {
+  SSE_CONFIG,
+  ERROR_MESSAGES,
+  EVENT_SOURCE_STATE,
+} from '../constants/sse.constants';
 
 export interface SSEEvent {
   type: string;
@@ -19,8 +24,6 @@ class SSEEventBus {
     new Set();
   private isConnected = false;
   private reconnectAttempts = 0;
-  private readonly maxReconnectAttempts = 5;
-  private readonly reconnectDelay = 3000;
 
   constructor() {
     this.handleVisibilityChange = this.handleVisibilityChange.bind(this);
@@ -50,7 +53,7 @@ class SSEEventBus {
       this.eventSource.close();
     }
 
-    this.eventSource = new EventSource('/api/events/stream');
+    this.eventSource = new EventSource(SSE_CONFIG.CONNECTION_ENDPOINT);
 
     this.eventSource.onopen = () => {
       this.isConnected = true;
@@ -60,8 +63,11 @@ class SSEEventBus {
 
     this.eventSource.onmessage = event => {
       try {
-        const rawData = JSON.parse(event.data);
-        const data = decodeSseDataSync(rawData);
+        const rawData = JSON.parse(event.data as string) as unknown;
+        // Type assertion for SSE data - decodeSseDataSync accepts unknown and handles type checking internally
+        const data = decodeSseDataSync(
+          rawData as Parameters<typeof decodeSseDataSync>[0]
+        );
 
         const sseEvent: SSEEvent = {
           type:
@@ -98,12 +104,15 @@ class SSEEventBus {
 
         this.broadcast(sseEvent);
       } catch (error) {
-        logger.error('[SSEEventBus] Error parsing event:', error);
+        logger.error('[SSEEventBus] ' + ERROR_MESSAGES.SSE_PARSE_ERROR, error);
       }
     };
 
     this.eventSource.onerror = error => {
-      logger.error('[SSEEventBus] Connection error:', error);
+      logger.error(
+        '[SSEEventBus] ' + ERROR_MESSAGES.SSE_CONNECTION_ERROR,
+        error
+      );
       this.isConnected = false;
       this.notifyConnectionStatusChange(false);
 
@@ -120,13 +129,18 @@ class SSEEventBus {
    * Schedule a reconnection attempt
    */
   private scheduleReconnect(): void {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      logger.error('[SSEEventBus] Max reconnection attempts reached');
+    if (this.reconnectAttempts >= SSE_CONFIG.MAX_RECONNECT_ATTEMPTS) {
+      logger.error('[SSEEventBus]', ERROR_MESSAGES.SSE_MAX_RECONNECT);
       return;
     }
 
     this.reconnectAttempts++;
-    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1); // Exponential backoff
+    const delay =
+      SSE_CONFIG.INITIAL_RECONNECT_DELAY *
+      Math.pow(
+        SSE_CONFIG.RECONNECT_BACKOFF_MULTIPLIER,
+        this.reconnectAttempts - 1
+      ); // Exponential backoff
 
     setTimeout(() => {
       if (!this.isConnected && document.visibilityState === 'visible') {
@@ -167,7 +181,7 @@ class SSEEventBus {
     // Send to wildcard subscribers
     const wildcardHandlers = this.subscribers.get('*');
 
-    const totalHandlers = (handlers?.size || 0) + (wildcardHandlers?.size || 0);
+    const totalHandlers = (handlers?.size ?? 0) + (wildcardHandlers?.size ?? 0);
 
     if (totalHandlers > 0) {
       // Call specific event type handlers
@@ -207,7 +221,7 @@ class SSEEventBus {
     if (document.visibilityState === 'visible') {
       if (
         !this.isConnected &&
-        this.eventSource?.readyState !== EventSource.CONNECTING
+        this.eventSource?.readyState !== EVENT_SOURCE_STATE.CONNECTING
       ) {
         this.connect();
       }
@@ -231,6 +245,7 @@ class SSEEventBus {
     }
 
     this.isConnected = false;
+    this.reconnectAttempts = 0; // Reset reconnection counter
     this.subscribers.clear();
 
     document.removeEventListener(

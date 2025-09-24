@@ -7,6 +7,7 @@ import {
   calculateTextDimensions,
   type TextMeasurementOptions,
 } from './textMeasurementService';
+import { NODE_SIZING } from '../constants/nodeSizing';
 
 export interface NodeDimensions {
   width: number;
@@ -37,23 +38,13 @@ export interface NodeSizingStrategy {
  * Handles standard sizing rules for mind map nodes
  */
 export class DefaultNodeSizingStrategy implements NodeSizingStrategy {
-  // Component already has padding via inline styles, so we should NOT add padding here
-  private readonly defaultPadding = {
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-  };
-
-  // Default font size (0.875rem = 14px)
-  private readonly defaultFontSize = '14px';
-  // Match the actual font-family from CSS including Inter font
-  private readonly defaultFontFamily =
-    'Inter, system-ui, -apple-system, sans-serif';
-  // Default font weight
-  private readonly defaultFontWeight = '500';
-  private readonly minWidth = 120;
-  private readonly maxWidth = 300; // Maximum width before text wraps (matching node maxWidth)
+  // Use shared constants for consistency across tests and implementation
+  private readonly defaultPadding = NODE_SIZING.DEFAULT_PADDING;
+  private readonly defaultFontSize = NODE_SIZING.DEFAULT_FONT_SIZE;
+  private readonly defaultFontFamily = NODE_SIZING.DEFAULT_FONT_FAMILY;
+  private readonly defaultFontWeight = NODE_SIZING.DEFAULT_FONT_WEIGHT;
+  private readonly minWidth = NODE_SIZING.MIN_WIDTH;
+  private readonly maxWidth = NODE_SIZING.MAX_WIDTH;
 
   calculateNodeSize(
     label: string,
@@ -61,9 +52,7 @@ export class DefaultNodeSizingStrategy implements NodeSizingStrategy {
   ): NodeDimensions {
     const {
       isEditing = false,
-      hasIcons = false,
       level = 1,
-      isCollapsed = false,
       fontSize = this.defaultFontSize,
       fontWeight = this.defaultFontWeight,
       padding = this.defaultPadding,
@@ -86,25 +75,21 @@ export class DefaultNodeSizingStrategy implements NodeSizingStrategy {
     let width = baseDimensions.width;
     let height = baseDimensions.height;
 
-    // Add extra width for icons (chat, notes, sources badges)
-    if (hasIcons) {
-      width += 30; // Space for icon badges
-    }
+    // Note: No extra width needed for icons since they are positioned
+    // absolutely outside the node bounds (bottom: -10px, right: -10px)
 
     // Add extra width for editing mode (cursor and comfortable typing)
     if (isEditing) {
-      width += 20; // Extra space for cursor
+      width += NODE_SIZING.EDITING_EXTRA_WIDTH; // Extra space for cursor
     }
 
-    // Add extra width for collapsed indicator
-    if (isCollapsed) {
-      width += 10; // Space for expand/collapse button
-    }
+    // Note: No extra width needed for collapsed state since the collapse button
+    // is positioned absolutely outside the node bounds
 
     // Apply root node scaling (level 0 nodes are larger)
     if (level === 0) {
-      width *= 1.1; // 10% wider
-      height *= 1.2; // 20% taller
+      width *= NODE_SIZING.ROOT_NODE_WIDTH_MULTIPLIER; // 10% wider
+      height *= NODE_SIZING.ROOT_NODE_HEIGHT_MULTIPLIER; // 20% taller
     }
 
     return {

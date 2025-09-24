@@ -1,5 +1,5 @@
 import React from 'react';
-import type { ExtractedMetadata } from '../services/metadata-extractor';
+import type { ExtractedMetadata } from '../services/metadataExtractor';
 import { useImageCache } from '../hooks/useImageCache';
 import {
   Music,

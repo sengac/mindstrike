@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
-import { LCD_FONT_DATA } from '../constants/lcd-font-data';
+import { LCD_FONT_DATA } from '../constants/lcdFontData';
 import {
   LCD_SIZES,
   LCD_COLORS,
   LCD_TIMING,
   type LCDSize,
-} from '../constants/lcd-common';
+} from '../constants/lcdCommon';
 
 interface LCDLine {
   text: string;

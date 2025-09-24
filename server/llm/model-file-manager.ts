@@ -5,6 +5,7 @@ import { readGgufFileInfo } from 'node-llama-cpp';
 import { getLocalModelsDirectory } from '../utils/settings-directory.js';
 import type { LocalModelInfo } from '../local-llm-manager.js';
 import { modelFetcher } from '../model-fetcher.js';
+import { DEFAULT_MODEL_PARAMS, MEMORY } from './constants.js';
 
 export interface ModelMetadata {
   name?: string;
@@ -79,7 +80,7 @@ export class ModelFileManager {
         maxContextLength ??
         matchingRemoteModel?.contextLength ??
         modelInfo.contextLength ??
-        4096;
+        DEFAULT_MODEL_PARAMS.CONTEXT_SIZE;
 
       const actualContextLength = contextSizeResolver
         ? await contextSizeResolver(stats.size, requestedContextSize, filename)
@@ -197,7 +198,7 @@ export class ModelFileManager {
     // Extract context length (if specified)
     const contextMatch = filename.match(/(\d+)k/i);
     if (contextMatch) {
-      contextLength = parseInt(contextMatch[1]) * 1024;
+      contextLength = parseInt(contextMatch[1]) * MEMORY.BYTES_TO_KB;
     }
 
     return {

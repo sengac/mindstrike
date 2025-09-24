@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
 import type { ChatPanelRef } from './chat/components/ChatPanel';
 import { ChatView } from './chat/components/ChatView';
@@ -9,7 +9,7 @@ import { SettingsView } from './settings/components/SettingsView';
 import { PromptsModal } from './settings/components/PromptsModal';
 import { LocalModelLoadDialog } from './components/LocalModelLoadDialog';
 import { ApplicationLogsView } from './components/ApplicationLogsView';
-import { useThreadsRefactored } from './chat/hooks/useThreadsRefactored';
+import { useThreads } from './chat/hooks/useThreads';
 import { useThreadsStore } from './store/useThreadsStore';
 import { SSEEventType } from './types';
 import type { LogsTabType } from './types/logs';
@@ -21,7 +21,6 @@ import { useMindMaps } from './mindmaps/hooks/useMindMaps';
 import { useAppStore } from './store/useAppStore';
 import { loadFontScheme } from './utils/fontSchemes';
 
-import type { Source } from './types/mindMap';
 import { Menu, X } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 import { initStormToastEffect } from './utils/stormToastEffect';
@@ -63,17 +62,6 @@ function App() {
     // Don't auto-close here - let the dialog handle its own close animation
   }, [isConnected, showConnectionDialog]);
 
-  const [pendingNodeUpdate, setPendingNodeUpdate] = useState<
-    | {
-        nodeId: string;
-        chatId?: string | null;
-        notes?: string | null;
-        sources?: Source[];
-        timestamp: number;
-      }
-    | undefined
-  >(undefined);
-
   const {
     sidebarOpen,
     setSidebarOpen,
@@ -101,7 +89,7 @@ function App() {
     const initializeApp = async () => {
       try {
         const { initializeWorkspace } = await import(
-          './utils/workspace-initializer'
+          './utils/workspaceInitializer'
         );
         await initializeWorkspace();
 
@@ -110,7 +98,7 @@ function App() {
 
         // Initialize system information store
         const { useSystemInformationStore } = await import(
-          './store/use-system-information-store'
+          './store/useSystemInformationStore'
         );
         await useSystemInformationStore.getState().initialize();
 
@@ -171,7 +159,7 @@ function App() {
     renameThread,
     updateThreadPrompt,
     selectThread,
-  } = useThreadsRefactored();
+  } = useThreads();
 
   // Get active thread from threads array
   const activeThread = threads.find(
@@ -218,90 +206,6 @@ function App() {
       logger.error('Error deleting message:', error);
     }
   };
-
-  // Helper functions for node updates using the new props-based approach
-  const updateNodeChatId = useCallback(
-    (nodeId: string, chatId: string | null) => {
-      setPendingNodeUpdate({
-        nodeId,
-        chatId,
-        timestamp: Date.now(),
-      });
-    },
-    []
-  );
-
-  const updateNodeNotes = useCallback(
-    async (nodeId: string, notes: string | null) => {
-      setPendingNodeUpdate({
-        nodeId,
-        notes,
-        timestamp: Date.now(),
-      });
-
-      // Wait for the save to complete
-      return new Promise<void>(resolve => {
-        const timeout = setTimeout(resolve, 1000); // Max 1 second timeout
-
-        const checkSave = () => {
-          // Check if the update was processed by checking if pendingNodeUpdate is cleared
-          if (
-            !pendingNodeUpdate ||
-            pendingNodeUpdate.nodeId !== nodeId ||
-            pendingNodeUpdate.notes !== notes
-          ) {
-            clearTimeout(timeout);
-            resolve();
-          } else {
-            setTimeout(checkSave, 50);
-          }
-        };
-        checkSave();
-      });
-    },
-    [pendingNodeUpdate]
-  );
-
-  const updateNodeSources = useCallback(
-    async (nodeId: string, sources: Source[]) => {
-      setPendingNodeUpdate({
-        nodeId,
-        sources,
-        timestamp: Date.now(),
-      });
-
-      // Wait for the save to complete
-      return new Promise<void>(resolve => {
-        const timeout = setTimeout(resolve, 1000); // Max 1 second timeout
-
-        const checkSave = () => {
-          // Check if the update was processed by checking if pendingNodeUpdate is cleared
-          if (
-            !pendingNodeUpdate ||
-            pendingNodeUpdate.nodeId !== nodeId ||
-            pendingNodeUpdate.sources !== sources
-          ) {
-            clearTimeout(timeout);
-            resolve();
-          } else {
-            setTimeout(checkSave, 50);
-          }
-        };
-        checkSave();
-      });
-    },
-    [pendingNodeUpdate]
-  );
-
-  // Clear pending node update after a short delay to ensure it's been processed
-  useEffect(() => {
-    if (pendingNodeUpdate) {
-      const timeout = setTimeout(() => {
-        setPendingNodeUpdate(undefined);
-      }, 100);
-      return () => clearTimeout(timeout);
-    }
-  }, [pendingNodeUpdate]);
 
   return (
     <div className="flex h-screen bg-dark-bg text-dark-text-primary">
@@ -360,12 +264,6 @@ function App() {
             onMindMapCreate={handleNewMindMap}
             onMindMapRename={renameMindMap}
             onMindMapDelete={deleteMindMap}
-            onThreadAssociate={(nodeId: string, threadId: string) => {
-              updateNodeChatId(nodeId, threadId);
-            }}
-            onThreadUnassign={(nodeId: string) => {
-              updateNodeChatId(nodeId, null);
-            }}
             onThreadCreate={handleNewThread}
             onThreadRename={renameThread}
             onThreadDelete={deleteThread}
@@ -377,10 +275,7 @@ function App() {
             }}
             onPromptUpdate={updateThreadPrompt}
             onCustomizePrompts={() => setShowPromptsModal(true)}
-            onNodeNotesUpdate={updateNodeNotes}
-            onNodeSourcesUpdate={updateNodeSources}
             loadMindMaps={loadMindMaps}
-            pendingNodeUpdate={pendingNodeUpdate}
           />
         )}
         {activeView === 'workspace' && (

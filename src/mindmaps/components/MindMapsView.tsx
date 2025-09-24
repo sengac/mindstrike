@@ -5,8 +5,6 @@ import { MindMapsPanel } from './MindMapsPanel';
 import { MindMapCanvas } from './MindMapCanvas';
 import type { ThreadMetadata } from '../../store/useThreadsStore';
 import type { MindMap } from '../hooks/useMindMaps';
-import type { Source } from '../../types/mindMap';
-
 interface MindMapsViewProps {
   mindMaps: MindMap[];
   activeMindMapId?: string;
@@ -16,24 +14,13 @@ interface MindMapsViewProps {
   onMindMapCreate: () => void;
   onMindMapRename: (mindMapId: string, newName: string) => void;
   onMindMapDelete: (mindMapId: string) => void;
-  onThreadAssociate: (nodeId: string, threadId: string) => void;
-  onThreadUnassign: (nodeId: string) => void;
   onThreadCreate: () => void;
   onThreadRename: (threadId: string, newName: string) => void;
   onThreadDelete: (threadId: string) => void;
   onNavigateToChat: (threadId?: string) => void;
   onPromptUpdate: (threadId: string, customPrompt?: string) => void;
   onCustomizePrompts: () => void;
-  onNodeNotesUpdate: (nodeId: string, notes: string | null) => Promise<void>;
-  onNodeSourcesUpdate: (nodeId: string, sources: Source[]) => Promise<void>;
   loadMindMaps: (preserveActiveId?: boolean) => Promise<void>;
-  pendingNodeUpdate?: {
-    nodeId: string;
-    chatId?: string | null;
-    notes?: string | null;
-    sources?: Source[];
-    timestamp: number;
-  };
 }
 
 export function MindMapsView({
@@ -45,18 +32,13 @@ export function MindMapsView({
   onMindMapCreate,
   onMindMapRename,
   onMindMapDelete,
-  onThreadAssociate,
-  onThreadUnassign,
   onThreadCreate,
   onThreadRename,
   onThreadDelete,
   onNavigateToChat,
   onPromptUpdate,
   onCustomizePrompts,
-  onNodeNotesUpdate,
-  onNodeSourcesUpdate,
   loadMindMaps,
-  pendingNodeUpdate,
 }: MindMapsViewProps) {
   // Error-safe wrapper for synchronous callbacks
   const createSafeCallback = useCallback(
@@ -117,16 +99,6 @@ export function MindMapsView({
     [createSafeCallback, onMindMapDelete]
   );
 
-  const safeThreadAssociate = useCallback(
-    createSafeCallback(onThreadAssociate, 'thread association'),
-    [createSafeCallback, onThreadAssociate]
-  );
-
-  const safeThreadUnassign = useCallback(
-    createSafeCallback(onThreadUnassign, 'thread unassignment'),
-    [createSafeCallback, onThreadUnassign]
-  );
-
   const safeThreadCreate = useCallback(
     createSafeCallback(onThreadCreate, 'thread creation'),
     [createSafeCallback, onThreadCreate]
@@ -157,16 +129,6 @@ export function MindMapsView({
     [createSafeCallback, onCustomizePrompts]
   );
 
-  const safeNodeNotesUpdate = useCallback(
-    createSafeAsyncCallback(onNodeNotesUpdate, 'node notes update'),
-    [createSafeAsyncCallback, onNodeNotesUpdate]
-  );
-
-  const safeNodeSourcesUpdate = useCallback(
-    createSafeAsyncCallback(onNodeSourcesUpdate, 'node sources update'),
-    [createSafeAsyncCallback, onNodeSourcesUpdate]
-  );
-
   const safeLoadMindMaps = useCallback(
     createSafeAsyncCallback(loadMindMaps, 'mind maps loading'),
     [createSafeAsyncCallback, loadMindMaps]
@@ -186,21 +148,16 @@ export function MindMapsView({
           onMindMapRename={safeMindMapRename}
           onMindMapDelete={safeMindMapDelete}
           threads={threads}
-          onThreadAssociate={safeThreadAssociate}
-          onThreadUnassign={safeThreadUnassign}
           onThreadCreate={safeThreadCreate}
           onThreadRename={safeThreadRename}
           onThreadDelete={safeThreadDelete}
           onNavigateToChat={safeNavigateToChat}
           onPromptUpdate={safePromptUpdate}
           onCustomizePrompts={safeCustomizePrompts}
-          onNodeNotesUpdate={safeNodeNotesUpdate}
-          onNodeSourcesUpdate={safeNodeSourcesUpdate}
         />
         <MindMapCanvas
           activeMindMap={activeMindMap}
           loadMindMaps={safeLoadMindMaps}
-          pendingNodeUpdate={pendingNodeUpdate}
         />
       </div>
     </div>

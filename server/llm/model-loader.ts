@@ -1,6 +1,7 @@
 import type { LocalModelInfo } from '../local-llm-manager.js';
 import { sharedLlamaInstance } from '../shared-llama-instance.js';
 import { logger } from '../logger.js';
+import { GPU_LAYERS } from './constants.js';
 import type { ModelRegistry } from './model-registry.js';
 import type { LlamaSessionManager } from './session-manager.js';
 import type { ModelSettingsService } from './model-settings-service.js';
@@ -100,7 +101,10 @@ export class ModelLoader {
       const model = await llama.loadModel({
         modelPath: modelInfo.path,
         gpuLayers: modelInfo.layerCount
-          ? Math.min(settings.gpuLayers ?? 0, modelInfo.layerCount)
+          ? Math.min(
+              settings.gpuLayers ?? GPU_LAYERS.NONE,
+              modelInfo.layerCount
+            )
           : settings.gpuLayers,
       });
 

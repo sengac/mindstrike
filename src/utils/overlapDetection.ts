@@ -32,16 +32,39 @@ export function detectNodeOverlaps(
 ): OverlapResult {
   const container = containerElement || document;
 
-  // Find all mindmap nodes (exclude tiny handles and other elements)
-  const nodeElements = container.querySelectorAll('[data-id^="node-"]');
+  // Find all mindmap nodes - check for ReactFlow structure first, then fallback
+  // ReactFlow creates wrapper elements, so we need to be precise about which elements we select
+  let nodeElements = container.querySelectorAll(
+    '.react-flow__node [data-id^="node-"]'
+  );
+
+  // If no nodes found with ReactFlow selector, try direct selector (for tests)
+  if (nodeElements.length === 0) {
+    nodeElements = container.querySelectorAll('[data-id^="node-"]');
+  }
   const nodePositions: NodePosition[] = [];
+  const seenIds = new Set<string>(); // Track unique node IDs to avoid duplicates
 
   nodeElements.forEach(el => {
     const rect = el.getBoundingClientRect();
     const nodeId = el.getAttribute('data-id') || 'unknown';
 
+    // Skip if we've already processed this node ID
+    if (seenIds.has(nodeId)) {
+      return;
+    }
+
     // Only consider actual content nodes (filter out tiny handles)
-    if (rect.width > 50 && rect.height > 20) {
+    // Also ensure the element is visible (not hidden handles)
+    let isVisible = true;
+    if (typeof window !== 'undefined' && window.getComputedStyle) {
+      const computedStyle = window.getComputedStyle(el);
+      isVisible =
+        computedStyle.opacity !== '0' && computedStyle.display !== 'none';
+    }
+
+    if (rect.width > 50 && rect.height > 20 && isVisible) {
+      seenIds.add(nodeId);
       nodePositions.push({
         id: nodeId,
         x: Math.round(rect.x),
@@ -66,6 +89,9 @@ export function detectNodeOverlaps(
       const node2 = nodePositions[j];
 
       // Check if rectangles overlap
+      // Add a small tolerance to avoid false positives from rounding errors
+      const OVERLAP_TOLERANCE = 2; // pixels
+
       const xOverlap = Math.max(
         0,
         Math.min(node1.x + node1.width, node2.x + node2.width) -
@@ -77,7 +103,8 @@ export function detectNodeOverlaps(
           Math.max(node1.y, node2.y)
       );
 
-      if (xOverlap > 0 && yOverlap > 0) {
+      // Only consider it an overlap if it's more than our tolerance
+      if (xOverlap > OVERLAP_TOLERANCE && yOverlap > OVERLAP_TOLERANCE) {
         const overlapArea = xOverlap * yOverlap;
         overlaps.push({
           node1,
@@ -119,27 +146,6 @@ export function detectNodeOverlaps(
         `Mindmap Layout Error: ${result.message}. See console for details.`
       );
     }
-  } else {
-    console.log('✅ NO OVERLAPS:', result.message);
-  }
-
-  // Always log layout debugging info in development
-  if (process.env.NODE_ENV === 'development' && nodePositions.length > 0) {
-    const bounds = {
-      minX: Math.min(...nodePositions.map(n => n.x)),
-      maxX: Math.max(...nodePositions.map(n => n.x + n.width)),
-      minY: Math.min(...nodePositions.map(n => n.y)),
-      maxY: Math.max(...nodePositions.map(n => n.y + n.height)),
-    };
-    const layoutWidth = bounds.maxX - bounds.minX;
-    const layoutHeight = bounds.maxY - bounds.minY;
-
-    console.log('📐 LAYOUT DEBUG:', {
-      totalNodes: nodePositions.length,
-      layoutDimensions: `${layoutWidth.toFixed(0)}x${layoutHeight.toFixed(0)}`,
-      bounds: `(${bounds.minX.toFixed(0)}, ${bounds.minY.toFixed(0)}) to (${bounds.maxX.toFixed(0)}, ${bounds.maxY.toFixed(0)})`,
-      averageNodeSize: `${(nodePositions.reduce((sum, n) => sum + n.width, 0) / nodePositions.length).toFixed(0)}x${(nodePositions.reduce((sum, n) => sum + n.height, 0) / nodePositions.length).toFixed(0)}`,
-    });
   }
 
   return result;

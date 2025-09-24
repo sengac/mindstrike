@@ -5,7 +5,7 @@ import {
   isSSEDebugEvent,
   isSSETokenStatsEvent,
   isSSEStatusEvent,
-} from '../types/sse-events';
+} from '../types/sseEvents';
 
 export interface LLMDebugEntry {
   id: string;

@@ -118,7 +118,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
 
       // Update system info after model change
       const { useSystemInformationStore } = await import(
-        './use-system-information-store'
+        './useSystemInformationStore'
       );
       useSystemInformationStore.getState().updateSystemInfo();
     } catch (error) {

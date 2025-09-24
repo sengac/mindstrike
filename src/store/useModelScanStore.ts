@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { AvailableModel } from './useAvailableModelsStore';
 import { useAvailableModelsStore } from './useAvailableModelsStore';
 import { sseEventBus } from '../utils/sseEventBus';
-import { isSSEModelScanEvent } from '../types/sse-events';
+import { isSSEModelScanEvent } from '../types/sseEvents';
 
 export interface ScanProgress {
   stage:

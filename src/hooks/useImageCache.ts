@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { imageCache } from '../services/image-cache';
+import { imageCache } from '../services/imageCache';
 
 /**
  * Hook for using cached images

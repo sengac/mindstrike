@@ -17,12 +17,17 @@ import {
 } from '../utils/sseDecoder';
 import { sseEventBus } from '../utils/sseEventBus';
 import { logger } from '../utils/logger';
+import {
+  cleanNodes,
+  extractTransientState,
+  mergeTransientState,
+} from '../mindmaps/utils/transientProperties';
 
 interface HistoryState {
   nodes: Node<MindMapNodeData>[];
   edges: Edge[];
   rootNodeId: string;
-  layout: 'LR' | 'RL' | 'TB' | 'BT';
+  layout: 'LR' | 'RL' | 'TB' | 'BT' | 'RD';
   selectedNodeId: string | null;
 }
 
@@ -32,7 +37,7 @@ interface MindMapState {
   nodes: Node<MindMapNodeData>[];
   edges: Edge[];
   rootNodeId: string;
-  layout: 'LR' | 'RL' | 'TB' | 'BT';
+  layout: 'LR' | 'RL' | 'TB' | 'BT' | 'RD';
 
   // UI state
   selectedNodeId: string | null;
@@ -116,7 +121,7 @@ interface MindMapActions {
   ) => Promise<void>;
 
   // Layout operations
-  changeLayout: (newLayout: 'LR' | 'RL' | 'TB' | 'BT') => Promise<void>;
+  changeLayout: (newLayout: 'LR' | 'RL' | 'TB' | 'BT' | 'RD') => Promise<void>;
   resetLayout: () => Promise<void>;
 
   // History operations
@@ -726,10 +731,24 @@ export const useMindMapStore = create<MindMapStore>()(
           return;
         }
 
+        // Capture current transient states before undo
+        const transientStates = new Map(
+          state.nodes.map(node => [node.id, extractTransientState(node)])
+        );
+
         set(draft => {
           draft.historyIndex -= 1;
           const previousState = draft.history[draft.historyIndex];
-          draft.nodes = previousState.nodes;
+
+          // Restore nodes from history while preserving current transient states
+          draft.nodes = previousState.nodes.map(node => {
+            const transientState = transientStates.get(node.id);
+            if (transientState) {
+              return mergeTransientState(node, transientState);
+            }
+            return node;
+          });
+
           draft.edges = previousState.edges;
           draft.rootNodeId = previousState.rootNodeId;
           draft.layout = previousState.layout;
@@ -743,10 +762,24 @@ export const useMindMapStore = create<MindMapStore>()(
           return;
         }
 
+        // Capture current transient states before redo
+        const transientStates = new Map(
+          state.nodes.map(node => [node.id, extractTransientState(node)])
+        );
+
         set(draft => {
           draft.historyIndex += 1;
           const nextState = draft.history[draft.historyIndex];
-          draft.nodes = nextState.nodes;
+
+          // Restore nodes from history while preserving current transient states
+          draft.nodes = nextState.nodes.map(node => {
+            const transientState = transientStates.get(node.id);
+            if (transientState) {
+              return mergeTransientState(node, transientState);
+            }
+            return node;
+          });
+
           draft.edges = nextState.edges;
           draft.rootNodeId = nextState.rootNodeId;
           draft.layout = nextState.layout;
@@ -771,8 +804,11 @@ export const useMindMapStore = create<MindMapStore>()(
         }
 
         set(draft => {
+          // Clean nodes to remove transient properties before saving to history
+          const cleanedNodes = cleanNodes(state.nodes);
+
           const newHistoryState: HistoryState = {
-            nodes: JSON.parse(JSON.stringify(state.nodes)),
+            nodes: JSON.parse(JSON.stringify(cleanedNodes)),
             edges: JSON.parse(JSON.stringify(state.edges)),
             rootNodeId: state.rootNodeId,
             layout: state.layout,
@@ -1019,7 +1055,7 @@ export const useMindMapStore = create<MindMapStore>()(
               } else if (
                 isSseObject(eventData) &&
                 eventData.type === 'token' &&
-                eventData.tokensPerSecond != null
+                eventData.tokensPerSecond !== null
               ) {
                 // Handle token progress updates
                 const state = get();
@@ -1308,8 +1344,10 @@ export const useMindMapStore = create<MindMapStore>()(
         }
 
         try {
+          // Clean nodes before saving to remove transient properties
+          const cleanedNodes = cleanNodes(state.nodes);
           const treeData = dataManager.convertNodesToTree(
-            state.nodes,
+            cleanedNodes,
             state.rootNodeId,
             state.layout
           );

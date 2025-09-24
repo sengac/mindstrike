@@ -4,7 +4,7 @@ import cors from 'cors';
 import path from 'path';
 import fs from 'fs/promises';
 import { existsSync, statSync, createReadStream, stat } from 'fs';
-import { musicMetadataCache } from './music-metadata-cache.js';
+import { musicMetadataCache } from './musicMetadataCache.js';
 import type { Stats } from 'fs';
 
 import { fileURLToPath } from 'url';
@@ -13,34 +13,34 @@ import { fileURLToPath } from 'url';
 import type { AgentConfig } from './agent.js';
 import { Agent } from './agent.js';
 import { logger } from './logger.js';
-import { cleanContentForLLM } from './utils/content-filter.js';
-import { LLMScanner } from './llm-scanner.js';
-import { LLMConfigManager } from './llm-config-manager.js';
-import { mcpManager } from './mcp-manager.js';
-import { lfsManager } from './lfs-manager.js';
+import { cleanContentForLLM } from './utils/contentFilter.js';
+import { LLMScanner } from './llmScanner.js';
+import { LLMConfigManager } from './llmConfigManager.js';
+import { mcpManager } from './mcpManager.js';
+import { lfsManager } from './lfsManager.js';
 import {
   getHomeDirectory,
   getWorkspaceRoot,
   getMusicRoot,
   setWorkspaceRoot,
   setMusicRoot,
-} from './utils/settings-directory.js';
-import { sseManager } from './sse-manager.js';
+} from './utils/settingsDirectory.js';
+import { sseManager } from './sseManager.js';
 import {
   getLocalLLMManager,
   cleanup as cleanupLLMWorker,
-} from './local-llm-singleton.js';
-import type { LocalModelInfo } from './local-llm-manager.js';
-import localLlmRoutes from './routes/local-llm.js';
-import modelScanRoutes from './routes/model-scan.js';
-import { MindmapAgentIterative } from './agents/mindmap-agent-iterative.js';
-import { WorkflowAgent } from './agents/workflow-agent.js';
-import { ConversationManager } from './conversation-manager.js';
-import { asyncHandler } from './utils/async-handler.js';
+} from './localLlmSingleton.js';
+import type { LocalModelInfo } from './localLlmManager.js';
+import localLlmRoutes from './routes/localLlm.js';
+import modelScanRoutes from './routes/modelScan.js';
+import { MindmapAgentIterative } from './agents/mindmapAgentIterative.js';
+import { WorkflowAgent } from './agents/workflowAgent.js';
+import { ConversationManager } from './conversationManager.js';
+import { asyncHandler } from './utils/asyncHandler.js';
 import type { ImageAttachment, NotesAttachment } from '../src/types.js';
 import { SSEEventType } from '../src/types.js';
-import { systemInfoManager } from './system-info-manager.js';
-import { ChatAgent } from './agents/chat-agent.js';
+import { systemInfoManager } from './systemInfoManager.js';
+import { ChatAgent } from './agents/chatAgent.js';
 
 // Cancellation system for ongoing message processing
 class MessageCancellationManager {
@@ -163,7 +163,7 @@ const cancellationManager = new MessageCancellationManager();
 
 // Helper function to sync current agent with thread history
 async function syncCurrentAgentWithThread(threadId: string): Promise<void> {
-  const { globalSessionManager } = await import('./session-manager.js');
+  const { globalSessionManager } = await import('./sessionManager.js');
   const currentAgent = agentPool.getCurrentAgent();
 
   await globalSessionManager.switchToThread(
@@ -383,7 +383,7 @@ app.get('/audio/*', (req: Request, res: Response) => {
   });
 });
 
-// Home directory function moved to utils/settings-directory.ts
+// Home directory function moved to utils/settingsDirectory.ts
 
 // Initialize workspace, music and agent configuration
 // Default to home directory if no working root is set
@@ -585,7 +585,7 @@ async function initializeLLMServices() {
 
     // Initialize model fetcher
     try {
-      const { modelFetcher } = await import('./model-fetcher.js');
+      const { modelFetcher } = await import('./modelFetcher.js');
       await modelFetcher.initialize();
     } catch (error) {
       logger.warn('Failed to initialize model fetcher:', error);
@@ -765,7 +765,7 @@ app.post('/api/playlists/save', async (req: Request, res: Response) => {
   try {
     const result = await playlistFileQueue.add(async () => {
       const { getMindstrikeDirectory } = await import(
-        './utils/settings-directory.js'
+        './utils/settingsDirectory.js'
       );
       const playlists = req.body;
 
@@ -817,7 +817,7 @@ app.get('/api/playlists/load', async (req: Request, res: Response) => {
   try {
     const result = await playlistFileQueue.add(async () => {
       const { getMindstrikeDirectory } = await import(
-        './utils/settings-directory.js'
+        './utils/settingsDirectory.js'
       );
       const playlistsDir = path.join(getMindstrikeDirectory(), 'playlists');
       const playlistsFile = path.join(playlistsDir, 'playlists.json');
@@ -892,7 +892,7 @@ app.get('/api/playlists/load', async (req: Request, res: Response) => {
 app.get('/api/playlists/:id', async (req: Request, res: Response) => {
   try {
     const { getMindstrikeDirectory } = await import(
-      './utils/settings-directory.js'
+      './utils/settingsDirectory.js'
     );
     const playlistsDir = path.join(getMindstrikeDirectory(), 'playlists');
     const playlistsFile = path.join(playlistsDir, 'playlists.json');
@@ -951,7 +951,7 @@ app.get('/api/playlists/:id', async (req: Request, res: Response) => {
 app.delete('/api/playlists/:id', async (req: Request, res: Response) => {
   try {
     const { getMindstrikeDirectory } = await import(
-      './utils/settings-directory.js'
+      './utils/settingsDirectory.js'
     );
     const playlistsDir = path.join(getMindstrikeDirectory(), 'playlists');
     const playlistsFile = path.join(playlistsDir, 'playlists.json');
@@ -3172,9 +3172,7 @@ app.post(
       const { workflowId } = req.params;
 
       // Import and call the cancel function
-      const { cancelWorkflow } = await import(
-        './agents/mindmap-agent-iterative'
-      );
+      const { cancelWorkflow } = await import('./agents/mindmapAgentIterative');
       const cancelled = cancelWorkflow(workflowId);
 
       res.json({
@@ -4209,7 +4207,7 @@ app.get('/api/mcp/server-logs', async (req: Request, res: Response) => {
 app.get('/api/mcp/config', async (req: Request, res: Response) => {
   try {
     const { getMindstrikeDirectory } = await import(
-      './utils/settings-directory.js'
+      './utils/settingsDirectory.js'
     );
     const configPath = path.join(getMindstrikeDirectory(), 'mcp-config.json');
     const configData = await fs.readFile(configPath, 'utf-8');
@@ -4249,7 +4247,7 @@ app.post('/api/mcp/config', async (req: Request, res: Response) => {
     }
 
     const { getMindstrikeDirectory } = await import(
-      './utils/settings-directory.js'
+      './utils/settingsDirectory.js'
     );
     const configPath = path.join(getMindstrikeDirectory(), 'mcp-config.json');
 

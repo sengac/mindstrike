@@ -255,7 +255,7 @@ export const useLocalModelsStore = create<LocalModelsState>()(
 
           // Update system info after model load
           const { useSystemInformationStore } = await import(
-            './use-system-information-store'
+            './useSystemInformationStore'
           );
           useSystemInformationStore.getState().updateSystemInfo();
 
@@ -304,7 +304,7 @@ export const useLocalModelsStore = create<LocalModelsState>()(
 
           // Update system info after model unload
           const { useSystemInformationStore } = await import(
-            './use-system-information-store'
+            './useSystemInformationStore'
           );
           useSystemInformationStore.getState().updateSystemInfo();
 

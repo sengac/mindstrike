@@ -62,7 +62,7 @@ vi.mock('reactflow', async () => {
 });
 
 // Mock the logger
-vi.mock('../utils/logger.js', () => ({
+vi.mock('../utils/logger', () => ({
   logger: {
     error: vi.fn(),
     warn: vi.fn(),
@@ -70,6 +70,9 @@ vi.mock('../utils/logger.js', () => ({
     debug: vi.fn(),
   },
 }));
+
+// Mock monaco-editor - using manual mock in __mocks__ directory
+vi.mock('monaco-editor');
 
 // Mock fetch globally
 const mockFetch = vi.fn();
@@ -162,12 +165,34 @@ Object.defineProperty(window, 'removeEventListener', {
   writable: true,
 });
 
+// Mock matchMedia for react-hot-toast
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: vi.fn().mockImplementation(query => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(), // deprecated
+    removeListener: vi.fn(), // deprecated
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })),
+});
+
 // Mock ResizeObserver
-global.ResizeObserver = vi.fn().mockImplementation(() => ({
+const MockResizeObserver = vi.fn().mockImplementation(() => ({
   observe: vi.fn(),
   unobserve: vi.fn(),
   disconnect: vi.fn(),
 }));
+
+// Define ResizeObserver on global
+Object.defineProperty(global, 'ResizeObserver', {
+  writable: true,
+  configurable: true,
+  value: MockResizeObserver,
+});
 
 // Mock IntersectionObserver
 global.IntersectionObserver = vi.fn().mockImplementation(() => ({

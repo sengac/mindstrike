@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { exec } from 'child_process';
 import fs from 'fs';
 import os from 'os';
@@ -7,6 +7,12 @@ import { sseManager } from '../sse-manager.js';
 import { getLocalModelsDirectory } from '../utils/settings-directory.js';
 import { modelSettingsManager } from '../utils/model-settings-manager.js';
 import { SSEEventType } from '../../src/types.js';
+import {
+  HTTP_STATUS,
+  TIMING,
+  PROGRESS,
+  RANDOM_STRING,
+} from '../llm/constants.js';
 
 const router = Router();
 const llmManager = getLocalLLMManager();
@@ -195,7 +201,7 @@ router.get('/hf-token/status', async (req, res) => {
 /**
  * Update model list with real-time progress via SSE
  */
-router.get('/update-models-stream', async (req: any, res: any) => {
+router.get('/update-models-stream', async (req: Request, res: Response) => {
   try {
     const { modelFetcher } = await import('../model-fetcher.js');
 
@@ -213,19 +219,19 @@ router.get('/update-models-stream', async (req: any, res: any) => {
     res.write(
       `data: {"type": "${SSEEventType.CONNECTED}", "message": "Connected to model update stream"}\n\n`
     );
-    if (res.flush) {
+    if ('flush' in res && typeof res.flush === 'function') {
       res.flush();
     }
 
     // Progress callback that sends updates via SSE
-    const progressCallback = (progress: any) => {
+    const progressCallback = (progress: { [key: string]: unknown }) => {
       res.write(
         `data: ${JSON.stringify({
           type: 'progress',
           ...progress,
         })}\n\n`
       );
-      if (res.flush) {
+      if ('flush' in res && typeof res.flush === 'function') {
         res.flush();
       }
     };
@@ -295,7 +301,7 @@ router.post('/search-models', async (req, res) => {
 
     if (!query || typeof query !== 'string') {
       return res
-        .status(400)
+        .status(HTTP_STATUS.BAD_REQUEST)
         .json({ error: 'Query parameter is required and must be a string' });
     }
 
@@ -337,7 +343,7 @@ router.post('/clear-search-cache', async (req, res) => {
 
     if (!query || typeof query !== 'string') {
       return res
-        .status(400)
+        .status(HTTP_STATUS.BAD_REQUEST)
         .json({ error: 'Query parameter is required and must be a string' });
     }
 
@@ -421,7 +427,18 @@ router.post('/download', async (req, res) => {
       .catch(error => {
         // Download failed or cancelled - broadcast error
         const isCancelled = error.message === 'Download cancelled';
-        const errorDetails: any = {
+        interface ErrorDetails {
+          filename: string;
+          progress: number;
+          speed: string;
+          isDownloading: boolean;
+          error: string;
+          cancelled: boolean;
+          errorType?: string;
+          errorMessage?: string;
+          huggingFaceUrl?: string;
+        }
+        const errorDetails: ErrorDetails = {
           filename,
           progress: 0,
           speed: '0 B/s',

@@ -4,6 +4,7 @@ import {
   type NodeSizingStrategy,
 } from '../nodeSizingStrategy';
 import * as textMeasurementService from '../textMeasurementService';
+import { NODE_SIZING } from '../../constants/nodeSizing';
 
 // Mock the text measurement service
 vi.mock('../textMeasurementService', () => ({
@@ -32,18 +33,18 @@ describe('Node Sizing Strategy', () => {
         textMeasurementService.calculateTextDimensions
       ).toHaveBeenCalledWith({
         text: 'Short Label',
-        fontSize: '14px',
-        fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
-        fontWeight: '500',
-        padding: { left: 0, right: 0, top: 0, bottom: 0 },
-        minWidth: 120,
-        maxWidth: 600,
+        fontSize: NODE_SIZING.DEFAULT_FONT_SIZE,
+        fontFamily: NODE_SIZING.DEFAULT_FONT_FAMILY,
+        fontWeight: NODE_SIZING.DEFAULT_FONT_WEIGHT,
+        padding: NODE_SIZING.DEFAULT_PADDING,
+        minWidth: NODE_SIZING.MIN_WIDTH,
+        maxWidth: NODE_SIZING.MAX_WIDTH,
       });
       // Result should be the base dimensions (which already include component padding)
       expect(result).toEqual({ width: 150, height: 32 });
     });
 
-    it('should add extra width when node has icons', () => {
+    it('should not add extra width for icons since they are positioned absolutely', () => {
       const mockDimensions = { width: 150, height: 32 };
       vi.mocked(textMeasurementService.calculateTextDimensions).mockReturnValue(
         mockDimensions
@@ -54,9 +55,10 @@ describe('Node Sizing Strategy', () => {
         hasIcons: true,
       });
 
-      // Icons should add extra width for the icon badges
-      expect(withIcons.width).toBe(withoutIcons.width + 30); // Extra space for icons
-      expect(withIcons.height).toBe(withoutIcons.height); // Height should be the same
+      // Icons are positioned absolutely outside the node bounds,
+      // so they should not affect the node width
+      expect(withIcons.width).toBe(withoutIcons.width);
+      expect(withIcons.height).toBe(withoutIcons.height);
     });
 
     it('should handle editing mode with extra space', () => {
@@ -71,7 +73,9 @@ describe('Node Sizing Strategy', () => {
       });
 
       // Editing mode should add extra width for cursor and comfortable typing
-      expect(editing.width).toBe(normal.width + 20); // Extra space for cursor
+      expect(editing.width).toBe(
+        normal.width + NODE_SIZING.EDITING_EXTRA_WIDTH
+      ); // Extra space for cursor
       expect(editing.height).toBe(normal.height); // Height should be the same
     });
 
@@ -87,8 +91,12 @@ describe('Node Sizing Strategy', () => {
       // Root nodes should be larger
       const expectedChildWidth = 150;
       const expectedChildHeight = 32;
-      const expectedRootWidth = Math.round(expectedChildWidth * 1.1);
-      const expectedRootHeight = Math.round(expectedChildHeight * 1.2);
+      const expectedRootWidth = Math.round(
+        expectedChildWidth * NODE_SIZING.ROOT_NODE_WIDTH_MULTIPLIER
+      );
+      const expectedRootHeight = Math.round(
+        expectedChildHeight * NODE_SIZING.ROOT_NODE_HEIGHT_MULTIPLIER
+      );
       expect(rootNode.width).toBe(expectedRootWidth); // 10% larger
       expect(rootNode.height).toBe(expectedRootHeight); // 20% taller
     });
@@ -121,15 +129,18 @@ describe('Node Sizing Strategy', () => {
         level: 0,
       });
 
-      // Should apply all modifiers
+      // Should apply only editing and root modifiers (icons don't affect width)
       const baseWidth = 200;
-      const withIcons = baseWidth + 30;
-      const withEditing = withIcons + 20;
-      const asRoot = Math.round(withEditing * 1.1);
+      const withEditing = baseWidth + NODE_SIZING.EDITING_EXTRA_WIDTH;
+      const asRoot = Math.round(
+        withEditing * NODE_SIZING.ROOT_NODE_WIDTH_MULTIPLIER
+      );
 
       expect(result.width).toBe(asRoot);
       const baseHeight = 32;
-      expect(result.height).toBe(Math.round(baseHeight * 1.2)); // Root node height modifier
+      expect(result.height).toBe(
+        Math.round(baseHeight * NODE_SIZING.ROOT_NODE_HEIGHT_MULTIPLIER)
+      ); // Root node height modifier
     });
 
     it('should handle empty text', () => {
@@ -168,7 +179,7 @@ describe('Node Sizing Strategy', () => {
       expect(result).toEqual({ width: 200, height: 40 });
     });
 
-    it('should handle collapsed nodes appropriately', () => {
+    it('should handle collapsed nodes without changing size', () => {
       const mockDimensions = { width: 150, height: 32 };
       vi.mocked(textMeasurementService.calculateTextDimensions).mockReturnValue(
         mockDimensions
@@ -181,9 +192,10 @@ describe('Node Sizing Strategy', () => {
         isCollapsed: true,
       });
 
-      // Collapsed nodes might need extra width for the expand indicator
-      expect(collapsed.width).toBe(expanded.width + 10);
-      expect(collapsed.height).toBe(expanded.height); // Height should be the same
+      // Collapsed nodes should have the same width since the collapse button
+      // is positioned absolutely outside the node bounds
+      expect(collapsed.width).toBe(expanded.width);
+      expect(collapsed.height).toBe(expanded.height);
     });
 
     it('should support custom padding', () => {

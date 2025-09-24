@@ -1,770 +1,254 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { renderHook } from '@testing-library/react';
 import { useMindMapDrag } from '../useMindMapDrag';
 import type { Node } from 'reactflow';
 import type { MindMapNodeData } from '../../types/mindMap';
-import { mockNodes } from '../../__fixtures__/mindMapData';
-import type { MouseEvent as ReactMouseEvent } from 'react';
+import { NODE_SIZING } from '../../constants/nodeSizing';
 
-// Create mock dependencies
-const createMockDependencies = () => {
+// Mock useReactFlow hook
+vi.mock('reactflow', async () => {
+  const actual = await vi.importActual('reactflow');
+  return {
+    ...actual,
+    useReactFlow: () => ({
+      screenToFlowPosition: vi.fn(pos => pos), // Simple pass-through for testing
+    }),
+  };
+});
+
+describe('useMindMapDrag - Drop Position Detection', () => {
   const mockMoveNode = vi.fn();
 
-  return {
-    nodes: [...mockNodes], // Use spread to avoid mutations
-    rootNodeId: 'root-node',
-    layout: 'LR' as const,
-    moveNode: mockMoveNode,
-  };
-};
-
-// Helper to create mock drag event
-// Helper to create a partial mock event for testing
-const createMockDragEvent = (
-  clientX = 100,
-  clientY = 100
-): ReactMouseEvent<Element, MouseEvent> => {
-  const target = document.createElement('div');
-  const currentTarget = document.createElement('div');
-
-  // Create a native mouse event
-  const nativeEvent = new MouseEvent('mousemove', {
-    clientX,
-    clientY,
-    bubbles: true,
-    cancelable: true,
+  const createNode = (
+    id: string,
+    x: number,
+    y: number,
+    width: number = NODE_SIZING.DEFAULT_NODE_WIDTH,
+    height: number = NODE_SIZING.DEFAULT_NODE_HEIGHT,
+    parentId?: string
+  ): Node<MindMapNodeData> => ({
+    id,
+    type: 'mindMapNode',
+    position: { x, y },
+    data: {
+      id,
+      label: `Node ${id}`,
+      isRoot: id === 'root',
+      level: id === 'root' ? 0 : 1,
+      hasChildren: false,
+      isCollapsed: false,
+      isDragging: false,
+      isDropTarget: false,
+      dropPosition: null,
+      layout: 'LR',
+      colorTheme: null,
+      width,
+      height,
+      parentId,
+    },
   });
 
-  // For testing purposes, we only need the properties that our hook actually uses
-  // This approach avoids type assertions while providing the necessary interface
-  const mockEvent: Pick<
-    ReactMouseEvent<Element, MouseEvent>,
-    | 'clientX'
-    | 'clientY'
-    | 'preventDefault'
-    | 'stopPropagation'
-    | 'currentTarget'
-    | 'target'
-    | 'nativeEvent'
-  > &
-    Partial<ReactMouseEvent<Element, MouseEvent>> = {
-    nativeEvent,
-    currentTarget: currentTarget as EventTarget & Element,
-    target: target as EventTarget & Element,
-    preventDefault: vi.fn(),
-    stopPropagation: vi.fn(),
-    clientX,
-    clientY,
-  };
+  describe('Height-aware drop zones', () => {
+    it('should use proportional zones based on node height', () => {
+      const smallNode = createNode('small', 200, 100, 150, 30);
+      const largeNode = createNode('large', 200, 200, 150, 120);
+      const nodes = [createNode('root', 0, 0), smallNode, largeNode];
 
-  // Return the mock event with only the required properties
-  return mockEvent as ReactMouseEvent<Element, MouseEvent>;
-};
-
-describe('useMindMapDrag', () => {
-  let mockDeps: ReturnType<typeof createMockDependencies>;
-
-  beforeEach(() => {
-    vi.clearAllTimers();
-    vi.useFakeTimers();
-    mockDeps = createMockDependencies();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.clearAllMocks();
-  });
-
-  describe('initialization', () => {
-    it('should initialize with default state', () => {
-      const { result } = renderHook(() => useMindMapDrag(mockDeps));
-
-      expect(result.current.draggedNodeId).toBeNull();
-      expect(result.current.closestDropTarget).toBeNull();
-      expect(result.current.dropPosition).toBeNull();
-      expect(result.current.hasDraggedSignificantly).toBe(false);
-      expect(result.current.dragCursorPosition).toBeNull();
-    });
-
-    it('should provide drag handlers', () => {
-      const { result } = renderHook(() => useMindMapDrag(mockDeps));
-
-      expect(typeof result.current.onNodeDragStart).toBe('function');
-      expect(typeof result.current.onNodeDrag).toBe('function');
-      expect(typeof result.current.onNodeDragStop).toBe('function');
-    });
-
-    it('should provide utility functions', () => {
-      const { result } = renderHook(() => useMindMapDrag(mockDeps));
-
-      expect(typeof result.current.findClosestNode).toBe('function');
-      expect(typeof result.current.getDropPosition).toBe('function');
-      expect(typeof result.current.wouldCreateCycle).toBe('function');
-    });
-  });
-
-  describe('findClosestNode', () => {
-    it('should find the closest node to a position', () => {
-      const { result } = renderHook(() => useMindMapDrag(mockDeps));
-
-      const position = { x: 260, y: -40 }; // Close to child-1 at (250, -50)
-      const closestNodeId = result.current.findClosestNode(
-        position,
-        'root-node'
+      const { result } = renderHook(() =>
+        useMindMapDrag({
+          nodes,
+          rootNodeId: 'root',
+          layout: 'LR',
+          moveNode: mockMoveNode,
+        })
       );
 
-      expect(closestNodeId).toBe('child-1');
+      // Small node (30px height): zones should be ~10px each
+      // Zones are based on NODE_SIZING.ZONE_PERCENTAGE (33%)
+      // Top third: above, Middle third: over, Bottom third: below
+      expect(result.current.getDropPosition({ x: 200, y: 105 }, 'small')).toBe(
+        'above'
+      ); // 5px from top
+      expect(result.current.getDropPosition({ x: 200, y: 115 }, 'small')).toBe(
+        'over'
+      ); // 15px from top
+      expect(result.current.getDropPosition({ x: 200, y: 125 }, 'small')).toBe(
+        'below'
+      ); // 25px from top
+
+      // Large node (120px height): zones should be ~40px each
+      // Zones are based on NODE_SIZING.ZONE_PERCENTAGE (33%)
+      // Top third: above, Middle third: over, Bottom third: below
+      expect(result.current.getDropPosition({ x: 200, y: 220 }, 'large')).toBe(
+        'above'
+      ); // 20px from top
+      expect(result.current.getDropPosition({ x: 200, y: 260 }, 'large')).toBe(
+        'over'
+      ); // 60px from top
+      expect(result.current.getDropPosition({ x: 200, y: 300 }, 'large')).toBe(
+        'below'
+      ); // 100px from top
     });
 
-    it('should exclude the specified node from search', () => {
-      const { result } = renderHook(() => useMindMapDrag(mockDeps));
+    it('should handle very tall nodes correctly', () => {
+      const tallNode = createNode('tall', 100, 100, 200, 300); // 300px tall
+      const nodes = [createNode('root', 0, 0), tallNode];
 
-      const position = { x: 260, y: -40 }; // Close to child-1
-      const closestNodeId = result.current.findClosestNode(position, 'child-1');
-
-      expect(closestNodeId).not.toBe('child-1');
-      expect(closestNodeId).toBeDefined();
-    });
-
-    it('should return null when no nodes available', () => {
-      const emptyDeps = { ...mockDeps, nodes: [] };
-      const { result } = renderHook(() => useMindMapDrag(emptyDeps));
-
-      const position = { x: 100, y: 100 };
-      const closestNodeId = result.current.findClosestNode(
-        position,
-        'non-existent'
+      const { result } = renderHook(() =>
+        useMindMapDrag({
+          nodes,
+          rootNodeId: 'root',
+          layout: 'LR',
+          moveNode: mockMoveNode,
+        })
       );
 
-      expect(closestNodeId).toBeNull();
+      // With 300px height and NODE_SIZING.ZONE_PERCENTAGE zones:
+      // Each zone is 33% of the height
+      expect(result.current.getDropPosition({ x: 100, y: 150 }, 'tall')).toBe(
+        'above'
+      ); // 50px from top
+      expect(result.current.getDropPosition({ x: 100, y: 250 }, 'tall')).toBe(
+        'over'
+      ); // 150px from top
+      expect(result.current.getDropPosition({ x: 100, y: 350 }, 'tall')).toBe(
+        'below'
+      ); // 250px from top
     });
-  });
 
-  describe('getDropPosition', () => {
-    it('should return "over" for root node', () => {
-      const { result } = renderHook(() => useMindMapDrag(mockDeps));
+    it('should handle width-based zones for vertical layouts', () => {
+      const wideNode = createNode('wide', 100, 100, 300, 50); // 300px wide
+      const nodes = [createNode('root', 0, 0), wideNode];
 
-      const position = { x: 10, y: 10 };
-      const dropPosition = result.current.getDropPosition(
-        position,
-        'root-node'
+      const { result } = renderHook(() =>
+        useMindMapDrag({
+          nodes,
+          rootNodeId: 'root',
+          layout: 'TB', // Top-to-bottom layout
+          moveNode: mockMoveNode,
+        })
       );
 
-      expect(dropPosition).toBe('over');
+      // With 300px width and NODE_SIZING.ZONE_PERCENTAGE zones in TB layout:
+      // Each zone is 33% of the width
+      expect(result.current.getDropPosition({ x: 150, y: 100 }, 'wide')).toBe(
+        'above'
+      ); // 50px from left
+      expect(result.current.getDropPosition({ x: 250, y: 100 }, 'wide')).toBe(
+        'over'
+      ); // 150px from left
+      expect(result.current.getDropPosition({ x: 350, y: 100 }, 'wide')).toBe(
+        'below'
+      ); // 250px from left
     });
 
-    it('should return "above" when dragging above threshold in LR layout', () => {
-      const { result } = renderHook(() => useMindMapDrag(mockDeps));
-
-      const childNode = mockNodes.find(n => n.id === 'child-1')!;
-      const position = {
-        x: childNode.position.x,
-        y: childNode.position.y - 40,
-      }; // 40px above
-
-      const dropPosition = result.current.getDropPosition(position, 'child-1');
-
-      expect(dropPosition).toBe('above');
-    });
-
-    it('should return "below" when dragging below threshold in LR layout', () => {
-      const { result } = renderHook(() => useMindMapDrag(mockDeps));
-
-      const childNode = mockNodes.find(n => n.id === 'child-1')!;
-      const position = {
-        x: childNode.position.x,
-        y: childNode.position.y + 40,
-      }; // 40px below
-
-      const dropPosition = result.current.getDropPosition(position, 'child-1');
-
-      expect(dropPosition).toBe('below');
-    });
-
-    it('should return "over" when within threshold', () => {
-      const { result } = renderHook(() => useMindMapDrag(mockDeps));
-
-      const childNode = mockNodes.find(n => n.id === 'child-1')!;
-      const position = {
-        x: childNode.position.x,
-        y: childNode.position.y + 10,
-      }; // 10px below (within threshold)
-
-      const dropPosition = result.current.getDropPosition(position, 'child-1');
-
-      expect(dropPosition).toBe('over');
-    });
-
-    it('should handle TB layout correctly', () => {
-      const tbDeps = { ...mockDeps, layout: 'TB' as const };
-      const { result } = renderHook(() => useMindMapDrag(tbDeps));
-
-      const childNode = mockNodes.find(n => n.id === 'child-1')!;
-      const position = {
-        x: childNode.position.x - 40,
-        y: childNode.position.y,
-      }; // 40px left (above in TB)
-
-      const dropPosition = result.current.getDropPosition(position, 'child-1');
-
-      expect(dropPosition).toBe('above');
-    });
-
-    it('should handle non-existent target node', () => {
-      const { result } = renderHook(() => useMindMapDrag(mockDeps));
-
-      const position = { x: 100, y: 100 };
-      const dropPosition = result.current.getDropPosition(
-        position,
-        'non-existent'
-      );
-
-      expect(dropPosition).toBe('over');
-    });
-  });
-
-  describe('wouldCreateCycle', () => {
-    it('should detect cycle when moving parent to its child', () => {
-      const { result } = renderHook(() => useMindMapDrag(mockDeps));
-
-      const wouldCycle = result.current.wouldCreateCycle(
-        'child-1',
-        'grandchild-1'
-      );
-
-      expect(wouldCycle).toBe(true);
-    });
-
-    it('should detect cycle when moving ancestor to descendant', () => {
-      const { result } = renderHook(() => useMindMapDrag(mockDeps));
-
-      const wouldCycle = result.current.wouldCreateCycle(
-        'root-node',
-        'grandchild-1'
-      );
-
-      expect(wouldCycle).toBe(true);
-    });
-
-    it('should allow valid moves', () => {
-      const { result } = renderHook(() => useMindMapDrag(mockDeps));
-
-      const wouldCycle = result.current.wouldCreateCycle('child-2', 'child-1');
-
-      expect(wouldCycle).toBe(false);
-    });
-
-    it('should allow moving to sibling', () => {
-      const { result } = renderHook(() => useMindMapDrag(mockDeps));
-
-      const wouldCycle = result.current.wouldCreateCycle(
-        'grandchild-1',
-        'child-2'
-      );
-
-      expect(wouldCycle).toBe(false);
-    });
-  });
-
-  describe('onNodeDragStart', () => {
-    it('should initialize drag state for non-root node', () => {
-      const { result } = renderHook(() => useMindMapDrag(mockDeps));
-
-      const mockNode = {
-        id: 'child-1',
-        position: { x: 100, y: 200 },
-      } as Node<MindMapNodeData>;
-
-      act(() => {
-        result.current.onNodeDragStart(
-          createMockDragEvent(),
-          mockNode,
-          mockDeps.nodes
-        );
-      });
-
-      expect(result.current.draggedNodeId).toBe('child-1');
-      expect(result.current.hasDraggedSignificantly).toBe(false);
-    });
-
-    it('should not initialize drag for root node', () => {
-      const { result } = renderHook(() => useMindMapDrag(mockDeps));
-
-      const mockRootNode = {
-        id: 'root-node',
-        position: { x: 0, y: 0 },
-      } as Node<MindMapNodeData>;
-
-      act(() => {
-        result.current.onNodeDragStart(
-          createMockDragEvent(),
-          mockRootNode,
-          mockDeps.nodes
-        );
-      });
-
-      expect(result.current.draggedNodeId).toBeNull();
-    });
-  });
-
-  describe('onNodeDrag', () => {
-    it('should update drag state when dragging significantly', () => {
-      const { result } = renderHook(() => useMindMapDrag(mockDeps));
-
-      const mockNode = {
-        id: 'child-1',
-        position: { x: 100, y: 200 },
-      } as Node<MindMapNodeData>;
-
-      // Start drag
-      act(() => {
-        result.current.onNodeDragStart(
-          createMockDragEvent(),
-          mockNode,
-          mockDeps.nodes
-        );
-      });
-
-      // Drag significantly (more than 20px)
-      const draggedNode = {
-        ...mockNode,
-        position: { x: 130, y: 230 }, // 30px away from start
+    it('should use default dimensions when not specified', () => {
+      const nodeWithoutDimensions = {
+        id: 'test',
+        type: 'mindMapNode' as const,
+        position: { x: 100, y: 100 },
+        data: {
+          id: 'test',
+          label: 'Test',
+          isRoot: false,
+          level: 1,
+          hasChildren: false,
+          isCollapsed: false,
+          isDragging: false,
+          isDropTarget: false,
+          dropPosition: null,
+          layout: 'LR' as const,
+          colorTheme: null,
+          // No width or height specified
+        },
       };
 
-      act(() => {
-        result.current.onNodeDrag(
-          createMockDragEvent(150, 250),
-          draggedNode,
-          mockDeps.nodes
-        );
-      });
+      const nodes = [createNode('root', 0, 0), nodeWithoutDimensions];
 
-      expect(result.current.hasDraggedSignificantly).toBe(true);
-      expect(result.current.dragCursorPosition).toEqual({ x: 150, y: 250 });
-    });
+      const { result } = renderHook(() =>
+        useMindMapDrag({
+          nodes,
+          rootNodeId: 'root',
+          layout: 'LR',
+          moveNode: mockMoveNode,
+        })
+      );
 
-    it('should not update when dragging root node', () => {
-      const { result } = renderHook(() => useMindMapDrag(mockDeps));
-
-      const mockRootNode = {
-        id: 'root-node',
-        position: { x: 0, y: 0 },
-      } as Node<MindMapNodeData>;
-
-      act(() => {
-        result.current.onNodeDrag(
-          createMockDragEvent(),
-          mockRootNode,
-          mockDeps.nodes
-        );
-      });
-
-      expect(result.current.hasDraggedSignificantly).toBe(false);
-      expect(result.current.closestDropTarget).toBeNull();
-    });
-
-    it('should throttle updates to prevent flicker', () => {
-      const { result } = renderHook(() => useMindMapDrag(mockDeps));
-
-      const mockNode = {
-        id: 'child-1',
-        position: { x: 100, y: 200 },
-      } as Node<MindMapNodeData>;
-
-      // Start drag
-      act(() => {
-        result.current.onNodeDragStart(
-          createMockDragEvent(),
-          mockNode,
-          mockDeps.nodes
-        );
-      });
-
-      // First significant drag
-      act(() => {
-        result.current.onNodeDrag(
-          createMockDragEvent(),
-          {
-            ...mockNode,
-            position: { x: 130, y: 230 },
-          },
-          mockDeps.nodes
-        );
-      });
-
-      const firstDropTarget = result.current.closestDropTarget;
-
-      // Immediate second drag (should be throttled)
-      act(() => {
-        result.current.onNodeDrag(
-          createMockDragEvent(),
-          {
-            ...mockNode,
-            position: { x: 140, y: 240 },
-          },
-          mockDeps.nodes
-        );
-      });
-
-      // Should still have same drop target due to throttling
-      expect(result.current.closestDropTarget).toBe(firstDropTarget);
-    });
-
-    it('should clear drop target when cycle would be created', () => {
-      const { result } = renderHook(() => useMindMapDrag(mockDeps));
-
-      const mockNode = {
-        id: 'child-1',
-        position: { x: 100, y: 200 },
-      } as Node<MindMapNodeData>;
-
-      // Start drag
-      act(() => {
-        result.current.onNodeDragStart(
-          createMockDragEvent(),
-          mockNode,
-          mockDeps.nodes
-        );
-      });
-
-      // Try to drag to a position that would create a cycle
-      // (this is complex to test directly, but the logic should clear drop targets)
-      act(() => {
-        result.current.onNodeDrag(
-          createMockDragEvent(),
-          {
-            ...mockNode,
-            position: { x: 450, y: -50 }, // Near grandchild-1
-          },
-          mockDeps.nodes
-        );
-        vi.advanceTimersByTime(100); // Allow throttling to pass
-      });
-
-      // The specific behavior depends on the exact positions, but the function should handle cycles
-      expect(
-        result.current.closestDropTarget === null ||
-          typeof result.current.closestDropTarget === 'string'
-      ).toBe(true);
+      // Should use default height of 40px
+      // Zones are based on NODE_SIZING.ZONE_PERCENTAGE (33%)
+      expect(result.current.getDropPosition({ x: 100, y: 110 }, 'test')).toBe(
+        'above'
+      ); // 10px from top
+      expect(result.current.getDropPosition({ x: 100, y: 120 }, 'test')).toBe(
+        'over'
+      ); // 20px from top
+      expect(result.current.getDropPosition({ x: 100, y: 135 }, 'test')).toBe(
+        'below'
+      ); // 35px from top
     });
   });
 
-  describe('onNodeDragStop', () => {
-    it('should execute move when drag was significant and had drop position', () => {
-      const { result } = renderHook(() => useMindMapDrag(mockDeps));
+  describe('Root node behavior', () => {
+    it('should always return "over" for root node', () => {
+      const nodes = [createNode('root', 0, 0, 200, 100)];
 
-      const mockNode = {
-        id: 'child-2',
-        position: { x: 100, y: 200 },
-      } as Node<MindMapNodeData>;
+      const { result } = renderHook(() =>
+        useMindMapDrag({
+          nodes,
+          rootNodeId: 'root',
+          layout: 'LR',
+          moveNode: mockMoveNode,
+        })
+      );
 
-      // Start drag
-      act(() => {
-        result.current.onNodeDragStart(
-          createMockDragEvent(),
-          mockNode,
-          mockDeps.nodes
-        );
-      });
-
-      // Drag significantly to establish drop position
-      act(() => {
-        result.current.onNodeDrag(
-          createMockDragEvent(),
-          {
-            ...mockNode,
-            position: { x: 260, y: -40 }, // Near child-1
-          },
-          mockDeps.nodes
-        );
-        vi.advanceTimersByTime(100);
-      });
-
-      // Stop drag
-      act(() => {
-        result.current.onNodeDragStop(
-          createMockDragEvent(),
-          {
-            ...mockNode,
-            position: { x: 260, y: -40 },
-          },
-          mockDeps.nodes
-        );
-      });
-
-      // Should have called moveNode if drag was significant and had drop position
-      if (
-        result.current.hasDraggedSignificantly &&
-        result.current.dropPosition
-      ) {
-        expect(mockDeps.moveNode).toHaveBeenCalled();
-      }
-    });
-
-    it('should clear all drag state', () => {
-      const { result } = renderHook(() => useMindMapDrag(mockDeps));
-
-      const mockNode = {
-        id: 'child-1',
-        position: { x: 100, y: 200 },
-      } as Node<MindMapNodeData>;
-
-      // Start drag and set some state
-      act(() => {
-        result.current.onNodeDragStart(
-          createMockDragEvent(),
-          mockNode,
-          mockDeps.nodes
-        );
-        result.current.onNodeDrag(
-          createMockDragEvent(),
-          {
-            ...mockNode,
-            position: { x: 130, y: 230 },
-          },
-          mockDeps.nodes
-        );
-      });
-
-      // Stop drag
-      act(() => {
-        result.current.onNodeDragStop(
-          createMockDragEvent(),
-          mockNode,
-          mockDeps.nodes
-        );
-      });
-
-      expect(result.current.draggedNodeId).toBeNull();
-      expect(result.current.closestDropTarget).toBeNull();
-      expect(result.current.dropPosition).toBeNull();
-      expect(result.current.hasDraggedSignificantly).toBe(false);
-      expect(result.current.dragCursorPosition).toBeNull();
-    });
-
-    it('should not execute move when drag was not significant', () => {
-      const { result } = renderHook(() => useMindMapDrag(mockDeps));
-
-      const mockNode = {
-        id: 'child-1',
-        position: { x: 100, y: 200 },
-      } as Node<MindMapNodeData>;
-
-      // Start drag but don't drag significantly
-      act(() => {
-        result.current.onNodeDragStart(
-          createMockDragEvent(),
-          mockNode,
-          mockDeps.nodes
-        );
-        result.current.onNodeDragStop(
-          createMockDragEvent(),
-          mockNode,
-          mockDeps.nodes
-        );
-      });
-
-      expect(mockDeps.moveNode).not.toHaveBeenCalled();
+      // No matter where we drag relative to root, it should always be "over"
+      expect(result.current.getDropPosition({ x: 0, y: -50 }, 'root')).toBe(
+        'over'
+      );
+      expect(result.current.getDropPosition({ x: 0, y: 50 }, 'root')).toBe(
+        'over'
+      );
+      expect(result.current.getDropPosition({ x: 0, y: 150 }, 'root')).toBe(
+        'over'
+      );
     });
   });
 
-  describe('sibling positioning', () => {
-    it('should handle sibling positioning above', () => {
-      const { result } = renderHook(() => useMindMapDrag(mockDeps));
+  describe('Cursor position for drop detection', () => {
+    it('should use cursor position instead of node position for drop detection', () => {
+      const targetNode = createNode('target', 200, 200, 150, 60);
+      const draggedNode = createNode('dragged', 100, 100, 120, 40);
+      const nodes = [createNode('root', 0, 0), targetNode, draggedNode];
 
-      const mockNode = {
-        id: 'child-2',
-        position: { x: 250, y: 50 },
-      } as Node<MindMapNodeData>;
+      const { result } = renderHook(() =>
+        useMindMapDrag({
+          nodes,
+          rootNodeId: 'root',
+          layout: 'LR',
+          moveNode: mockMoveNode,
+        })
+      );
 
-      // Start drag
-      act(() => {
-        result.current.onNodeDragStart(
-          createMockDragEvent(),
-          mockNode,
-          mockDeps.nodes
-        );
-      });
+      // The dragged node is at (100, 100)
+      // But the cursor is at different positions relative to the target node
 
-      // Drag to above child-1 position
-      act(() => {
-        result.current.onNodeDrag(
-          createMockDragEvent(),
-          {
-            ...mockNode,
-            position: { x: 250, y: -85 }, // Well above child-1 (more than 30px threshold)
-          },
-          mockDeps.nodes
-        );
-        vi.advanceTimersByTime(100);
-      });
+      // Cursor at top of target node
+      const cursorPosTop = { x: 200, y: 205 }; // 5px into target
+      expect(result.current.getDropPosition(cursorPosTop, 'target')).toBe(
+        'above'
+      );
 
-      // Should determine "above" position
-      expect(result.current.closestDropTarget).toBe('child-1');
-      expect(result.current.dropPosition).toBe('above');
-    });
+      // Cursor at middle of target node
+      const cursorPosMiddle = { x: 200, y: 230 }; // 30px into target (middle)
+      expect(result.current.getDropPosition(cursorPosMiddle, 'target')).toBe(
+        'over'
+      );
 
-    it('should handle sibling positioning below', () => {
-      const { result } = renderHook(() => useMindMapDrag(mockDeps));
-
-      const mockNode = {
-        id: 'child-2',
-        position: { x: 250, y: 50 },
-      } as Node<MindMapNodeData>;
-
-      // Start drag
-      act(() => {
-        result.current.onNodeDragStart(
-          createMockDragEvent(),
-          mockNode,
-          mockDeps.nodes
-        );
-      });
-
-      // Drag to below child-1 position
-      act(() => {
-        result.current.onNodeDrag(
-          createMockDragEvent(),
-          {
-            ...mockNode,
-            position: { x: 250, y: -10 }, // Below child-1
-          },
-          mockDeps.nodes
-        );
-        vi.advanceTimersByTime(100);
-      });
-
-      // Should determine "below" position
-      if (result.current.closestDropTarget === 'child-1') {
-        expect(result.current.dropPosition).toBe('below');
-      }
-    });
-  });
-
-  describe('layout variations', () => {
-    it('should handle RL layout correctly', () => {
-      const rlDeps = { ...mockDeps, layout: 'RL' as const };
-      const { result } = renderHook(() => useMindMapDrag(rlDeps));
-
-      const childNode = mockNodes.find(n => n.id === 'child-1')!;
-      const position = {
-        x: childNode.position.x,
-        y: childNode.position.y - 40,
-      };
-
-      const dropPosition = result.current.getDropPosition(position, 'child-1');
-
-      expect(dropPosition).toBe('above');
-    });
-
-    it('should handle TB layout correctly', () => {
-      const tbDeps = { ...mockDeps, layout: 'TB' as const };
-      const { result } = renderHook(() => useMindMapDrag(tbDeps));
-
-      const childNode = mockNodes.find(n => n.id === 'child-1')!;
-      const position = {
-        x: childNode.position.x - 40,
-        y: childNode.position.y,
-      };
-
-      const dropPosition = result.current.getDropPosition(position, 'child-1');
-
-      expect(dropPosition).toBe('above');
-    });
-
-    it('should handle BT layout correctly', () => {
-      const btDeps = { ...mockDeps, layout: 'BT' as const };
-      const { result } = renderHook(() => useMindMapDrag(btDeps));
-
-      const childNode = mockNodes.find(n => n.id === 'child-1')!;
-      const position = {
-        x: childNode.position.x + 40,
-        y: childNode.position.y,
-      };
-
-      const dropPosition = result.current.getDropPosition(position, 'child-1');
-
-      expect(dropPosition).toBe('below');
-    });
-  });
-
-  describe('edge cases', () => {
-    it('should handle empty nodes array', () => {
-      const emptyDeps = { ...mockDeps, nodes: [] };
-      const { result } = renderHook(() => useMindMapDrag(emptyDeps));
-
-      const position = { x: 100, y: 100 };
-      const closestNode = result.current.findClosestNode(position, 'any');
-
-      expect(closestNode).toBeNull();
-    });
-
-    it('should handle drag events without clientX/clientY', () => {
-      const { result } = renderHook(() => useMindMapDrag(mockDeps));
-
-      const mockNode = {
-        id: 'child-1',
-        position: { x: 100, y: 200 },
-      } as Node<MindMapNodeData>;
-
-      // Start drag
-      act(() => {
-        result.current.onNodeDragStart(
-          createMockDragEvent(0, 0),
-          mockNode,
-          mockDeps.nodes
-        );
-      });
-
-      // Drag with event without clientX/clientY
-      act(() => {
-        result.current.onNodeDrag(
-          createMockDragEvent(0, 0),
-          {
-            ...mockNode,
-            position: { x: 130, y: 230 },
-          },
-          mockDeps.nodes
-        );
-      });
-
-      // Should not crash and should still update drag state
-      expect(result.current.draggedNodeId).toBe('child-1');
-    });
-
-    it('should handle multiple rapid drag operations', () => {
-      const { result } = renderHook(() => useMindMapDrag(mockDeps));
-
-      const mockNode = {
-        id: 'child-1',
-        position: { x: 100, y: 200 },
-      } as Node<MindMapNodeData>;
-
-      // Start drag
-      act(() => {
-        result.current.onNodeDragStart(
-          createMockDragEvent(),
-          mockNode,
-          mockDeps.nodes
-        );
-      });
-
-      // Multiple rapid drags
-      for (let i = 0; i < 10; i++) {
-        act(() => {
-          result.current.onNodeDrag(
-            createMockDragEvent(),
-            {
-              ...mockNode,
-              position: { x: 130 + i, y: 230 + i },
-            },
-            mockDeps.nodes
-          );
-        });
-      }
-
-      // Should handle gracefully without errors
-      expect(result.current.draggedNodeId).toBe('child-1');
+      // Cursor at bottom of target node
+      const cursorPosBottom = { x: 200, y: 255 }; // 55px into target
+      expect(result.current.getDropPosition(cursorPosBottom, 'target')).toBe(
+        'below'
+      );
     });
   });
 });

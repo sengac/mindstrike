@@ -7,6 +7,7 @@ import type {
 import { parentPort } from 'worker_threads';
 import type { MCPTool } from '../mcp-manager.js';
 import { logger } from '../logger.js';
+import { TIMING, PROBABILITY, RANDOM_STRING, PROGRESS } from './constants.js';
 
 // Type definitions for worker messages
 interface MCPToolsMessage {
@@ -77,7 +78,7 @@ export class ModelResponseGenerator {
     }
 
     // If we already have tools, return them
-    if (this.mcpTools.length > 0) {
+    if (this.mcpTools.length > PROGRESS.INITIAL) {
       return this.mcpTools;
     }
 
@@ -88,7 +89,9 @@ export class ModelResponseGenerator {
 
     // Request tools from parent
     this.mcpToolsPromise = new Promise<MCPTool[]>(resolve => {
-      const messageId = Math.random().toString(36).substring(7);
+      const messageId = Math.random()
+        .toString(RANDOM_STRING.RADIX)
+        .substring(RANDOM_STRING.ID_LENGTH);
 
       const handleMessage = (message: unknown) => {
         const msg = message as MCPToolsResponseMessage;
@@ -105,7 +108,7 @@ export class ModelResponseGenerator {
       setTimeout(() => {
         parentPort!.off('message', handleMessage);
         resolve([]);
-      }, 5000);
+      }, TIMING.MCP_TOOL_TIMEOUT);
     });
 
     const tools = await this.mcpToolsPromise;
@@ -136,7 +139,9 @@ export class ModelResponseGenerator {
           }
 
           return new Promise((resolve, reject) => {
-            const messageId = Math.random().toString(36).substring(7);
+            const messageId = Math.random()
+              .toString(RANDOM_STRING.RADIX)
+              .substring(RANDOM_STRING.ID_LENGTH);
 
             const handleMessage = (message: unknown) => {
               const msg = message as ToolExecutionResponseMessage;
@@ -165,7 +170,7 @@ export class ModelResponseGenerator {
             setTimeout(() => {
               parentPort!.off('message', handleMessage);
               reject(new Error('Tool execution timeout'));
-            }, 30000);
+            }, TIMING.MCP_FUNCTION_TIMEOUT);
           });
         },
       },
@@ -199,7 +204,7 @@ export class ModelResponseGenerator {
       }
 
       // Log sampling chance (10%)
-      if (Math.random() < 0.1) {
+      if (Math.random() < PROBABILITY.LOG_SAMPLING_CHANCE) {
         logger.debug('Generating response with options:', {
           temperature: options.temperature,
           maxTokens: options.maxTokens,
@@ -233,7 +238,7 @@ export class ModelResponseGenerator {
       if (error instanceof Error && error.name === 'AbortError') {
         return {
           content: '',
-          tokensGenerated: 0,
+          tokensGenerated: PROGRESS.INITIAL,
           stopReason: 'abort',
         };
       }
@@ -251,7 +256,7 @@ export class ModelResponseGenerator {
   ): AsyncGenerator<string, GenerateResponse, unknown> {
     try {
       let generatedContent = '';
-      let tokenCount = 0;
+      let tokenCount = PROGRESS.INITIAL;
 
       // Get functions if not disabled
       let functions: ChatSessionModelFunctions | undefined;
@@ -287,7 +292,7 @@ export class ModelResponseGenerator {
       };
 
       const getNextToken = async (): Promise<string | null> => {
-        if (tokenQueue.length > 0) {
+        if (tokenQueue.length > PROGRESS.INITIAL) {
           return tokenQueue.shift()!;
         }
 
@@ -354,7 +359,7 @@ export class ModelResponseGenerator {
       if (error instanceof Error && error.name === 'AbortError') {
         return {
           content: '',
-          tokensGenerated: 0,
+          tokensGenerated: PROGRESS.INITIAL,
           stopReason: 'abort',
         };
       }

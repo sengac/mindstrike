@@ -1,0 +1,129 @@
+// Node UI Dimensions
+export const NODE_UI_CONSTANTS = {
+  // Button sizes
+  INFERENCE_BUTTON_SIZE: 32,
+  COLLAPSE_BUTTON_SIZE: 24,
+  INDICATOR_SIZE: 20,
+
+  // Icon sizes
+  ICON_SIZE_LARGE: 16,
+  ICON_SIZE_MEDIUM: 14,
+  ICON_SIZE_SMALL: 12,
+
+  // Spacing
+  BUTTON_MARGIN: 4,
+  CONTENT_GAP: 4,
+  INDICATOR_GAP: 4,
+  MENU_PADDING: 8,
+  MENU_ITEM_PADDING_V: 8,
+  MENU_ITEM_PADDING_H: 16,
+
+  // Positioning offsets
+  BUTTON_OFFSET: 8,
+  COLLAPSE_BUTTON_OFFSET: 12,
+  DROP_INDICATOR_OFFSET: 8,
+  DROP_DOT_OFFSET: 4,
+
+  // Drop indicator
+  DROP_INDICATOR_SIZE: 4,
+  DROP_DOT_SIZE: 8,
+
+  // Z-index layers
+  Z_INDEX_NODE: 0,
+  Z_INDEX_BUTTON: 10,
+  Z_INDEX_INDICATOR: 10,
+  Z_INDEX_ACTIVE: 20,
+  Z_INDEX_MENU: 9999,
+
+  // Animations
+  ANIMATION_DURATION: '0.2s',
+  RIPPLE_DURATION: '1.5s',
+  RIPPLE_DELAY: '0.5s',
+  PULSE_DURATION: '2s',
+
+  // Opacity values
+  OPACITY_DRAGGING: 0.3,
+  OPACITY_DISABLED: 0.5,
+
+  // Scale values
+  SCALE_ROOT: 1.1,
+  SCALE_DRAGGING: 0.95,
+  SCALE_RIPPLE: 2.5,
+
+  // Delays (ms)
+  EDIT_MODE_DELAY: 100,
+  UPDATE_DELAY: 300,
+  CONTEXT_MENU_DELAY: 500,
+  HANDLE_CLICK_DELAY: 50,
+
+  // Border widths
+  BORDER_WIDTH: 1,
+  FOCUS_RING_WIDTH: 2,
+  FOCUS_RING_OUTER_WIDTH: 4,
+
+  // Other
+  MENU_MIN_WIDTH: 160,
+  NODE_MIN_HEIGHT: '1.5em',
+  BORDER_RADIUS: 8,
+  BORDER_RADIUS_FULL: '50%',
+
+  // Dimension change thresholds
+  WIDTH_CHANGE_THRESHOLD: 5,
+  HEIGHT_CHANGE_THRESHOLD: 2,
+
+  // Font sizes
+  FONT_SIZE_NORMAL: '0.875rem',
+  FONT_WEIGHT: '500',
+  LINE_HEIGHT: 1.5,
+} as const;
+
+// Color constants
+export const NODE_STYLE_COLORS = {
+  // Primary colors
+  INFERENCE_BUTTON_BG: '#2563eb',
+  INFERENCE_BUTTON_BORDER: '#3b82f6',
+  INFERENCE_BUTTON_HOVER: '#1d4ed8',
+  INFERENCE_BUTTON_ACTIVE: '#60a5fa',
+  INFERENCE_BUTTON_ACTIVE_RING: '#93c5fd',
+
+  // Collapse button
+  COLLAPSE_BUTTON_BG: '#4b5563',
+  COLLAPSE_BUTTON_BORDER: '#6b7280',
+  COLLAPSE_BUTTON_HOVER: '#6b7280',
+
+  // Indicators
+  CHAT_INDICATOR: '#10b981',
+  CHAT_INDICATOR_HOVER: '#059669',
+  NOTES_INDICATOR: '#ef4444',
+  NOTES_INDICATOR_HOVER: '#dc2626',
+  SOURCES_INDICATOR: '#f97316',
+  SOURCES_INDICATOR_HOVER: '#ea580c',
+
+  // Drop indicators
+  DROP_INDICATOR: '#4ade80',
+
+  // Context menu
+  MENU_BG: '#1f2937',
+  MENU_BORDER: '#4b5563',
+  MENU_ITEM_HOVER: '#374151',
+  MENU_TEXT_DANGER: '#f87171',
+  MENU_DIVIDER: '#4b5563',
+
+  // Selection rings
+  SELECTION_RING_INNER: '#fbbf24',
+  SELECTION_RING_OUTER: '#111827',
+  DRAGGING_RING_INNER: '#60a5fa',
+  DROP_TARGET_RING_INNER: '#4ade80',
+
+  // Text
+  TEXT_WHITE: '#ffffff',
+} as const;
+
+// Box shadow values
+export const NODE_SHADOWS = {
+  DEFAULT: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+  ELEVATED: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+  SELECTION: '0 0 0 2px #fbbf24, 0 0 0 4px #111827',
+  DRAGGING: '0 0 0 2px #60a5fa, 0 0 0 4px #111827',
+  DROP_TARGET: '0 0 0 2px #4ade80, 0 0 0 4px #111827',
+} as const;

@@ -21,7 +21,7 @@ import { ConfirmDialog } from '../../components/shared/ConfirmDialog';
 
 import toast from 'react-hot-toast';
 
-import { useChatRefactored } from '../hooks/useChatRefactored';
+import { useChat } from '../hooks/useChat';
 import { useAppStore } from '../../store/useAppStore';
 import { useModelsStore } from '../../store/useModelsStore';
 import { useTaskStore } from '../../store/useTaskStore';
@@ -102,7 +102,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
       validation,
       localModelError,
       clearLocalModelError,
-    } = useChatRefactored({
+    } = useChat({
       threadId,
       isAgentMode: isAgentActive,
     });
@@ -188,7 +188,8 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
         return;
       }
 
-      const handleMermaidComplete = (_event: Event) => {
+      const handleMermaidComplete = (event: Event) => {
+        // Event parameter required by mermaid callback interface but not used
         // Clear any existing timeout to debounce multiple diagram completions
         if (scrollTimeoutRef.current) {
           clearTimeout(scrollTimeoutRef.current);

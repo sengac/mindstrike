@@ -4,6 +4,15 @@ import type { DynamicModelInfo } from '../model-fetcher.js';
 import { modelFetcher } from '../model-fetcher.js';
 import { logger } from '../logger.js';
 import { getMindstrikeDirectory } from '../utils/settings-directory.js';
+import {
+  HTTP_STATUS,
+  USER_AGENT,
+  PROGRESS,
+  TIMING,
+  MEMORY,
+  SPEED_FORMAT,
+  CALCULATION,
+} from './constants.js';
 
 export interface DownloadProgress {
   progress: number;
@@ -89,9 +98,9 @@ export class ModelDownloader {
       });
 
       if (!response.ok) {
-        if (response.status === 401) {
+        if (response.status === HTTP_STATUS.UNAUTHORIZED) {
           throw new Error('UNAUTHORIZED_HF_TOKEN_REQUIRED');
-        } else if (response.status === 403) {
+        } else if (response.status === HTTP_STATUS.FORBIDDEN) {
           throw new Error('FORBIDDEN_MODEL_ACCESS_REQUIRED');
         } else {
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -99,7 +108,9 @@ export class ModelDownloader {
       }
 
       const contentLength = response.headers.get('Content-Length');
-      const totalSize = contentLength ? parseInt(contentLength, 10) : 0;
+      const totalSize = contentLength
+        ? parseInt(contentLength, 10)
+        : PROGRESS.INITIAL;
 
       await this.streamDownloadToFile(
         response.body!,
@@ -136,7 +147,7 @@ export class ModelDownloader {
    */
   private async getDownloadHeaders(): Promise<Record<string, string>> {
     const headers: Record<string, string> = {
-      'User-Agent': 'mindstrike-local-llm/1.0',
+      'User-Agent': `${USER_AGENT.NAME}/${USER_AGENT.VERSION}`,
     };
 
     try {
@@ -166,9 +177,9 @@ export class ModelDownloader {
     const fileStream = fs.createWriteStream(outputPath);
     const reader = body.getReader();
 
-    let downloadedBytes = 0;
+    let downloadedBytes: number = PROGRESS.INITIAL;
     let lastUpdate = Date.now();
-    let lastBytes = 0;
+    let lastBytes: number = PROGRESS.INITIAL;
 
     try {
       while (true) {
@@ -189,11 +200,16 @@ export class ModelDownloader {
         const now = Date.now();
         const timeDiff = now - lastUpdate;
 
-        if (totalSize > 0 && timeDiff >= 1000) {
+        if (
+          totalSize > PROGRESS.INITIAL &&
+          timeDiff >= TIMING.SPEED_CALCULATION_INTERVAL
+        ) {
           // Update every second
-          const progress = (downloadedBytes / totalSize) * 100;
+          const progress = (downloadedBytes / totalSize) * PROGRESS.COMPLETE;
           const bytesDiff = downloadedBytes - lastBytes;
-          const speed = this.formatSpeed(bytesDiff / (timeDiff / 1000));
+          const speed = this.formatSpeed(
+            bytesDiff / (timeDiff / TIMING.SPEED_CALCULATION_INTERVAL)
+          );
 
           this.downloadProgress.set(filename, {
             progress: Math.round(progress),
@@ -212,10 +228,13 @@ export class ModelDownloader {
       fileStream.end();
 
       // Final progress update
-      if (totalSize > 0) {
-        this.downloadProgress.set(filename, { progress: 100, speed: '0 B/s' });
+      if (totalSize > PROGRESS.INITIAL) {
+        this.downloadProgress.set(filename, {
+          progress: PROGRESS.COMPLETE,
+          speed: '0 B/s',
+        });
         if (onProgress) {
-          onProgress(100, '0 B/s');
+          onProgress(PROGRESS.COMPLETE, '0 B/s');
         }
       }
 
@@ -234,16 +253,19 @@ export class ModelDownloader {
    * Format download speed
    */
   private formatSpeed(bytesPerSecond: number): string {
-    const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+    const units = SPEED_FORMAT.UNITS;
     let speed = bytesPerSecond;
-    let unitIndex = 0;
+    let unitIndex = PROGRESS.INITIAL;
 
-    while (speed >= 1024 && unitIndex < units.length - 1) {
-      speed /= 1024;
+    while (
+      speed >= MEMORY.BYTES_TO_KB &&
+      unitIndex < units.length - CALCULATION.INCREMENT
+    ) {
+      speed /= MEMORY.BYTES_TO_KB;
       unitIndex++;
     }
 
-    return `${speed.toFixed(1)} ${units[unitIndex]}`;
+    return `${speed.toFixed(SPEED_FORMAT.PRECISION)} ${units[unitIndex]}`;
   }
 
   /**

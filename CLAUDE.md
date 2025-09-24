@@ -224,10 +224,10 @@ mindstrike/
 
 #### Naming Conventions
 
-- **Files**: `kebab-case.tsx` for components, `use-kebab-case.ts` for hooks
+- **Files**: `PascalCase.tsx` for components, `useCamelCase.ts` for hooks
 - **Components**: `PascalCase` for React components
 - **Hooks**: `useCamelCase` for custom hooks
-- **CSS**: `kebab-case` for class names
+- **CSS**: `camelCase` for class names
 - **Constants**: `UPPER_SNAKE_CASE` for global constants
 - **Interfaces**: `IPascalCase` or just `PascalCase` for TypeScript interfaces
 

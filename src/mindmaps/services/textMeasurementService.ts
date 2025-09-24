@@ -3,6 +3,8 @@
  * Uses actual DOM rendering for accurate text measurement
  */
 
+import { NODE_SIZING } from '../constants/nodeSizing';
+
 export interface TextMetrics {
   width: number;
   height: number;
@@ -113,15 +115,26 @@ export function calculateTextDimensions(
   if (!text || text.length === 0) {
     element.textContent = '\u00A0'; // Non-breaking space for height calculation
     const rect = element.getBoundingClientRect();
-    // Component has built-in padding
-    const componentPaddingH = 32;
-    const componentPaddingV = 16;
+    // Component has built-in padding and border
+    const componentPaddingH = NODE_SIZING.PADDING_HORIZONTAL * 2;
+    const componentPaddingV = NODE_SIZING.PADDING_VERTICAL * 2;
+    const componentBorderH = NODE_SIZING.BORDER_WIDTH * 2;
+    const componentBorderV = NODE_SIZING.BORDER_WIDTH * 2;
     const result = {
       width: Math.max(
         minWidth,
-        rect.width + componentPaddingH + padding.left + padding.right
+        rect.width +
+          componentPaddingH +
+          componentBorderH +
+          padding.left +
+          padding.right
       ),
-      height: rect.height + componentPaddingV + padding.top + padding.bottom,
+      height:
+        rect.height +
+        componentPaddingV +
+        componentBorderV +
+        padding.top +
+        padding.bottom,
     };
     measurementCache.set(cacheKey, result);
     return result;
@@ -130,22 +143,37 @@ export function calculateTextDimensions(
   // Set text content
   element.textContent = text;
 
-  // Component has 8px 16px padding built-in via inline styles
-  const componentPaddingH = 32; // 16px * 2
-  const componentPaddingV = 16; // 8px * 2
+  // Component has built-in padding via inline styles
+  const componentPaddingH = NODE_SIZING.PADDING_HORIZONTAL * 2;
+  const componentPaddingV = NODE_SIZING.PADDING_VERTICAL * 2;
+  // Node also has border with box-sizing: border-box
+  const componentBorderH = NODE_SIZING.BORDER_WIDTH * 2;
+  const componentBorderV = NODE_SIZING.BORDER_WIDTH * 2;
 
   // First measure without wrapping
   let rect = element.getBoundingClientRect();
   let textWidth = rect.width;
   let textHeight = rect.height;
 
-  // Check if we need to wrap (considering component's built-in padding)
-  const availableWidth = maxWidth
-    ? maxWidth - componentPaddingH - padding.left - padding.right
-    : Infinity;
+  // Check if we need to wrap
+  // Only wrap if the total width (text + padding + border) would exceed maxWidth
+  // We include border because the node uses box-sizing: border-box
+  const totalWidth =
+    textWidth +
+    componentPaddingH +
+    componentBorderH +
+    padding.left +
+    padding.right;
 
-  // If text exceeds available width, apply wrapping
-  if (maxWidth && textWidth > availableWidth) {
+  // If total width exceeds maxWidth, apply wrapping
+  if (maxWidth && totalWidth > maxWidth) {
+    // Available width for text after accounting for padding and border
+    const availableWidth =
+      maxWidth -
+      componentPaddingH -
+      componentBorderH -
+      padding.left -
+      padding.right;
     element.style.whiteSpace = 'normal';
     element.style.wordBreak = 'break-word';
     element.style.width = `${availableWidth}px`;
@@ -156,13 +184,26 @@ export function calculateTextDimensions(
     textHeight = rect.height;
   }
 
-  // Calculate final dimensions (text + component padding + any extra padding)
-  const finalWidth = Math.max(
-    minWidth,
-    textWidth + componentPaddingH + padding.left + padding.right
-  );
+  // Calculate final dimensions (text + component padding + border + any extra padding)
+  // We include border in the total width because the node uses box-sizing: border-box
+  let finalWidth =
+    textWidth +
+    componentPaddingH +
+    componentBorderH +
+    padding.left +
+    padding.right;
+
+  // Ensure we respect min and max width constraints
+  finalWidth = Math.max(minWidth, finalWidth);
+  if (maxWidth) {
+    finalWidth = Math.min(maxWidth, finalWidth);
+  }
   const finalHeight =
-    textHeight + componentPaddingV + padding.top + padding.bottom;
+    textHeight +
+    componentPaddingV +
+    componentBorderV +
+    padding.top +
+    padding.bottom;
 
   const result = { width: finalWidth, height: finalHeight };
 

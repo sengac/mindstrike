@@ -27,6 +27,8 @@
     "../src/settings",
     "../src/workflows",
     "../src/workspace",
-    "../src/store"
+    "../src/store",
+    "./**/__tests__/**/*",
+    "./**/*.test.ts"
   ]
 }

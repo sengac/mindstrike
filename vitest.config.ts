@@ -1,22 +1,25 @@
 import { defineConfig } from 'vitest/config';
 import { resolve } from 'path';
+import { fileURLToPath } from 'url';
 import react from '@vitejs/plugin-react';
+
+const currentDir = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@': resolve(__dirname, 'src'),
-      '@server': resolve(__dirname, 'server'),
+      '@': resolve(currentDir, 'src'),
+      '@server': resolve(currentDir, 'server'),
     },
   },
   test: {
     globals: true,
     environment: 'node',
-    setupFiles: ['./tests/setup-minimal.ts'],
+    setupFiles: ['./tests/setupMinimal.ts'],
     include: [
       'server/**/*.{test,spec}.{js,ts}',
-      'tests/integration/**/*.{test,spec}.{js,ts}',
+      'tests/integration/**/*.{test,spec}.{js,ts,tsx}',
     ],
     exclude: [
       'node_modules/**',

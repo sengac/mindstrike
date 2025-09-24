@@ -57,7 +57,7 @@ describe('ChatAgent', () => {
 
 ```tsx
 // src/components/__tests__/Button.test.tsx
-import { render, screen, fireEvent } from '@/tests/test-utils';
+import { render, screen, fireEvent } from '@/tests/testUtils';
 
 describe('Button', () => {
   it('should handle clicks', () => {
@@ -106,8 +106,8 @@ test('should send a message', async ({ page }) => {
 ```
 tests/
 ├── setup.ts              # Global test setup
-├── setup-react.ts        # React-specific setup
-├── test-utils.tsx        # Testing utilities
+├── setupReact.ts         # React-specific setup
+├── testUtils.tsx         # Testing utilities
 ├── __mocks__/           # Module mocks
 ├── fixtures/            # Test data
 ├── integration/         # Integration tests

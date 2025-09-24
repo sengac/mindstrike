@@ -9,7 +9,7 @@ import {
   isSSEMCPStderrLogEvent,
   isSSEMCPServerConnectedEvent,
   isSSEMCPServerDisconnectedEvent,
-} from '../types/sse-events';
+} from '../types/sseEvents';
 
 export interface MCPProcessInfo {
   serverId: string;

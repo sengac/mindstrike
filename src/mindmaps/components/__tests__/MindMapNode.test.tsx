@@ -883,6 +883,183 @@ describe('MindMapNode', () => {
     });
   });
 
+  describe('editing mode height consistency', () => {
+    it('should maintain consistent height between view and edit modes', () => {
+      const props = createMockNodeProps({
+        data: mockNodeData.child1,
+      });
+
+      const { container } = render(<MindMapNode {...props} />);
+
+      // Find the main node container
+      const allDivs = Array.from(container.querySelectorAll('div'));
+      const nodeContainer = allDivs.find(div => {
+        const style = div.getAttribute('style') || '';
+        return (
+          style.includes('padding:') &&
+          style.includes('border-radius:') &&
+          style.includes('border:')
+        );
+      });
+
+      // The node uses minHeight, not height
+      expect(nodeContainer?.style.minHeight).toBe('32px');
+
+      // Enter edit mode
+      const labelElement = getVisibleText('First Child');
+      fireEvent.doubleClick(labelElement);
+
+      // Mock scrollHeight for textarea to prevent it from being 0
+      const textarea = screen.getByPlaceholderText(
+        'Enter text...'
+      ) as HTMLTextAreaElement;
+      Object.defineProperty(textarea, 'scrollHeight', {
+        value: 21, // Single line height matching the span
+        configurable: true,
+      });
+
+      // Wait for the auto-resize to trigger
+      act(() => {
+        vi.advanceTimersByTime(100);
+      });
+
+      // The minHeight should remain the same
+      expect(nodeContainer?.style.minHeight).toBe('32px');
+
+      // The textarea should have been resized to 21px (matching single line)
+      expect(textarea.style.height).toBe('21px');
+    });
+
+    it('should apply correct textarea styles in edit mode', () => {
+      const props = createMockNodeProps({
+        data: mockNodeData.child1,
+      });
+
+      render(<MindMapNode {...props} />);
+
+      // Enter edit mode
+      const labelElement = getVisibleText('First Child');
+      fireEvent.doubleClick(labelElement);
+
+      const textarea = screen.getByPlaceholderText(
+        'Enter text...'
+      ) as HTMLTextAreaElement;
+
+      // Check that textarea has correct inline styles
+      const style = textarea.getAttribute('style') || '';
+      expect(style).toContain('line-height: 21px');
+      expect(style).toContain('height: 21px');
+      expect(style).toContain('padding: 0');
+      expect(style).toContain('margin: 0');
+    });
+
+    it('should auto-resize textarea correctly based on content', () => {
+      const props = createMockNodeProps({
+        data: mockNodeData.child1,
+      });
+
+      render(<MindMapNode {...props} />);
+
+      // Enter edit mode
+      const labelElement = getVisibleText('First Child');
+      fireEvent.doubleClick(labelElement);
+
+      const textarea = screen.getByPlaceholderText(
+        'Enter text...'
+      ) as HTMLTextAreaElement;
+
+      // Mock scrollHeight for multi-line content (3 lines * 21px)
+      Object.defineProperty(textarea, 'scrollHeight', {
+        value: 63, // 3 lines * 21px per line
+        configurable: true,
+      });
+
+      // Simulate typing multi-line text
+      const multiLineText = 'Line 1\nLine 2\nLine 3';
+      fireEvent.change(textarea, { target: { value: multiLineText } });
+
+      // The auto-resize should have been triggered
+      // Check that height is now 3 * 21px = 63px
+      const style = textarea.getAttribute('style') || '';
+      expect(style).toContain('height: 63px');
+    });
+
+    it('should unselect text when clicking on fully selected text', () => {
+      const props = createMockNodeProps({
+        data: mockNodeData.child1,
+      });
+
+      render(<MindMapNode {...props} />);
+
+      // Enter edit mode
+      const labelElement = getVisibleText('First Child');
+      fireEvent.doubleClick(labelElement);
+
+      const textarea = screen.getByPlaceholderText(
+        'Enter text...'
+      ) as HTMLTextAreaElement;
+
+      // Mock initial selection (text is fully selected)
+      Object.defineProperty(textarea, 'selectionStart', {
+        value: 0,
+        configurable: true,
+      });
+      Object.defineProperty(textarea, 'selectionEnd', {
+        value: textarea.value.length,
+        configurable: true,
+      });
+
+      // Mock setSelectionRange
+      const setSelectionRangeSpy = vi.fn();
+      textarea.setSelectionRange = setSelectionRangeSpy;
+
+      // Click on the textarea
+      fireEvent.click(textarea);
+
+      // Verify that setSelectionRange was called to unselect text
+      expect(setSelectionRangeSpy).toHaveBeenCalledWith(
+        textarea.value.length,
+        textarea.value.length
+      );
+    });
+
+    it('should not unselect text when clicking on partially selected text', () => {
+      const props = createMockNodeProps({
+        data: mockNodeData.child1,
+      });
+
+      render(<MindMapNode {...props} />);
+
+      // Enter edit mode
+      const labelElement = getVisibleText('First Child');
+      fireEvent.doubleClick(labelElement);
+
+      const textarea = screen.getByPlaceholderText(
+        'Enter text...'
+      ) as HTMLTextAreaElement;
+
+      // Mock partial selection
+      Object.defineProperty(textarea, 'selectionStart', {
+        value: 2,
+        configurable: true,
+      });
+      Object.defineProperty(textarea, 'selectionEnd', {
+        value: 5,
+        configurable: true,
+      });
+
+      // Mock setSelectionRange
+      const setSelectionRangeSpy = vi.fn();
+      textarea.setSelectionRange = setSelectionRangeSpy;
+
+      // Click on the textarea
+      fireEvent.click(textarea);
+
+      // Verify that setSelectionRange was NOT called
+      expect(setSelectionRangeSpy).not.toHaveBeenCalled();
+    });
+  });
+
   describe('layout-specific behavior', () => {
     it('should position collapse button correctly for different layouts', () => {
       // Test TB layout
@@ -917,7 +1094,7 @@ describe('MindMapNode', () => {
       expect(buttonBT?.style.top).toBe('-12px');
       expect(buttonBT?.style.left).toBe('50%');
 
-      // Test LR/RL layout (default)
+      // Test LR layout
       const propsLR = createMockNodeProps({
         data: {
           ...mockNodeData.child1,
@@ -932,6 +1109,56 @@ describe('MindMapNode', () => {
       ) as HTMLElement;
       expect(buttonLR?.style.right).toBe('-12px');
       expect(buttonLR?.style.top).toBe('50%');
+
+      // Test RL layout
+      const propsRL = createMockNodeProps({
+        data: {
+          ...mockNodeData.child1,
+          hasChildren: true,
+          layout: 'RL',
+        },
+      });
+
+      const { container: containerRL } = render(<MindMapNode {...propsRL} />);
+      const buttonRL = containerRL.querySelector(
+        'button[title="Collapse children"]'
+      ) as HTMLElement;
+      expect(buttonRL?.style.left).toBe('-12px');
+      expect(buttonRL?.style.top).toBe('50%');
+    });
+
+    it('should position inference button correctly for different layouts', () => {
+      // Test LR layout
+      const propsLR = createMockNodeProps({
+        data: {
+          ...mockNodeData.child1,
+          layout: 'LR',
+        },
+      });
+
+      const { container: containerLR } = render(<MindMapNode {...propsLR} />);
+      const buttonLR = containerLR.querySelector(
+        'button[title="Node Panel"]'
+      ) as HTMLElement;
+      const buttonContainerLR = buttonLR?.parentElement as HTMLElement;
+      expect(buttonContainerLR?.style.left).toBe('8px');
+      expect(buttonContainerLR?.style.transform).toBe('translate(-100%, -50%)');
+
+      // Test RL layout
+      const propsRL = createMockNodeProps({
+        data: {
+          ...mockNodeData.child1,
+          layout: 'RL',
+        },
+      });
+
+      const { container: containerRL } = render(<MindMapNode {...propsRL} />);
+      const buttonRL = containerRL.querySelector(
+        'button[title="Node Panel"]'
+      ) as HTMLElement;
+      const buttonContainerRL = buttonRL?.parentElement as HTMLElement;
+      expect(buttonContainerRL?.style.right).toBe('8px');
+      expect(buttonContainerRL?.style.transform).toBe('translate(100%, -50%)');
     });
 
     it('should show correct drop indicators for different layouts', () => {
