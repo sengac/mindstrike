@@ -49,18 +49,24 @@ export function getContextDescription(tokens: number): string {
  * 4. Default (4096)
  */
 interface ModelWithContext {
-  loadingSettings?: {
-    contextSize?: number;
-  };
+  trainedContextLength?: number;
   maxContextLength?: number;
-  contextLength?: number;
+  contextLength?: number; // For remote models (OpenAI, Anthropic, etc.)
 }
 
-export function getActualContextSize(model: ModelWithContext): number {
-  return (
-    model.loadingSettings?.contextSize ??
-    model.maxContextLength ??
-    model.contextLength ??
-    4096
-  );
+export function getActualContextSize(
+  model: ModelWithContext
+): number | undefined {
+  // Return max, or trained, or standard context for remote models, but NO FALLBACK
+  if (model.maxContextLength) {
+    return model.maxContextLength;
+  }
+  if (model.trainedContextLength) {
+    return model.trainedContextLength;
+  }
+  if (model.contextLength) {
+    return model.contextLength;
+  }
+  // No fallback - return undefined if no context is known
+  return undefined;
 }

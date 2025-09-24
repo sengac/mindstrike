@@ -54,12 +54,12 @@ export interface LocalModelInfo {
   downloaded: boolean;
   downloading: boolean;
   downloadProgress?: number;
-  contextLength?: number;
+  trainedContextLength?: number; // The context length the model was trained with
+  maxContextLength?: number; // The maximum context length the model can handle
   parameterCount?: string;
   quantization?: string;
   loadingSettings?: ModelLoadingSettings;
   layerCount?: number; // Total layers in the model from GGUF metadata
-  maxContextLength?: number; // Maximum context length from GGUF metadata
 
   // VRAM calculation fields
   vramEstimates?: VRAMEstimateInfo[];

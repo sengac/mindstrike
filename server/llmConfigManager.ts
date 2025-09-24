@@ -71,7 +71,9 @@ interface DetectedService {
 interface LocalModel {
   id: string;
   name: string;
-  contextLength?: number;
+  trainedContextLength?: number;
+  maxContextLength?: number;
+  contextLength?: number; // Kept for backwards compatibility
   parameterCount?: string;
   quantization?: string;
 }
@@ -460,7 +462,10 @@ export class LLMConfigManager {
           displayName: `${localModel.name} | Local Models`,
           baseURL: '/api/local-llm',
           type: 'local',
-          contextLength: localModel.contextLength,
+          contextLength:
+            localModel.maxContextLength ??
+            localModel.trainedContextLength ??
+            localModel.contextLength,
           parameterCount: localModel.parameterCount,
           quantization: localModel.quantization,
           available: true,
@@ -565,9 +570,8 @@ export class LLMConfigManager {
           data?: Array<{ id?: string; name?: string }>;
         };
         models =
-          responseData?.data
-            ?.map(m => (m.id || m.name) ?? '')
-            .filter(Boolean) ?? [];
+          responseData?.data?.map(m => m.id ?? m.name ?? '').filter(Boolean) ??
+          [];
       } else {
         const responseData = data as {
           data?: Array<{ id?: string; name?: string }>;
@@ -576,8 +580,8 @@ export class LLMConfigManager {
           responseData?.data
             ?.map(
               (m: unknown) =>
-                ((m as { id?: string; model?: string }).id ||
-                  (m as { id?: string; model?: string }).model) ??
+                (m as { id?: string; model?: string }).id ??
+                (m as { id?: string; model?: string }).model ??
                 ''
             )
             .filter(Boolean) ?? [];

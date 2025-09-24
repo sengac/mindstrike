@@ -16,7 +16,6 @@ interface VRAMRequirementsDisplayProps {
   hasVramData?: boolean;
   vramError?: string;
   compactMode?: boolean;
-  showLegend?: boolean;
   className?: string;
 }
 
@@ -26,7 +25,6 @@ export function VRAMRequirementsDisplay({
   hasVramData,
   vramError,
   compactMode = false,
-  showLegend = true,
   className = '',
 }: VRAMRequirementsDisplayProps) {
   // Get system VRAM information
@@ -117,7 +115,7 @@ export function VRAMRequirementsDisplay({
   // Full mode for detailed views
   return (
     <div className={`mt-3 pt-3 border-t border-gray-700 ${className}`}>
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <HardDrive size={14} className="text-purple-400" />
           <span className="text-gray-300 font-medium text-sm">
@@ -132,86 +130,56 @@ export function VRAMRequirementsDisplay({
         )}
       </div>
 
-      <div className="space-y-2">
+      <div className="grid grid-cols-4 overflow-hidden rounded-lg">
         {vramEstimates.slice(0, 4).map((estimate, idx) => {
           const expectedGB = (estimate.expected / 1024).toFixed(1);
-          const conservativeGB = (estimate.conservative / 1024).toFixed(1);
           const safety = calculateVRAMSafety(
             estimate.conservative,
             availableVramMB
           );
           const isRecommended = idx === recommendedContextIdx;
 
+          // Determine background colors
+          let bgClass = 'bg-gray-800';
+          let textClass = 'text-gray-400';
+
+          if (isRecommended) {
+            bgClass = 'bg-blue-900/30';
+            textClass = 'text-blue-400';
+          } else if (safety.level === 'safe') {
+            bgClass = 'bg-green-900/20';
+            textClass = 'text-green-400';
+          } else if (safety.level === 'caution') {
+            bgClass = 'bg-yellow-900/20';
+            textClass = 'text-yellow-400';
+          } else if (safety.level === 'risky') {
+            bgClass = 'bg-orange-900/20';
+            textClass = 'text-orange-400';
+          } else if (safety.level === 'unsafe') {
+            bgClass = 'bg-red-900/20';
+            textClass = 'text-red-400';
+          }
+
           return (
             <div
               key={estimate.config.label}
-              className={`flex items-center justify-between p-2 rounded-md transition-all ${
-                isRecommended
-                  ? 'bg-blue-900/20 border border-blue-600'
-                  : safety.level !== 'unknown'
-                    ? `${safety.bgColor} border ${safety.borderColor}`
-                    : 'bg-gray-800 border border-gray-700'
-              }`}
+              className={`flex flex-col items-center justify-center p-3 ${bgClass} transition-all`}
+              title={safety.description}
             >
-              <div className="flex items-center gap-2">
-                <span
-                  className={`text-sm ${isRecommended ? 'font-medium' : ''}`}
-                  title={safety.description}
-                >
-                  {safety.icon}
-                </span>
-                <span
-                  className={`${
-                    isRecommended
-                      ? 'text-blue-400'
-                      : safety.level !== 'unknown'
-                        ? safety.textColor
-                        : 'text-gray-400'
-                  }`}
-                >
-                  {estimate.config.label}
-                  {isRecommended && (
-                    <span className="ml-1 text-xs">(Recommended)</span>
-                  )}
-                </span>
+              <div className={`text-xs font-medium ${textClass} mb-1`}>
+                {estimate.config.label}
               </div>
-              <div className="flex items-center gap-3">
-                <span
-                  className={`text-sm ${
-                    safety.level === 'safe'
-                      ? 'text-green-400'
-                      : safety.level === 'caution'
-                        ? 'text-yellow-400'
-                        : safety.level === 'risky'
-                          ? 'text-orange-400'
-                          : safety.level === 'unsafe'
-                            ? 'text-red-400'
-                            : 'text-gray-300'
-                  }`}
-                >
-                  {expectedGB} GB
-                  <span className="text-gray-500 text-xs">
-                    {' '}
-                    (~{conservativeGB} GB)
-                  </span>
-                </span>
-                {safety.level !== 'unknown' && (
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded ${
-                      safety.level === 'safe'
-                        ? 'bg-green-900/50 text-green-400'
-                        : safety.level === 'caution'
-                          ? 'bg-yellow-900/50 text-yellow-400'
-                          : safety.level === 'risky'
-                            ? 'bg-orange-900/50 text-orange-400'
-                            : 'bg-red-900/50 text-red-400'
-                    }`}
-                    title={safety.description}
-                  >
-                    {Math.round(safety.percentageUsed)}%
-                  </span>
-                )}
+              <div className={`text-sm font-semibold ${textClass}`}>
+                {expectedGB} GB
               </div>
+              {safety.level !== 'unknown' && (
+                <div className={`text-xs ${textClass} opacity-75 mt-1`}>
+                  {Math.round(safety.percentageUsed)}%
+                </div>
+              )}
+              {isRecommended && (
+                <div className="text-xs text-blue-400 mt-1">✓ Best fit</div>
+              )}
             </div>
           );
         })}
@@ -228,30 +196,6 @@ export function VRAMRequirementsDisplay({
           {modelArchitecture.embeddingDim && (
             <span>Embedding: {modelArchitecture.embeddingDim}</span>
           )}
-        </div>
-      )}
-
-      {/* Safety Legend */}
-      {showLegend && availableVramMB && (
-        <div className="mt-3 pt-2 border-t border-gray-700/50">
-          <div className="flex flex-wrap gap-2 text-xs">
-            <span className="flex items-center gap-1">
-              <span>🟢</span>
-              <span className="text-gray-500">&lt;70%</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <span>🟡</span>
-              <span className="text-gray-500">70-90%</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <span>🟠</span>
-              <span className="text-gray-500">90-100%</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <span>🔴</span>
-              <span className="text-gray-500">&gt;100%</span>
-            </span>
-          </div>
         </div>
       )}
     </div>

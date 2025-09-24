@@ -9,6 +9,12 @@ import {
 } from '../utils/conversationTokens';
 import { formatTokenCount } from '../utils/tokenUtils';
 
+// Extended type to handle both local and remote models
+type ModelWithContextInfo = LLMModel & {
+  trainedContextLength?: number;
+  maxContextLength?: number;
+};
+
 interface ConversationStatsProps {
   messages: ConversationMessage[];
   selectedModel?: LLMModel;
@@ -20,7 +26,13 @@ export function ConversationStats({
 }: ConversationStatsProps) {
   const tokenCount = calculateConversationTokens(messages);
   const conversationSize = calculateConversationSize(messages);
-  const maxTokens = selectedModel?.contextLength ?? 0;
+  // Handle both local models (trainedContextLength/maxContextLength) and remote models (contextLength)
+  const modelWithContext = selectedModel as ModelWithContextInfo | undefined;
+  const maxTokens =
+    modelWithContext?.trainedContextLength ??
+    modelWithContext?.maxContextLength ??
+    modelWithContext?.contextLength ??
+    0;
   const usagePercentage = calculateContextUsage(tokenCount, maxTokens);
 
   // Don't show if no messages

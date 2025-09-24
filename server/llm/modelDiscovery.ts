@@ -19,11 +19,7 @@ export class ModelDiscovery {
    * Get all local models
    */
   async getLocalModels(): Promise<LocalModelInfo[]> {
-    return this.fileManager.getLocalModels(
-      this.contextCalculator.calculateSafeContextSize.bind(
-        this.contextCalculator
-      )
-    );
+    return this.fileManager.getLocalModels();
   }
 
   /**

@@ -15,7 +15,7 @@ import {
   calculateVRAMEstimate,
   type CacheType,
 } from '../utils/ggufVramCalculator';
-import { DEFAULT_MODEL_PARAMS, MEMORY } from './constants';
+// import { MEMORY } from './constants'; // Not needed anymore since we use 1000 instead of 1024
 
 export interface ModelMetadata {
   name?: string;
@@ -41,13 +41,7 @@ export class ModelFileManager {
   /**
    * Get all locally available models
    */
-  async getLocalModels(
-    contextSizeResolver?: (
-      size: number,
-      requestedSize: number,
-      filename: string
-    ) => Promise<number>
-  ): Promise<LocalModelInfo[]> {
+  async getLocalModels(): Promise<LocalModelInfo[]> {
     const models: LocalModelInfo[] = [];
 
     if (!fs.existsSync(this.modelsDir)) {
@@ -75,26 +69,28 @@ export class ModelFileManager {
 
       // Try to read GGUF metadata for layer count and context length
       let layerCount: number | undefined;
-      let maxContextLength: number | undefined;
+      let trainedContextLength: number | undefined;
       try {
         const ggufInfo = await readGgufFileInfo(fullPath);
         const ggufMetadata = this.extractGgufMetadata(ggufInfo);
         layerCount = ggufMetadata.layerCount;
-        maxContextLength = ggufMetadata.maxContextLength;
+        trainedContextLength = ggufMetadata.trainedContextLength;
       } catch {
         // Silently fail - metadata is optional
       }
 
-      // Calculate context length
-      const requestedContextSize =
-        maxContextLength ??
+      // Get trained context length from various sources (no fallback)
+      const trainedContext =
+        trainedContextLength ??
         matchingRemoteModel?.contextLength ??
-        modelInfo.contextLength ??
-        DEFAULT_MODEL_PARAMS.CONTEXT_SIZE;
+        modelInfo.contextLength;
 
-      const actualContextLength = contextSizeResolver
-        ? await contextSizeResolver(stats.size, requestedContextSize, filename)
-        : requestedContextSize;
+      // The trained context IS the maximum the model supports
+      // The resolver calculates what's practical given memory constraints
+      const maxContext = trainedContext;
+
+      // Note: contextSizeResolver calculates recommended context based on available memory
+      // but we're not using it for display purposes anymore
 
       // Calculate VRAM estimates for local models
       let vramEstimates: VRAMEstimateInfo[] | undefined;
@@ -110,7 +106,7 @@ export class ModelFileManager {
           layers: metadata.n_layers ?? 0,
           kvHeads: metadata.n_kv_heads ?? 0,
           embeddingDim: metadata.embedding_dim ?? 0,
-          contextLength: metadata.context_length ?? 0,
+          contextLength: metadata.context_length ?? undefined,
           feedForwardDim: metadata.feed_forward_dim ?? 0,
         };
 
@@ -173,13 +169,13 @@ export class ModelFileManager {
         size: stats.size,
         downloaded: true,
         downloading: false,
-        contextLength: actualContextLength,
+        trainedContextLength: trainedContext,
+        maxContextLength: maxContext,
         parameterCount:
           matchingRemoteModel?.parameterCount ?? modelInfo.parameterCount,
         quantization:
           matchingRemoteModel?.quantization ?? modelInfo.quantization,
         layerCount,
-        maxContextLength,
         vramEstimates,
         modelArchitecture,
         hasVramData,
@@ -197,10 +193,10 @@ export class ModelFileManager {
     metadata?: Record<string, unknown>;
   }): {
     layerCount?: number;
-    maxContextLength?: number;
+    trainedContextLength?: number;
   } {
     let layerCount: number | undefined;
-    let maxContextLength: number | undefined;
+    let trainedContextLength: number | undefined;
 
     if (ggufInfo.metadata) {
       const metadata = ggufInfo.metadata as {
@@ -210,7 +206,7 @@ export class ModelFileManager {
 
       if (metadata.llama) {
         layerCount = metadata.llama.block_count;
-        maxContextLength = metadata.llama.context_length;
+        trainedContextLength = metadata.llama.context_length;
       } else {
         // Try other common architecture names
         const architectures = ['llama', 'mistral', 'gpt', 'qwen'];
@@ -223,9 +219,9 @@ export class ModelFileManager {
               layerCount = archData.block_count;
             }
             if (archData.context_length) {
-              maxContextLength = archData.context_length;
+              trainedContextLength = archData.context_length;
             }
-            if (layerCount || maxContextLength) {
+            if (layerCount || trainedContextLength) {
               break;
             }
           }
@@ -233,7 +229,7 @@ export class ModelFileManager {
       }
     }
 
-    return { layerCount, maxContextLength };
+    return { layerCount, trainedContextLength };
   }
 
   /**
@@ -275,10 +271,10 @@ export class ModelFileManager {
       quantization = 'F16';
     }
 
-    // Extract context length (if specified)
+    // Extract context length (if specified in filename like "32k" = 32,000 tokens)
     const contextMatch = filename.match(/(\d+)k/i);
     if (contextMatch) {
-      contextLength = parseInt(contextMatch[1]) * MEMORY.BYTES_TO_KB;
+      contextLength = parseInt(contextMatch[1]) * 1000; // k = 1000 tokens, not 1024
     }
 
     return {

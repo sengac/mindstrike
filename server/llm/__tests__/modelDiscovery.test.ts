@@ -71,13 +71,11 @@ describe('ModelDiscovery', () => {
   });
 
   describe('getLocalModels', () => {
-    it('should return local models with context size calculation', async () => {
+    it('should return local models', async () => {
       const result = await modelDiscovery.getLocalModels();
 
       expect(result).toEqual([mockLocalModel]);
-      expect(mockFileManager.getLocalModels).toHaveBeenCalledWith(
-        expect.any(Function)
-      );
+      expect(mockFileManager.getLocalModels).toHaveBeenCalled();
     });
   });
 

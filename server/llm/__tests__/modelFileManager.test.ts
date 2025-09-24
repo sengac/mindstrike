@@ -168,6 +168,7 @@ describe('ModelFileManager', () => {
       expect(models[0].filename).toBe('model1.gguf');
       expect(models[1].filename).toBe('model2.gguf');
       expect(models[0].layerCount).toBe(32);
+      expect(models[0].trainedContextLength).toBe(4096);
       expect(models[0].maxContextLength).toBe(4096);
     });
 
@@ -207,12 +208,27 @@ describe('ModelFileManager', () => {
         mockModelStats as import('fs').Stats
       );
 
+      const mockGgufMetadata: MockGgufMetadata = {
+        metadata: {
+          llama: {
+            block_count: 32,
+            context_length: 4096,
+          },
+        },
+      };
+      vi.mocked(readGgufFileInfo).mockResolvedValue(
+        mockGgufMetadata as Awaited<ReturnType<typeof readGgufFileInfo>>
+      );
+
       const resolver = vi.fn().mockResolvedValue(2048);
 
       const models = await manager.getLocalModels(resolver);
 
-      expect(resolver).toHaveBeenCalledWith(1000000000, 4096, 'model.gguf');
-      expect(models[0].contextLength).toBe(2048);
+      // Context resolver is no longer used for max context
+      expect(resolver).not.toHaveBeenCalled();
+      // Both trained and max context come from GGUF metadata
+      expect(models[0].trainedContextLength).toBe(4096);
+      expect(models[0].maxContextLength).toBe(4096);
     });
 
     it('should handle GGUF metadata extraction failure gracefully', async () => {
@@ -287,7 +303,7 @@ describe('ModelFileManager', () => {
 
     it('should extract context length from filename', () => {
       const metadata = manager.parseModelFilename('model-8k-context.gguf');
-      expect(metadata.contextLength).toBe(8192);
+      expect(metadata.contextLength).toBe(8000); // 8k = 8000 tokens, not 8192
     });
 
     it('should default to F16 quantization for GGUF files without explicit quantization', () => {

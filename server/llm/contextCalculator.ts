@@ -281,7 +281,8 @@ export class ContextCalculator {
   async calculateOptimalContextSize(
     modelInfo: LocalModelInfo
   ): Promise<number> {
-    const modelMaxContext = modelInfo.contextLength;
+    const modelMaxContext =
+      modelInfo.maxContextLength ?? modelInfo.trainedContextLength;
 
     // Convert to calculator format
     const calcModelInfo = this.createModelInfo(modelInfo);
@@ -290,7 +291,7 @@ export class ContextCalculator {
     const defaultOptions = LLMResourceCalculator.getDefaultOptions();
 
     // Use model's max context if available, otherwise use a reasonable default
-    const requestedContext = modelMaxContext || defaultOptions.numCtx;
+    const requestedContext = modelMaxContext ?? defaultOptions.numCtx;
 
     // Validate context size using LLMResourceCalculator
     const validatedContext = LLMResourceCalculator.validateContextSize(
@@ -424,7 +425,8 @@ export class ContextCalculator {
 
     return {
       blockCount: estimatedLayers,
-      trainCtx: modelInfo.maxContextLength ?? modelInfo.contextLength ?? 4096,
+      trainCtx:
+        modelInfo.trainedContextLength ?? modelInfo.maxContextLength ?? 4096,
       headCountMax: 32, // Common default
       headCountKVMin: 8, // Common GQA ratio
       supportsFlashAttention: true, // Assume modern architecture

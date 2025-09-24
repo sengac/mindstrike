@@ -11,11 +11,11 @@ export interface LocalModelInfo {
   size: number;
   downloaded: boolean;
   downloading: boolean;
-  contextLength: number;
+  trainedContextLength?: number; // The context length the model was trained with
+  maxContextLength?: number; // The maximum context length the model can handle
   parameterCount?: string;
   quantization?: string;
   layerCount?: number;
-  maxContextLength?: number;
 
   // VRAM calculation fields
   vramEstimates?: VRAMEstimateInfo[];

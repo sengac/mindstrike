@@ -59,12 +59,12 @@ interface ModelInfo {
   modelId?: string; // For HuggingFace model ID
   filename: string;
   size: number;
-  contextLength?: number;
+  trainedContextLength?: number; // The context length the model was trained with
+  maxContextLength?: number; // The maximum context length the model can handle
   parameterCount?: string;
   quantization?: string;
   loadingSettings?: ModelLoadingSettings;
   layerCount?: number;
-  maxContextLength?: number;
   // VRAM fields
   vramEstimates?: VRAMEstimateInfo[];
   modelArchitecture?: ModelArchitecture;
@@ -118,7 +118,7 @@ export function ModelCard({
   onUpdateSettings,
   formatFileSize,
 }: ModelCardProps) {
-  const isLoaded = status?.loaded || false;
+  const isLoaded = status?.loaded ?? false;
   const [showSettings, setShowSettings] = useState(false);
   const [tempSettings, setTempSettings] = useState<ModelLoadingSettings>(
     model.loadingSettings ?? {}
@@ -164,7 +164,7 @@ export function ModelCard({
         throw new Error('Failed to fetch optimal settings');
       }
 
-      const optimalSettings: ModelLoadingSettings = await response.json();
+      const optimalSettings = (await response.json()) as ModelLoadingSettings;
 
       // Show user the calculated optimal settings
       setTempSettings(optimalSettings);
@@ -208,7 +208,7 @@ export function ModelCard({
   // Validation functions
   const validateAndSetGpuLayers = (value: string) => {
     const num = parseInt(value);
-    const maxLayers = model.layerCount || 100;
+    const maxLayers = model.layerCount ?? 100;
     if (value === '' || isNaN(num)) {
       setTempSettings(prev => ({ ...prev, gpuLayers: undefined }));
       setValidationErrors(prev => ({ ...prev, gpuLayers: '' }));
@@ -225,17 +225,23 @@ export function ModelCard({
 
   const validateAndSetContextSize = (value: string) => {
     const num = parseInt(value);
-    const maxContext = model.maxContextLength || 32768;
+    const maxContext = model.maxContextLength;
     if (value === '' || isNaN(num)) {
       setTempSettings(prev => ({ ...prev, contextSize: undefined }));
       setValidationErrors(prev => ({ ...prev, contextSize: '' }));
-    } else if (num >= 512 && num <= maxContext) {
+    } else if (maxContext && num >= 512 && num <= maxContext) {
+      setTempSettings(prev => ({ ...prev, contextSize: num }));
+      setValidationErrors(prev => ({ ...prev, contextSize: '' }));
+    } else if (!maxContext && num >= 512) {
+      // If no max context is known, allow any value >= 512
       setTempSettings(prev => ({ ...prev, contextSize: num }));
       setValidationErrors(prev => ({ ...prev, contextSize: '' }));
     } else {
       setValidationErrors(prev => ({
         ...prev,
-        contextSize: `Must be between 512 and ${maxContext}`,
+        contextSize: maxContext
+          ? `Must be between 512 and ${maxContext}`
+          : 'Must be at least 512',
       }));
     }
   };
@@ -259,7 +265,7 @@ export function ModelCard({
 
   const validateAndSetThreads = (value: string) => {
     const num = parseInt(value);
-    const maxThreads = Math.min(32, (navigator.hardwareConcurrency || 8) * 2); // Cap at 32 or 2x CPU cores
+    const maxThreads = Math.min(32, (navigator.hardwareConcurrency ?? 8) * 2); // Cap at 32 or 2x CPU cores
     if (value === '' || isNaN(num)) {
       setTempSettings(prev => ({ ...prev, threads: undefined }));
       setValidationErrors(prev => ({ ...prev, threads: '' }));
@@ -332,369 +338,365 @@ export function ModelCard({
   };
 
   return (
-    <div className="p-4 bg-gray-800 rounded-lg border border-gray-700">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center gap-3 mb-2">
-            {isDownloadable ? (
-              <Download size={16} className="text-green-400" />
-            ) : (
-              <Cpu size={16} className="text-blue-400" />
-            )}
-            <h4 className="text-white font-medium">
-              {model.modelId || model.name}
-            </h4>
-            {model.huggingFaceUrl && (
-              <a
-                href={model.huggingFaceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-1 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-blue-400"
-                title="View on Hugging Face"
-              >
-                <ExternalLink size={12} />
-              </a>
-            )}
+    <div className="relative p-4 bg-gray-800 rounded-lg border border-gray-700">
+      {/* Header Section */}
+      <div className="flex items-center gap-3 mb-3 flex-wrap">
+        {isDownloadable ? (
+          <Download size={16} className="text-green-400" />
+        ) : (
+          <Cpu size={16} className="text-blue-400" />
+        )}
+        <h4 className="text-white font-medium">
+          {model.modelId ?? model.name}
+        </h4>
+        {model.huggingFaceUrl && (
+          <a
+            href={model.huggingFaceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-1 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-blue-400"
+            title="View on Hugging Face"
+          >
+            <ExternalLink size={12} />
+          </a>
+        )}
 
-            {isTarget && (
-              <span className="px-2 py-1 text-xs bg-blue-600 text-white rounded-full">
-                Auto-Starting
-              </span>
-            )}
+        {isTarget && (
+          <span className="px-2 py-1 text-xs bg-blue-600 text-white rounded-full">
+            Auto-Starting
+          </span>
+        )}
 
-            <span
-              className={`px-2 py-1 text-xs rounded-full ${
-                isLoaded
-                  ? 'bg-green-600 text-white'
-                  : 'bg-gray-600 text-gray-300'
-              }`}
-            >
-              {isLoaded ? 'Loaded' : 'Not Loaded'}
+        <span
+          className={`px-2 py-1 text-xs rounded-full ${
+            isLoaded ? 'bg-green-600 text-white' : 'bg-gray-600 text-gray-300'
+          }`}
+        >
+          {isLoaded ? 'Loaded' : 'Not Loaded'}
+        </span>
+
+        {/* VRAM Safety Indicator */}
+        {model.hasVramData && availableVramMB && (
+          <span
+            className={`px-2 py-1 text-xs rounded-full flex items-center gap-1 ${
+              modelSafetyLevel === 'safe'
+                ? 'bg-green-900/30 text-green-400 border border-green-600'
+                : modelSafetyLevel === 'caution'
+                  ? 'bg-yellow-900/30 text-yellow-400 border border-yellow-600'
+                  : modelSafetyLevel === 'risky'
+                    ? 'bg-orange-900/30 text-orange-400 border border-orange-600'
+                    : modelSafetyLevel === 'unsafe'
+                      ? 'bg-red-900/30 text-red-400 border border-red-600'
+                      : 'bg-gray-700 text-gray-400 border border-gray-600'
+            }`}
+            title={`VRAM compatibility: ${
+              modelSafetyLevel === 'safe'
+                ? 'Safe to run'
+                : modelSafetyLevel === 'caution'
+                  ? 'May work but use caution'
+                  : modelSafetyLevel === 'risky'
+                    ? 'Risky - may cause issues'
+                    : modelSafetyLevel === 'unsafe'
+                      ? 'Exceeds available VRAM'
+                      : 'Unknown compatibility'
+            }`}
+          >
+            <Zap size={12} />
+            <span>
+              {modelSafetyLevel === 'safe'
+                ? 'Safe'
+                : modelSafetyLevel === 'caution'
+                  ? 'Caution'
+                  : modelSafetyLevel === 'risky'
+                    ? 'Risky'
+                    : modelSafetyLevel === 'unsafe'
+                      ? 'Unsafe'
+                      : 'Unknown'}
             </span>
+          </span>
+        )}
 
-            {/* VRAM Safety Indicator */}
-            {model.hasVramData && availableVramMB && (
-              <span
-                className={`px-2 py-1 text-xs rounded-full flex items-center gap-1 ${
-                  modelSafetyLevel === 'safe'
-                    ? 'bg-green-900/30 text-green-400 border border-green-600'
-                    : modelSafetyLevel === 'caution'
-                      ? 'bg-yellow-900/30 text-yellow-400 border border-yellow-600'
-                      : modelSafetyLevel === 'risky'
-                        ? 'bg-orange-900/30 text-orange-400 border border-orange-600'
-                        : modelSafetyLevel === 'unsafe'
-                          ? 'bg-red-900/30 text-red-400 border border-red-600'
-                          : 'bg-gray-700 text-gray-400 border border-gray-600'
-                }`}
-                title={`VRAM compatibility: ${
-                  modelSafetyLevel === 'safe'
-                    ? 'Safe to run'
-                    : modelSafetyLevel === 'caution'
-                      ? 'May work but use caution'
-                      : modelSafetyLevel === 'risky'
-                        ? 'Risky - may cause issues'
-                        : modelSafetyLevel === 'unsafe'
-                          ? 'Exceeds available VRAM'
-                          : 'Unknown compatibility'
-                }`}
-              >
-                <Zap size={12} />
-                <span>
-                  {modelSafetyLevel === 'safe'
-                    ? 'Safe'
-                    : modelSafetyLevel === 'caution'
-                      ? 'Caution'
-                      : modelSafetyLevel === 'risky'
-                        ? 'Risky'
-                        : modelSafetyLevel === 'unsafe'
-                          ? 'Unsafe'
-                          : 'Unknown'}
+        {model.parameterCount && (
+          <span className="px-2 py-1 text-xs bg-indigo-600 text-white rounded-full">
+            {model.parameterCount}
+          </span>
+        )}
+
+        {model.quantization && (
+          <span className="px-2 py-1 text-xs bg-orange-600 text-white rounded-full">
+            {model.quantization}
+          </span>
+        )}
+      </div>
+
+      {/* Description */}
+      {model.description && (
+        <p className="text-gray-400 text-sm mb-3">{model.description}</p>
+      )}
+
+      {/* Basic Details */}
+      <div className="space-y-1 text-sm mb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-gray-400 w-20">File:</span>
+          <span className="text-gray-300 font-mono">{model.filename}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-gray-400 w-20">Size:</span>
+          <span className="text-gray-300">{formatFileSize(model.size)}</span>
+        </div>
+        {(model.trainedContextLength ?? model.maxContextLength) && (
+          <div className="flex items-center gap-2">
+            <span className="text-gray-400 w-20">Context:</span>
+            <span className="text-gray-300">
+              {model.trainedContextLength ? (
+                <>
+                  {model.trainedContextLength.toLocaleString()} tokens
+                  {model.maxContextLength &&
+                    model.maxContextLength !== model.trainedContextLength && (
+                      <span className="text-gray-500">
+                        {' '}
+                        (max: {model.maxContextLength.toLocaleString()})
+                      </span>
+                    )}
+                </>
+              ) : model.maxContextLength ? (
+                <>{model.maxContextLength.toLocaleString()} tokens</>
+              ) : null}
+            </span>
+          </div>
+        )}
+        {model.username && (
+          <div className="flex items-center gap-2">
+            <User size={12} className="text-gray-400" />
+            <span className="text-gray-400 w-16">By:</span>
+            <a
+              href={`https://huggingface.co/${model.username}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-300 hover:text-blue-200 hover:underline transition-colors"
+            >
+              {model.username}
+            </a>
+          </div>
+        )}
+      </div>
+
+      {/* VRAM Requirements Display */}
+      <VRAMRequirementsDisplay
+        vramEstimates={model.vramEstimates}
+        modelArchitecture={model.modelArchitecture}
+        hasVramData={model.hasVramData}
+        vramError={model.vramError}
+        compactMode={false}
+      />
+
+      {/* Model Stats for downloadable models */}
+      {(model.downloads ?? model.likes ?? model.updatedAt) && (
+        <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
+          {model.downloads && (
+            <div className="flex items-center gap-1">
+              <Download size={12} />
+              <span>{model.downloads.toLocaleString()} downloads</span>
+            </div>
+          )}
+          {model.likes && (
+            <div className="flex items-center gap-1">
+              <Heart size={12} />
+              <span>{model.likes.toLocaleString()} likes</span>
+            </div>
+          )}
+          {model.updatedAt && (
+            <div className="flex items-center gap-1">
+              <Calendar size={12} />
+              <span>
+                Updated {new Date(model.updatedAt).toLocaleDateString()}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Download Progress */}
+      {downloadProgress && !downloadProgress.errorType && (
+        <div className="mt-3">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Loader2 size={14} className="animate-spin text-blue-400" />
+              <span className="text-sm text-blue-400">
+                Downloading... {downloadProgress.progress}%
+              </span>
+              {downloadProgress.speed && (
+                <span className="text-xs text-gray-400">
+                  ({downloadProgress.speed})
                 </span>
-              </span>
-            )}
-
-            {model.parameterCount && (
-              <span className="px-2 py-1 text-xs bg-indigo-600 text-white rounded-full">
-                {model.parameterCount}
-              </span>
-            )}
-
-            {model.quantization && (
-              <span className="px-2 py-1 text-xs bg-orange-600 text-white rounded-full">
-                {model.quantization}
-              </span>
+              )}
+            </div>
+            {onCancelDownload && (
+              <button
+                onClick={() => onCancelDownload(model.filename)}
+                className="p-1 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-red-400"
+                title="Cancel download"
+              >
+                <X size={12} />
+              </button>
             )}
           </div>
-
-          {model.description && (
-            <p className="text-gray-400 text-sm mb-2">{model.description}</p>
-          )}
-
-          <div className="space-y-1 text-sm">
-            <div className="flex items-center gap-2">
-              <span className="text-gray-400 w-20">File:</span>
-              <span className="text-gray-300 font-mono">{model.filename}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-gray-400 w-20">Size:</span>
-              <span className="text-gray-300">
-                {formatFileSize(model.size)}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-gray-400 w-20">Context:</span>
-              <span className="text-gray-300">
-                {(
-                  model.loadingSettings?.contextSize ??
-                  model.maxContextLength ??
-                  model.contextLength ??
-                  4096
-                ).toLocaleString()}{' '}
-                tokens
-                {model.maxContextLength && (
-                  <span className="text-gray-500">
-                    {' '}
-                    (Maximum: {model.maxContextLength.toLocaleString()})
-                  </span>
-                )}
-              </span>
-            </div>
-            {model.username && (
-              <div className="flex items-center gap-2">
-                <User size={12} className="text-gray-400" />
-                <span className="text-gray-400 w-16">By:</span>
-                <a
-                  href={`https://huggingface.co/${model.username}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-300 hover:text-blue-200 hover:underline transition-colors"
-                >
-                  {model.username}
-                </a>
-              </div>
-            )}
-
-            {/* VRAM Requirements Display */}
-            <VRAMRequirementsDisplay
-              vramEstimates={model.vramEstimates}
-              modelArchitecture={model.modelArchitecture}
-              hasVramData={model.hasVramData}
-              vramError={model.vramError}
-              compactMode={false}
-              showLegend={!isDownloadable} // Hide legend for downloadable models to save space
+          <div className="w-full bg-gray-700 rounded-full h-2">
+            <div
+              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${downloadProgress.progress}%` }}
             />
+          </div>
+        </div>
+      )}
 
-            {/* Model Stats for downloadable models */}
-            {(model.downloads || model.likes || model.updatedAt) && (
-              <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
-                {model.downloads && (
-                  <div className="flex items-center gap-1">
-                    <Download size={12} />
-                    <span>{model.downloads.toLocaleString()} downloads</span>
-                  </div>
-                )}
-                {model.likes && (
-                  <div className="flex items-center gap-1">
-                    <Heart size={12} />
-                    <span>{model.likes.toLocaleString()} likes</span>
-                  </div>
-                )}
-                {model.updatedAt && (
-                  <div className="flex items-center gap-1">
-                    <Calendar size={12} />
-                    <span>
-                      Updated {new Date(model.updatedAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Download Progress */}
-            {downloadProgress && !downloadProgress.errorType && (
-              <div className="mt-3">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <Loader2 size={14} className="animate-spin text-blue-400" />
-                    <span className="text-sm text-blue-400">
-                      Downloading... {downloadProgress.progress}%
-                    </span>
-                    {downloadProgress.speed && (
-                      <span className="text-xs text-gray-400">
-                        ({downloadProgress.speed})
-                      </span>
-                    )}
-                  </div>
-                  {onCancelDownload && (
-                    <button
-                      onClick={() => onCancelDownload(model.filename)}
-                      className="p-1 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-red-400"
-                      title="Cancel download"
+      {/* Download Error */}
+      {downloadProgress?.errorType && (
+        <div className="mt-3 p-3 bg-red-900/20 border border-red-600/30 rounded-lg">
+          <div className="flex items-start gap-3">
+            <AlertTriangle
+              size={16}
+              className="text-red-400 mt-0.5 flex-shrink-0"
+            />
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm font-medium text-red-200">
+                  Download Error
+                </span>
+                {downloadProgress.errorType === '403' &&
+                  downloadProgress.huggingFaceUrl && (
+                    <a
+                      href={downloadProgress.huggingFaceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs text-white transition-colors"
                     >
-                      <X size={12} />
-                    </button>
+                      <ExternalLink size={10} />
+                      Request Access
+                    </a>
                   )}
-                </div>
-                <div className="w-full bg-gray-700 rounded-full h-2">
-                  <div
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${downloadProgress.progress}%` }}
-                  />
-                </div>
               </div>
-            )}
-
-            {/* Download Error */}
-            {downloadProgress?.errorType && (
-              <div className="mt-3 p-3 bg-red-900/20 border border-red-600/30 rounded-lg">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle
-                    size={16}
-                    className="text-red-400 mt-0.5 flex-shrink-0"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-sm font-medium text-red-200">
-                        Download Error
-                      </span>
-                      {downloadProgress.errorType === '403' &&
-                        downloadProgress.huggingFaceUrl && (
-                          <a
-                            href={downloadProgress.huggingFaceUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs text-white transition-colors"
-                          >
-                            <ExternalLink size={10} />
-                            Request Access
-                          </a>
-                        )}
-                    </div>
-                    <p className="text-sm text-red-300">
-                      {downloadProgress.errorMessage ?? 'Download failed'}
-                    </p>
-                    {downloadProgress.errorType === '403' && (
-                      <p className="text-xs text-red-400 mt-1">
-                        This model requires permission to access. Click the
-                        acknowledgement button on Hugging Face.
-                      </p>
-                    )}
-                  </div>
-                  {onDismissError && (
-                    <button
-                      onClick={() => onDismissError(model.filename)}
-                      className="p-1 hover:bg-red-800/50 rounded transition-colors text-red-400 hover:text-red-300"
-                      title="Dismiss error"
-                    >
-                      <X size={14} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Runtime Information */}
-            {isLoaded && status?.runtimeInfo && (
-              <>
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-400 w-20">GPU Type:</span>
-                  <span className="text-gray-300 flex items-center gap-1">
-                    <Zap size={12} className="text-yellow-400" />
-                    {status.runtimeInfo.gpuType ?? 'Unknown'}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-400 w-20">GPU Layers:</span>
-                  <span className="text-gray-300">
-                    {formatGpuLayers(status.runtimeInfo.actualGpuLayers)}
-                  </span>
-                </div>
-
-                {status.runtimeInfo.loadingTime && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-400 w-20">Load Time:</span>
-                    <span className="text-gray-300 flex items-center gap-1">
-                      <Clock size={12} className="text-blue-400" />
-                      {(status.runtimeInfo.loadingTime / 1000).toFixed(1)}s
-                    </span>
-                  </div>
-                )}
-              </>
+              <p className="text-sm text-red-300">
+                {downloadProgress.errorMessage ?? 'Download failed'}
+              </p>
+              {downloadProgress.errorType === '403' && (
+                <p className="text-xs text-red-400 mt-1">
+                  This model requires permission to access. Click the
+                  acknowledgement button on Hugging Face.
+                </p>
+              )}
+            </div>
+            {onDismissError && (
+              <button
+                onClick={() => onDismissError(model.filename)}
+                className="p-1 hover:bg-red-800/50 rounded transition-colors text-red-400 hover:text-red-300"
+                title="Dismiss error"
+              >
+                <X size={14} />
+              </button>
             )}
           </div>
         </div>
+      )}
 
-        <div className="flex items-center gap-2 ml-4">
-          {/* Settings button */}
-          {onUpdateSettings && !isDownloadable && (
-            <button
-              onClick={() => setShowSettings(!showSettings)}
-              className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-blue-400"
-              title="Model settings"
-            >
-              <Settings size={14} />
-            </button>
-          )}
+      {/* Runtime Information */}
+      {isLoaded && status?.runtimeInfo && (
+        <div className="mt-3 pt-3 border-t border-gray-700 space-y-1 text-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-gray-400 w-20">GPU Type:</span>
+            <span className="text-gray-300 flex items-center gap-1">
+              <Zap size={12} className="text-yellow-400" />
+              {status.runtimeInfo.gpuType ?? 'Unknown'}
+            </span>
+          </div>
 
-          {/* Download/Load/Unload buttons */}
-          {isDownloadable ? (
-            <button
-              onClick={onDownload ? () => onDownload(model) : undefined}
-              disabled={
-                !onDownload || isAlreadyDownloaded || !!downloadProgress
-              }
-              className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-green-400 disabled:text-gray-600 disabled:cursor-not-allowed"
-              title={
-                isAlreadyDownloaded
-                  ? 'Already downloaded'
-                  : downloadProgress
-                    ? 'Downloading...'
-                    : 'Download model'
-              }
-            >
-              {downloadProgress ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : isAlreadyDownloaded ? (
-                <CheckCircle size={14} className="text-green-400" />
-              ) : (
-                <Download size={14} />
-              )}
-            </button>
-          ) : isLoaded ? (
-            <button
-              onClick={onUnload ? () => onUnload(model.id) : undefined}
-              disabled={!onUnload}
-              className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-orange-400 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Unload model"
-            >
-              <Square size={14} />
-            </button>
-          ) : (
-            <button
-              onClick={onLoad ? () => onLoad(model.id) : undefined}
-              disabled={isLoading || !onLoad}
-              className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-green-400 disabled:text-gray-600 disabled:cursor-not-allowed"
-              title="Load model"
-            >
-              {isLoading ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <Play size={14} />
-              )}
-            </button>
-          )}
-          {!isDownloadable && (
-            <button
-              onClick={onDelete ? () => onDelete(model.id) : undefined}
-              disabled={!onDelete}
-              className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Delete model"
-            >
-              <Trash2 size={14} />
-            </button>
+          <div className="flex items-center gap-2">
+            <span className="text-gray-400 w-20">GPU Layers:</span>
+            <span className="text-gray-300">
+              {formatGpuLayers(status.runtimeInfo.actualGpuLayers)}
+            </span>
+          </div>
+
+          {status.runtimeInfo.loadingTime && (
+            <div className="flex items-center gap-2">
+              <span className="text-gray-400 w-20">Load Time:</span>
+              <span className="text-gray-300 flex items-center gap-1">
+                <Clock size={12} className="text-blue-400" />
+                {(status.runtimeInfo.loadingTime / 1000).toFixed(1)}s
+              </span>
+            </div>
           )}
         </div>
+      )}
+
+      {/* Action Buttons - Floating */}
+      <div className="absolute top-4 right-4 flex items-center gap-2">
+        {/* Settings button */}
+        {onUpdateSettings && !isDownloadable && (
+          <button
+            onClick={() => setShowSettings(!showSettings)}
+            className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-blue-400"
+            title="Model settings"
+          >
+            <Settings size={14} />
+          </button>
+        )}
+
+        {/* Download/Load/Unload buttons */}
+        {isDownloadable ? (
+          <button
+            onClick={onDownload ? () => onDownload(model) : undefined}
+            disabled={!onDownload || isAlreadyDownloaded || !!downloadProgress}
+            className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-green-400 disabled:text-gray-600 disabled:cursor-not-allowed"
+            title={
+              isAlreadyDownloaded
+                ? 'Already downloaded'
+                : downloadProgress
+                  ? 'Downloading...'
+                  : 'Download model'
+            }
+          >
+            {downloadProgress ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : isAlreadyDownloaded ? (
+              <CheckCircle size={14} className="text-green-400" />
+            ) : (
+              <Download size={14} />
+            )}
+          </button>
+        ) : isLoaded ? (
+          <button
+            onClick={onUnload ? () => onUnload(model.id) : undefined}
+            disabled={!onUnload}
+            className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-orange-400 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Unload model"
+          >
+            <Square size={14} />
+          </button>
+        ) : (
+          <button
+            onClick={onLoad ? () => onLoad(model.id) : undefined}
+            disabled={isLoading || !onLoad}
+            className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-green-400 disabled:text-gray-600 disabled:cursor-not-allowed"
+            title="Load model"
+          >
+            {isLoading ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Play size={14} />
+            )}
+          </button>
+        )}
+        {!isDownloadable && (
+          <button
+            onClick={onDelete ? () => onDelete(model.id) : undefined}
+            disabled={!onDelete}
+            className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Delete model"
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
       </div>
 
       {/* Settings Panel */}
@@ -713,7 +715,7 @@ export function ModelCard({
                 <input
                   type="range"
                   min="-1"
-                  max={model.layerCount || 100}
+                  max={model.layerCount ?? 100}
                   value={tempSettings.gpuLayers ?? -1}
                   onChange={e => validateAndSetGpuLayers(e.target.value)}
                   className="flex-1 h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
@@ -722,7 +724,7 @@ export function ModelCard({
                   <input
                     type="number"
                     min="-1"
-                    max={model.layerCount || 100}
+                    max={model.layerCount ?? 100}
                     value={tempSettings.gpuLayers ?? ''}
                     onChange={e => validateAndSetGpuLayers(e.target.value)}
                     onKeyDown={e => handleKeyDown(e, true)}
@@ -752,7 +754,7 @@ export function ModelCard({
               )}
               {!validationErrors.gpuLayers && (
                 <div className="text-xs text-gray-500 mt-1">
-                  -1: Auto, 0: CPU only, 1-{model.layerCount || 100}: Specific
+                  -1: Auto, 0: CPU only, 1-{model.layerCount ?? 100}: Specific
                   layers
                 </div>
               )}
@@ -766,23 +768,38 @@ export function ModelCard({
                 <input
                   type="range"
                   min="512"
-                  max={model.maxContextLength || 32768}
+                  max={
+                    model.maxContextLength ??
+                    (model.trainedContextLength
+                      ? model.trainedContextLength * 8
+                      : 32768)
+                  }
                   step="512"
-                  value={tempSettings.contextSize ?? 4096}
+                  value={
+                    tempSettings.contextSize ?? model.trainedContextLength ?? ''
+                  }
                   onChange={e => validateAndSetContextSize(e.target.value)}
                   className="flex-1 h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                  disabled={
+                    !model.trainedContextLength && !model.maxContextLength
+                  }
                 />
                 <div className="flex items-center gap-1">
                   <input
                     type="number"
                     min="512"
-                    max={model.maxContextLength || 32768}
+                    max={
+                      model.maxContextLength ??
+                      (model.trainedContextLength
+                        ? model.trainedContextLength * 8
+                        : undefined)
+                    }
                     step="512"
                     value={tempSettings.contextSize ?? ''}
                     onChange={e => validateAndSetContextSize(e.target.value)}
                     onKeyDown={e => handleKeyDown(e)}
                     onPaste={e => handlePaste(e, validateAndSetContextSize)}
-                    placeholder="4096"
+                    placeholder={model.trainedContextLength?.toString() ?? ''}
                     className={`w-20 px-2 py-1 text-xs bg-gray-700 border rounded text-white focus:outline-none ${
                       validationErrors.contextSize
                         ? 'border-red-500 focus:border-red-500'
@@ -797,9 +814,9 @@ export function ModelCard({
                   {validationErrors.contextSize}
                 </div>
               )}
-              {!validationErrors.contextSize && (
+              {!validationErrors.contextSize && model.maxContextLength && (
                 <div className="text-xs text-gray-500 mt-1">
-                  512 - {model.maxContextLength || 32768} tokens
+                  512 - {model.maxContextLength} tokens
                 </div>
               )}
             </div>
@@ -854,7 +871,7 @@ export function ModelCard({
                 {(() => {
                   const maxThreads = Math.min(
                     32,
-                    (navigator.hardwareConcurrency || 8) * 2
+                    (navigator.hardwareConcurrency ?? 8) * 2
                   );
                   return (
                     <>
@@ -901,7 +918,7 @@ export function ModelCard({
               {!validationErrors.threads && (
                 <div className="text-xs text-gray-500 mt-1">
                   0: Auto, 1 -{' '}
-                  {Math.min(32, (navigator.hardwareConcurrency || 8) * 2)}{' '}
+                  {Math.min(32, (navigator.hardwareConcurrency ?? 8) * 2)}{' '}
                   threads
                 </div>
               )}
@@ -965,7 +982,11 @@ export function ModelCard({
               Save Settings
             </button>
             <button
-              onClick={handleResetSettings}
+              onClick={() => {
+                handleResetSettings().catch(error => {
+                  logger.error('Failed to reset settings:', error);
+                });
+              }}
               className="px-3 py-1 text-xs bg-yellow-600 hover:bg-yellow-700 text-white rounded transition-colors"
             >
               Reset
