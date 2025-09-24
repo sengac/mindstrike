@@ -1,64 +1,22 @@
 import React from 'react';
 import { Palette, X } from 'lucide-react';
+import { NodeColorTheme, NODE_COLORS } from '../mindmaps/constants/nodeColors';
 
 interface ColorPaletteProps {
   selectedNodeId: string | null;
-  onColorChange: (colors: {
-    backgroundClass: string;
-    foregroundClass: string;
-  }) => void;
+  onColorChange: (theme: NodeColorTheme) => void;
   onColorClear: () => void;
 }
 
 const COLOR_PRESETS = [
-  {
-    backgroundClass: 'bg-blue-500 border-blue-400',
-    foregroundClass: 'text-white',
-    name: 'Blue',
-    displayColor: '#3b82f6',
-  },
-  {
-    backgroundClass: 'bg-green-500 border-green-400',
-    foregroundClass: 'text-white',
-    name: 'Green',
-    displayColor: '#10b981',
-  },
-  {
-    backgroundClass: 'bg-purple-500 border-purple-400',
-    foregroundClass: 'text-white',
-    name: 'Purple',
-    displayColor: '#8b5cf6',
-  },
-  {
-    backgroundClass: 'bg-orange-500 border-orange-400',
-    foregroundClass: 'text-white',
-    name: 'Orange',
-    displayColor: '#f59e0b',
-  },
-  {
-    backgroundClass: 'bg-pink-500 border-pink-400',
-    foregroundClass: 'text-white',
-    name: 'Pink',
-    displayColor: '#ec4899',
-  },
-  {
-    backgroundClass: 'bg-red-500 border-red-400',
-    foregroundClass: 'text-white',
-    name: 'Red',
-    displayColor: '#ef4444',
-  },
-  {
-    backgroundClass: 'bg-cyan-500 border-cyan-400',
-    foregroundClass: 'text-white',
-    name: 'Cyan',
-    displayColor: '#06b6d4',
-  },
-  {
-    backgroundClass: 'bg-lime-500 border-lime-400',
-    foregroundClass: 'text-white',
-    name: 'Lime',
-    displayColor: '#84cc16',
-  },
+  { theme: NodeColorTheme.Blue, name: 'Blue' },
+  { theme: NodeColorTheme.Green, name: 'Green' },
+  { theme: NodeColorTheme.Purple, name: 'Purple' },
+  { theme: NodeColorTheme.Orange, name: 'Orange' },
+  { theme: NodeColorTheme.Pink, name: 'Pink' },
+  { theme: NodeColorTheme.Red, name: 'Red' },
+  { theme: NodeColorTheme.Cyan, name: 'Cyan' },
+  { theme: NodeColorTheme.Lime, name: 'Lime' },
 ];
 
 export function ColorPalette({
@@ -116,21 +74,21 @@ export function ColorPalette({
           </div>
 
           <div className="grid grid-cols-4 gap-2 mb-3">
-            {COLOR_PRESETS.map(preset => (
-              <button
-                key={preset.name}
-                onClick={() => {
-                  onColorChange({
-                    backgroundClass: preset.backgroundClass,
-                    foregroundClass: preset.foregroundClass,
-                  });
-                  setIsOpen(false);
-                }}
-                className="w-8 h-8 rounded border-2 border-gray-600 hover:border-gray-400 transition-all hover:scale-110"
-                style={{ backgroundColor: preset.displayColor }}
-                title={preset.name}
-              />
-            ))}
+            {COLOR_PRESETS.map(preset => {
+              const colors = NODE_COLORS[preset.theme];
+              return (
+                <button
+                  key={preset.name}
+                  onClick={() => {
+                    onColorChange(preset.theme);
+                    setIsOpen(false);
+                  }}
+                  className="w-8 h-8 rounded border-2 border-gray-600 hover:border-gray-400 transition-all hover:scale-110"
+                  style={{ backgroundColor: colors.backgroundColor }}
+                  title={preset.name}
+                />
+              );
+            })}
           </div>
 
           <button

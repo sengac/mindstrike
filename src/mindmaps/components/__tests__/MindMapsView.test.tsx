@@ -55,20 +55,16 @@ vi.mock('../MindMapsPanel', () => ({
     onMindMapRename: (id: string, name: string) => void;
     onMindMapDelete: (id: string) => void;
     threads: unknown[];
-    onThreadAssociate: (
-      threadId: string,
-      mindMapId: string,
-      nodeId: string
-    ) => void;
+    onThreadAssociate: (nodeId: string, threadId: string) => void;
     onThreadUnassign: (threadId: string) => void;
     onThreadCreate: () => void;
     onThreadRename: (id: string, name: string) => void;
     onThreadDelete: (id: string) => void;
     onNavigateToChat: (threadId: string) => void;
-    onPromptUpdate: (prompt: string) => void;
+    onPromptUpdate: (threadId: string, customPrompt?: string) => void;
     onCustomizePrompts: () => void;
-    onNodeNotesUpdate: (notes: string) => void;
-    onNodeSourcesUpdate: (sources: unknown[]) => void;
+    onNodeNotesUpdate: (nodeId: string, notes: string | null) => Promise<void>;
+    onNodeSourcesUpdate: (nodeId: string, sources: unknown[]) => Promise<void>;
   }) => (
     <div data-testid="mindmaps-panel">
       <div data-testid="panel-mindmaps-count">{mindMaps.length}</div>
@@ -102,7 +98,7 @@ vi.mock('../MindMapsPanel', () => ({
       </button>
       <button
         data-testid="panel-associate-thread"
-        onClick={() => onThreadAssociate('thread-1', 'mindmap-1', 'node-1')}
+        onClick={() => onThreadAssociate('node-1', 'thread-1')}
       >
         Associate Thread
       </button>
@@ -138,7 +134,7 @@ vi.mock('../MindMapsPanel', () => ({
       </button>
       <button
         data-testid="panel-update-prompt"
-        onClick={() => onPromptUpdate('custom')}
+        onClick={() => onPromptUpdate('thread-1', 'custom')}
       >
         Update Prompt
       </button>
@@ -150,13 +146,13 @@ vi.mock('../MindMapsPanel', () => ({
       </button>
       <button
         data-testid="panel-update-notes"
-        onClick={() => onNodeNotesUpdate('updated notes')}
+        onClick={() => onNodeNotesUpdate('node-1', 'updated notes')}
       >
         Update Notes
       </button>
       <button
         data-testid="panel-update-sources"
-        onClick={() => onNodeSourcesUpdate(mockSources)}
+        onClick={() => onNodeSourcesUpdate('node-1', mockSources)}
       >
         Update Sources
       </button>
@@ -172,7 +168,7 @@ vi.mock('../MindMapCanvas', () => ({
     pendingNodeUpdate,
   }: {
     activeMindMap?: { id: string; name: string; data?: unknown };
-    loadMindMaps: () => void;
+    loadMindMaps: (preserveActiveId?: boolean) => Promise<void>;
     pendingNodeUpdate?: { nodeId: string; chatId?: string };
   }) => (
     <div data-testid="mindmap-canvas">
@@ -187,7 +183,10 @@ vi.mock('../MindMapCanvas', () => ({
       </div>
 
       {/* Action button for testing prop forwarding */}
-      <button data-testid="canvas-load-mindmaps" onClick={() => loadMindMaps()}>
+      <button
+        data-testid="canvas-load-mindmaps"
+        onClick={() => loadMindMaps(true)}
+      >
         Load MindMaps
       </button>
     </div>
@@ -283,7 +282,7 @@ describe('MindMapsView', () => {
   };
 
   beforeEach(() => {
-    user = userEvent.setup();
+    user = userEvent.setup({ delay: null });
     vi.clearAllMocks();
   });
 
@@ -292,35 +291,59 @@ describe('MindMapsView', () => {
   });
 
   describe('rendering', () => {
-    it('should render all main components', () => {
+    it('should render all main components', async () => {
       render(<MindMapsView {...defaultProps} />);
 
-      expect(screen.getByTestId('app-bar')).toBeInTheDocument();
-      expect(screen.getByTestId('mindmaps-panel')).toBeInTheDocument();
-      expect(screen.getByTestId('mindmap-canvas')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByTestId('app-bar')).toBeTruthy();
+      });
+
+      expect(screen.getByTestId('mindmaps-panel')).toBeTruthy();
+      expect(screen.getByTestId('mindmap-canvas')).toBeTruthy();
     });
 
-    it('should render correct AppBar with Network icon and title', () => {
+    it('should render correct AppBar with Network icon and title', async () => {
       render(<MindMapsView {...defaultProps} />);
 
-      expect(screen.getByTestId('app-bar-title')).toHaveTextContent('MindMaps');
-      expect(screen.getByTestId('network-icon')).toBeInTheDocument();
-      expect(screen.getByTestId('app-bar-actions')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByTestId('app-bar-title').textContent).toBe(
+          'MindMaps'
+        );
+      });
+
+      expect(screen.getByTestId('network-icon')).toBeTruthy();
+      expect(screen.getByTestId('app-bar-actions')).toBeTruthy();
     });
 
-    it('should have proper layout structure with flex classes', () => {
+    it('should have proper layout structure with flex classes', async () => {
       const { container } = render(<MindMapsView {...defaultProps} />);
 
-      const mainContainer = container.firstChild as HTMLElement;
-      expect(mainContainer).toHaveClass('flex', 'flex-col', 'h-full');
+      await waitFor(() => {
+        expect(container.firstChild).toBeTruthy();
+      });
 
-      const contentArea = mainContainer.querySelector(
-        'div:nth-child(2)'
+      // Find the main container div with flex classes
+      const mainContainer = container.querySelector(
+        '.flex.flex-col.h-full'
       ) as HTMLElement;
-      expect(contentArea).toHaveClass('flex', 'flex-1', 'min-h-0');
+      expect(mainContainer).toBeTruthy();
+      const mainClasses = mainContainer.getAttribute('class') || '';
+      expect(mainClasses).toContain('flex');
+      expect(mainClasses).toContain('flex-col');
+      expect(mainClasses).toContain('h-full');
+
+      // Find the content area div with flex-1 classes
+      const contentArea = container.querySelector(
+        '.flex.flex-1.min-h-0'
+      ) as HTMLElement;
+      expect(contentArea).toBeTruthy();
+      const contentClasses = contentArea.getAttribute('class') || '';
+      expect(contentClasses).toContain('flex');
+      expect(contentClasses).toContain('flex-1');
+      expect(contentClasses).toContain('min-h-0');
     });
 
-    it('should render empty state when no mind maps', () => {
+    it('should render empty state when no mind maps', async () => {
       render(
         <MindMapsView
           {...defaultProps}
@@ -330,51 +353,72 @@ describe('MindMapsView', () => {
         />
       );
 
-      expect(screen.getByTestId('panel-mindmaps-count')).toHaveTextContent('0');
-      expect(screen.getByTestId('panel-active-mindmap')).toHaveTextContent(
+      await waitFor(() => {
+        expect(screen.getByTestId('panel-mindmaps-count').textContent).toBe(
+          '0'
+        );
+      });
+
+      expect(screen.getByTestId('panel-active-mindmap').textContent).toBe(
         'none'
       );
-      expect(screen.getByTestId('canvas-active-mindmap')).toHaveTextContent(
+      expect(screen.getByTestId('canvas-active-mindmap').textContent).toBe(
         'none'
       );
     });
 
-    it('should render empty state when no threads', () => {
+    it('should render empty state when no threads', async () => {
       render(<MindMapsView {...defaultProps} threads={[]} />);
 
-      expect(screen.getByTestId('panel-threads-count')).toHaveTextContent('0');
+      await waitFor(() => {
+        expect(screen.getByTestId('panel-threads-count').textContent).toBe('0');
+      });
     });
   });
 
   describe('data passing', () => {
-    it('should pass mind maps data to MindMapsPanel', () => {
+    it('should pass mind maps data to MindMapsPanel', async () => {
       render(<MindMapsView {...defaultProps} />);
 
-      expect(screen.getByTestId('panel-mindmaps-count')).toHaveTextContent('2');
-      expect(screen.getByTestId('panel-active-mindmap')).toHaveTextContent(
+      await waitFor(() => {
+        expect(screen.getByTestId('panel-mindmaps-count').textContent).toBe(
+          '2'
+        );
+      });
+
+      expect(screen.getByTestId('panel-active-mindmap').textContent).toBe(
         'mindmap-1'
       );
     });
 
-    it('should pass threads data to MindMapsPanel', () => {
+    it('should pass threads data to MindMapsPanel', async () => {
       render(<MindMapsView {...defaultProps} />);
 
-      expect(screen.getByTestId('panel-threads-count')).toHaveTextContent('2');
+      await waitFor(() => {
+        expect(screen.getByTestId('panel-threads-count').textContent).toBe('2');
+      });
     });
 
-    it('should pass active mind map to MindMapCanvas', () => {
+    it('should pass active mind map to MindMapCanvas', async () => {
       render(<MindMapsView {...defaultProps} />);
 
-      expect(screen.getByTestId('canvas-active-mindmap')).toHaveTextContent(
-        'mindmap-1'
+      await waitFor(() => {
+        expect(screen.getByTestId('canvas-active-mindmap').textContent).toBe(
+          'mindmap-1'
+        );
+      });
+
+      expect(screen.getByTestId('canvas-active-mindmap-name').textContent).toBe(
+        'Active Mind Map'
       );
-      expect(
-        screen.getByTestId('canvas-active-mindmap-name')
-      ).toHaveTextContent('Active Mind Map');
     });
 
-    it('should pass pending node update to MindMapCanvas', () => {
+    it('should pass pending node update to MindMapCanvas', async () => {
       render(<MindMapsView {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('canvas-pending-update')).toBeTruthy();
+      });
 
       const pendingUpdateElement = screen.getByTestId('canvas-pending-update');
       const updateData = JSON.parse(pendingUpdateElement.textContent ?? '{}');
@@ -384,12 +428,14 @@ describe('MindMapsView', () => {
       expect(updateData.notes).toBe('Updated notes');
     });
 
-    it('should handle missing pending update gracefully', () => {
+    it('should handle missing pending update gracefully', async () => {
       render(<MindMapsView {...defaultProps} pendingNodeUpdate={undefined} />);
 
-      expect(screen.getByTestId('canvas-pending-update')).toHaveTextContent(
-        'no-update'
-      );
+      await waitFor(() => {
+        expect(screen.getByTestId('canvas-pending-update').textContent).toBe(
+          'no-update'
+        );
+      });
     });
   });
 
@@ -593,11 +639,11 @@ describe('MindMapsView', () => {
 
       render(<MindMapsView {...testProps} />);
 
-      expect(screen.getByTestId('panel-mindmaps-count')).toHaveTextContent('1');
-      expect(screen.getByTestId('panel-active-mindmap')).toHaveTextContent(
+      expect(screen.getByTestId('panel-mindmaps-count').textContent).toBe('1');
+      expect(screen.getByTestId('panel-active-mindmap').textContent).toBe(
         'test-id'
       );
-      expect(screen.getByTestId('panel-threads-count')).toHaveTextContent('1');
+      expect(screen.getByTestId('panel-threads-count').textContent).toBe('1');
     });
 
     it('should forward all props correctly to MindMapCanvas', () => {
@@ -625,12 +671,12 @@ describe('MindMapsView', () => {
         />
       );
 
-      expect(screen.getByTestId('canvas-active-mindmap')).toHaveTextContent(
+      expect(screen.getByTestId('canvas-active-mindmap').textContent).toBe(
         'custom-map'
       );
-      expect(
-        screen.getByTestId('canvas-active-mindmap-name')
-      ).toHaveTextContent('Custom Map');
+      expect(screen.getByTestId('canvas-active-mindmap-name').textContent).toBe(
+        'Custom Map'
+      );
 
       const pendingUpdateElement = screen.getByTestId('canvas-pending-update');
       const updateData = JSON.parse(pendingUpdateElement.textContent ?? '{}');
@@ -666,12 +712,12 @@ describe('MindMapsView', () => {
 
       render(<MindMapsView {...minimalProps} />);
 
-      expect(screen.getByTestId('app-bar')).toBeInTheDocument();
-      expect(screen.getByTestId('mindmaps-panel')).toBeInTheDocument();
-      expect(screen.getByTestId('mindmap-canvas')).toBeInTheDocument();
-      expect(screen.getByTestId('panel-mindmaps-count')).toHaveTextContent('0');
-      expect(screen.getByTestId('panel-threads-count')).toHaveTextContent('0');
-      expect(screen.getByTestId('canvas-active-mindmap')).toHaveTextContent(
+      expect(screen.getByTestId('app-bar')).toBeTruthy();
+      expect(screen.getByTestId('mindmaps-panel')).toBeTruthy();
+      expect(screen.getByTestId('mindmap-canvas')).toBeTruthy();
+      expect(screen.getByTestId('panel-mindmaps-count').textContent).toBe('0');
+      expect(screen.getByTestId('panel-threads-count').textContent).toBe('0');
+      expect(screen.getByTestId('canvas-active-mindmap').textContent).toBe(
         'none'
       );
     });
@@ -707,16 +753,16 @@ describe('MindMapsView', () => {
         />
       );
 
-      expect(screen.getByTestId('panel-mindmaps-count')).toHaveTextContent(
+      expect(screen.getByTestId('panel-mindmaps-count').textContent).toBe(
         '100'
       );
-      expect(screen.getByTestId('panel-threads-count')).toHaveTextContent('50');
+      expect(screen.getByTestId('panel-threads-count').textContent).toBe('50');
     });
 
     it('should handle component updates correctly', async () => {
       const { rerender } = render(<MindMapsView {...defaultProps} />);
 
-      expect(screen.getByTestId('panel-mindmaps-count')).toHaveTextContent('2');
+      expect(screen.getByTestId('panel-mindmaps-count').textContent).toBe('2');
 
       const updatedMindMaps = [
         ...mockMindMaps,
@@ -731,7 +777,7 @@ describe('MindMapsView', () => {
 
       rerender(<MindMapsView {...defaultProps} mindMaps={updatedMindMaps} />);
 
-      expect(screen.getByTestId('panel-mindmaps-count')).toHaveTextContent('3');
+      expect(screen.getByTestId('panel-mindmaps-count').textContent).toBe('3');
     });
 
     it('should maintain component structure during data changes', () => {
@@ -749,20 +795,24 @@ describe('MindMapsView', () => {
       );
 
       // Core components should still be present
-      expect(screen.getByTestId('app-bar')).toBeInTheDocument();
-      expect(screen.getByTestId('mindmaps-panel')).toBeInTheDocument();
-      expect(screen.getByTestId('mindmap-canvas')).toBeInTheDocument();
+      expect(screen.getByTestId('app-bar')).toBeTruthy();
+      expect(screen.getByTestId('mindmaps-panel')).toBeTruthy();
+      expect(screen.getByTestId('mindmap-canvas')).toBeTruthy();
 
       // Change back to populated state
       rerender(<MindMapsView {...defaultProps} />);
 
-      expect(screen.getByTestId('panel-mindmaps-count')).toHaveTextContent('2');
-      expect(screen.getByTestId('panel-threads-count')).toHaveTextContent('2');
+      expect(screen.getByTestId('panel-mindmaps-count').textContent).toBe('2');
+      expect(screen.getByTestId('panel-threads-count').textContent).toBe('2');
     });
   });
 
   describe('error handling', () => {
     it('should handle callback errors gracefully', async () => {
+      const consoleSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+
       const errorProps = {
         ...defaultProps,
         onMindMapSelect: vi.fn().mockImplementation(() => {
@@ -774,8 +824,18 @@ describe('MindMapsView', () => {
 
       const selectButton = screen.getByTestId('panel-select-mindmap');
 
-      // Should not crash the component when callback throws
-      expect(() => user.click(selectButton)).not.toThrow();
+      // Click the button - this should not crash the component
+      await user.click(selectButton);
+
+      // Verify the callback was called
+      expect(errorProps.onMindMapSelect).toHaveBeenCalledWith('mindmap-1');
+
+      // Verify the component is still functional by checking it still renders
+      expect(screen.getByTestId('app-bar')).toBeTruthy();
+      expect(screen.getByTestId('mindmaps-panel')).toBeTruthy();
+      expect(screen.getByTestId('mindmap-canvas')).toBeTruthy();
+
+      consoleSpy.mockRestore();
     });
 
     it('should handle async callback rejections', async () => {
@@ -806,10 +866,10 @@ describe('MindMapsView', () => {
       render(<MindMapsView {...defaultProps} />);
 
       // Test that both components receive consistent data
-      expect(screen.getByTestId('panel-active-mindmap')).toHaveTextContent(
+      expect(screen.getByTestId('panel-active-mindmap').textContent).toBe(
         'mindmap-1'
       );
-      expect(screen.getByTestId('canvas-active-mindmap')).toHaveTextContent(
+      expect(screen.getByTestId('canvas-active-mindmap').textContent).toBe(
         'mindmap-1'
       );
 
@@ -836,17 +896,17 @@ describe('MindMapsView', () => {
       render(<MindMapsView {...customProps} />);
 
       // Panel should show the active ID
-      expect(screen.getByTestId('panel-active-mindmap')).toHaveTextContent(
+      expect(screen.getByTestId('panel-active-mindmap').textContent).toBe(
         'custom-id'
       );
 
       // Canvas should show the active mind map object
-      expect(screen.getByTestId('canvas-active-mindmap')).toHaveTextContent(
+      expect(screen.getByTestId('canvas-active-mindmap').textContent).toBe(
         'custom-id'
       );
-      expect(
-        screen.getByTestId('canvas-active-mindmap-name')
-      ).toHaveTextContent('Custom Mind Map');
+      expect(screen.getByTestId('canvas-active-mindmap-name').textContent).toBe(
+        'Custom Mind Map'
+      );
     });
   });
 });

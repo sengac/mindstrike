@@ -1,6 +1,11 @@
 import { vi, beforeEach, afterEach } from 'vitest';
-import '@testing-library/jest-dom';
 import { cleanup } from '@testing-library/react';
+
+// Set up React act environment for Vitest
+declare global {
+  var IS_REACT_ACT_ENVIRONMENT: boolean;
+}
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 declare global {
   interface Window {
@@ -24,7 +29,7 @@ vi.mock('reactflow', async () => {
   return {
     ...actual,
     ReactFlow: vi.fn(() =>
-      React.createElement('div', { 'data-testid': 'react-flow' })
+      React.createElement('div', { 'data-testid': 'rf__wrapper' })
     ),
     Background: vi.fn(() =>
       React.createElement('div', { 'data-testid': 'react-flow-background' })
@@ -37,7 +42,7 @@ vi.mock('reactflow', async () => {
     ),
     Handle: vi.fn(props =>
       React.createElement('div', {
-        'data-testid': `react-flow-handle-${props?.type || 'source'}-${props?.position || 'top'}-${props?.id || 'default'}`,
+        'data-testid': `react-flow-handle-${props?.type ?? 'source'}-${props?.position ?? 'top'}-${props?.id ?? 'default'}`,
       })
     ),
     useReactFlow: vi.fn(() => ({
@@ -90,7 +95,7 @@ class MockEventSource implements EventSource {
   constructor(url: string | URL, eventSourceInitDict?: EventSourceInit) {
     this.url = typeof url === 'string' ? url : url.toString();
     if (eventSourceInitDict) {
-      this.withCredentials = eventSourceInitDict.withCredentials || false;
+      this.withCredentials = eventSourceInitDict.withCredentials ?? false;
     }
   }
 
@@ -193,10 +198,38 @@ beforeEach(() => {
     json: () => Promise.resolve({}),
   });
 
-  // Clear window event mocks
-  vi.mocked(window.dispatchEvent).mockClear();
-  vi.mocked(window.addEventListener).mockClear();
-  vi.mocked(window.removeEventListener).mockClear();
+  // Clear window event mocks if they exist
+  if (vi.isMockFunction(window.dispatchEvent)) {
+    vi.mocked(window.dispatchEvent).mockClear();
+  }
+  if (vi.isMockFunction(window.addEventListener)) {
+    vi.mocked(window.addEventListener).mockClear();
+  }
+  if (vi.isMockFunction(window.removeEventListener)) {
+    vi.mocked(window.removeEventListener).mockClear();
+  }
+});
+
+// Mock getBoundingClientRect for text measurement
+// @ts-ignore - Mocking DOM API
+Element.prototype.getBoundingClientRect = vi.fn(function (this: HTMLElement) {
+  // Default size for text elements
+  const fontSize = parseInt(this.style.fontSize || '14');
+  const text = this.textContent || '';
+  const lines =
+    this.style.whiteSpace === 'normal' ? Math.ceil(text.length / 30) : 1;
+
+  return {
+    width: Math.min(text.length * fontSize * 0.6, 300),
+    height: lines * fontSize * 1.5,
+    top: 0,
+    left: 0,
+    bottom: lines * fontSize * 1.5,
+    right: Math.min(text.length * fontSize * 0.6, 300),
+    x: 0,
+    y: 0,
+    toJSON: () => {},
+  };
 });
 
 afterEach(() => {

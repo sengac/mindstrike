@@ -48,7 +48,7 @@ export const mockNodeData: Record<string, MindMapNodeData> = {
     dropPosition: null,
     layout: 'LR',
     width: 200,
-    customColors: null,
+    colorTheme: null,
   },
   child1: {
     id: 'child-1',
@@ -66,10 +66,7 @@ export const mockNodeData: Record<string, MindMapNodeData> = {
     dropPosition: null,
     layout: 'LR',
     width: 150,
-    customColors: {
-      backgroundClass: 'bg-blue-500',
-      foregroundClass: 'text-white',
-    },
+    colorTheme: 'blue',
   },
   child2: {
     id: 'child-2',
@@ -87,7 +84,7 @@ export const mockNodeData: Record<string, MindMapNodeData> = {
     dropPosition: null,
     layout: 'LR',
     width: 130,
-    customColors: null,
+    colorTheme: null,
   },
   grandchild: {
     id: 'grandchild-1',
@@ -105,7 +102,7 @@ export const mockNodeData: Record<string, MindMapNodeData> = {
     dropPosition: null,
     layout: 'LR',
     width: 160,
-    customColors: null,
+    colorTheme: null,
   },
 };
 

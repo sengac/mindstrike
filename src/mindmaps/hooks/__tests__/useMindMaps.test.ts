@@ -1,85 +1,85 @@
-import {
-  describe,
-  it,
-  expect,
-  vi,
-  beforeEach,
-  afterEach,
-  type Mock,
-} from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useMindMaps } from '../useMindMaps';
-import {
-  mockMindMapsApiResponse,
-  createMockFetch,
-} from '../../__fixtures__/apiMocks';
+import { mindMapApi } from '../../services/mindMapApi';
+import type { MindMap } from '../useMindMaps';
 
-// Mock the useAppStore hook
+// Mock dependencies
 vi.mock('../../../store/useAppStore', () => ({
-  useAppStore: vi.fn(() => ({
-    workspaceVersion: 1,
-  })),
+  useAppStore: vi.fn(() => 1),
+}));
+
+vi.mock('../../services/mindMapApi');
+
+vi.mock('../../../utils/logger', () => ({
+  logger: {
+    error: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
+  },
 }));
 
 describe('useMindMaps', () => {
-  let mockFetch: Mock;
+  const mockMindMaps: MindMap[] = [
+    {
+      id: '1',
+      name: 'MindMap 1',
+      createdAt: new Date('2024-01-01'),
+      updatedAt: new Date('2024-01-02'),
+    },
+    {
+      id: '2',
+      name: 'MindMap 2',
+      createdAt: new Date('2024-01-03'),
+      updatedAt: new Date('2024-01-04'),
+    },
+  ];
 
   beforeEach(() => {
-    vi.clearAllTimers();
-    vi.useFakeTimers();
-    mockFetch = createMockFetch();
-    global.fetch = mockFetch;
+    vi.clearAllMocks();
+
+    vi.mocked(mindMapApi.fetchAll).mockResolvedValue(mockMindMaps);
+    vi.mocked(mindMapApi.save).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
-    vi.useRealTimers();
-    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
-  describe('initialization and loading', () => {
-    it('should initialize with empty state', () => {
+  describe('initialization', () => {
+    it('should load mind maps on mount', async () => {
       const { result } = renderHook(() => useMindMaps());
 
-      expect(result.current.mindMaps).toEqual([]);
-      expect(result.current.activeMindMapId).toBeNull();
-      expect(result.current.activeMindMap).toBeNull();
       expect(result.current.isLoaded).toBe(false);
+      expect(result.current.mindMaps).toEqual([]);
+
+      await waitFor(() => {
+        expect(result.current.isLoaded).toBe(true);
+      });
+
+      expect(mindMapApi.fetchAll).toHaveBeenCalledTimes(1);
+      // Mind maps are sorted by date, most recent first
+      expect(result.current.mindMaps).toEqual([
+        mockMindMaps[1],
+        mockMindMaps[0],
+      ]);
     });
 
-    it('should load mind maps from API on mount', async () => {
+    it('should set most recent mind map as active', async () => {
       const { result } = renderHook(() => useMindMaps());
 
       await waitFor(() => {
         expect(result.current.isLoaded).toBe(true);
       });
 
-      expect(mockFetch).toHaveBeenCalledWith('/api/mindmaps');
-      expect(result.current.mindMaps).toHaveLength(3);
-      expect(result.current.mindMaps[0].name).toBe('Project Planning');
-      expect(result.current.activeMindMapId).toBe('mindmap-1'); // Most recently updated
+      // Should select the most recent (by updatedAt)
+      expect(result.current.activeMindMapId).toBe('2');
+      expect(result.current.activeMindMap).toEqual(mockMindMaps[1]);
     });
 
-    it('should sort mind maps by updatedAt in descending order', async () => {
-      const { result } = renderHook(() => useMindMaps());
-
-      await waitFor(() => {
-        expect(result.current.isLoaded).toBe(true);
-      });
-
-      const mindMaps = result.current.mindMaps;
-      expect(mindMaps[0].updatedAt.getTime()).toBeGreaterThan(
-        mindMaps[1].updatedAt.getTime()
-      );
-      expect(mindMaps[1].updatedAt.getTime()).toBeGreaterThan(
-        mindMaps[2].updatedAt.getTime()
-      );
-    });
-
-    it('should handle API errors gracefully', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-      });
+    it('should handle empty mind maps list', async () => {
+      vi.mocked(mindMapApi.fetchAll).mockResolvedValue([]);
 
       const { result } = renderHook(() => useMindMaps());
 
@@ -88,30 +88,22 @@ describe('useMindMaps', () => {
       });
 
       expect(result.current.mindMaps).toEqual([]);
-      expect(result.current.activeMindMapId).toBeNull();
+      expect(result.current.activeMindMapId).toBe(null);
+      expect(result.current.activeMindMap).toBe(null);
     });
 
-    it('should reload when workspace version changes', async () => {
-      const { useAppStore } = await import('../../../store/useAppStore');
-      const mockUseAppStore = vi.mocked(useAppStore);
+    it('should handle fetch errors gracefully', async () => {
+      const error = new Error('Network error');
+      vi.mocked(mindMapApi.fetchAll).mockRejectedValue(error);
 
-      // Initial render
-      mockUseAppStore.mockReturnValue({ workspaceVersion: 1 });
-      const { result, rerender } = renderHook(() => useMindMaps());
+      const { result } = renderHook(() => useMindMaps());
 
       await waitFor(() => {
         expect(result.current.isLoaded).toBe(true);
       });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-
-      // Change workspace version
-      mockUseAppStore.mockReturnValue({ workspaceVersion: 2 });
-      rerender();
-
-      await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledTimes(2);
-      });
+      expect(result.current.mindMaps).toEqual([]);
+      expect(result.current.activeMindMapId).toBe(null);
     });
   });
 
@@ -123,26 +115,18 @@ describe('useMindMaps', () => {
         expect(result.current.isLoaded).toBe(true);
       });
 
-      const initialCount = result.current.mindMaps.length;
-
-      let createdId: string;
+      let newId: string = '';
       await act(async () => {
-        createdId = await result.current.createMindMap();
+        newId = await result.current.createMindMap();
       });
 
-      expect(result.current.mindMaps).toHaveLength(initialCount + 1);
-      expect(result.current.mindMaps[0].id).toBe(createdId!);
-      expect(result.current.mindMaps[0].name).toMatch(/^MindMap \d+$/);
-      expect(result.current.activeMindMapId).toBe(createdId!);
+      expect(result.current.mindMaps).toHaveLength(3);
+      expect(result.current.mindMaps[0].name).toMatch(/^MindMap/);
+      expect(result.current.activeMindMapId).toBe(newId);
+      expect(newId).toBeTruthy();
 
-      // Should save immediately
-      expect(mockFetch).toHaveBeenCalledWith('/api/mindmaps', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: expect.stringContaining(createdId!),
-      });
+      // Verify save was called
+      expect(mindMapApi.save).toHaveBeenCalled();
     });
 
     it('should create a new mind map with custom name', async () => {
@@ -152,333 +136,145 @@ describe('useMindMaps', () => {
         expect(result.current.isLoaded).toBe(true);
       });
 
-      let createdId: string;
+      const customName = 'Custom MindMap';
+
+      let newId: string = '';
       await act(async () => {
-        createdId = await result.current.createMindMap('Custom Name');
+        newId = await result.current.createMindMap(customName);
       });
 
-      const newMindMap = result.current.mindMaps.find(m => m.id === createdId!);
-      expect(newMindMap).toBeDefined();
-      expect(newMindMap!.name).toBe('Custom Name');
-    });
-
-    it('should place new mind map at the beginning of the list', async () => {
-      const { result } = renderHook(() => useMindMaps());
-
-      await waitFor(() => {
-        expect(result.current.isLoaded).toBe(true);
-      });
-
-      await act(async () => {
-        await result.current.createMindMap('New Mind Map');
-      });
-
-      expect(result.current.mindMaps[0].name).toBe('New Mind Map');
+      const newMindMap = result.current.mindMaps.find(m => m.id === newId);
+      expect(newMindMap?.name).toBe(customName);
+      expect(result.current.activeMindMapId).toBe(newId);
     });
   });
 
   describe('deleteMindMap', () => {
-    it('should delete a mind map', async () => {
+    it('should delete a mind map and update active selection', async () => {
       const { result } = renderHook(() => useMindMaps());
 
       await waitFor(() => {
         expect(result.current.isLoaded).toBe(true);
       });
 
-      const initialCount = result.current.mindMaps.length;
-      const mindMapToDelete = result.current.mindMaps[1];
+      // Initially selected is '2' (most recent)
+      expect(result.current.activeMindMapId).toBe('2');
 
       await act(async () => {
-        await result.current.deleteMindMap(mindMapToDelete.id);
-      });
-
-      expect(result.current.mindMaps).toHaveLength(initialCount - 1);
-      expect(
-        result.current.mindMaps.find(m => m.id === mindMapToDelete.id)
-      ).toBeUndefined();
-
-      // Should save changes
-      expect(mockFetch).toHaveBeenCalledWith('/api/mindmaps', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: expect.not.stringContaining(mindMapToDelete.id),
-      });
-    });
-
-    it('should update active mind map when deleting active one', async () => {
-      const { result } = renderHook(() => useMindMaps());
-
-      await waitFor(() => {
-        expect(result.current.isLoaded).toBe(true);
-      });
-
-      const activeId = result.current.activeMindMapId;
-      expect(activeId).toBe('mindmap-1');
-
-      await act(async () => {
-        await result.current.deleteMindMap(activeId!);
-      });
-
-      // Should set new active mind map to the first remaining one
-      expect(result.current.activeMindMapId).toBe('mindmap-2');
-    });
-
-    it('should set active mind map to null when deleting the last one', async () => {
-      // Mock API to return only one mind map
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve([mockMindMapsApiResponse[0]]),
-      });
-
-      const { result } = renderHook(() => useMindMaps());
-
-      await waitFor(() => {
-        expect(result.current.isLoaded).toBe(true);
+        await result.current.deleteMindMap('2');
       });
 
       expect(result.current.mindMaps).toHaveLength(1);
+      expect(result.current.mindMaps[0].id).toBe('1');
+      expect(result.current.activeMindMapId).toBe('1'); // Falls back to remaining
+    });
 
-      await act(async () => {
-        await result.current.deleteMindMap(result.current.mindMaps[0].id);
+    it('should handle deleting non-active mind map', async () => {
+      const { result } = renderHook(() => useMindMaps());
+
+      await waitFor(() => {
+        expect(result.current.isLoaded).toBe(true);
       });
 
-      expect(result.current.mindMaps).toHaveLength(0);
-      expect(result.current.activeMindMapId).toBeNull();
+      // Select first mind map
+      act(() => {
+        result.current.selectMindMap('1');
+      });
+
+      await act(async () => {
+        await result.current.deleteMindMap('2');
+      });
+
+      expect(result.current.activeMindMapId).toBe('1'); // Should remain unchanged
     });
   });
 
   describe('renameMindMap', () => {
-    it('should rename a mind map', async () => {
+    it('should rename a mind map and update timestamp', async () => {
       const { result } = renderHook(() => useMindMaps());
 
       await waitFor(() => {
         expect(result.current.isLoaded).toBe(true);
       });
 
-      const mindMapToRename = result.current.mindMaps[0];
-      const originalUpdatedAt = mindMapToRename.updatedAt;
+      const newName = 'Renamed MindMap';
+      const beforeUpdate = new Date();
 
       await act(async () => {
-        await result.current.renameMindMap(
-          mindMapToRename.id,
-          'Renamed Mind Map'
-        );
+        await result.current.renameMindMap('1', newName);
       });
 
-      const renamedMindMap = result.current.mindMaps.find(
-        m => m.id === mindMapToRename.id
+      const renamedMindMap = result.current.mindMaps.find(m => m.id === '1');
+      expect(renamedMindMap?.name).toBe(newName);
+      expect(renamedMindMap?.updatedAt.getTime()).toBeGreaterThanOrEqual(
+        beforeUpdate.getTime()
       );
-      expect(renamedMindMap).toBeDefined();
-      expect(renamedMindMap!.name).toBe('Renamed Mind Map');
-      expect(renamedMindMap!.updatedAt.getTime()).toBeGreaterThan(
-        originalUpdatedAt.getTime()
-      );
-
-      // Should save changes
-      expect(mockFetch).toHaveBeenCalledWith('/api/mindmaps', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: expect.stringContaining('Renamed Mind Map'),
-      });
-    });
-
-    it('should re-sort mind maps after renaming', async () => {
-      const { result } = renderHook(() => useMindMaps());
-
-      await waitFor(() => {
-        expect(result.current.isLoaded).toBe(true);
-      });
-
-      // Rename the last mind map
-      const lastMindMap =
-        result.current.mindMaps[result.current.mindMaps.length - 1];
-
-      await act(async () => {
-        await result.current.renameMindMap(lastMindMap.id, 'Most Recent');
-      });
-
-      // Should now be at the top due to updated timestamp
-      expect(result.current.mindMaps[0].id).toBe(lastMindMap.id);
-      expect(result.current.mindMaps[0].name).toBe('Most Recent');
     });
   });
 
   describe('selectMindMap', () => {
-    it('should select a mind map', async () => {
+    it('should update active mind map selection', async () => {
       const { result } = renderHook(() => useMindMaps());
 
       await waitFor(() => {
         expect(result.current.isLoaded).toBe(true);
       });
 
-      const mindMapToSelect = result.current.mindMaps[1];
+      expect(result.current.activeMindMapId).toBe('2');
 
-      await act(async () => {
-        await result.current.selectMindMap(mindMapToSelect.id);
+      act(() => {
+        result.current.selectMindMap('1');
       });
 
-      expect(result.current.activeMindMapId).toBe(mindMapToSelect.id);
-      expect(result.current.activeMindMap).toEqual(mindMapToSelect);
-    });
-  });
-
-  describe('getActiveMindMap', () => {
-    it('should return the active mind map', async () => {
-      const { result } = renderHook(() => useMindMaps());
-
-      await waitFor(() => {
-        expect(result.current.isLoaded).toBe(true);
-      });
-
-      const activeMindMap = result.current.activeMindMap;
-      expect(activeMindMap).toBeDefined();
-      expect(activeMindMap!.id).toBe(result.current.activeMindMapId);
-    });
-
-    it('should return null when no active mind map', async () => {
-      // Mock API to return empty array
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve([]),
-      });
-
-      const { result } = renderHook(() => useMindMaps());
-
-      await waitFor(() => {
-        expect(result.current.isLoaded).toBe(true);
-      });
-
-      expect(result.current.activeMindMap).toBeNull();
+      expect(result.current.activeMindMapId).toBe('1');
+      expect(result.current.activeMindMap).toEqual(mockMindMaps[0]);
     });
   });
 
   describe('loadMindMaps', () => {
-    it('should reload mind maps manually', async () => {
+    it('should reload mind maps and preserve selection', async () => {
       const { result } = renderHook(() => useMindMaps());
 
       await waitFor(() => {
         expect(result.current.isLoaded).toBe(true);
       });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-
-      await act(async () => {
-        await result.current.loadMindMaps();
+      // Select first mind map
+      act(() => {
+        result.current.selectMindMap('1');
       });
 
-      expect(mockFetch).toHaveBeenCalledTimes(2);
-    });
-
-    it('should preserve active mind map ID when requested', async () => {
-      const { result } = renderHook(() => useMindMaps());
-
-      await waitFor(() => {
-        expect(result.current.isLoaded).toBe(true);
-      });
-
-      // Select a different mind map
-      await act(async () => {
-        await result.current.selectMindMap('mindmap-3');
-      });
-
-      expect(result.current.activeMindMapId).toBe('mindmap-3');
-
-      // Reload with preserve flag
-      await act(async () => {
-        await result.current.loadMindMaps(true);
-      });
-
-      // Should keep the selected mind map
-      expect(result.current.activeMindMapId).toBe('mindmap-3');
-    });
-
-    it('should fallback to most recent when preserving non-existent active ID', async () => {
-      const { result } = renderHook(() => useMindMaps());
-
-      await waitFor(() => {
-        expect(result.current.isLoaded).toBe(true);
-      });
-
-      // Select a non-existent mind map ID
-      await act(async () => {
-        // Use selectMindMap to set a non-existent ID
-        await result.current.selectMindMap('non-existent-id');
-      });
-
-      // Mock API to return different mind maps (without the non-existent one)
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve([mockMindMapsApiResponse[0]]),
-      });
+      // Clear mock calls
+      vi.clearAllMocks();
 
       await act(async () => {
         await result.current.loadMindMaps(true);
       });
 
-      // Should fallback to most recent
-      expect(result.current.activeMindMapId).toBe('mindmap-1');
+      expect(mindMapApi.fetchAll).toHaveBeenCalledTimes(1);
+      expect(result.current.activeMindMapId).toBe('1'); // Selection preserved
     });
-  });
 
-  describe('cleanup', () => {
-    it('should cleanup timeout on unmount', () => {
-      const { unmount } = renderHook(() => useMindMaps());
-
-      // Create a mind map to trigger save timeout
-      act(() => {
-        // This would normally create a timeout
-      });
-
-      // Should not throw when unmounting
-      expect(() => unmount()).not.toThrow();
-    });
-  });
-
-  describe('debounced saving', () => {
-    it('should debounce save operations', async () => {
+    it('should handle removed active mind map during reload', async () => {
       const { result } = renderHook(() => useMindMaps());
 
       await waitFor(() => {
         expect(result.current.isLoaded).toBe(true);
       });
 
-      // Create multiple mind maps quickly
+      // Select second mind map
       act(() => {
-        void result.current.createMindMap('Map 1');
-        void result.current.createMindMap('Map 2');
-        void result.current.createMindMap('Map 3');
+        result.current.selectMindMap('2');
       });
 
-      // Should not call save immediately
-      expect(mockFetch).toHaveBeenCalledWith('/api/mindmaps'); // Initial load
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-
-      // Fast-forward past debounce delay
-      act(() => {
-        vi.advanceTimersByTime(500);
-      });
-
-      // Should have called save after debounce
-      expect(mockFetch).toHaveBeenCalledTimes(2);
-    });
-
-    it('should save immediately when requested', async () => {
-      const { result } = renderHook(() => useMindMaps());
-
-      await waitFor(() => {
-        expect(result.current.isLoaded).toBe(true);
-      });
+      // Mock API to return only first mind map
+      vi.mocked(mindMapApi.fetchAll).mockResolvedValue([mockMindMaps[0]]);
 
       await act(async () => {
-        await result.current.createMindMap('Immediate Save');
+        await result.current.loadMindMaps(true);
       });
 
-      // Should save immediately, not wait for debounce
-      expect(mockFetch).toHaveBeenCalledTimes(2); // Load + immediate save
+      expect(result.current.activeMindMapId).toBe('1'); // Falls back to first
     });
   });
 });

@@ -96,7 +96,7 @@ describe('mindMap types', () => {
         dropPosition: null,
         layout: 'LR',
         width: 200,
-        customColors: null,
+        colorTheme: null,
       };
 
       expect(rootNode.isRoot).toBe(true);
@@ -120,7 +120,7 @@ describe('mindMap types', () => {
         dropPosition: null,
         layout: 'LR',
         width: 150,
-        customColors: null,
+        colorTheme: null,
       };
 
       expect(childNode.isRoot).toBe(false);
@@ -150,7 +150,7 @@ describe('mindMap types', () => {
           dropPosition: null,
           layout,
           width: 150,
-          customColors: null,
+          colorTheme: null,
         };
 
         expect(node.layout).toBe(layout);
@@ -178,7 +178,7 @@ describe('mindMap types', () => {
           dropPosition,
           layout: 'LR',
           width: 150,
-          customColors: null,
+          colorTheme: null,
         };
 
         expect(node.dropPosition).toBe(dropPosition);
@@ -186,7 +186,7 @@ describe('mindMap types', () => {
       });
     });
 
-    it('should support custom colors', () => {
+    it('should support color themes', () => {
       const nodeWithColors: MindMapNodeData = {
         id: 'colored-node',
         label: 'Colored Node',
@@ -199,16 +199,10 @@ describe('mindMap types', () => {
         dropPosition: null,
         layout: 'LR',
         width: 150,
-        customColors: {
-          backgroundClass: 'bg-blue-500',
-          foregroundClass: 'text-white',
-        },
+        colorTheme: 'blue',
       };
 
-      expect(nodeWithColors.customColors).toEqual({
-        backgroundClass: 'bg-blue-500',
-        foregroundClass: 'text-white',
-      });
+      expect(nodeWithColors.colorTheme).toBe('blue');
     });
 
     it('should support notes and sources', () => {
@@ -233,7 +227,7 @@ describe('mindMap types', () => {
         dropPosition: null,
         layout: 'LR',
         width: 150,
-        customColors: null,
+        colorTheme: null,
         notes: 'These are test notes',
         sources,
         chatId: 'chat-123',
@@ -257,7 +251,7 @@ describe('mindMap types', () => {
         dropPosition: null,
         layout: 'LR',
         width: 150,
-        customColors: null,
+        colorTheme: null,
       };
 
       expect(minimalNode.parentId).toBeUndefined();
@@ -265,7 +259,7 @@ describe('mindMap types', () => {
       expect(minimalNode.sources).toBeUndefined();
       expect(minimalNode.chatId).toBeUndefined();
       expect(minimalNode.isEditing).toBeUndefined();
-      expect(minimalNode.customColors).toBeNull();
+      expect(minimalNode.colorTheme).toBeNull();
     });
 
     it('should support editing state', () => {
@@ -281,7 +275,7 @@ describe('mindMap types', () => {
         dropPosition: null,
         layout: 'LR',
         width: 150,
-        customColors: null,
+        colorTheme: null,
         isEditing: true,
       };
 
@@ -301,7 +295,7 @@ describe('mindMap types', () => {
         dropPosition: null,
         layout: 'LR',
         width: 150,
-        customColors: null,
+        colorTheme: null,
       };
 
       const dropTargetNode: MindMapNodeData = {
@@ -316,7 +310,7 @@ describe('mindMap types', () => {
         dropPosition: 'above',
         layout: 'LR',
         width: 150,
-        customColors: null,
+        colorTheme: null,
       };
 
       expect(draggingNode.isDragging).toBe(true);

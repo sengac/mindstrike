@@ -4,6 +4,7 @@ import { immer } from 'zustand/middleware/immer';
 import { useMemo } from 'react';
 import type { Node, Edge } from 'reactflow';
 import type { MindMapNodeData, Source } from '../types/mindMap';
+import type { NodeColorTheme } from '../mindmaps/constants/nodeColors';
 import type { MindMapData } from '../utils/mindMapData';
 import { MindMapDataManager } from '../utils/mindMapData';
 import { MindMapLayoutManager } from '../utils/mindMapLayout';
@@ -106,11 +107,13 @@ interface MindMapActions {
   updateNodeChatId: (nodeId: string, chatId: string | null) => void;
   updateNodeNotes: (nodeId: string, notes: string | null) => void;
   updateNodeSources: (nodeId: string, sources: Source[]) => void;
-  setNodeColors: (
-    nodeId: string,
-    colors: { backgroundClass: string; foregroundClass: string }
-  ) => void;
+  setNodeColors: (nodeId: string, theme: NodeColorTheme) => void;
   clearNodeColors: (nodeId: string) => void;
+  updateNodeDimensions: (
+    nodeId: string,
+    width: number,
+    height: number
+  ) => Promise<void>;
 
   // Layout operations
   changeLayout: (newLayout: 'LR' | 'RL' | 'TB' | 'BT') => Promise<void>;
@@ -580,7 +583,7 @@ export const useMindMapStore = create<MindMapStore>()(
         actions.save();
       },
 
-      setNodeColors: (nodeId, colors) => {
+      setNodeColors: (nodeId, theme) => {
         const state = get();
         if (!state.isInitialized) {
           return;
@@ -590,7 +593,7 @@ export const useMindMapStore = create<MindMapStore>()(
           node.id === nodeId
             ? {
                 ...node,
-                data: { ...node.data, customColors: colors },
+                data: { ...node.data, colorTheme: theme },
                 style: { ...node.style },
               }
             : node
@@ -614,7 +617,7 @@ export const useMindMapStore = create<MindMapStore>()(
           node.id === nodeId
             ? {
                 ...node,
-                data: { ...node.data, customColors: null },
+                data: { ...node.data, colorTheme: null },
                 style: { ...node.style },
               }
             : node
@@ -626,6 +629,36 @@ export const useMindMapStore = create<MindMapStore>()(
         const actions = get();
         actions.saveToHistory();
         actions.save();
+      },
+
+      updateNodeDimensions: async (nodeId, width, height) => {
+        const state = get();
+        if (!state.isInitialized) {
+          return;
+        }
+
+        // Update the node with new dimensions
+        const updatedNodes = state.nodes.map(node =>
+          node.id === nodeId
+            ? {
+                ...node,
+                data: { ...node.data, width, height },
+              }
+            : node
+        );
+
+        // Trigger a layout recalculation with the new dimensions
+        const result = await state.layoutManager.performCompleteLayout(
+          updatedNodes,
+          state.edges,
+          state.rootNodeId,
+          state.layout
+        );
+
+        set({
+          nodes: result.nodes,
+          edges: result.edges,
+        });
       },
 
       // Layout operations
@@ -1449,6 +1482,9 @@ export const useMindMapActions = () => {
   const updateNodeSources = useMindMapStore(state => state.updateNodeSources);
   const setNodeColors = useMindMapStore(state => state.setNodeColors);
   const clearNodeColors = useMindMapStore(state => state.clearNodeColors);
+  const updateNodeDimensions = useMindMapStore(
+    state => state.updateNodeDimensions
+  );
   const changeLayout = useMindMapStore(state => state.changeLayout);
   const resetLayout = useMindMapStore(state => state.resetLayout);
   const applyMindmapChanges = useMindMapStore(
@@ -1469,6 +1505,7 @@ export const useMindMapActions = () => {
       updateNodeSources,
       setNodeColors,
       clearNodeColors,
+      updateNodeDimensions,
       changeLayout,
       resetLayout,
       applyMindmapChanges,
@@ -1486,6 +1523,7 @@ export const useMindMapActions = () => {
       updateNodeSources,
       setNodeColors,
       clearNodeColors,
+      updateNodeDimensions,
       changeLayout,
       resetLayout,
       applyMindmapChanges,

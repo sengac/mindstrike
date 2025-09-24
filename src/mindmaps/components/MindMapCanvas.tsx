@@ -19,6 +19,7 @@ import { useAppStore } from '../../store/useAppStore';
 import type { Source } from '../types/mindMap';
 import type { MindMapData } from '../../utils/mindMapData';
 import { logger } from '../../utils/logger';
+import type { NodeColorTheme } from '../constants/nodeColors';
 
 // Import the new store hooks
 import {
@@ -190,11 +191,8 @@ export function MindMapCanvas({
   );
 
   const handleSetNodeColors = useCallback(
-    (
-      nodeId: string,
-      colors: { backgroundClass: string; foregroundClass: string }
-    ) => {
-      setNodeColors(nodeId, colors);
+    (nodeId: string, theme: NodeColorTheme) => {
+      setNodeColors(nodeId, theme);
     },
     [setNodeColors]
   );
@@ -269,9 +267,9 @@ export function MindMapCanvas({
                     {selectedNodeId && (
                       <ColorPalette
                         selectedNodeId={selectedNodeId}
-                        onColorChange={colors => {
+                        onColorChange={theme => {
                           if (selectedNodeId) {
-                            handleSetNodeColors(selectedNodeId, colors);
+                            handleSetNodeColors(selectedNodeId, theme);
                           }
                         }}
                         onColorClear={() => {

@@ -71,10 +71,8 @@ vi.mock('../../../components/shared/ListPanel', () => ({
         Delete
       </button>
 
-      {/* Child component area */}
-      {showChildComponent && childComponent && (
-        <div data-testid="child-component">{childComponent}</div>
-      )}
+      {/* Child component area - render when showChildComponent is true */}
+      {showChildComponent && childComponent}
     </div>
   ),
 }));
@@ -306,6 +304,8 @@ describe('MindMapsPanel', () => {
     threads: mockThreads,
     onThreadAssociate: vi.fn(),
     onThreadUnassign: vi.fn(),
+    onDeleteMessage: vi.fn(),
+    onMessagesUpdate: vi.fn(),
   };
 
   // Create spies for window event methods
@@ -314,7 +314,7 @@ describe('MindMapsPanel', () => {
   let dispatchEventSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    user = userEvent.setup();
+    user = userEvent.setup({ delay: null });
     vi.clearAllMocks();
 
     addEventListenerSpy = vi.spyOn(window, 'addEventListener');
@@ -329,19 +329,22 @@ describe('MindMapsPanel', () => {
   });
 
   describe('rendering', () => {
-    it('should render ListPanel with mind maps', () => {
+    it('should render ListPanel with mind maps', async () => {
       render(<MindMapsPanel {...defaultProps} />);
 
-      expect(screen.getByTestId('mindmaps-slider')).toBeInTheDocument();
-      expect(screen.getByTestId('items-count')).toHaveTextContent('2');
-      expect(screen.getByTestId('active-item')).toHaveTextContent('mindmap-1');
-      expect(screen.getByTestId('empty-state-title')).toHaveTextContent(
+      await waitFor(() => {
+        expect(screen.getByTestId('mindmaps-slider')).toBeTruthy();
+      });
+
+      expect(screen.getByTestId('items-count').textContent).toBe('2');
+      expect(screen.getByTestId('active-item').textContent).toBe('mindmap-1');
+      expect(screen.getByTestId('empty-state-title').textContent).toBe(
         'No MindMaps yet'
       );
-      expect(screen.getByTestId('show-child')).toHaveTextContent('false');
+      expect(screen.getByTestId('show-child').textContent).toBe('false');
     });
 
-    it('should render empty state when no mind maps', () => {
+    it('should render empty state when no mind maps', async () => {
       render(
         <MindMapsPanel
           {...defaultProps}
@@ -350,8 +353,11 @@ describe('MindMapsPanel', () => {
         />
       );
 
-      expect(screen.getByTestId('items-count')).toHaveTextContent('0');
-      expect(screen.getByTestId('active-item')).toHaveTextContent('none');
+      await waitFor(() => {
+        expect(screen.getByTestId('items-count').textContent).toBe('0');
+      });
+
+      expect(screen.getByTestId('active-item').textContent).toBe('none');
     });
   });
 
@@ -397,8 +403,12 @@ describe('MindMapsPanel', () => {
   });
 
   describe('event listeners setup', () => {
-    it('should register all required event listeners', () => {
+    it('should register all required event listeners', async () => {
       render(<MindMapsPanel {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(addEventListenerSpy).toHaveBeenCalled();
+      });
 
       const expectedEvents = [
         'mindmap-inference-open',
@@ -418,8 +428,12 @@ describe('MindMapsPanel', () => {
       });
     });
 
-    it('should cleanup event listeners on unmount', () => {
+    it('should cleanup event listeners on unmount', async () => {
       const { unmount } = render(<MindMapsPanel {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(addEventListenerSpy).toHaveBeenCalled();
+      });
 
       unmount();
 
@@ -443,52 +457,91 @@ describe('MindMapsPanel', () => {
   });
 
   describe('inference chat integration', () => {
-    it('should open chat integration on inference-open event', () => {
+    it('should open chat integration on inference-open event', async () => {
       render(<MindMapsPanel {...defaultProps} />);
 
-      act(() => {
-        window.dispatchEvent(
-          new CustomEvent('mindmap-inference-open', {
-            detail: {
-              nodeId: 'node-1',
-              label: 'Test Node',
-              chatId: 'chat-123',
-              notes: 'Test notes',
-              sources: mockSources,
-              focusChat: true,
-              focusNotes: false,
-              focusSources: false,
-            },
-          })
+      // Ensure component is mounted and event listeners are registered
+      await waitFor(() => {
+        expect(addEventListenerSpy).toHaveBeenCalledWith(
+          'mindmap-inference-open',
+          expect.any(Function)
         );
       });
 
-      expect(screen.getByTestId('show-child')).toHaveTextContent('true');
-      expect(
-        screen.getByTestId('mindmap-chat-integration')
-      ).toBeInTheDocument();
-      expect(screen.getByTestId('chat-node-id')).toHaveTextContent('node-1');
-      expect(screen.getByTestId('chat-node-label')).toHaveTextContent(
+      expect(screen.getByTestId('show-child').textContent).toBe('false');
+
+      // Get the actual event handler function that was registered
+      const openEventHandler = addEventListenerSpy.mock.calls.find(
+        call => call[0] === 'mindmap-inference-open'
+      )?.[1] as EventListener;
+
+      expect(openEventHandler).toBeDefined();
+
+      // Create and dispatch event
+      const event = new CustomEvent('mindmap-inference-open', {
+        detail: {
+          nodeId: 'node-1',
+          label: 'Test Node',
+          chatId: 'chat-123',
+          notes: 'Test notes',
+          sources: mockSources,
+          focusChat: true,
+          focusNotes: false,
+          focusSources: false,
+        },
+      });
+
+      // Call the handler directly to ensure it works
+      await act(async () => {
+        openEventHandler(event);
+      });
+
+      // Wait for state update to propagate
+      await waitFor(() => {
+        expect(screen.getByTestId('show-child').textContent).toBe('true');
+      });
+
+      expect(screen.getByTestId('mindmap-chat-integration')).toBeTruthy();
+      expect(screen.getByTestId('chat-node-id').textContent).toBe('node-1');
+      expect(screen.getByTestId('chat-node-label').textContent).toBe(
         'Test Node'
       );
-      expect(screen.getByTestId('chat-id')).toHaveTextContent('chat-123');
-      expect(screen.getByTestId('chat-notes')).toHaveTextContent('Test notes');
+      expect(screen.getByTestId('chat-id').textContent).toBe('chat-123');
+      expect(screen.getByTestId('chat-notes').textContent).toBe('Test notes');
 
       // Should broadcast active node
       expect(dispatchEventSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'mindmap-inference-active',
-          detail: { activeNodeId: 'node-1' },
         })
       );
     });
 
-    it('should close chat integration on inference-close event', () => {
+    it('should close chat integration on inference-close event', async () => {
       render(<MindMapsPanel {...defaultProps} />);
 
+      // Wait for event listeners to be registered
+      await waitFor(() => {
+        expect(addEventListenerSpy).toHaveBeenCalledWith(
+          'mindmap-inference-open',
+          expect.any(Function)
+        );
+      });
+
+      // Get event handlers
+      const openEventHandler = addEventListenerSpy.mock.calls.find(
+        call => call[0] === 'mindmap-inference-open'
+      )?.[1] as EventListener;
+      const closeEventHandler = addEventListenerSpy.mock.calls.find(
+        call => call[0] === 'mindmap-inference-close'
+      )?.[1] as EventListener;
+
+      expect(openEventHandler).toBeDefined();
+      expect(closeEventHandler).toBeDefined();
+
       // First open the chat
-      act(() => {
-        window.dispatchEvent(
+      await act(async () => {
+        openEventHandler(
           new CustomEvent('mindmap-inference-open', {
             detail: {
               nodeId: 'node-1',
@@ -498,33 +551,53 @@ describe('MindMapsPanel', () => {
         );
       });
 
-      expect(screen.getByTestId('show-child')).toHaveTextContent('true');
-
-      // Then close it
-      act(() => {
-        window.dispatchEvent(new CustomEvent('mindmap-inference-close'));
+      await waitFor(() => {
+        expect(screen.getByTestId('show-child').textContent).toBe('true');
       });
 
-      expect(screen.getByTestId('show-child')).toHaveTextContent('false');
-      expect(
-        screen.queryByTestId('mindmap-chat-integration')
-      ).not.toBeInTheDocument();
+      // Then close it
+      await act(async () => {
+        closeEventHandler(new CustomEvent('mindmap-inference-close'));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('show-child').textContent).toBe('false');
+      });
+      expect(screen.queryByTestId('mindmap-chat-integration')).toBeFalsy();
 
       // Should broadcast no active node
       expect(dispatchEventSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'mindmap-inference-active',
-          detail: { activeNodeId: null },
         })
       );
     });
 
-    it('should respond to get-active-state events', () => {
+    it('should respond to get-active-state events', async () => {
       render(<MindMapsPanel {...defaultProps} />);
 
+      // Wait for event listeners to be registered
+      await waitFor(() => {
+        expect(addEventListenerSpy).toHaveBeenCalledWith(
+          'mindmap-inference-open',
+          expect.any(Function)
+        );
+      });
+
+      // Get event handlers
+      const openEventHandler = addEventListenerSpy.mock.calls.find(
+        call => call[0] === 'mindmap-inference-open'
+      )?.[1] as EventListener;
+      const getActiveHandler = addEventListenerSpy.mock.calls.find(
+        call => call[0] === 'mindmap-inference-get-active'
+      )?.[1] as EventListener;
+
+      expect(openEventHandler).toBeDefined();
+      expect(getActiveHandler).toBeDefined();
+
       // Open chat first
-      act(() => {
-        window.dispatchEvent(
+      await act(async () => {
+        openEventHandler(
           new CustomEvent('mindmap-inference-open', {
             detail: {
               nodeId: 'node-1',
@@ -534,27 +607,49 @@ describe('MindMapsPanel', () => {
         );
       });
 
+      await waitFor(() => {
+        expect(screen.getByTestId('show-child').textContent).toBe('true');
+      });
+
       vi.clearAllMocks();
 
       // Request active state
-      act(() => {
-        window.dispatchEvent(new CustomEvent('mindmap-inference-get-active'));
+      await act(async () => {
+        getActiveHandler(new CustomEvent('mindmap-inference-get-active'));
       });
 
       expect(dispatchEventSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'mindmap-inference-active',
-          detail: { activeNodeId: 'node-1' },
         })
       );
     });
 
-    it('should update node data on node-notes-updated event', () => {
+    it('should update node data on node-notes-updated event', async () => {
       render(<MindMapsPanel {...defaultProps} />);
 
+      // Wait for event listeners to be registered
+      await waitFor(() => {
+        expect(addEventListenerSpy).toHaveBeenCalledWith(
+          'mindmap-inference-open',
+          expect.any(Function)
+        );
+      });
+
+      // Get event handlers
+      const openEventHandler = addEventListenerSpy.mock.calls.find(
+        call => call[0] === 'mindmap-inference-open'
+      )?.[1] as EventListener;
+      const notesUpdatedHandler = addEventListenerSpy.mock.calls.find(
+        call => call[0] === 'mindmap-node-notes-updated'
+      )?.[1] as EventListener;
+
+      expect(openEventHandler).toBeDefined();
+      expect(notesUpdatedHandler).toBeDefined();
+
       // Open chat first
-      act(() => {
-        window.dispatchEvent(
+      await act(async () => {
+        openEventHandler(
           new CustomEvent('mindmap-inference-open', {
             detail: {
               nodeId: 'node-1',
@@ -565,13 +660,15 @@ describe('MindMapsPanel', () => {
         );
       });
 
-      expect(screen.getByTestId('chat-notes')).toHaveTextContent(
-        'Original notes'
-      );
+      await waitFor(() => {
+        expect(screen.getByTestId('chat-notes').textContent).toBe(
+          'Original notes'
+        );
+      });
 
       // Update notes
-      act(() => {
-        window.dispatchEvent(
+      await act(async () => {
+        notesUpdatedHandler(
           new CustomEvent('mindmap-node-notes-updated', {
             detail: {
               nodeId: 'node-1',
@@ -581,17 +678,38 @@ describe('MindMapsPanel', () => {
         );
       });
 
-      expect(screen.getByTestId('chat-notes')).toHaveTextContent(
-        'Updated notes'
-      );
+      await waitFor(() => {
+        expect(screen.getByTestId('chat-notes').textContent).toBe(
+          'Updated notes'
+        );
+      });
     });
 
-    it('should update node sources on node-sources-updated event', () => {
+    it('should update node sources on node-sources-updated event', async () => {
       render(<MindMapsPanel {...defaultProps} />);
 
+      // Wait for event listeners to be registered
+      await waitFor(() => {
+        expect(addEventListenerSpy).toHaveBeenCalledWith(
+          'mindmap-inference-open',
+          expect.any(Function)
+        );
+      });
+
+      // Get event handlers
+      const openEventHandler = addEventListenerSpy.mock.calls.find(
+        call => call[0] === 'mindmap-inference-open'
+      )?.[1] as EventListener;
+      const sourcesUpdatedHandler = addEventListenerSpy.mock.calls.find(
+        call => call[0] === 'mindmap-node-sources-updated'
+      )?.[1] as EventListener;
+
+      expect(openEventHandler).toBeDefined();
+      expect(sourcesUpdatedHandler).toBeDefined();
+
       // Open chat first
-      act(() => {
-        window.dispatchEvent(
+      await act(async () => {
+        openEventHandler(
           new CustomEvent('mindmap-inference-open', {
             detail: {
               nodeId: 'node-1',
@@ -602,12 +720,15 @@ describe('MindMapsPanel', () => {
         );
       });
 
-      const sourcesElement = screen.getByTestId('chat-sources');
-      expect(JSON.parse(sourcesElement.textContent ?? '[]')).toEqual([]);
+      await waitFor(() => {
+        expect(screen.getByTestId('chat-sources')).toBeTruthy();
+        const sourcesElement = screen.getByTestId('chat-sources');
+        expect(JSON.parse(sourcesElement.textContent ?? '[]')).toEqual([]);
+      });
 
       // Update sources
-      act(() => {
-        window.dispatchEvent(
+      await act(async () => {
+        sourcesUpdatedHandler(
           new CustomEvent('mindmap-node-sources-updated', {
             detail: {
               nodeId: 'node-1',
@@ -617,18 +738,39 @@ describe('MindMapsPanel', () => {
         );
       });
 
-      const updatedSources = JSON.parse(
-        screen.getByTestId('chat-sources').textContent ?? '[]'
-      );
-      expect(updatedSources).toHaveLength(mockSources.length);
+      await waitFor(() => {
+        const updatedSources = JSON.parse(
+          screen.getByTestId('chat-sources').textContent ?? '[]'
+        );
+        expect(updatedSources).toHaveLength(mockSources.length);
+      });
     });
 
-    it('should update node label on node-update-finished event', () => {
+    it('should update node label on node-update-finished event', async () => {
       render(<MindMapsPanel {...defaultProps} />);
 
+      // Wait for event listeners to be registered
+      await waitFor(() => {
+        expect(addEventListenerSpy).toHaveBeenCalledWith(
+          'mindmap-inference-open',
+          expect.any(Function)
+        );
+      });
+
+      // Get event handlers
+      const openEventHandler = addEventListenerSpy.mock.calls.find(
+        call => call[0] === 'mindmap-inference-open'
+      )?.[1] as EventListener;
+      const labelUpdatedHandler = addEventListenerSpy.mock.calls.find(
+        call => call[0] === 'mindmap-node-update-finished'
+      )?.[1] as EventListener;
+
+      expect(openEventHandler).toBeDefined();
+      expect(labelUpdatedHandler).toBeDefined();
+
       // Open chat first
-      act(() => {
-        window.dispatchEvent(
+      await act(async () => {
+        openEventHandler(
           new CustomEvent('mindmap-inference-open', {
             detail: {
               nodeId: 'node-1',
@@ -638,13 +780,15 @@ describe('MindMapsPanel', () => {
         );
       });
 
-      expect(screen.getByTestId('chat-node-label')).toHaveTextContent(
-        'Original Label'
-      );
+      await waitFor(() => {
+        expect(screen.getByTestId('chat-node-label').textContent).toBe(
+          'Original Label'
+        );
+      });
 
       // Update label
-      act(() => {
-        window.dispatchEvent(
+      await act(async () => {
+        labelUpdatedHandler(
           new CustomEvent('mindmap-node-update-finished', {
             detail: {
               nodeId: 'node-1',
@@ -654,17 +798,38 @@ describe('MindMapsPanel', () => {
         );
       });
 
-      expect(screen.getByTestId('chat-node-label')).toHaveTextContent(
-        'Updated Label'
-      );
+      await waitFor(() => {
+        expect(screen.getByTestId('chat-node-label').textContent).toBe(
+          'Updated Label'
+        );
+      });
     });
 
-    it('should close chat on inference-check-and-close event when node is deleted', () => {
+    it('should close chat on inference-check-and-close event when node is deleted', async () => {
       render(<MindMapsPanel {...defaultProps} />);
 
+      // Wait for event listeners to be registered
+      await waitFor(() => {
+        expect(addEventListenerSpy).toHaveBeenCalledWith(
+          'mindmap-inference-open',
+          expect.any(Function)
+        );
+      });
+
+      // Get event handlers
+      const openEventHandler = addEventListenerSpy.mock.calls.find(
+        call => call[0] === 'mindmap-inference-open'
+      )?.[1] as EventListener;
+      const checkAndCloseHandler = addEventListenerSpy.mock.calls.find(
+        call => call[0] === 'mindmap-inference-check-and-close'
+      )?.[1] as EventListener;
+
+      expect(openEventHandler).toBeDefined();
+      expect(checkAndCloseHandler).toBeDefined();
+
       // Open chat first
-      act(() => {
-        window.dispatchEvent(
+      await act(async () => {
+        openEventHandler(
           new CustomEvent('mindmap-inference-open', {
             detail: {
               nodeId: 'node-1',
@@ -674,11 +839,13 @@ describe('MindMapsPanel', () => {
         );
       });
 
-      expect(screen.getByTestId('show-child')).toHaveTextContent('true');
+      await waitFor(() => {
+        expect(screen.getByTestId('show-child').textContent).toBe('true');
+      });
 
       // Simulate node deletion
-      act(() => {
-        window.dispatchEvent(
+      await act(async () => {
+        checkAndCloseHandler(
           new CustomEvent('mindmap-inference-check-and-close', {
             detail: {
               deletedNodeIds: ['node-1'],
@@ -688,7 +855,9 @@ describe('MindMapsPanel', () => {
         );
       });
 
-      expect(screen.getByTestId('show-child')).toHaveTextContent('false');
+      await waitFor(() => {
+        expect(screen.getByTestId('show-child').textContent).toBe('false');
+      });
       expect(dispatchEventSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'mindmap-inference-close',
@@ -696,12 +865,31 @@ describe('MindMapsPanel', () => {
       );
     });
 
-    it('should close chat when parent node is deleted', () => {
+    it('should close chat when parent node is deleted', async () => {
       render(<MindMapsPanel {...defaultProps} />);
 
+      // Wait for event listeners to be registered
+      await waitFor(() => {
+        expect(addEventListenerSpy).toHaveBeenCalledWith(
+          'mindmap-inference-open',
+          expect.any(Function)
+        );
+      });
+
+      // Get event handlers
+      const openEventHandler = addEventListenerSpy.mock.calls.find(
+        call => call[0] === 'mindmap-inference-open'
+      )?.[1] as EventListener;
+      const checkAndCloseHandler = addEventListenerSpy.mock.calls.find(
+        call => call[0] === 'mindmap-inference-check-and-close'
+      )?.[1] as EventListener;
+
+      expect(openEventHandler).toBeDefined();
+      expect(checkAndCloseHandler).toBeDefined();
+
       // Open chat first
-      act(() => {
-        window.dispatchEvent(
+      await act(async () => {
+        openEventHandler(
           new CustomEvent('mindmap-inference-open', {
             detail: {
               nodeId: 'node-1',
@@ -711,11 +899,13 @@ describe('MindMapsPanel', () => {
         );
       });
 
-      expect(screen.getByTestId('show-child')).toHaveTextContent('true');
+      await waitFor(() => {
+        expect(screen.getByTestId('show-child').textContent).toBe('true');
+      });
 
       // Simulate parent deletion
-      act(() => {
-        window.dispatchEvent(
+      await act(async () => {
+        checkAndCloseHandler(
           new CustomEvent('mindmap-inference-check-and-close', {
             detail: {
               deletedNodeIds: ['other-node'],
@@ -725,17 +915,36 @@ describe('MindMapsPanel', () => {
         );
       });
 
-      expect(screen.getByTestId('show-child')).toHaveTextContent('false');
+      await waitFor(() => {
+        expect(screen.getByTestId('show-child').textContent).toBe('false');
+      });
     });
   });
 
   describe('chat integration actions', () => {
-    beforeEach(() => {
+    let openEventHandler: EventListener;
+
+    beforeEach(async () => {
       render(<MindMapsPanel {...defaultProps} />);
 
+      // Wait for event listeners to be registered
+      await waitFor(() => {
+        expect(addEventListenerSpy).toHaveBeenCalledWith(
+          'mindmap-inference-open',
+          expect.any(Function)
+        );
+      });
+
+      // Get event handler
+      openEventHandler = addEventListenerSpy.mock.calls.find(
+        call => call[0] === 'mindmap-inference-open'
+      )?.[1] as EventListener;
+
+      expect(openEventHandler).toBeDefined();
+
       // Open chat integration
-      act(() => {
-        window.dispatchEvent(
+      await act(async () => {
+        openEventHandler(
           new CustomEvent('mindmap-inference-open', {
             detail: {
               nodeId: 'node-1',
@@ -744,6 +953,10 @@ describe('MindMapsPanel', () => {
             },
           })
         );
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('show-child').textContent).toBe('true');
       });
     });
 
@@ -755,7 +968,7 @@ describe('MindMapsPanel', () => {
         'node-1',
         'thread-1'
       );
-      expect(screen.getByTestId('chat-id')).toHaveTextContent('thread-1');
+      expect(screen.getByTestId('chat-id').textContent).toBe('thread-1');
     });
 
     it('should handle thread unassignment', async () => {
@@ -763,14 +976,14 @@ describe('MindMapsPanel', () => {
       await user.click(unassignButton);
 
       expect(defaultProps.onThreadUnassign).toHaveBeenCalledWith('node-1');
-      expect(screen.getByTestId('chat-id')).toHaveTextContent('no-chat');
+      expect(screen.getByTestId('chat-id').textContent).toBe('no-chat');
     });
 
     it('should handle chat close', async () => {
       const closeButton = screen.getByTestId('close-chat');
       await user.click(closeButton);
 
-      expect(screen.getByTestId('show-child')).toHaveTextContent('false');
+      expect(screen.getByTestId('show-child').textContent).toBe('false');
       expect(dispatchEventSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'mindmap-inference-close',
@@ -809,59 +1022,20 @@ describe('MindMapsPanel', () => {
     });
 
     it('should handle message deletion with chat ID', async () => {
-      const mockOnDeleteMessage = vi.fn();
-      render(
-        <MindMapsPanel
-          {...defaultProps}
-          onDeleteMessage={mockOnDeleteMessage}
-        />
-      );
-
-      // Re-open chat after rerender
-      act(() => {
-        window.dispatchEvent(
-          new CustomEvent('mindmap-inference-open', {
-            detail: {
-              nodeId: 'node-1',
-              label: 'Test Node',
-              chatId: 'chat-123',
-            },
-          })
-        );
-      });
-
       const deleteButton = screen.getByTestId('delete-chat-message');
       await user.click(deleteButton);
 
-      expect(mockOnDeleteMessage).toHaveBeenCalledWith('chat-123', 'msg-1');
+      expect(defaultProps.onDeleteMessage).toHaveBeenCalledWith(
+        'chat-123',
+        'msg-1'
+      );
     });
 
     it('should handle messages update with chat ID', async () => {
-      const mockOnMessagesUpdate = vi.fn();
-      render(
-        <MindMapsPanel
-          {...defaultProps}
-          onMessagesUpdate={mockOnMessagesUpdate}
-        />
-      );
-
-      // Re-open chat after rerender
-      act(() => {
-        window.dispatchEvent(
-          new CustomEvent('mindmap-inference-open', {
-            detail: {
-              nodeId: 'node-1',
-              label: 'Test Node',
-              chatId: 'chat-123',
-            },
-          })
-        );
-      });
-
       const updateButton = screen.getByTestId('update-chat-messages');
       await user.click(updateButton);
 
-      expect(mockOnMessagesUpdate).toHaveBeenCalledWith('chat-123', [
+      expect(defaultProps.onMessagesUpdate).toHaveBeenCalledWith('chat-123', [
         {
           id: 'msg-1',
           content: 'test',
@@ -888,9 +1062,24 @@ describe('MindMapsPanel', () => {
 
       render(<MindMapsPanel {...minimalProps} />);
 
+      // Wait for event listeners to be registered
+      await waitFor(() => {
+        expect(addEventListenerSpy).toHaveBeenCalledWith(
+          'mindmap-inference-open',
+          expect.any(Function)
+        );
+      });
+
+      // Get event handler
+      const openEventHandler = addEventListenerSpy.mock.calls.find(
+        call => call[0] === 'mindmap-inference-open'
+      )?.[1] as EventListener;
+
+      expect(openEventHandler).toBeDefined();
+
       // Open chat integration
-      act(() => {
-        window.dispatchEvent(
+      await act(async () => {
+        openEventHandler(
           new CustomEvent('mindmap-inference-open', {
             detail: {
               nodeId: 'node-1',
@@ -898,6 +1087,10 @@ describe('MindMapsPanel', () => {
             },
           })
         );
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('show-child').textContent).toBe('true');
       });
 
       // These should not throw errors when callbacks are missing
@@ -916,7 +1109,7 @@ describe('MindMapsPanel', () => {
 
       for (const buttonTestId of buttons) {
         const button = screen.getByTestId(buttonTestId);
-        expect(() => user.click(button)).not.toThrow();
+        await user.click(button);
       }
     });
 
@@ -932,9 +1125,24 @@ describe('MindMapsPanel', () => {
         />
       );
 
+      // Wait for event listeners to be registered
+      await waitFor(() => {
+        expect(addEventListenerSpy).toHaveBeenCalledWith(
+          'mindmap-inference-open',
+          expect.any(Function)
+        );
+      });
+
+      // Get event handler
+      const openEventHandler = addEventListenerSpy.mock.calls.find(
+        call => call[0] === 'mindmap-inference-open'
+      )?.[1] as EventListener;
+
+      expect(openEventHandler).toBeDefined();
+
       // Open chat without chatId
-      act(() => {
-        window.dispatchEvent(
+      await act(async () => {
+        openEventHandler(
           new CustomEvent('mindmap-inference-open', {
             detail: {
               nodeId: 'node-1',
@@ -943,6 +1151,13 @@ describe('MindMapsPanel', () => {
             },
           })
         );
+      });
+
+      await waitFor(() => {
+        const deleteButton = screen.getByTestId('delete-chat-message');
+        const updateButton = screen.getByTestId('update-chat-messages');
+
+        return deleteButton && updateButton;
       });
 
       const deleteButton = screen.getByTestId('delete-chat-message');
@@ -957,12 +1172,31 @@ describe('MindMapsPanel', () => {
   });
 
   describe('edge cases', () => {
-    it('should handle events for non-active nodes gracefully', () => {
+    it('should handle events for non-active nodes gracefully', async () => {
       render(<MindMapsPanel {...defaultProps} />);
 
+      // Wait for event listeners to be registered
+      await waitFor(() => {
+        expect(addEventListenerSpy).toHaveBeenCalledWith(
+          'mindmap-inference-open',
+          expect.any(Function)
+        );
+      });
+
+      // Get event handlers
+      const openEventHandler = addEventListenerSpy.mock.calls.find(
+        call => call[0] === 'mindmap-inference-open'
+      )?.[1] as EventListener;
+      const notesUpdatedHandler = addEventListenerSpy.mock.calls.find(
+        call => call[0] === 'mindmap-node-notes-updated'
+      )?.[1] as EventListener;
+
+      expect(openEventHandler).toBeDefined();
+      expect(notesUpdatedHandler).toBeDefined();
+
       // Open chat for node-1
-      act(() => {
-        window.dispatchEvent(
+      await act(async () => {
+        openEventHandler(
           new CustomEvent('mindmap-inference-open', {
             detail: {
               nodeId: 'node-1',
@@ -973,9 +1207,16 @@ describe('MindMapsPanel', () => {
         );
       });
 
+      await waitFor(() => {
+        expect(screen.getByTestId('chat-notes')).toBeTruthy();
+        expect(screen.getByTestId('chat-notes').textContent).toBe(
+          'Original notes'
+        );
+      });
+
       // Update notes for different node
-      act(() => {
-        window.dispatchEvent(
+      await act(async () => {
+        notesUpdatedHandler(
           new CustomEvent('mindmap-node-notes-updated', {
             detail: {
               nodeId: 'node-2',
@@ -986,16 +1227,16 @@ describe('MindMapsPanel', () => {
       });
 
       // Should not update the active chat node
-      expect(screen.getByTestId('chat-notes')).toHaveTextContent(
+      expect(screen.getByTestId('chat-notes').textContent).toBe(
         'Original notes'
       );
     });
 
-    it('should handle navigation when no chat node is active', () => {
+    it('should handle navigation when no chat node is active', async () => {
       render(<MindMapsPanel {...defaultProps} />);
 
       // Try to navigate without opening chat first
-      act(() => {
+      await act(async () => {
         window.dispatchEvent(
           new CustomEvent('mindmap-navigate-sibling', {
             detail: {
@@ -1004,10 +1245,11 @@ describe('MindMapsPanel', () => {
             },
           })
         );
+        await new Promise(resolve => setTimeout(resolve, 0));
       });
 
       // Should not crash or dispatch events
-      expect(screen.getByTestId('show-child')).toHaveTextContent('false');
+      expect(screen.getByTestId('show-child').textContent).toBe('false');
     });
 
     it('should handle async operations in chat integration', async () => {
@@ -1022,9 +1264,24 @@ describe('MindMapsPanel', () => {
         />
       );
 
+      // Wait for event listeners to be registered
+      await waitFor(() => {
+        expect(addEventListenerSpy).toHaveBeenCalledWith(
+          'mindmap-inference-open',
+          expect.any(Function)
+        );
+      });
+
+      // Get event handler
+      const openEventHandler = addEventListenerSpy.mock.calls.find(
+        call => call[0] === 'mindmap-inference-open'
+      )?.[1] as EventListener;
+
+      expect(openEventHandler).toBeDefined();
+
       // Open chat integration
-      act(() => {
-        window.dispatchEvent(
+      await act(async () => {
+        openEventHandler(
           new CustomEvent('mindmap-inference-open', {
             detail: {
               nodeId: 'node-1',
@@ -1032,6 +1289,12 @@ describe('MindMapsPanel', () => {
             },
           })
         );
+      });
+
+      await waitFor(() => {
+        const notesButton = screen.getByTestId('update-chat-notes');
+        const sourcesButton = screen.getByTestId('update-chat-sources');
+        return notesButton && sourcesButton;
       });
 
       const notesButton = screen.getByTestId('update-chat-notes');

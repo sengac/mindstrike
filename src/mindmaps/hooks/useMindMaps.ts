@@ -1,6 +1,14 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, startTransition } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { logger } from '../../utils/logger';
+import { useMindMapState } from './useMindMapState';
+import { useDebouncedSave } from './useDebouncedSave';
+import { mindMapApi } from '../services/mindMapApi';
+import {
+  sortMindMapsByDate,
+  selectDefaultMindMap,
+  createNewMindMap,
+} from '../utils/mindMapUtils';
 
 export interface MindMap {
   id: string;
@@ -11,188 +19,134 @@ export interface MindMap {
   [key: string]: unknown; // Allow additional properties for ListItem compatibility
 }
 
+/**
+ * Main hook for managing mind maps
+ * Composes state management, API operations, and business logic
+ */
 export function useMindMaps() {
   const workspaceVersion = useAppStore(state => state.workspaceVersion);
-  const [mindMaps, setMindMaps] = useState<MindMap[]>([]);
-  const [activeMindMapId, setActiveMindMapId] = useState<string | null>(null);
-  const [isLoaded, setIsLoaded] = useState(false);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const {
+    mindMaps,
+    setMindMaps,
+    activeMindMapId,
+    setActiveMindMapId,
+    activeMindMap,
+    isLoaded,
+    setIsLoaded,
+  } = useMindMapState();
 
-  const loadMindMaps = useCallback(async (preserveActiveId = false) => {
+  // Debounced save function
+  const save = useDebouncedSave(mindMapApi.save);
+
+  // Pure data loading - no dependencies on state
+  const loadMindMapsData = useCallback(async () => {
     try {
-      const response = await fetch('/api/mindmaps');
-      if (response.ok) {
-        const data = await response.json();
-        const parsedMindMaps = data
-          .map((graph: Record<string, unknown>) => ({
-            ...graph,
-            createdAt: new Date(graph.createdAt as string),
-            updatedAt: new Date(graph.updatedAt as string),
-          }))
-          .sort(
-            (a: MindMap, b: MindMap) =>
-              b.updatedAt.getTime() - a.updatedAt.getTime()
-          );
-        setMindMaps(parsedMindMaps);
-
-        // Set active MindMap - preserve current selection if requested, otherwise pick most recently updated
-        if (parsedMindMaps.length > 0) {
-          if (preserveActiveId) {
-            // Keep current active mindmap if it still exists
-            if (
-              activeMindMapId &&
-              parsedMindMaps.some((m: MindMap) => m.id === activeMindMapId)
-            ) {
-              // Current active mindmap still exists, keep it
-            } else {
-              // Current active mindmap doesn't exist, pick most recently updated
-              setActiveMindMapId(parsedMindMaps[0].id);
-            }
-          } else {
-            // Always pick the most recently updated mindmap (first in sorted array)
-            setActiveMindMapId(parsedMindMaps[0].id);
-          }
-        }
-      }
+      const data = await mindMapApi.fetchAll();
+      return sortMindMapsByDate(data);
     } catch (error) {
-      logger.error('Failed to load mindmaps from file:', error);
-    } finally {
-      setIsLoaded(true);
+      logger.error('Failed to load mindmaps:', error);
+      return [];
     }
-  }, []);
+  }, []); // No dependencies!
 
-  // Load mindmaps from mindstrike-mindmaps.json file on mount and when workspace changes
-  useEffect(() => {
-    loadMindMaps();
-  }, [loadMindMaps, workspaceVersion]);
+  // Load and update state
+  const loadMindMaps = useCallback(
+    async (preserveActiveId = false) => {
+      const sorted = await loadMindMapsData();
 
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, []);
+      startTransition(() => {
+        setMindMaps(sorted);
 
-  // Save mindmaps to mindstrike-mindmaps.json file with debouncing
-  const saveMindMaps = useCallback(
-    async (graphsToSave: MindMap[], immediate = false) => {
-      if (immediate) {
-        // Immediate save without debouncing
-        try {
-          const response = await fetch('/api/mindmaps', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(graphsToSave),
-          });
-
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+        if (!preserveActiveId || !activeMindMapId) {
+          // Select first if not preserving or no current selection
+          const newActiveId = sorted.length > 0 ? sorted[0].id : null;
+          setActiveMindMapId(newActiveId);
+        } else if (preserveActiveId && activeMindMapId) {
+          // Check if current selection still exists
+          const stillExists = sorted.some(m => m.id === activeMindMapId);
+          if (!stillExists) {
+            const newActiveId = sorted.length > 0 ? sorted[0].id : null;
+            setActiveMindMapId(newActiveId);
           }
-        } catch (error) {
-          logger.error('Failed to save mindmaps to file:', error);
-        }
-      } else {
-        // Clear any existing timeout
-        if (saveTimeoutRef.current) {
-          clearTimeout(saveTimeoutRef.current);
         }
 
-        // Debounce the save operation
-        saveTimeoutRef.current = setTimeout(async () => {
-          try {
-            const response = await fetch('/api/mindmaps', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify(graphsToSave),
-            });
-
-            if (!response.ok) {
-              throw new Error(`HTTP error! status: ${response.status}`);
-            }
-          } catch (error) {
-            logger.error('Failed to save mindmaps to file:', error);
-          }
-        }, 500);
-      }
+        setIsLoaded(true);
+      });
     },
-    []
+    [
+      loadMindMapsData,
+      setMindMaps,
+      setActiveMindMapId,
+      setIsLoaded,
+      activeMindMapId,
+    ]
   );
 
+  // Initial load - separate effect with minimal dependencies
+  useEffect(() => {
+    if (!isLoaded) {
+      loadMindMaps(false).catch(error => {
+        logger.error('Failed to load mindmaps on mount:', error);
+      });
+    }
+  }, [workspaceVersion]); // Only depend on workspace, not loadMindMaps
+
+  // CRUD operations
   const createMindMap = useCallback(
     async (name?: string): Promise<string> => {
-      const newMindMap: MindMap = {
-        id: Date.now().toString(),
-        name: name || `MindMap ${mindMaps.length + 1}`,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+      const newMindMap = createNewMindMap(name, mindMaps.length);
+      const updated = [newMindMap, ...mindMaps];
 
-      const updatedMindMaps = [newMindMap, ...mindMaps];
-      setMindMaps(updatedMindMaps);
-
-      // Save the mindmaps immediately (no debounce) to ensure the file is written with initial data
-      await saveMindMaps(updatedMindMaps, true);
-
-      // Only set active mindmap after saving is complete
+      setMindMaps(updated);
       setActiveMindMapId(newMindMap.id);
 
+      await save(updated, true); // Save immediately
       return newMindMap.id;
     },
-    [mindMaps, saveMindMaps]
+    [mindMaps, setMindMaps, setActiveMindMapId, save]
   );
 
   const deleteMindMap = useCallback(
-    async (graphId: string) => {
-      const updatedMindMaps = mindMaps.filter(g => g.id !== graphId);
-      setMindMaps(updatedMindMaps);
+    async (id: string) => {
+      const updated = mindMaps.filter(m => m.id !== id);
 
-      if (activeMindMapId === graphId) {
-        const newActiveId =
-          updatedMindMaps.length > 0 ? updatedMindMaps[0].id : null;
-        setActiveMindMapId(newActiveId);
-      }
+      startTransition(() => {
+        setMindMaps(updated);
+        if (activeMindMapId === id) {
+          const newActiveId = selectDefaultMindMap(updated, null, false);
+          setActiveMindMapId(newActiveId);
+        }
+      });
 
-      await saveMindMaps(updatedMindMaps);
+      await save(updated);
     },
-    [mindMaps, activeMindMapId, saveMindMaps]
+    [mindMaps, activeMindMapId, setMindMaps, setActiveMindMapId, save]
   );
 
   const renameMindMap = useCallback(
-    async (graphId: string, newName: string) => {
-      const updatedMindMaps = mindMaps
-        .map(graph =>
-          graph.id === graphId
-            ? { ...graph, name: newName, updatedAt: new Date() }
-            : graph
-        )
-        .sort(
-          (a: MindMap, b: MindMap) =>
-            b.updatedAt.getTime() - a.updatedAt.getTime()
-        );
-      setMindMaps(updatedMindMaps);
-      await saveMindMaps(updatedMindMaps);
+    async (id: string, newName: string) => {
+      const updated = mindMaps.map(m =>
+        m.id === id ? { ...m, name: newName, updatedAt: new Date() } : m
+      );
+      const sorted = sortMindMapsByDate(updated);
+
+      setMindMaps(sorted);
+      await save(sorted);
     },
-    [mindMaps, saveMindMaps]
+    [mindMaps, setMindMaps, save]
   );
 
-  const getActiveMindMap = useCallback(() => {
-    return mindMaps.find(g => g.id === activeMindMapId) || null;
-  }, [mindMaps, activeMindMapId]);
-
-  const selectMindMap = useCallback(async (graphId: string) => {
-    setActiveMindMapId(graphId);
-  }, []);
+  const selectMindMap = useCallback(
+    (id: string) => {
+      setActiveMindMapId(id);
+    },
+    [setActiveMindMapId]
+  );
 
   return {
     mindMaps,
     activeMindMapId,
-    activeMindMap: getActiveMindMap(),
+    activeMindMap,
     isLoaded,
     loadMindMaps,
     createMindMap,

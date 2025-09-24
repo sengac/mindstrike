@@ -31,5 +31,12 @@ export default defineConfig({
     mockReset: true,
     clearMocks: true,
     restoreMocks: true,
+    isolate: true, // Enable test isolation
+    pool: 'threads',
+    poolOptions: {
+      threads: {
+        singleThread: true, // Run tests sequentially in a single thread
+      },
+    },
   },
 });

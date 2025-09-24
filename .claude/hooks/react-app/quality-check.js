@@ -1195,6 +1195,75 @@ class QualityChecker {
         });
       }
 
+      // Check for void operator workaround
+      const voidOperatorRule = config._fileConfig.rules?.voidOperator || {};
+      if (
+        voidOperatorRule.enabled !== false &&
+        !this.filePath.endsWith('quality-check.js')
+      ) {
+        // Skip checking the quality-check.js file itself to avoid recursive issues
+        // Common patterns where void is used to suppress no-unused-expressions
+        const voidPatterns = [
+          // void expressions
+          {
+            pattern: /\bvoid\s+[^;]+/,
+            description: 'void operator usage',
+          },
+          // void with function calls
+          {
+            pattern: /\bvoid\s*\(/,
+            description: 'void operator with parentheses',
+          },
+          // void 0 pattern
+          {
+            pattern: /\bvoid\s+0\b/,
+            description: 'void 0 usage',
+          },
+        ];
+
+        lines.forEach((line, index) => {
+          // Skip comments
+          const trimmedLine = line.trim();
+          if (trimmedLine.startsWith('//') || trimmedLine.startsWith('*')) {
+            return;
+          }
+
+          // Skip legitimate void usage (e.g., in type definitions)
+          if (
+            // TypeScript void return type
+            trimmedLine.includes(': void') ||
+            trimmedLine.includes('<void>') ||
+            trimmedLine.includes('Promise<void>') ||
+            // Function return type
+            trimmedLine.includes('=> void') ||
+            (trimmedLine.includes('function') && trimmedLine.includes('void'))
+          ) {
+            return;
+          }
+
+          for (const { pattern, description } of voidPatterns) {
+            if (pattern.test(line)) {
+              const severity = voidOperatorRule.severity || 'error';
+              const message =
+                voidOperatorRule.message ||
+                "Don't use void operator to suppress no-unused-expressions. Fix the underlying issue or use proper patterns.";
+
+              if (severity === 'error') {
+                this.errors.push(
+                  `Found ${description} in ${this.filePath} - ${message}`
+                );
+                console.error(`  Line ${index + 1}: ${line.trim()}`);
+                foundIssues = true;
+              } else {
+                // Warning level - just warn, don't block
+                log.warning(`${description} at line ${index + 1}: ${message}`);
+              }
+              break; // Only report once per line
+            }
+          }
+        });
+      }
+
       if (!foundIssues) {
         log.success('No common issues found');
       }
@@ -1495,7 +1564,8 @@ async function main() {
       e.includes('were auto-fixed') ||
       e.includes('CommonJS syntax') ||
       e.includes('ESLint disable comment') ||
-      e.includes('underscore-prefixed')
+      e.includes('underscore-prefixed') ||
+      e.includes('void operator')
   );
 
   const dependencyWarnings = errors.filter(e => !editedFileErrors.includes(e));

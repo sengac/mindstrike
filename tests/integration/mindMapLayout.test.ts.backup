@@ -1,0 +1,1092 @@
+/**
+ * Integration test for MindMapLayoutManager
+ * Tests the recursive space allocation layout algorithm
+ */
+
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { Node, Edge } from 'reactflow';
+import type { MindMapNodeData } from '../../src/types/mindMap';
+
+// Mock the dependencies before importing the class
+vi.mock('../../src/mindmaps/services/textMeasurementService.js', () => ({
+  calculateTextDimensions: vi.fn().mockReturnValue({ width: 100, height: 40 }),
+}));
+
+vi.mock('../../src/mindmaps/services/nodeSizingStrategy.js', () => ({
+  createDefaultSizingStrategy: vi.fn().mockReturnValue({
+    calculateNodeSize: vi.fn().mockImplementation((text: string) => ({
+      width: Math.max(text.length * 8 + 40, 100), // Rough text width estimation
+      height: text.includes('\n') ? 60 : 40, // Multi-line vs single line
+    })),
+  }),
+  DefaultNodeSizingStrategy: vi.fn().mockImplementation(() => ({
+    calculateNodeSize: vi.fn().mockImplementation((text: string) => ({
+      width: Math.max(text.length * 8 + 40, 100), // Rough text width estimation
+      height: text.includes('\n') ? 60 : 40, // Multi-line vs single line
+    })),
+  })),
+}));
+
+import { MindMapLayoutManager } from '../../src/utils/mindMapLayout.js';
+
+describe('MindMapLayoutManager - Recursive Space Allocation Algorithm', () => {
+  let layoutManager: MindMapLayoutManager;
+
+  beforeEach(() => {
+    layoutManager = new MindMapLayoutManager();
+  });
+
+  it('should layout a simple parent-child tree with space allocation', async () => {
+    const nodes: Node<MindMapNodeData>[] = [
+      {
+        id: 'root',
+        type: 'mindMapNode',
+        position: { x: 0, y: 0 },
+        data: {
+          id: 'root',
+          label: 'Root Node',
+          isRoot: true,
+          level: 0,
+          hasChildren: true,
+          isCollapsed: false,
+          isDragging: false,
+          isDropTarget: false,
+          dropPosition: null,
+          layout: 'LR',
+          colorTheme: null,
+        },
+      },
+      {
+        id: 'child1',
+        type: 'mindMapNode',
+        position: { x: 0, y: 0 },
+        data: {
+          id: 'child1',
+          label: 'Child Node 1',
+          isRoot: false,
+          level: 1,
+          hasChildren: false,
+          isCollapsed: false,
+          isDragging: false,
+          isDropTarget: false,
+          dropPosition: null,
+          layout: 'LR',
+          colorTheme: null,
+        },
+      },
+      {
+        id: 'child2',
+        type: 'mindMapNode',
+        position: { x: 0, y: 0 },
+        data: {
+          id: 'child2',
+          label: 'Child Node 2',
+          isRoot: false,
+          level: 1,
+          hasChildren: false,
+          isCollapsed: false,
+          isDragging: false,
+          isDropTarget: false,
+          dropPosition: null,
+          layout: 'LR',
+          colorTheme: null,
+        },
+      },
+    ];
+
+    const edges: Edge[] = [
+      { id: 'e1', source: 'root', target: 'child1' },
+      { id: 'e2', source: 'root', target: 'child2' },
+    ];
+
+    const result = await layoutManager.arrangeNodes(nodes, edges, 'root', 'LR');
+
+    // Check that all nodes are positioned
+    expect(result).toHaveLength(3);
+
+    const root = result.find(n => n.id === 'root')!;
+    const child1 = result.find(n => n.id === 'child1')!;
+    const child2 = result.find(n => n.id === 'child2')!;
+
+    // Root should be positioned around the center area (600, 400 is the base)
+    expect(root.position.x).toBeCloseTo(600, 0);
+    expect(root.position.y).toBeGreaterThan(300);
+    expect(root.position.y).toBeLessThan(500);
+
+    // Children should be to the right of root (LR layout) with proper spacing
+    expect(child1.position.x).toBeGreaterThan(root.position.x + 200);
+    expect(child2.position.x).toBeGreaterThan(root.position.x + 200);
+    expect(child1.position.x).toBeCloseTo(child2.position.x, 10); // Same depth level
+
+    // Children should have different Y positions (space allocated proportionally)
+    const yDifference = Math.abs(child1.position.y - child2.position.y);
+    expect(yDifference).toBeGreaterThan(80); // At least minimum node spacing
+
+    // All nodes should have dimensions calculated
+    expect(root.data.width).toBeGreaterThan(0);
+    expect(root.data.height).toBeGreaterThan(0);
+    expect(child1.data.width).toBeGreaterThan(0);
+    expect(child1.data.height).toBeGreaterThan(0);
+  });
+
+  it('should handle deeply nested tree structures', async () => {
+    const nodes: Node<MindMapNodeData>[] = [
+      {
+        id: 'root',
+        type: 'mindMapNode',
+        position: { x: 0, y: 0 },
+        data: {
+          id: 'root',
+          label: 'Root',
+          isRoot: true,
+          level: 0,
+          hasChildren: true,
+          isCollapsed: false,
+          isDragging: false,
+          isDropTarget: false,
+          dropPosition: null,
+          layout: 'LR',
+          colorTheme: null,
+        },
+      },
+      {
+        id: 'branch1',
+        type: 'mindMapNode',
+        position: { x: 0, y: 0 },
+        data: {
+          id: 'branch1',
+          label: 'Branch 1',
+          isRoot: false,
+          level: 1,
+          hasChildren: true,
+          isCollapsed: false,
+          isDragging: false,
+          isDropTarget: false,
+          dropPosition: null,
+          layout: 'LR',
+          colorTheme: null,
+        },
+      },
+      {
+        id: 'leaf1',
+        type: 'mindMapNode',
+        position: { x: 0, y: 0 },
+        data: {
+          id: 'leaf1',
+          label: 'Leaf 1',
+          isRoot: false,
+          level: 2,
+          hasChildren: false,
+          isCollapsed: false,
+          isDragging: false,
+          isDropTarget: false,
+          dropPosition: null,
+          layout: 'LR',
+          colorTheme: null,
+        },
+      },
+    ];
+
+    const edges: Edge[] = [
+      { id: 'e1', source: 'root', target: 'branch1' },
+      { id: 'e2', source: 'branch1', target: 'leaf1' },
+    ];
+
+    const result = await layoutManager.arrangeNodes(nodes, edges, 'root', 'LR');
+
+    const root = result.find(n => n.id === 'root')!;
+    const branch1 = result.find(n => n.id === 'branch1')!;
+    const leaf1 = result.find(n => n.id === 'leaf1')!;
+
+    // Check progressive depth positioning (left to right)
+    expect(root.position.x).toBeLessThan(branch1.position.x);
+    expect(branch1.position.x).toBeLessThan(leaf1.position.x);
+
+    // Each level should have reasonable spacing
+    expect(branch1.position.x - root.position.x).toBeGreaterThan(200);
+    expect(leaf1.position.x - branch1.position.x).toBeGreaterThan(200);
+  });
+
+  it('should center parent within allocated space relative to children', async () => {
+    const nodes: Node<MindMapNodeData>[] = [
+      {
+        id: 'root',
+        type: 'mindMapNode',
+        position: { x: 0, y: 0 },
+        data: {
+          id: 'root',
+          label: 'Parent',
+          isRoot: true,
+          level: 0,
+          hasChildren: true,
+          isCollapsed: false,
+          isDragging: false,
+          isDropTarget: false,
+          dropPosition: null,
+          layout: 'LR',
+          colorTheme: null,
+        },
+      },
+      {
+        id: 'child1',
+        type: 'mindMapNode',
+        position: { x: 0, y: 0 },
+        data: {
+          id: 'child1',
+          label: 'Top Child',
+          isRoot: false,
+          level: 1,
+          hasChildren: false,
+          isCollapsed: false,
+          isDragging: false,
+          isDropTarget: false,
+          dropPosition: null,
+          layout: 'LR',
+          colorTheme: null,
+        },
+      },
+      {
+        id: 'child2',
+        type: 'mindMapNode',
+        position: { x: 0, y: 0 },
+        data: {
+          id: 'child2',
+          label: 'Middle Child',
+          isRoot: false,
+          level: 1,
+          hasChildren: false,
+          isCollapsed: false,
+          isDragging: false,
+          isDropTarget: false,
+          dropPosition: null,
+          layout: 'LR',
+          colorTheme: null,
+        },
+      },
+      {
+        id: 'child3',
+        type: 'mindMapNode',
+        position: { x: 0, y: 0 },
+        data: {
+          id: 'child3',
+          label: 'Bottom Child',
+          isRoot: false,
+          level: 1,
+          hasChildren: false,
+          isCollapsed: false,
+          isDragging: false,
+          isDropTarget: false,
+          dropPosition: null,
+          layout: 'LR',
+          colorTheme: null,
+        },
+      },
+    ];
+
+    const edges: Edge[] = [
+      { id: 'e1', source: 'root', target: 'child1' },
+      { id: 'e2', source: 'root', target: 'child2' },
+      { id: 'e3', source: 'root', target: 'child3' },
+    ];
+
+    const result = await layoutManager.arrangeNodes(nodes, edges, 'root', 'LR');
+
+    const root = result.find(n => n.id === 'root')!;
+    const child1 = result.find(n => n.id === 'child1')!;
+    const child3 = result.find(n => n.id === 'child3')!;
+
+    // Calculate center positions for parent and children span
+    const rootCenter = root.position.y + (root.data.height || 40) / 2;
+    
+    // Find the top and bottom bounds of children
+    const childPositions = [child1, child2, child3].map(child => ({
+      top: child.position.y,
+      bottom: child.position.y + (child.data.height || 40)
+    }));
+    
+    const childrenTop = Math.min(...childPositions.map(p => p.top));
+    const childrenBottom = Math.max(...childPositions.map(p => p.bottom));
+    const childrenSpanCenter = (childrenTop + childrenBottom) / 2;
+
+    // In the new algorithm, parent should be centered within its allocated space
+    // which should align reasonably with the children's span center
+    expect(Math.abs(rootCenter - childrenSpanCenter)).toBeLessThan(60);
+  });
+
+  it('should handle different layout directions', async () => {
+    const nodes: Node<MindMapNodeData>[] = [
+      {
+        id: 'root',
+        type: 'mindMapNode',
+        position: { x: 0, y: 0 },
+        data: {
+          id: 'root',
+          label: 'Root',
+          isRoot: true,
+          level: 0,
+          hasChildren: true,
+          isCollapsed: false,
+          isDragging: false,
+          isDropTarget: false,
+          dropPosition: null,
+          layout: 'TB',
+          colorTheme: null,
+        },
+      },
+      {
+        id: 'child',
+        type: 'mindMapNode',
+        position: { x: 0, y: 0 },
+        data: {
+          id: 'child',
+          label: 'Child',
+          isRoot: false,
+          level: 1,
+          hasChildren: false,
+          isCollapsed: false,
+          isDragging: false,
+          isDropTarget: false,
+          dropPosition: null,
+          layout: 'TB',
+          colorTheme: null,
+        },
+      },
+    ];
+
+    const edges: Edge[] = [
+      { id: 'e1', source: 'root', target: 'child' },
+    ];
+
+    // Test top-to-bottom layout
+    const resultTB = await layoutManager.arrangeNodes(nodes, edges, 'root', 'TB');
+    const rootTB = resultTB.find(n => n.id === 'root')!;
+    const childTB = resultTB.find(n => n.id === 'child')!;
+
+    // In TB layout, child should be below parent
+    expect(childTB.position.y).toBeGreaterThan(rootTB.position.y);
+
+    // Test right-to-left layout
+    const resultRL = await layoutManager.arrangeNodes(nodes, edges, 'root', 'RL');
+    const rootRL = resultRL.find(n => n.id === 'root')!;
+    const childRL = resultRL.find(n => n.id === 'child')!;
+
+    // In RL layout, child should be to the left of parent
+    expect(childRL.position.x).toBeLessThan(rootRL.position.x);
+  });
+
+  it('should calculate node dimensions properly', async () => {
+    const nodes: Node<MindMapNodeData>[] = [
+      {
+        id: 'short',
+        type: 'mindMapNode',
+        position: { x: 0, y: 0 },
+        data: {
+          id: 'short',
+          label: 'Hi',
+          isRoot: true,
+          level: 0,
+          hasChildren: false,
+          isCollapsed: false,
+          isDragging: false,
+          isDropTarget: false,
+          dropPosition: null,
+          layout: 'LR',
+          colorTheme: null,
+        },
+      },
+      {
+        id: 'long',
+        type: 'mindMapNode',
+        position: { x: 0, y: 0 },
+        data: {
+          id: 'long',
+          label: 'This is a very long node label that should result in a wider node',
+          isRoot: false,
+          level: 1,
+          hasChildren: false,
+          isCollapsed: false,
+          isDragging: false,
+          isDropTarget: false,
+          dropPosition: null,
+          layout: 'LR',
+          colorTheme: null,
+        },
+      },
+    ];
+
+    const result = await layoutManager.calculateAllNodeDimensions(nodes);
+
+    const shortNode = result.find(n => n.id === 'short')!;
+    const longNode = result.find(n => n.id === 'long')!;
+
+    // Long node should be wider than short node
+    expect(longNode.data.width!).toBeGreaterThan(shortNode.data.width!);
+
+    // Both should have reasonable dimensions
+    expect(shortNode.data.width!).toBeGreaterThan(50);
+    expect(longNode.data.width!).toBeGreaterThan(200);
+    expect(shortNode.data.height!).toBeGreaterThan(20);
+    expect(longNode.data.height!).toBeGreaterThan(20);
+  });
+
+  describe('Space Allocation Algorithm', () => {
+    it('should allocate space proportionally based on subtree size', async () => {
+      const nodes: Node<MindMapNodeData>[] = [
+        {
+          id: 'root',
+          type: 'mindMapNode',
+          position: { x: 0, y: 0 },
+          data: {
+            id: 'root',
+            label: 'Root',
+            isRoot: true,
+            level: 0,
+            hasChildren: true,
+            isCollapsed: false,
+            isDragging: false,
+            isDropTarget: false,
+            dropPosition: null,
+            layout: 'LR',
+            colorTheme: null,
+          },
+        },
+        {
+          id: 'parent1',
+          type: 'mindMapNode',
+          position: { x: 0, y: 0 },
+          data: {
+            id: 'parent1',
+            label: 'Parent 1',
+            isRoot: false,
+            level: 1,
+            hasChildren: true,
+            isCollapsed: false,
+            isDragging: false,
+            isDropTarget: false,
+            dropPosition: null,
+            layout: 'LR',
+            colorTheme: null,
+          },
+        },
+        {
+          id: 'parent2',
+          type: 'mindMapNode',
+          position: { x: 0, y: 0 },
+          data: {
+            id: 'parent2',
+            label: 'Parent 2',
+            isRoot: false,
+            level: 1,
+            hasChildren: true,
+            isCollapsed: false,
+            isDragging: false,
+            isDropTarget: false,
+            dropPosition: null,
+            layout: 'LR',
+            colorTheme: null,
+          },
+        },
+        {
+          id: 'leaf1',
+          type: 'mindMapNode',
+          position: { x: 0, y: 0 },
+          data: {
+            id: 'leaf1',
+            label: 'Leaf 1',
+            isRoot: false,
+            level: 2,
+            hasChildren: false,
+            isCollapsed: false,
+            isDragging: false,
+            isDropTarget: false,
+            dropPosition: null,
+            layout: 'LR',
+            colorTheme: null,
+          },
+        },
+        {
+          id: 'leaf2',
+          type: 'mindMapNode',
+          position: { x: 0, y: 0 },
+          data: {
+            id: 'leaf2',
+            label: 'Leaf 2',
+            isRoot: false,
+            level: 2,
+            hasChildren: false,
+            isCollapsed: false,
+            isDragging: false,
+            isDropTarget: false,
+            dropPosition: null,
+            layout: 'LR',
+            colorTheme: null,
+          },
+        },
+        {
+          id: 'leaf3',
+          type: 'mindMapNode',
+          position: { x: 0, y: 0 },
+          data: {
+            id: 'leaf3',
+            label: 'Leaf 3',
+            isRoot: false,
+            level: 2,
+            hasChildren: false,
+            isCollapsed: false,
+            isDragging: false,
+            isDropTarget: false,
+            dropPosition: null,
+            layout: 'LR',
+            colorTheme: null,
+          },
+        },
+        {
+          id: 'leaf4',
+          type: 'mindMapNode',
+          position: { x: 0, y: 0 },
+          data: {
+            id: 'leaf4',
+            label: 'Leaf 4',
+            isRoot: false,
+            level: 2,
+            hasChildren: false,
+            isCollapsed: false,
+            isDragging: false,
+            isDropTarget: false,
+            dropPosition: null,
+            layout: 'LR',
+            colorTheme: null,
+          },
+        },
+      ];
+
+      const edges: Edge[] = [
+        { id: 'e1', source: 'root', target: 'parent1' },
+        { id: 'e2', source: 'root', target: 'parent2' },
+        { id: 'e3', source: 'parent1', target: 'leaf1' },
+        { id: 'e4', source: 'parent2', target: 'leaf2' },
+        { id: 'e5', source: 'parent2', target: 'leaf3' },
+        { id: 'e6', source: 'parent2', target: 'leaf4' },
+      ];
+
+      const result = await layoutManager.arrangeNodes(nodes, edges, 'root', 'LR');
+
+      const parent1 = result.find(n => n.id === 'parent1')!;
+      const parent2 = result.find(n => n.id === 'parent2')!;
+      const leaf2 = result.find(n => n.id === 'leaf2')!;
+      const leaf3 = result.find(n => n.id === 'leaf3')!;
+      const leaf4 = result.find(n => n.id === 'leaf4')!;
+
+      // Parent2 has more children (3 vs 1), so should get more vertical space
+      // The leaves under parent2 should have more spacing between them
+      const parent2LeafSpacing1 = Math.abs(leaf2.position.y - leaf3.position.y);
+      const parent2LeafSpacing2 = Math.abs(leaf3.position.y - leaf4.position.y);
+
+      // All leaf spacing should be reasonably consistent due to proportional allocation
+      expect(parent2LeafSpacing1).toBeGreaterThan(50);
+      expect(parent2LeafSpacing2).toBeGreaterThan(50);
+      
+      // Parent2 should be roughly centered among its children
+      const parent2Children = [leaf2, leaf3, leaf4];
+      const minY = Math.min(...parent2Children.map(n => n.position.y));
+      const maxY = Math.max(...parent2Children.map(n => n.position.y + (n.data.height || 40)));
+      const childrenCenter = (minY + maxY) / 2;
+      const parent2Center = parent2.position.y + (parent2.data.height || 40) / 2;
+      
+      expect(Math.abs(parent2Center - childrenCenter)).toBeLessThan(40);
+    });
+
+    it('should handle nodes with different heights in space allocation', async () => {
+      const nodes: Node<MindMapNodeData>[] = [
+        {
+          id: 'root',
+          type: 'mindMapNode',
+          position: { x: 0, y: 0 },
+          data: {
+            id: 'root',
+            label: 'Root',
+            isRoot: true,
+            level: 0,
+            hasChildren: true,
+            isCollapsed: false,
+            isDragging: false,
+            isDropTarget: false,
+            dropPosition: null,
+            layout: 'LR',
+            colorTheme: null,
+          },
+        },
+        {
+          id: 'tall',
+          type: 'mindMapNode',
+          position: { x: 0, y: 0 },
+          data: {
+            id: 'tall',
+            label: 'This is a very\\ntall node with\\nmultiple lines\\nof text content',
+            isRoot: false,
+            level: 1,
+            hasChildren: false,
+            isCollapsed: false,
+            isDragging: false,
+            isDropTarget: false,
+            dropPosition: null,
+            layout: 'LR',
+            colorTheme: null,
+          },
+        },
+        {
+          id: 'short',
+          type: 'mindMapNode',
+          position: { x: 0, y: 0 },
+          data: {
+            id: 'short',
+            label: 'Short',
+            isRoot: false,
+            level: 1,
+            hasChildren: false,
+            isCollapsed: false,
+            isDragging: false,
+            isDropTarget: false,
+            dropPosition: null,
+            layout: 'LR',
+            colorTheme: null,
+          },
+        },
+      ];
+
+      const edges: Edge[] = [
+        { id: 'e1', source: 'root', target: 'tall' },
+        { id: 'e2', source: 'root', target: 'short' },
+      ];
+
+      const result = await layoutManager.arrangeNodes(nodes, edges, 'root', 'LR');
+
+      const tallNode = result.find(n => n.id === 'tall')!;
+      const shortNode = result.find(n => n.id === 'short')!;
+
+      // Tall node should get more height due to its content
+      expect(tallNode.data.height!).toBeGreaterThan(shortNode.data.height!);
+
+      // Nodes should not overlap despite different heights
+      const tallBottom = tallNode.position.y + (tallNode.data.height || 40);
+      const shortTop = shortNode.position.y;
+      const shortBottom = shortNode.position.y + (shortNode.data.height || 40);
+      const tallTop = tallNode.position.y;
+
+      // Either tall is above short or short is above tall, with no overlap
+      const noOverlap = (tallBottom <= shortTop) || (shortBottom <= tallTop);
+      expect(noOverlap).toBe(true);
+
+      // Minimum spacing should be maintained
+      const verticalSpacing = Math.min(
+        Math.abs(tallBottom - shortTop),
+        Math.abs(shortBottom - tallTop)
+      );
+      expect(verticalSpacing).toBeGreaterThan(20);
+    });
+  });
+
+  describe('Recursive Positioning Logic', () => {
+    it('should position descendants correctly in allocated subtree space', async () => {
+      const nodes: Node<MindMapNodeData>[] = [
+        {
+          id: 'root',
+          type: 'mindMapNode',
+          position: { x: 0, y: 0 },
+          data: {
+            id: 'root',
+            label: 'Root',
+            isRoot: true,
+            level: 0,
+            hasChildren: true,
+            isCollapsed: false,
+            isDragging: false,
+            isDropTarget: false,
+            dropPosition: null,
+            layout: 'LR',
+            colorTheme: null,
+          },
+        },
+        {
+          id: 'branch',
+          type: 'mindMapNode',
+          position: { x: 0, y: 0 },
+          data: {
+            id: 'branch',
+            label: 'Branch',
+            isRoot: false,
+            level: 1,
+            hasChildren: true,
+            isCollapsed: false,
+            isDragging: false,
+            isDropTarget: false,
+            dropPosition: null,
+            layout: 'LR',
+            colorTheme: null,
+          },
+        },
+        {
+          id: 'subbranch1',
+          type: 'mindMapNode',
+          position: { x: 0, y: 0 },
+          data: {
+            id: 'subbranch1',
+            label: 'Subbranch 1',
+            isRoot: false,
+            level: 2,
+            hasChildren: true,
+            isCollapsed: false,
+            isDragging: false,
+            isDropTarget: false,
+            dropPosition: null,
+            layout: 'LR',
+            colorTheme: null,
+          },
+        },
+        {
+          id: 'subbranch2',
+          type: 'mindMapNode',
+          position: { x: 0, y: 0 },
+          data: {
+            id: 'subbranch2',
+            label: 'Subbranch 2',
+            isRoot: false,
+            level: 2,
+            hasChildren: false,
+            isCollapsed: false,
+            isDragging: false,
+            isDropTarget: false,
+            dropPosition: null,
+            layout: 'LR',
+            colorTheme: null,
+          },
+        },
+        {
+          id: 'leaf1',
+          type: 'mindMapNode',
+          position: { x: 0, y: 0 },
+          data: {
+            id: 'leaf1',
+            label: 'Deep Leaf 1',
+            isRoot: false,
+            level: 3,
+            hasChildren: false,
+            isCollapsed: false,
+            isDragging: false,
+            isDropTarget: false,
+            dropPosition: null,
+            layout: 'LR',
+            colorTheme: null,
+          },
+        },
+        {
+          id: 'leaf2',
+          type: 'mindMapNode',
+          position: { x: 0, y: 0 },
+          data: {
+            id: 'leaf2',
+            label: 'Deep Leaf 2',
+            isRoot: false,
+            level: 3,
+            hasChildren: false,
+            isCollapsed: false,
+            isDragging: false,
+            isDropTarget: false,
+            dropPosition: null,
+            layout: 'LR',
+            colorTheme: null,
+          },
+        },
+      ];
+
+      const edges: Edge[] = [
+        { id: 'e1', source: 'root', target: 'branch' },
+        { id: 'e2', source: 'branch', target: 'subbranch1' },
+        { id: 'e3', source: 'branch', target: 'subbranch2' },
+        { id: 'e4', source: 'subbranch1', target: 'leaf1' },
+        { id: 'e5', source: 'subbranch1', target: 'leaf2' },
+      ];
+
+      const result = await layoutManager.arrangeNodes(nodes, edges, 'root', 'LR');
+
+      const root = result.find(n => n.id === 'root')!;
+      const branch = result.find(n => n.id === 'branch')!;
+      const subbranch1 = result.find(n => n.id === 'subbranch1')!;
+      const subbranch2 = result.find(n => n.id === 'subbranch2')!;
+      const leaf1 = result.find(n => n.id === 'leaf1')!;
+      const leaf2 = result.find(n => n.id === 'leaf2')!;
+
+      // Verify proper depth progression (X positioning)
+      expect(root.position.x).toBeLessThan(branch.position.x);
+      expect(branch.position.x).toBeLessThan(subbranch1.position.x);
+      expect(branch.position.x).toBeLessThan(subbranch2.position.x);
+      expect(subbranch1.position.x).toBeLessThan(leaf1.position.x);
+      expect(subbranch1.position.x).toBeLessThan(leaf2.position.x);
+
+      // Verify subbranches are at same depth
+      expect(Math.abs(subbranch1.position.x - subbranch2.position.x)).toBeLessThan(10);
+
+      // Verify leaves are at same depth
+      expect(Math.abs(leaf1.position.x - leaf2.position.x)).toBeLessThan(10);
+
+      // Verify branch is centered relative to its descendants
+      const branchDescendants = [subbranch1, subbranch2, leaf1, leaf2];
+      const minDescendantY = Math.min(...branchDescendants.map(n => n.position.y));
+      const maxDescendantY = Math.max(...branchDescendants.map(n => n.position.y + (n.data.height || 40)));
+      const descendantsCenter = (minDescendantY + maxDescendantY) / 2;
+      const branchCenter = branch.position.y + (branch.data.height || 40) / 2;
+
+      expect(Math.abs(branchCenter - descendantsCenter)).toBeLessThan(50);
+
+      // Verify subbranch1 is centered relative to its children
+      const subbranch1Children = [leaf1, leaf2];
+      const minChildY = Math.min(...subbranch1Children.map(n => n.position.y));
+      const maxChildY = Math.max(...subbranch1Children.map(n => n.position.y + (n.data.height || 40)));
+      const childrenCenter = (minChildY + maxChildY) / 2;
+      const subbranch1Center = subbranch1.position.y + (subbranch1.data.height || 40) / 2;
+
+      expect(Math.abs(subbranch1Center - childrenCenter)).toBeLessThan(30);
+    });
+  });
+
+  describe('Overlap Prevention', () => {
+    it('should prevent overlaps with large text nodes', async () => {
+      const nodes: Node<MindMapNodeData>[] = [
+        {
+          id: 'root',
+          type: 'mindMapNode',
+          position: { x: 0, y: 0 },
+          data: {
+            id: 'root',
+            label: 'Root',
+            isRoot: true,
+            level: 0,
+            hasChildren: true,
+            isCollapsed: false,
+            isDragging: false,
+            isDropTarget: false,
+            dropPosition: null,
+            layout: 'LR',
+            colorTheme: null,
+          },
+        },
+        {
+          id: 'large1',
+          type: 'mindMapNode',
+          position: { x: 0, y: 0 },
+          data: {
+            id: 'large1',
+            label: 'This is an extremely long node label that would cause overlapping issues in the old algorithm implementation',
+            isRoot: false,
+            level: 1,
+            hasChildren: false,
+            isCollapsed: false,
+            isDragging: false,
+            isDropTarget: false,
+            dropPosition: null,
+            layout: 'LR',
+            colorTheme: null,
+          },
+        },
+        {
+          id: 'large2',
+          type: 'mindMapNode',
+          position: { x: 0, y: 0 },
+          data: {
+            id: 'large2',
+            label: 'Another very long node label\\nwith multiple lines\\nthat should not overlap\\nwith adjacent nodes',
+            isRoot: false,
+            level: 1,
+            hasChildren: false,
+            isCollapsed: false,
+            isDragging: false,
+            isDropTarget: false,
+            dropPosition: null,
+            layout: 'LR',
+            colorTheme: null,
+          },
+        },
+        {
+          id: 'large3',
+          type: 'mindMapNode',
+          position: { x: 0, y: 0 },
+          data: {
+            id: 'large3',
+            label: 'Yet another substantially large node with extensive text content that previously caused positioning problems',
+            isRoot: false,
+            level: 1,
+            hasChildren: false,
+            isCollapsed: false,
+            isDragging: false,
+            isDropTarget: false,
+            dropPosition: null,
+            layout: 'LR',
+            colorTheme: null,
+          },
+        },
+      ];
+
+      const edges: Edge[] = [
+        { id: 'e1', source: 'root', target: 'large1' },
+        { id: 'e2', source: 'root', target: 'large2' },
+        { id: 'e3', source: 'root', target: 'large3' },
+      ];
+
+      const result = await layoutManager.arrangeNodes(nodes, edges, 'root', 'LR');
+
+      const large1 = result.find(n => n.id === 'large1')!;
+      const large2 = result.find(n => n.id === 'large2')!;
+      const large3 = result.find(n => n.id === 'large3')!;
+
+      // Calculate bounding boxes
+      const nodes_with_bounds = [large1, large2, large3].map(node => ({
+        ...node,
+        top: node.position.y,
+        bottom: node.position.y + (node.data.height || 40),
+        left: node.position.x,
+        right: node.position.x + (node.data.width || 100),
+      }));
+
+      // Check for overlaps between each pair
+      for (let i = 0; i < nodes_with_bounds.length; i++) {
+        for (let j = i + 1; j < nodes_with_bounds.length; j++) {
+          const node1 = nodes_with_bounds[i];
+          const node2 = nodes_with_bounds[j];
+
+          // Check for vertical overlap (since they're at same depth horizontally)
+          const verticalOverlap = !(node1.bottom <= node2.top || node2.bottom <= node1.top);
+          
+          // They should not overlap vertically
+          expect(verticalOverlap).toBe(false);
+
+          // Minimum spacing should be maintained
+          const verticalSpacing = Math.min(
+            Math.abs(node1.bottom - node2.top),
+            Math.abs(node2.bottom - node1.top)
+          );
+          expect(verticalSpacing).toBeGreaterThan(20);
+        }
+      }
+
+      // Ensure all nodes have reasonable calculated dimensions
+      expect(large1.data.width!).toBeGreaterThan(400); // Long text should be wide
+      expect(large2.data.height!).toBeGreaterThan(80); // Multi-line should be tall
+      expect(large3.data.width!).toBeGreaterThan(400); // Long text should be wide
+    });
+
+    it('should handle mixed node sizes without overlap', async () => {
+      const nodes: Node<MindMapNodeData>[] = [
+        {
+          id: 'root',
+          type: 'mindMapNode',
+          position: { x: 0, y: 0 },
+          data: {
+            id: 'root',
+            label: 'Root',
+            isRoot: true,
+            level: 0,
+            hasChildren: true,
+            isCollapsed: false,
+            isDragging: false,
+            isDropTarget: false,
+            dropPosition: null,
+            layout: 'LR',
+            colorTheme: null,
+          },
+        },
+        {
+          id: 'tiny',
+          type: 'mindMapNode',
+          position: { x: 0, y: 0 },
+          data: {
+            id: 'tiny',
+            label: 'A',
+            isRoot: false,
+            level: 1,
+            hasChildren: false,
+            isCollapsed: false,
+            isDragging: false,
+            isDropTarget: false,
+            dropPosition: null,
+            layout: 'LR',
+            colorTheme: null,
+          },
+        },
+        {
+          id: 'huge',
+          type: 'mindMapNode',
+          position: { x: 0, y: 0 },
+          data: {
+            id: 'huge',
+            label: 'This is an absolutely massive node with tons of text\\nthat spans multiple lines\\nand takes up significant space\\nboth horizontally and vertically\\nto test the layout algorithm',
+            isRoot: false,
+            level: 1,
+            hasChildren: false,
+            isCollapsed: false,
+            isDragging: false,
+            isDropTarget: false,
+            dropPosition: null,
+            layout: 'LR',
+            colorTheme: null,
+          },
+        },
+        {
+          id: 'medium',
+          type: 'mindMapNode',
+          position: { x: 0, y: 0 },
+          data: {
+            id: 'medium',
+            label: 'Medium sized node',
+            isRoot: false,
+            level: 1,
+            hasChildren: false,
+            isCollapsed: false,
+            isDragging: false,
+            isDropTarget: false,
+            dropPosition: null,
+            layout: 'LR',
+            colorTheme: null,
+          },
+        },
+      ];
+
+      const edges: Edge[] = [
+        { id: 'e1', source: 'root', target: 'tiny' },
+        { id: 'e2', source: 'root', target: 'huge' },
+        { id: 'e3', source: 'root', target: 'medium' },
+      ];
+
+      const result = await layoutManager.arrangeNodes(nodes, edges, 'root', 'LR');
+
+      const tiny = result.find(n => n.id === 'tiny')!;
+      const huge = result.find(n => n.id === 'huge')!;
+      const medium = result.find(n => n.id === 'medium')!;
+
+      // Verify size differences
+      expect(huge.data.width!).toBeGreaterThan(medium.data.width!);
+      expect(medium.data.width!).toBeGreaterThan(tiny.data.width!);
+      expect(huge.data.height!).toBeGreaterThan(medium.data.height!);
+
+      // Check no overlaps
+      const nodeList = [tiny, huge, medium];
+      for (let i = 0; i < nodeList.length; i++) {
+        for (let j = i + 1; j < nodeList.length; j++) {
+          const node1 = nodeList[i];
+          const node2 = nodeList[j];
+
+          const node1Bottom = node1.position.y + (node1.data.height || 40);
+          const node2Bottom = node2.position.y + (node2.data.height || 40);
+
+          // No vertical overlap
+          const noOverlap = (node1Bottom <= node2.position.y) || (node2Bottom <= node1.position.y);
+          expect(noOverlap).toBe(true);
+        }
+      }
+
+      // Space allocation should account for the huge node's size
+      // The huge node should get more space proportional to its height
+      const hugeAllocatedSpace = huge.data.height! / 120; // MIN_NODE_SPACING
+      expect(hugeAllocatedSpace).toBeGreaterThan(1);
+    });
+  });
+});

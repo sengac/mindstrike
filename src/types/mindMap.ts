@@ -1,4 +1,6 @@
 // Shared types for mind map functionality
+import type { NodeColorTheme } from '../mindmaps/constants/nodeColors';
+
 export interface Source {
   id: string;
   name: string;
@@ -27,8 +29,6 @@ export interface MindMapNodeData {
   dropPosition?: 'above' | 'below' | 'over' | null;
   layout?: 'LR' | 'RL' | 'TB' | 'BT';
   width?: number; // Calculated width of the node
-  customColors?: {
-    backgroundClass: string;
-    foregroundClass: string;
-  } | null;
+  height?: number; // Calculated height of the node
+  colorTheme?: NodeColorTheme | null;
 }

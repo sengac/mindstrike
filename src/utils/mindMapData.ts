@@ -1,5 +1,11 @@
 import type { Node, Edge } from 'reactflow';
 import type { MindMapNodeData, Source } from '../types/mindMap';
+import type { NodeColorTheme } from '../mindmaps/constants/nodeColors';
+import {
+  needsColorMigration,
+  migrateNodeData,
+  type NodeDataWithLegacyColors,
+} from './colorMigration';
 
 export interface MindMapNode {
   id: string;
@@ -10,9 +16,14 @@ export interface MindMapNode {
   side?: 'left' | 'right';
   children?: MindMapNode[];
   isCollapsed?: boolean;
+  colorTheme?: NodeColorTheme | null;
+  // Legacy field for migration
   customColors?: {
-    backgroundClass: string;
-    foregroundClass: string;
+    backgroundClass?: string;
+    foregroundClass?: string;
+    backgroundColor?: string;
+    borderColor?: string;
+    foregroundColor?: string;
   } | null;
 }
 
@@ -42,6 +53,13 @@ export class MindMapDataManager {
       parentId?: string,
       level: number = 0
     ) => {
+      // Migrate color data if needed
+      let colorTheme = treeNode.colorTheme;
+      if (needsColorMigration(treeNode as NodeDataWithLegacyColors)) {
+        const migrated = migrateNodeData(treeNode as NodeDataWithLegacyColors);
+        colorTheme = migrated.colorTheme;
+      }
+
       const reactFlowNode: Node<MindMapNodeData> = {
         id: treeNode.id,
         type: 'mindMapNode',
@@ -58,7 +76,7 @@ export class MindMapDataManager {
           chatId: treeNode.chatId || undefined,
           notes: treeNode.notes || undefined,
           sources: treeNode.sources || undefined,
-          customColors: treeNode.customColors || undefined,
+          colorTheme: colorTheme || undefined,
         },
       };
 
@@ -133,9 +151,9 @@ export class MindMapDataManager {
         nodeData.isCollapsed = node.data.isCollapsed;
       }
 
-      // Include customColors if they exist
-      if (node.data.customColors) {
-        nodeData.customColors = node.data.customColors;
+      // Include colorTheme if it exists
+      if (node.data.colorTheme) {
+        nodeData.colorTheme = node.data.colorTheme;
       }
 
       return nodeData;

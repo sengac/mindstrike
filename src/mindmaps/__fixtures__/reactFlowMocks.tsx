@@ -144,7 +144,7 @@ export const createMockNodeProps = (overrides = {}) => ({
     dropPosition: null,
     layout: 'LR' as const,
     width: 150,
-    customColors: null,
+    colorTheme: null,
   },
   position: { x: 0, y: 0 },
   selected: false,

@@ -77,7 +77,8 @@ export function MindMapsPanel({
 
   // Listen for mindmap inference events
   useEffect(() => {
-    const handleInferenceOpen = (event: CustomEvent) => {
+    const handleInferenceOpen = (event: Event) => {
+      const customEvent = event as CustomEvent;
       const {
         nodeId,
         label,
@@ -87,7 +88,7 @@ export function MindMapsPanel({
         focusChat,
         focusNotes,
         focusSources,
-      } = event.detail;
+      } = customEvent.detail;
       setInferenceChatNode({
         id: nodeId,
         label,
@@ -120,130 +121,144 @@ export function MindMapsPanel({
       );
     };
 
-    const handleGetActiveState = (_event: CustomEvent) => {
-      const currentActiveNodeId = inferenceChatNode?.id || null;
+    const handleGetActiveState = (event: Event) => {
+      // Log the event type for debugging purposes
+      console.debug('Received get-active-state event:', event.type);
 
-      // Respond with current active state for the requesting node
-      window.dispatchEvent(
-        new CustomEvent('mindmap-inference-active', {
-          detail: { activeNodeId: currentActiveNodeId },
-        })
-      );
+      setInferenceChatNode(currentNode => {
+        const currentActiveNodeId = currentNode?.id || null;
+
+        // Respond with current active state for the requesting node
+        window.dispatchEvent(
+          new CustomEvent('mindmap-inference-active', {
+            detail: { activeNodeId: currentActiveNodeId },
+          })
+        );
+
+        return currentNode; // Return unchanged state
+      });
     };
 
-    const handleNodeNotesUpdated = (event: CustomEvent) => {
-      const { nodeId, notes } = event.detail;
+    const handleNodeNotesUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { nodeId, notes } = customEvent.detail;
 
       // Update the inferenceChatNode if it's the same node
-      if (inferenceChatNode && inferenceChatNode.id === nodeId) {
-        setInferenceChatNode({
-          ...inferenceChatNode,
-          notes,
-        });
-      }
+      setInferenceChatNode(prevNode => {
+        if (prevNode && prevNode.id === nodeId) {
+          return {
+            ...prevNode,
+            notes,
+          };
+        }
+        return prevNode;
+      });
     };
 
-    const handleNodeSourcesUpdated = (event: CustomEvent) => {
-      const { nodeId, sources } = event.detail;
+    const handleNodeSourcesUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { nodeId, sources } = customEvent.detail;
 
       // Update the inferenceChatNode if it's the same node
-      if (inferenceChatNode && inferenceChatNode.id === nodeId) {
-        setInferenceChatNode({
-          ...inferenceChatNode,
-          sources,
-        });
-      }
+      setInferenceChatNode(prevNode => {
+        if (prevNode && prevNode.id === nodeId) {
+          return {
+            ...prevNode,
+            sources,
+          };
+        }
+        return prevNode;
+      });
     };
 
-    const handleNodeLabelUpdated = (event: CustomEvent) => {
-      const { nodeId, label } = event.detail;
+    const handleNodeLabelUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { nodeId, label } = customEvent.detail;
 
       // Update the inferenceChatNode label if it's the same node
-      if (inferenceChatNode && inferenceChatNode.id === nodeId) {
-        setInferenceChatNode({
-          ...inferenceChatNode,
-          label,
-        });
-      }
-    };
-
-    const handleInferenceCheckAndClose = (event: CustomEvent) => {
-      const { deletedNodeIds, parentId } = event.detail;
-
-      if (inferenceChatNode) {
-        // Check if the active inference node is being deleted or is the parent of deleted nodes
-        const shouldClose =
-          deletedNodeIds.includes(inferenceChatNode.id) ||
-          (parentId && inferenceChatNode.id === parentId);
-
-        if (shouldClose) {
-          setShowInferenceChat(false);
-          setInferenceChatNode(null);
-          window.dispatchEvent(new CustomEvent('mindmap-inference-close'));
+      setInferenceChatNode(prevNode => {
+        if (prevNode && prevNode.id === nodeId) {
+          return {
+            ...prevNode,
+            label,
+          };
         }
-      }
+        return prevNode;
+      });
     };
 
-    window.addEventListener(
-      'mindmap-inference-open',
-      handleInferenceOpen as EventListener
-    );
-    window.addEventListener(
-      'mindmap-inference-close',
-      handleInferenceClose as EventListener
-    );
+    const handleInferenceCheckAndClose = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { deletedNodeIds, parentId } = customEvent.detail;
+
+      setInferenceChatNode(prevNode => {
+        if (prevNode) {
+          // Check if the active inference node is being deleted or is the parent of deleted nodes
+          const shouldClose =
+            deletedNodeIds.includes(prevNode.id) ||
+            (parentId && prevNode.id === parentId);
+
+          if (shouldClose) {
+            setShowInferenceChat(false);
+            window.dispatchEvent(new CustomEvent('mindmap-inference-close'));
+            return null;
+          }
+        }
+        return prevNode;
+      });
+    };
+
+    window.addEventListener('mindmap-inference-open', handleInferenceOpen);
+    window.addEventListener('mindmap-inference-close', handleInferenceClose);
     window.addEventListener(
       'mindmap-inference-get-active',
-      handleGetActiveState as EventListener
+      handleGetActiveState
     );
     window.addEventListener(
       'mindmap-node-notes-updated',
-      handleNodeNotesUpdated as EventListener
+      handleNodeNotesUpdated
     );
     window.addEventListener(
       'mindmap-node-sources-updated',
-      handleNodeSourcesUpdated as EventListener
+      handleNodeSourcesUpdated
     );
     window.addEventListener(
       'mindmap-node-update-finished',
-      handleNodeLabelUpdated as EventListener
+      handleNodeLabelUpdated
     );
     window.addEventListener(
       'mindmap-inference-check-and-close',
-      handleInferenceCheckAndClose as EventListener
+      handleInferenceCheckAndClose
     );
 
     return () => {
-      window.removeEventListener(
-        'mindmap-inference-open',
-        handleInferenceOpen as EventListener
-      );
+      window.removeEventListener('mindmap-inference-open', handleInferenceOpen);
       window.removeEventListener(
         'mindmap-inference-close',
-        handleInferenceClose as EventListener
+        handleInferenceClose
       );
       window.removeEventListener(
         'mindmap-inference-get-active',
-        handleGetActiveState as EventListener
+        handleGetActiveState
       );
       window.removeEventListener(
         'mindmap-node-notes-updated',
-        handleNodeNotesUpdated as EventListener
+        handleNodeNotesUpdated
       );
       window.removeEventListener(
         'mindmap-node-sources-updated',
-        handleNodeSourcesUpdated as EventListener
+        handleNodeSourcesUpdated
       );
       window.removeEventListener(
         'mindmap-node-update-finished',
-        handleNodeLabelUpdated as EventListener
+        handleNodeLabelUpdated
       );
       window.removeEventListener(
         'mindmap-inference-check-and-close',
-        handleInferenceCheckAndClose as EventListener
+        handleInferenceCheckAndClose
       );
     };
-  }, [inferenceChatNode]);
+  }, []); // Empty dependencies array to register listeners only once
 
   const handleCloseInferenceChat = () => {
     setShowInferenceChat(false);

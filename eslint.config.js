@@ -151,6 +151,7 @@ export default [
       'no-console': 'warn',
       'prefer-const': 'error',
       'no-var': 'error',
+      'no-void': 'error',
       eqeqeq: 'error',
       curly: 'error',
 

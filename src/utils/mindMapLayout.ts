@@ -1,7 +1,11 @@
 import type { Node, Edge } from 'reactflow';
 import type { MindMapNodeData } from '../types/mindMap';
+import { createDefaultSizingStrategy } from '../mindmaps/services/nodeSizingStrategy';
 
 export class MindMapLayoutManager {
+  constructor() {
+    // Simple recursive layout manager - no complex algorithms needed
+  }
   // Get visible nodes (excluding collapsed subtrees)
   getVisibleNodes(
     nodes: Node<MindMapNodeData>[],
@@ -96,33 +100,43 @@ export class MindMapLayoutManager {
     }));
   }
 
-  // Calculate text width for proper spacing
-  calculateNodeWidth(text: string): number {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.font = '14px system-ui, -apple-system, sans-serif';
-      const textWidth = ctx.measureText(text).width;
-      const padding = 32;
-      const minWidth = 120;
-      const maxWidth = 800;
-      return Math.min(Math.max(textWidth + padding, minWidth), maxWidth);
-    }
-    return 120;
+  // Calculate node dimensions for proper spacing
+  calculateNodeDimensions(
+    text: string,
+    nodeData?: MindMapNodeData
+  ): { width: number; height: number } {
+    const sizingStrategy = createDefaultSizingStrategy();
+    const hasIcons = !!(
+      nodeData?.chatId ||
+      nodeData?.notes?.trim() ||
+      (nodeData?.sources && nodeData.sources.length > 0)
+    );
+
+    const dimensions = sizingStrategy.calculateNodeSize(text, {
+      hasIcons,
+      level: nodeData?.level || 1,
+      isCollapsed: nodeData?.isCollapsed || false,
+    });
+
+    return dimensions;
   }
 
-  // Calculate all node widths and update them in the nodes
-  async calculateAllNodeWidths(
+  // Calculate all node dimensions and update them in the nodes
+  async calculateAllNodeDimensions(
     nodes: Node<MindMapNodeData>[]
   ): Promise<Node<MindMapNodeData>[]> {
     const updatedNodes = await Promise.all(
       nodes.map(async node => {
-        const width = this.calculateNodeWidth(node.data.label || '');
+        const dimensions = this.calculateNodeDimensions(
+          node.data.label || '',
+          node.data
+        );
         return {
           ...node,
           data: {
             ...node.data,
-            width,
+            width: dimensions.width,
+            height: dimensions.height,
           },
         };
       })
@@ -130,7 +144,7 @@ export class MindMapLayoutManager {
     return updatedNodes;
   }
 
-  // Main layout algorithm with proper async handling
+  // Main layout algorithm - restored working recursive approach
   async arrangeNodes(
     nodes: Node<MindMapNodeData>[],
     edges: Edge[],
@@ -142,10 +156,10 @@ export class MindMapLayoutManager {
       return nodes;
     }
 
-    // First, calculate all node widths
-    const nodesWithWidths = await this.calculateAllNodeWidths(nodes);
+    // First, calculate all node dimensions (keep this improvement)
+    const nodesWithDimensions = await this.calculateAllNodeDimensions(nodes);
 
-    const visibleEdges = this.getVisibleEdges(nodesWithWidths, edges);
+    const visibleEdges = this.getVisibleEdges(nodesWithDimensions, edges);
 
     // Build hierarchy
     const children = new Map<string, string[]>();
@@ -158,7 +172,7 @@ export class MindMapLayoutManager {
 
     // Sort children to preserve order
     const nodeOrderMap = new Map<string, number>();
-    nodesWithWidths.forEach((node, index) => {
+    nodesWithDimensions.forEach((node, index) => {
       nodeOrderMap.set(node.id, index);
     });
 
@@ -172,14 +186,17 @@ export class MindMapLayoutManager {
 
     // Layout constants
     const LEVEL_SPACING = 250;
-    const NODE_SPACING = direction === 'TB' || direction === 'BT' ? 220 : 120;
+    const MIN_NODE_SPACING =
+      direction === 'TB' || direction === 'BT' ? 220 : 120;
 
-    // Get node widths
+    // Get node dimensions (improved from current implementation)
     const nodeWidths = new Map<string, number>();
-    nodesWithWidths.forEach(node => {
-      const width =
-        node.data.width || this.calculateNodeWidth(node.data.label || '');
+    const nodeHeights = new Map<string, number>();
+    nodesWithDimensions.forEach(node => {
+      const width = node.data.width || 120;
+      const height = node.data.height || 40;
       nodeWidths.set(node.id, width);
+      nodeHeights.set(node.id, height);
     });
 
     // Tree positioning data
@@ -193,51 +210,87 @@ export class MindMapLayoutManager {
 
     const treeNodes = new Map<string, TreeNode>();
 
-    // Calculate subtree sizes
+    // Calculate subtree sizes recursively (accounting for node heights)
     const calculateSubtreeSize = (nodeId: string, depth: number): number => {
       const nodeChildren = children.get(nodeId) || [];
+      const nodeHeight = nodeHeights.get(nodeId) || 40;
+
       if (nodeChildren.length === 0) {
-        return 1;
+        // Leaf node: size based on its height relative to min spacing
+        return Math.max(1, Math.ceil(nodeHeight / MIN_NODE_SPACING));
       }
 
       let totalSize = 0;
       for (const childId of nodeChildren) {
         totalSize += calculateSubtreeSize(childId, depth + 1);
       }
-      return Math.max(totalSize, 1);
+
+      // Parent node: ensure it can accommodate its own height and children
+      const ownSizeRequirement = Math.ceil(nodeHeight / MIN_NODE_SPACING);
+      return Math.max(totalSize, ownSizeRequirement);
     };
 
-    // Position nodes recursively
+    // Proper recursive layout: parent positions children in their allocated space
     const positionNodes = (
       nodeId: string,
       depth: number,
-      _siblingIndex: number,
-      startY: number
-    ): number => {
+      allocatedY: number,
+      allocatedHeight: number
+    ): void => {
       const nodeChildren = children.get(nodeId) || [];
-      const subtreeSize = calculateSubtreeSize(nodeId, depth);
+      const nodeHeight = nodeHeights.get(nodeId) || 40;
 
-      const nodeY = startY + (subtreeSize * NODE_SPACING) / 2;
+      if (nodeChildren.length === 0) {
+        // Leaf node: center in allocated space
+        const nodeY = allocatedY + (allocatedHeight - nodeHeight) / 2;
+        treeNodes.set(nodeId, {
+          id: nodeId,
+          depth,
+          subtreeSize: 1,
+          x: 0,
+          y: nodeY,
+        });
+        return;
+      }
 
+      // Calculate space needed for each child subtree
+      const childSubtreeSizes = nodeChildren.map(childId =>
+        calculateSubtreeSize(childId, depth + 1)
+      );
+      const totalChildSize = childSubtreeSizes.reduce(
+        (sum, size) => sum + size,
+        0
+      );
+
+      // Position children in their allocated portions
+      let currentY = allocatedY;
+      for (let i = 0; i < nodeChildren.length; i++) {
+        const childId = nodeChildren[i];
+        const childSubtreeSize = childSubtreeSizes[i];
+        const childHeight =
+          (allocatedHeight * childSubtreeSize) / totalChildSize;
+
+        // Recursively position this child in its allocated space
+        positionNodes(childId, depth + 1, currentY, childHeight);
+        currentY += childHeight;
+      }
+
+      // Position parent at center of its allocated space
+      const parentY = allocatedY + (allocatedHeight - nodeHeight) / 2;
       treeNodes.set(nodeId, {
         id: nodeId,
         depth,
-        subtreeSize,
+        subtreeSize: calculateSubtreeSize(nodeId, depth),
         x: 0,
-        y: nodeY,
+        y: parentY,
       });
-
-      let currentY = startY;
-      for (let i = 0; i < nodeChildren.length; i++) {
-        const childId = nodeChildren[i];
-        const childEndY = positionNodes(childId, depth + 1, i, currentY);
-        currentY = childEndY;
-      }
-
-      return startY + subtreeSize * NODE_SPACING;
     };
 
-    positionNodes(rootId, 0, 0, 0);
+    // Calculate total height needed for the tree
+    const rootSubtreeSize = calculateSubtreeSize(rootId, 0);
+    const totalHeight = rootSubtreeSize * MIN_NODE_SPACING;
+
+    positionNodes(rootId, 0, 0, totalHeight);
 
     // Convert to screen coordinates
     const positions = new Map<string, { x: number; y: number }>();
@@ -326,7 +379,7 @@ export class MindMapLayoutManager {
     }
 
     // Apply positions to nodes
-    return nodesWithWidths.map(node => {
+    return nodesWithDimensions.map(node => {
       const newPosition = positions.get(node.id);
       if (newPosition) {
         return { ...node, position: newPosition };

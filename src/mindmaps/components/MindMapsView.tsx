@@ -1,4 +1,5 @@
 import { Network } from 'lucide-react';
+import { useCallback } from 'react';
 import { AppBar } from '../../components/AppBar';
 import { MindMapsPanel } from './MindMapsPanel';
 import { MindMapCanvas } from './MindMapCanvas';
@@ -57,6 +58,119 @@ export function MindMapsView({
   loadMindMaps,
   pendingNodeUpdate,
 }: MindMapsViewProps) {
+  // Error-safe wrapper for synchronous callbacks
+  const createSafeCallback = useCallback(
+    <TArgs extends unknown[]>(
+      callback: (...args: TArgs) => void,
+      errorContext: string
+    ) => {
+      return (...args: TArgs) => {
+        try {
+          callback(...args);
+        } catch (error) {
+          console.error(`Error in ${errorContext}:`, error);
+          // Optionally, you could show a toast notification here
+          // toast.error(`Failed to ${errorContext}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      };
+    },
+    []
+  );
+
+  // Error-safe wrapper for async callbacks
+  const createSafeAsyncCallback = useCallback(
+    <TArgs extends unknown[]>(
+      callback: (...args: TArgs) => Promise<void>,
+      errorContext: string
+    ) => {
+      return async (...args: TArgs) => {
+        try {
+          await callback(...args);
+        } catch (error) {
+          console.error(`Error in ${errorContext}:`, error);
+          // Optionally, you could show a toast notification here
+          // toast.error(`Failed to ${errorContext}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      };
+    },
+    []
+  );
+
+  // Create error-safe versions of all callbacks
+  const safeMindMapSelect = useCallback(
+    createSafeCallback(onMindMapSelect, 'mind map selection'),
+    [createSafeCallback, onMindMapSelect]
+  );
+
+  const safeMindMapCreate = useCallback(
+    createSafeCallback(onMindMapCreate, 'mind map creation'),
+    [createSafeCallback, onMindMapCreate]
+  );
+
+  const safeMindMapRename = useCallback(
+    createSafeCallback(onMindMapRename, 'mind map renaming'),
+    [createSafeCallback, onMindMapRename]
+  );
+
+  const safeMindMapDelete = useCallback(
+    createSafeCallback(onMindMapDelete, 'mind map deletion'),
+    [createSafeCallback, onMindMapDelete]
+  );
+
+  const safeThreadAssociate = useCallback(
+    createSafeCallback(onThreadAssociate, 'thread association'),
+    [createSafeCallback, onThreadAssociate]
+  );
+
+  const safeThreadUnassign = useCallback(
+    createSafeCallback(onThreadUnassign, 'thread unassignment'),
+    [createSafeCallback, onThreadUnassign]
+  );
+
+  const safeThreadCreate = useCallback(
+    createSafeCallback(onThreadCreate, 'thread creation'),
+    [createSafeCallback, onThreadCreate]
+  );
+
+  const safeThreadRename = useCallback(
+    createSafeCallback(onThreadRename, 'thread renaming'),
+    [createSafeCallback, onThreadRename]
+  );
+
+  const safeThreadDelete = useCallback(
+    createSafeCallback(onThreadDelete, 'thread deletion'),
+    [createSafeCallback, onThreadDelete]
+  );
+
+  const safeNavigateToChat = useCallback(
+    createSafeCallback(onNavigateToChat, 'navigation to chat'),
+    [createSafeCallback, onNavigateToChat]
+  );
+
+  const safePromptUpdate = useCallback(
+    createSafeCallback(onPromptUpdate, 'prompt update'),
+    [createSafeCallback, onPromptUpdate]
+  );
+
+  const safeCustomizePrompts = useCallback(
+    createSafeCallback(onCustomizePrompts, 'prompt customization'),
+    [createSafeCallback, onCustomizePrompts]
+  );
+
+  const safeNodeNotesUpdate = useCallback(
+    createSafeAsyncCallback(onNodeNotesUpdate, 'node notes update'),
+    [createSafeAsyncCallback, onNodeNotesUpdate]
+  );
+
+  const safeNodeSourcesUpdate = useCallback(
+    createSafeAsyncCallback(onNodeSourcesUpdate, 'node sources update'),
+    [createSafeAsyncCallback, onNodeSourcesUpdate]
+  );
+
+  const safeLoadMindMaps = useCallback(
+    createSafeAsyncCallback(loadMindMaps, 'mind maps loading'),
+    [createSafeAsyncCallback, loadMindMaps]
+  );
   return (
     <div className="flex flex-col h-full">
       {/* MindMaps Header */}
@@ -67,25 +181,25 @@ export function MindMapsView({
         <MindMapsPanel
           mindMaps={mindMaps}
           activeMindMapId={activeMindMapId}
-          onMindMapSelect={onMindMapSelect}
-          onMindMapCreate={onMindMapCreate}
-          onMindMapRename={onMindMapRename}
-          onMindMapDelete={onMindMapDelete}
+          onMindMapSelect={safeMindMapSelect}
+          onMindMapCreate={safeMindMapCreate}
+          onMindMapRename={safeMindMapRename}
+          onMindMapDelete={safeMindMapDelete}
           threads={threads}
-          onThreadAssociate={onThreadAssociate}
-          onThreadUnassign={onThreadUnassign}
-          onThreadCreate={onThreadCreate}
-          onThreadRename={onThreadRename}
-          onThreadDelete={onThreadDelete}
-          onNavigateToChat={onNavigateToChat}
-          onPromptUpdate={onPromptUpdate}
-          onCustomizePrompts={onCustomizePrompts}
-          onNodeNotesUpdate={onNodeNotesUpdate}
-          onNodeSourcesUpdate={onNodeSourcesUpdate}
+          onThreadAssociate={safeThreadAssociate}
+          onThreadUnassign={safeThreadUnassign}
+          onThreadCreate={safeThreadCreate}
+          onThreadRename={safeThreadRename}
+          onThreadDelete={safeThreadDelete}
+          onNavigateToChat={safeNavigateToChat}
+          onPromptUpdate={safePromptUpdate}
+          onCustomizePrompts={safeCustomizePrompts}
+          onNodeNotesUpdate={safeNodeNotesUpdate}
+          onNodeSourcesUpdate={safeNodeSourcesUpdate}
         />
         <MindMapCanvas
           activeMindMap={activeMindMap}
-          loadMindMaps={loadMindMaps}
+          loadMindMaps={safeLoadMindMaps}
           pendingNodeUpdate={pendingNodeUpdate}
         />
       </div>

@@ -11,7 +11,7 @@
   "eslint": {
     "enabled": true,
     "autofix": true,
-    "extends": ["react-app", "react-app/jest"]
+    "extends": ["react-app"]
   },
   "prettier": {
     "enabled": true,

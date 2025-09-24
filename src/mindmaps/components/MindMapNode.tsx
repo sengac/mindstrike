@@ -13,12 +13,277 @@ import {
   BookOpen,
   MessageCircle,
 } from 'lucide-react';
-import { clsx } from 'clsx';
 import type { MindMapNodeData } from '../types/mindMap';
 import {
   useMindMapActions,
   useMindMapSelection,
 } from '../../store/useMindMapStore';
+import { createDefaultSizingStrategy } from '../services/nodeSizingStrategy';
+import { NODE_COLORS, DEFAULT_NODE_COLORS } from '../constants/nodeColors';
+
+// Define all styles as objects to replace Tailwind classes
+const styles = {
+  container: {
+    position: 'relative' as const,
+  },
+  dropIndicatorHorizontal: {
+    position: 'absolute' as const,
+    left: 0,
+    right: 0,
+    height: '4px',
+    backgroundColor: '#4ade80',
+    borderRadius: '9999px',
+    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+    animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+    zIndex: 20,
+  },
+  dropIndicatorVertical: {
+    position: 'absolute' as const,
+    top: 0,
+    bottom: 0,
+    width: '4px',
+    backgroundColor: '#4ade80',
+    borderRadius: '9999px',
+    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+    animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+    zIndex: 20,
+  },
+  dropDot: {
+    width: '8px',
+    height: '8px',
+    backgroundColor: '#4ade80',
+    borderRadius: '50%',
+  },
+  inferenceButton: {
+    position: 'absolute' as const,
+    left: '8px',
+    top: '50%',
+    transform: 'translate(-100%, -50%)',
+    marginRight: '4px',
+    zIndex: 20,
+  },
+  inferenceButtonInner: {
+    position: 'relative' as const,
+    width: '32px',
+    height: '32px',
+    backgroundColor: '#2563eb',
+    border: '1px solid #3b82f6',
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s',
+    zIndex: 10,
+    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+  },
+  inferenceButtonHover: {
+    backgroundColor: '#1d4ed8',
+  },
+  ripple: {
+    position: 'absolute' as const,
+    inset: 0,
+    width: '32px',
+    height: '32px',
+    borderRadius: '50%',
+    zIndex: 0,
+  },
+  node: {
+    padding: '8px 16px',
+    borderRadius: '8px',
+    border: '2px solid',
+    transition: 'all 0.2s',
+    position: 'relative' as const,
+    boxSizing: 'border-box' as const,
+  },
+  nodeSelected: {
+    boxShadow: '0 0 0 2px #fbbf24, 0 0 0 4px #111827',
+  },
+  nodeRoot: {
+    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+    transform: 'scale(1.1)',
+  },
+  nodeDragging: {
+    opacity: 0.3,
+    transform: 'scale(0.95)',
+    boxShadow: '0 0 0 2px #60a5fa, 0 0 0 4px #111827',
+  },
+  nodeDropTarget: {
+    boxShadow: '0 0 0 2px #4ade80, 0 0 0 4px #111827',
+    animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+  },
+  iconContainer: {
+    position: 'absolute' as const,
+    bottom: '-10px',
+    right: '-10px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    zIndex: 10,
+  },
+  iconBadge: {
+    width: '20px',
+    height: '20px',
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s',
+  },
+  chatIcon: {
+    backgroundColor: '#10b981',
+  },
+  chatIconHover: {
+    backgroundColor: '#059669',
+  },
+  notesIcon: {
+    backgroundColor: '#ef4444',
+  },
+  notesIconHover: {
+    backgroundColor: '#dc2626',
+  },
+  sourcesIcon: {
+    backgroundColor: '#f97316',
+  },
+  sourcesIconHover: {
+    backgroundColor: '#ea580c',
+  },
+  textContainer: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: '8px',
+    width: '100%',
+    minHeight: '100%',
+  },
+  textInput: {
+    backgroundColor: 'transparent',
+    border: 'none',
+    outline: 'none',
+    fontSize: '0.875rem',
+    fontWeight: '500',
+    flex: 1,
+    minWidth: 0,
+    resize: 'none' as const,
+    width: '100%',
+    lineHeight: 1.5,
+    minHeight: '1.5em',
+    color: 'inherit',
+    wordBreak: 'break-word' as const,
+    whiteSpace: 'pre-wrap' as const,
+    overflowWrap: 'break-word' as const,
+    overflow: 'hidden',
+    height: 'auto',
+  },
+  textLabel: {
+    fontSize: '0.875rem',
+    fontWeight: '500',
+    flex: 1,
+    minWidth: 0,
+    cursor: 'pointer',
+    userSelect: 'none' as const,
+    wordBreak: 'break-word' as const,
+    whiteSpace: 'pre-wrap' as const,
+    overflowWrap: 'break-word' as const,
+    lineHeight: 1.5,
+    color: 'inherit',
+    display: 'block',
+  },
+  collapseButton: {
+    position: 'absolute' as const,
+    width: '24px',
+    height: '24px',
+    backgroundColor: '#4b5563',
+    border: '1px solid #6b7280',
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s',
+    zIndex: 10,
+    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+  },
+  collapseButtonHover: {
+    backgroundColor: '#6b7280',
+  },
+  contextMenu: {
+    position: 'fixed' as const,
+    backgroundColor: '#1f2937',
+    border: '1px solid #4b5563',
+    borderRadius: '8px',
+    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+    padding: '8px 0',
+    minWidth: '160px',
+    zIndex: 9999,
+  },
+  contextMenuItem: {
+    width: '100%',
+    textAlign: 'left' as const,
+    padding: '8px 16px',
+    fontSize: '0.875rem',
+    color: '#ffffff',
+    backgroundColor: 'transparent',
+    border: 'none',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    transition: 'background-color 0.2s',
+  },
+  contextMenuItemHover: {
+    backgroundColor: '#374151',
+  },
+  contextMenuItemDanger: {
+    color: '#f87171',
+  },
+  contextMenuDivider: {
+    margin: '4px 0',
+    borderTop: '1px solid #4b5563',
+  },
+};
+
+// Add keyframes for animations
+const styleSheet = document.createElement('style');
+styleSheet.textContent = `
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+  @keyframes ripple {
+    0% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(2.5);
+      opacity: 0;
+    }
+  }
+  @keyframes ripple-delayed {
+    0% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(2.5);
+      opacity: 0;
+    }
+  }
+  .animate-ripple {
+    animation: ripple 1.5s linear infinite;
+  }
+  .animate-ripple-delayed {
+    animation: ripple-delayed 1.5s linear infinite;
+    animation-delay: 0.5s;
+  }
+`;
+document.head.appendChild(styleSheet);
 
 export function MindMapNode({
   id,
@@ -33,10 +298,14 @@ export function MindMapNode({
     y: 0,
   });
   const [nodeWidth, setNodeWidth] = useState(data.width || 120);
+  const [nodeHeight, setNodeHeight] = useState(data.height || 32);
   const [isInferenceActive, setIsInferenceActive] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [hoveredButton, setHoveredButton] = useState<string | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
-  const measureRef = useRef<HTMLSpanElement>(null);
+
+  // Create sizing strategy instance
+  const sizingStrategy = createDefaultSizingStrategy();
 
   // Get actions from store
   const {
@@ -45,6 +314,7 @@ export function MindMapNode({
     deleteNode,
     updateNodeLabelWithLayout,
     toggleNodeCollapse,
+    updateNodeDimensions,
   } = useMindMapActions();
 
   // Get selection from store
@@ -57,6 +327,9 @@ export function MindMapNode({
         if (inputRef.current) {
           inputRef.current.focus();
           inputRef.current.select();
+          // Auto-resize to fit content
+          inputRef.current.style.height = 'auto';
+          inputRef.current.style.height = `${inputRef.current.scrollHeight}px`;
         }
       }, 100);
     }
@@ -68,39 +341,70 @@ export function MindMapNode({
     }
   }, [data.isEditing]);
 
-  // Calculate text width for display purposes only
+  // Calculate node dimensions using sizing strategy
   useEffect(() => {
-    const measureTextWidth = () => {
-      if (measureRef.current && !data.isDragging) {
-        const textWidth = measureRef.current.scrollWidth;
-        const padding = 32; // 16px padding on each side
-        const minWidth = 120;
-        const maxWidth = 800;
-        const calculatedWidth = Math.min(
-          Math.max(textWidth + padding, minWidth),
-          maxWidth
-        );
-
-        if (Math.abs(calculatedWidth - nodeWidth) > 5) {
-          // Only update if difference > 5px
-          setNodeWidth(calculatedWidth);
-        }
-      }
-    };
-
-    // Only measure width when not dragging to prevent flicker
     if (!data.isDragging) {
-      requestAnimationFrame(measureTextWidth);
-    }
-  }, [label, data.isDragging, data.label]);
+      const displayLabel = label || data.label || 'Untitled';
+      const hasIcons = !!(
+        data.chatId ||
+        data.notes?.trim() ||
+        (data.sources && data.sources.length > 0)
+      );
 
-  // Update width when data.width changes (from parent)
+      const dimensions = sizingStrategy.calculateNodeSize(displayLabel, {
+        isEditing,
+        hasIcons,
+        level: data.level || 0,
+        isCollapsed: data.isCollapsed,
+      });
+
+      // Only update if dimensions changed significantly
+      let dimensionsChanged = false;
+      if (Math.abs(dimensions.width - nodeWidth) > 5) {
+        setNodeWidth(dimensions.width);
+        dimensionsChanged = true;
+      }
+      if (Math.abs(dimensions.height - nodeHeight) > 2) {
+        setNodeHeight(dimensions.height);
+        dimensionsChanged = true;
+      }
+
+      // Notify the store about dimension changes to trigger re-layout
+      if (dimensionsChanged && !isEditing) {
+        // Debounce the update to avoid too many re-layouts
+        const timeoutId = setTimeout(() => {
+          updateNodeDimensions(id, dimensions.width, dimensions.height);
+        }, 300);
+
+        return () => clearTimeout(timeoutId);
+      }
+    }
+  }, [
+    label,
+    data.label,
+    data.isDragging,
+    isEditing,
+    data.chatId,
+    data.notes,
+    data.sources,
+    data.level,
+    data.isCollapsed,
+    sizingStrategy,
+    nodeWidth,
+    nodeHeight,
+    id,
+    updateNodeDimensions,
+  ]);
+
+  // Update dimensions when data changes (from parent)
   useEffect(() => {
     if (data.width && Math.abs(data.width - nodeWidth) > 5) {
-      // Only update if difference > 5px
       setNodeWidth(data.width);
     }
-  }, [data.width, data.label, data.isDragging]);
+    if (data.height && Math.abs(data.height - nodeHeight) > 2) {
+      setNodeHeight(data.height);
+    }
+  }, [data.width, data.height, data.label, data.isDragging]);
 
   // Close context menu when clicking outside
   useEffect(() => {
@@ -206,7 +510,7 @@ export function MindMapNode({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
     } else if (e.key === 'Escape') {
@@ -329,32 +633,93 @@ export function MindMapNode({
   };
 
   const nodeLevel = data.level || 0;
-  const rootColorClass = 'bg-blue-500 border-blue-400';
 
-  // Only apply default color to root node (level 0), others get no color unless user picks one
-  const defaultColorClass = nodeLevel === 0 ? rootColorClass : '';
-  const colorClass = data.customColors
-    ? data.customColors.backgroundClass
-    : defaultColorClass;
+  // Node color logic
+  const isRootNode = nodeLevel === 0;
+
+  // Get colors based on theme or defaults
+  let colors: {
+    backgroundColor: string;
+    borderColor: string;
+    foregroundColor: string;
+  };
+
+  if (data.colorTheme && NODE_COLORS[data.colorTheme]) {
+    // Use theme colors if set
+    colors = NODE_COLORS[data.colorTheme];
+  } else if (isRootNode) {
+    // Use default root colors
+    colors = DEFAULT_NODE_COLORS.root;
+  } else {
+    // Use default regular node colors
+    colors = DEFAULT_NODE_COLORS.regular;
+  }
+
+  const { backgroundColor, borderColor, foregroundColor: textColor } = colors;
+
+  // Compute node styles - order matters for boxShadow precedence
+  const nodeStyle = {
+    ...styles.node,
+    backgroundColor,
+    borderColor,
+    color: textColor,
+    width: `${nodeWidth}px`,
+    minHeight: `${nodeHeight}px`,
+    minWidth: '120px',
+    maxWidth: '300px',
+    // Default box shadow
+    boxShadow: data.isRoot
+      ? '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
+      : '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+    // Root node scaling
+    ...(data.isRoot ? { transform: 'scale(1.1)' } : {}),
+    // Selected state (should override default boxShadow)
+    ...(selected ? styles.nodeSelected : {}),
+    // Dragging state (should override selected)
+    ...(data.isDragging ? styles.nodeDragging : {}),
+    // Drop target states (highest priority)
+    ...(data.isDropTarget && data.dropPosition === 'over'
+      ? { ...styles.nodeDropTarget }
+      : {}),
+    ...(data.isDropTarget &&
+    (data.dropPosition === 'above' || data.dropPosition === 'below')
+      ? { boxShadow: '0 0 0 2px #60a5fa, 0 0 0 4px #111827' }
+      : {}),
+    ...(!isEditing ? { userSelect: 'none' as const } : {}),
+  };
 
   return (
-    <div className="relative">
+    <div style={styles.container}>
       {/* Drop Position Indicators */}
       {data.isDropTarget && data.dropPosition === 'above' && (
         <>
           {/* For LR/RL layouts: show above indicator */}
           {(data.layout === 'LR' || data.layout === 'RL' || !data.layout) && (
-            <div className="absolute -top-2 left-0 right-0 h-1 bg-green-400 rounded-full shadow-lg animate-pulse z-20">
-              <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 text-green-400">
-                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+            <div style={{ ...styles.dropIndicatorHorizontal, top: '-8px' }}>
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '-4px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                }}
+              >
+                <div style={styles.dropDot}></div>
               </div>
             </div>
           )}
           {/* For TB/BT layouts: show left indicator */}
           {(data.layout === 'TB' || data.layout === 'BT') && (
-            <div className="absolute -left-2 top-0 bottom-0 w-1 bg-green-400 rounded-full shadow-lg animate-pulse z-20">
-              <div className="absolute -left-1 top-1/2 transform -translate-y-1/2 text-green-400">
-                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+            <div style={{ ...styles.dropIndicatorVertical, left: '-8px' }}>
+              <div
+                style={{
+                  position: 'absolute',
+                  left: '-4px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                }}
+              >
+                <div style={styles.dropDot}></div>
               </div>
             </div>
           )}
@@ -365,17 +730,31 @@ export function MindMapNode({
         <>
           {/* For LR/RL layouts: show below indicator */}
           {(data.layout === 'LR' || data.layout === 'RL' || !data.layout) && (
-            <div className="absolute -bottom-2 left-0 right-0 h-1 bg-green-400 rounded-full shadow-lg animate-pulse z-20">
-              <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 text-green-400">
-                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+            <div style={{ ...styles.dropIndicatorHorizontal, bottom: '-8px' }}>
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: '-4px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                }}
+              >
+                <div style={styles.dropDot}></div>
               </div>
             </div>
           )}
           {/* For TB/BT layouts: show right indicator */}
           {(data.layout === 'TB' || data.layout === 'BT') && (
-            <div className="absolute -right-2 top-0 bottom-0 w-1 bg-green-400 rounded-full shadow-lg animate-pulse z-20">
-              <div className="absolute -right-1 top-1/2 transform -translate-y-1/2 text-green-400">
-                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+            <div style={{ ...styles.dropIndicatorVertical, right: '-8px' }}>
+              <div
+                style={{
+                  position: 'absolute',
+                  right: '-4px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                }}
+              >
+                <div style={styles.dropDot}></div>
               </div>
             </div>
           )}
@@ -383,51 +762,45 @@ export function MindMapNode({
       )}
 
       {/* Inference Button */}
-      <div className="absolute left-2 top-1/2 transform -translate-y-1/2 -translate-x-full mr-1 z-20">
+      <div style={styles.inferenceButton}>
         {/* Ripple Effects */}
         {isInferenceActive && (
           <>
-            <div className="absolute inset-0 w-8 h-8 bg-blue-400 rounded-full animate-ripple z-0" />
-            <div className="absolute inset-0 w-8 h-8 bg-blue-300 rounded-full animate-ripple-delayed z-0" />
+            <div
+              className="animate-ripple"
+              style={{
+                ...styles.ripple,
+                backgroundColor: '#60a5fa',
+              }}
+            />
+            <div
+              className="animate-ripple-delayed"
+              style={{
+                ...styles.ripple,
+                backgroundColor: '#93c5fd',
+              }}
+            />
           </>
         )}
 
         <button
           onClick={handleInferenceClick}
-          className="relative w-8 h-8 bg-blue-600 border border-blue-500 rounded-full flex items-center justify-center hover:bg-blue-700 transition-colors z-10 shadow-lg"
+          onMouseEnter={() => setHoveredButton('inference')}
+          onMouseLeave={() => setHoveredButton(null)}
+          style={{
+            ...styles.inferenceButtonInner,
+            ...(hoveredButton === 'inference'
+              ? styles.inferenceButtonHover
+              : {}),
+          }}
           title="Node Panel"
         >
-          <PanelRightOpen size={16} className="text-white" />
+          <PanelRightOpen size={16} color="#ffffff" />
         </button>
       </div>
 
       <div
-        className={clsx(
-          'px-4 py-2 rounded-lg border-2 transition-colors duration-200 relative',
-          colorClass,
-          data.customColors?.foregroundClass ||
-            (data.customColors ? '' : 'text-white'),
-          selected
-            ? 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-gray-900'
-            : '',
-          data.isRoot ? 'shadow-lg scale-110' : 'shadow-md',
-          data.isDragging
-            ? 'opacity-30 scale-95 ring-2 ring-blue-400 ring-offset-2 ring-offset-gray-900 shadow-lg'
-            : '',
-          data.isDropTarget && data.dropPosition === 'over'
-            ? 'ring-2 ring-green-400 ring-offset-2 ring-offset-gray-900 shadow-lg animate-pulse'
-            : '',
-          data.isDropTarget &&
-            (data.dropPosition === 'above' || data.dropPosition === 'below')
-            ? 'ring-2 ring-blue-400 ring-offset-2 ring-offset-gray-900 shadow-lg'
-            : '',
-          !isEditing ? 'select-none' : ''
-        )}
-        style={{
-          width: `${nodeWidth}px`,
-          minWidth: '120px',
-          maxWidth: '800px',
-        }}
+        style={nodeStyle}
         onContextMenu={handleContextMenu}
         onClick={handleNodeClick}
         onPointerDown={handlePointerDown}
@@ -437,11 +810,17 @@ export function MindMapNode({
         {(data.chatId ||
           data.notes?.trim() ||
           (data.sources && data.sources.length > 0)) && (
-          <div className="absolute -bottom-2.5 -right-2.5 flex items-center gap-1 z-10">
+          <div style={styles.iconContainer}>
             {/* Chat watermark icon */}
             {data.chatId && (
               <div
-                className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center cursor-pointer hover:bg-green-600 transition-colors"
+                style={{
+                  ...styles.iconBadge,
+                  ...styles.chatIcon,
+                  ...(hoveredButton === 'chat' ? styles.chatIconHover : {}),
+                }}
+                onMouseEnter={() => setHoveredButton('chat')}
+                onMouseLeave={() => setHoveredButton(null)}
                 onClick={e => {
                   e.stopPropagation();
                   window.dispatchEvent(
@@ -459,14 +838,20 @@ export function MindMapNode({
                 }}
                 title="View chat"
               >
-                <MessageCircle size={12} className="text-white" />
+                <MessageCircle size={12} color="#ffffff" />
               </div>
             )}
 
             {/* Notes watermark icon */}
             {data.notes?.trim() && (
               <div
-                className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center cursor-pointer hover:bg-red-600 transition-colors"
+                style={{
+                  ...styles.iconBadge,
+                  ...styles.notesIcon,
+                  ...(hoveredButton === 'notes' ? styles.notesIconHover : {}),
+                }}
+                onMouseEnter={() => setHoveredButton('notes')}
+                onMouseLeave={() => setHoveredButton(null)}
                 onClick={e => {
                   e.stopPropagation();
                   window.dispatchEvent(
@@ -484,14 +869,22 @@ export function MindMapNode({
                 }}
                 title="View notes"
               >
-                <FileText size={12} className="text-white" />
+                <FileText size={12} color="#ffffff" />
               </div>
             )}
 
             {/* Sources watermark icon */}
             {data.sources && data.sources.length > 0 && (
               <div
-                className="w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center cursor-pointer hover:bg-orange-600 transition-colors"
+                style={{
+                  ...styles.iconBadge,
+                  ...styles.sourcesIcon,
+                  ...(hoveredButton === 'sources'
+                    ? styles.sourcesIconHover
+                    : {}),
+                }}
+                onMouseEnter={() => setHoveredButton('sources')}
+                onMouseLeave={() => setHoveredButton(null)}
                 onClick={e => {
                   e.stopPropagation();
                   window.dispatchEvent(
@@ -509,93 +902,131 @@ export function MindMapNode({
                 }}
                 title="View sources"
               >
-                <BookOpen size={12} className="text-white" />
+                <BookOpen size={12} color="#ffffff" />
               </div>
             )}
           </div>
         )}
 
-        {/* Hidden handles for automatic connections only */}
+        {/* Hidden handles for automatic connections - ReactFlow needs these for proper edge routing */}
         <Handle
           type="target"
           position={Position.Top}
           id="top"
-          style={{ opacity: 0, pointerEvents: 'none' }}
+          style={{
+            opacity: 0,
+            pointerEvents: 'none',
+            width: 1,
+            height: 1,
+            position: 'absolute',
+          }}
         />
         <Handle
           type="target"
           position={Position.Bottom}
           id="bottom"
-          style={{ opacity: 0, pointerEvents: 'none' }}
+          style={{
+            opacity: 0,
+            pointerEvents: 'none',
+            width: 1,
+            height: 1,
+            position: 'absolute',
+          }}
         />
         <Handle
           type="target"
           position={Position.Left}
           id="left"
-          style={{ opacity: 0, pointerEvents: 'none' }}
+          style={{
+            opacity: 0,
+            pointerEvents: 'none',
+            width: 1,
+            height: 1,
+            position: 'absolute',
+          }}
         />
         <Handle
           type="target"
           position={Position.Right}
           id="right"
-          style={{ opacity: 0, pointerEvents: 'none' }}
+          style={{
+            opacity: 0,
+            pointerEvents: 'none',
+            width: 1,
+            height: 1,
+            position: 'absolute',
+          }}
         />
         <Handle
           type="source"
           position={Position.Top}
           id="top-source"
-          style={{ opacity: 0, pointerEvents: 'none' }}
+          style={{
+            opacity: 0,
+            pointerEvents: 'none',
+            width: 1,
+            height: 1,
+            position: 'absolute',
+          }}
         />
         <Handle
           type="source"
           position={Position.Bottom}
           id="bottom-source"
-          style={{ opacity: 0, pointerEvents: 'none' }}
+          style={{
+            opacity: 0,
+            pointerEvents: 'none',
+            width: 1,
+            height: 1,
+            position: 'absolute',
+          }}
         />
         <Handle
           type="source"
           position={Position.Left}
           id="left-source"
-          style={{ opacity: 0, pointerEvents: 'none' }}
+          style={{
+            opacity: 0,
+            pointerEvents: 'none',
+            width: 1,
+            height: 1,
+            position: 'absolute',
+          }}
         />
         <Handle
           type="source"
           position={Position.Right}
           id="right-source"
-          style={{ opacity: 0, pointerEvents: 'none' }}
+          style={{
+            opacity: 0,
+            pointerEvents: 'none',
+            width: 1,
+            height: 1,
+            position: 'absolute',
+          }}
         />
 
-        {/* Hidden element for measuring text width */}
-        <span
-          ref={measureRef}
-          className="absolute opacity-0 pointer-events-none text-sm font-medium whitespace-nowrap"
-          style={{ left: '-9999px', top: '-9999px' }}
-        >
-          {label || data.label || 'Untitled'}
-        </span>
-
-        <div className="flex items-center justify-between gap-2">
+        <div style={styles.textContainer}>
           {isEditing ? (
-            <input
+            <textarea
               ref={inputRef}
-              type="text"
               value={label}
-              onChange={e => setLabel(e.target.value)}
+              onChange={e => {
+                setLabel(e.target.value);
+                // Auto-resize textarea
+                if (inputRef.current) {
+                  inputRef.current.style.height = 'auto';
+                  inputRef.current.style.height = `${inputRef.current.scrollHeight}px`;
+                }
+              }}
               onBlur={handleSubmit}
               onKeyDown={handleKeyDown}
-              className={clsx(
-                'bg-transparent border-none outline-none text-sm font-medium flex-1 min-w-0',
-                data.customColors?.foregroundClass || 'text-white'
-              )}
-              style={{ width: '100%' }}
+              style={styles.textInput}
               placeholder="Enter text..."
             />
           ) : (
             <span
-              className={clsx(
-                'text-sm font-medium flex-1 min-w-0 break-words cursor-pointer select-none',
-                data.customColors?.foregroundClass || 'text-white'
-              )}
+              style={styles.textLabel}
               onDoubleClick={() => setIsEditing(true)}
             >
               {data.label}
@@ -607,20 +1038,33 @@ export function MindMapNode({
         {data.hasChildren && (
           <button
             onClick={handleToggleCollapse}
-            className={clsx(
-              'absolute w-6 h-6 bg-gray-600 border border-gray-500 rounded-full flex items-center justify-center hover:bg-gray-500 transition-colors z-10 shadow-lg',
-              data.layout === 'TB'
-                ? '-bottom-3 left-1/2 transform -translate-x-1/2'
+            onMouseEnter={() => setHoveredButton('collapse')}
+            onMouseLeave={() => setHoveredButton(null)}
+            style={{
+              ...styles.collapseButton,
+              ...(hoveredButton === 'collapse'
+                ? styles.collapseButtonHover
+                : {}),
+              ...(data.layout === 'TB'
+                ? {
+                    bottom: '-12px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                  }
                 : data.layout === 'BT'
-                  ? '-top-3 left-1/2 transform -translate-x-1/2'
-                  : '-right-3 top-1/2 transform -translate-y-1/2'
-            )}
+                  ? { top: '-12px', left: '50%', transform: 'translateX(-50%)' }
+                  : {
+                      right: '-12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                    }),
+            }}
             title={data.isCollapsed ? 'Expand children' : 'Collapse children'}
           >
             {data.isCollapsed ? (
-              <Plus size={12} className="text-white" />
+              <Plus size={12} color="#ffffff" />
             ) : (
-              <Minus size={12} className="text-white" />
+              <Minus size={12} color="#ffffff" />
             )}
           </button>
         )}
@@ -631,17 +1075,23 @@ export function MindMapNode({
         createPortal(
           <div
             ref={contextMenuRef}
-            className="fixed bg-gray-800 border border-gray-600 rounded-lg shadow-lg py-2 min-w-[160px] context-menu"
-            data-context-menu="true"
             style={{
+              ...styles.contextMenu,
               left: contextMenuPosition.x,
               top: contextMenuPosition.y,
-              zIndex: 9999,
             }}
+            data-context-menu="true"
           >
             <button
               onClick={handleAddChild}
-              className="w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700 flex items-center gap-2"
+              onMouseEnter={() => setHoveredButton('addChild')}
+              onMouseLeave={() => setHoveredButton(null)}
+              style={{
+                ...styles.contextMenuItem,
+                ...(hoveredButton === 'addChild'
+                  ? styles.contextMenuItemHover
+                  : {}),
+              }}
             >
               <Plus size={14} />
               Add Child
@@ -649,7 +1099,14 @@ export function MindMapNode({
             {!data.isRoot && (
               <button
                 onClick={handleAddSibling}
-                className="w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700 flex items-center gap-2"
+                onMouseEnter={() => setHoveredButton('addSibling')}
+                onMouseLeave={() => setHoveredButton(null)}
+                style={{
+                  ...styles.contextMenuItem,
+                  ...(hoveredButton === 'addSibling'
+                    ? styles.contextMenuItemHover
+                    : {}),
+                }}
               >
                 <Share size={14} />
                 Add Sibling
@@ -657,7 +1114,14 @@ export function MindMapNode({
             )}
             <button
               onClick={handleEdit}
-              className="w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700 flex items-center gap-2"
+              onMouseEnter={() => setHoveredButton('edit')}
+              onMouseLeave={() => setHoveredButton(null)}
+              style={{
+                ...styles.contextMenuItem,
+                ...(hoveredButton === 'edit'
+                  ? styles.contextMenuItemHover
+                  : {}),
+              }}
             >
               <Edit size={14} />
               Edit Label
@@ -668,7 +1132,14 @@ export function MindMapNode({
                   setShowContextMenu(false);
                   handleToggleCollapse(e);
                 }}
-                className="w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700 flex items-center gap-2"
+                onMouseEnter={() => setHoveredButton('toggle')}
+                onMouseLeave={() => setHoveredButton(null)}
+                style={{
+                  ...styles.contextMenuItem,
+                  ...(hoveredButton === 'toggle'
+                    ? styles.contextMenuItemHover
+                    : {}),
+                }}
               >
                 {data.isCollapsed ? <Plus size={14} /> : <Minus size={14} />}
                 {data.isCollapsed ? 'Expand' : 'Collapse'}
@@ -679,17 +1150,32 @@ export function MindMapNode({
                 setShowContextMenu(false);
                 handleInferenceClick(e);
               }}
-              className="w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700 flex items-center gap-2"
+              onMouseEnter={() => setHoveredButton('panel')}
+              onMouseLeave={() => setHoveredButton(null)}
+              style={{
+                ...styles.contextMenuItem,
+                ...(hoveredButton === 'panel'
+                  ? styles.contextMenuItemHover
+                  : {}),
+              }}
             >
               <PanelRightOpen size={14} />
               Node Panel
             </button>
             {!data.isRoot && (
               <>
-                <hr className="my-1 border-gray-600" />
+                <hr style={styles.contextMenuDivider} />
                 <button
                   onClick={handleDelete}
-                  className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-700 flex items-center gap-2"
+                  onMouseEnter={() => setHoveredButton('delete')}
+                  onMouseLeave={() => setHoveredButton(null)}
+                  style={{
+                    ...styles.contextMenuItem,
+                    ...styles.contextMenuItemDanger,
+                    ...(hoveredButton === 'delete'
+                      ? styles.contextMenuItemHover
+                      : {}),
+                  }}
                 >
                   <Trash2 size={14} />
                   Delete Node

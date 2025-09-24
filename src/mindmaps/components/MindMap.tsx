@@ -8,6 +8,7 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Plus, Trash2, Sparkles } from 'lucide-react';
+import { detectNodeOverlaps } from '../../utils/overlapDetection';
 
 import { MindMapNode } from './MindMapNode';
 import { MusicVisualization } from '../../components/MusicVisualization';
@@ -16,6 +17,7 @@ import type { Source } from '../types/mindMap';
 import { GenerateDialog } from '../../components/shared/GenerateDialog';
 import { useGenerationStreaming } from '../../hooks/useGenerationStreaming';
 import { useIterativeGeneration } from '../../hooks/useIterativeGeneration';
+import { NODE_COLORS, DEFAULT_NODE_COLORS } from '../constants/nodeColors';
 
 import { useMindMapDrag } from '../hooks/useMindMapDrag';
 import type { MindMapData } from '../../utils/mindMapData';
@@ -37,6 +39,8 @@ const nodeTypes = {
   mindMapNode: MindMapNode,
 };
 
+import type { NodeColorTheme } from '../constants/nodeColors';
+
 export interface MindMapControls {
   undo: () => void;
   redo: () => void;
@@ -46,10 +50,7 @@ export interface MindMapControls {
   canRedo: boolean;
   currentLayout: 'LR' | 'RL' | 'TB' | 'BT';
   selectedNodeId: string | null;
-  setNodeColors: (
-    nodeId: string,
-    colors: { backgroundClass: string; foregroundClass: string }
-  ) => void;
+  setNodeColors: (nodeId: string, theme: NodeColorTheme) => void;
   clearNodeColors: (nodeId: string) => void;
 }
 
@@ -199,6 +200,36 @@ function MindMapInner({
     isInitialized,
   ]);
 
+  // Overlap detection - runs after nodes are positioned
+  useEffect(() => {
+    if (!isInitialized || !nodesInitialized || nodes.length === 0) {
+      return;
+    }
+
+    // Add a small delay to ensure nodes are fully rendered
+    const timeoutId = setTimeout(() => {
+      try {
+        const result = detectNodeOverlaps(
+          containerRef.current || undefined,
+          false
+        );
+
+        // In development mode, log errors on overlap to catch layout issues
+        if (result.hasOverlaps && process.env.NODE_ENV === 'development') {
+          console.error('🚨 LAYOUT ERROR: Overlapping nodes detected!', result);
+          // Only throw if there are many overlaps (indicates serious layout failure)
+          if (result.overlaps.length > 3) {
+            throw new Error(`Serious Layout Error: ${result.message}`);
+          }
+        }
+      } catch (error) {
+        console.error('Overlap detection failed:', error);
+      }
+    }, 500); // Small delay to ensure rendering is complete
+
+    return () => clearTimeout(timeoutId);
+  }, [isInitialized, nodesInitialized, nodes, edges, layout]);
+
   // Global click handler to deselect nodes when clicking outside
   useEffect(() => {
     const handleGlobalClick = (e: MouseEvent) => {
@@ -330,11 +361,8 @@ function MindMapInner({
   }, [redo, fitView]);
 
   const handleSetNodeColors = useCallback(
-    (
-      nodeId: string,
-      colors: { backgroundClass: string; foregroundClass: string }
-    ) => {
-      setNodeColors(nodeId, colors);
+    (nodeId: string, theme: NodeColorTheme) => {
+      setNodeColors(nodeId, theme);
     },
     [setNodeColors]
   );
@@ -764,14 +792,18 @@ function MindMapInner({
 
   // Node event handlers
   const onNodeClick = useCallback(
-    (_event: React.MouseEvent, node: Node<MindMapNodeData>) => {
+    (event: React.MouseEvent, node: Node<MindMapNodeData>) => {
+      // Event parameter required by ReactFlow callback interface
+      event; // Acknowledge parameter
       selectNode(node.id);
     },
     [selectNode]
   );
 
   const onNodeDoubleClick = useCallback(
-    (_event: React.MouseEvent, node: Node<MindMapNodeData>) => {
+    (event: React.MouseEvent, node: Node<MindMapNodeData>) => {
+      // Event parameter required by ReactFlow callback interface
+      event; // Acknowledge parameter
       // Start editing the node
       handleUpdateNodeLabel(node.id, node.data.label);
     },
@@ -800,14 +832,34 @@ function MindMapInner({
           }
 
           const nodeLevel = draggedNode.data.level || 0;
-          const rootColorClass = 'bg-blue-500 border-blue-400';
-          const defaultColorClass = nodeLevel === 0 ? rootColorClass : '';
-          const colorClass = draggedNode.data.customColors
-            ? draggedNode.data.customColors.backgroundClass
-            : defaultColorClass;
-          const foregroundClass =
-            draggedNode.data.customColors?.foregroundClass ||
-            (draggedNode.data.customColors ? '' : 'text-white');
+          const isRootNode = nodeLevel === 0;
+
+          // Get colors based on theme or defaults
+          let colors: {
+            backgroundColor: string;
+            borderColor: string;
+            foregroundColor: string;
+          };
+
+          if (
+            draggedNode.data.colorTheme &&
+            NODE_COLORS[draggedNode.data.colorTheme]
+          ) {
+            // Use theme colors if set
+            colors = NODE_COLORS[draggedNode.data.colorTheme];
+          } else if (isRootNode) {
+            // Use default root colors
+            colors = DEFAULT_NODE_COLORS.root;
+          } else {
+            // Use default regular node colors
+            colors = DEFAULT_NODE_COLORS.regular;
+          }
+
+          const {
+            backgroundColor,
+            borderColor,
+            foregroundColor: textColor,
+          } = colors;
 
           return (
             <div
@@ -819,9 +871,22 @@ function MindMapInner({
               }}
             >
               <div
-                className={`px-4 py-2 rounded-lg border-2 transition-colors duration-200 ${colorClass} ${foregroundClass} opacity-80 shadow-2xl scale-110 rotate-1 ${draggedNode.data.isRoot ? 'shadow-lg scale-110' : 'shadow-md'}`}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  border: `2px solid ${borderColor}`,
+                  backgroundColor,
+                  color: textColor,
+                  transition: 'all 0.2s',
+                  opacity: 0.8,
+                  boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+                  transform: 'scale(1.1) rotate(1deg)',
+                  ...(draggedNode.data.isRoot
+                    ? { boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }
+                    : {}),
+                }}
               >
-                <span className="text-sm font-medium">
+                <span style={{ fontSize: '0.875rem', fontWeight: '500' }}>
                   {draggedNode.data.label}
                 </span>
               </div>
