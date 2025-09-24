@@ -26,6 +26,7 @@ export interface ModelArchitecture {
   embeddingDim?: number;
   contextLength?: number;
   feedForwardDim?: number;
+  modelSizeMB?: number;
 }
 
 export interface AvailableModel {
@@ -36,7 +37,9 @@ export interface AvailableModel {
   size?: number;
   description?: string;
 
-  contextLength?: number;
+  contextLength?: number; // This is the estimated/guessed value, to be removed eventually
+  trainedContextLength?: number;
+  maxContextLength?: number;
   parameterCount?: string;
   quantization?: string;
   huggingFaceUrl?: string;
@@ -50,6 +53,13 @@ export interface AvailableModel {
   modelArchitecture?: ModelArchitecture;
   hasVramData?: boolean;
   vramError?: string;
+  isFetchingVram?: boolean; // Track if VRAM data is being fetched
+
+  // Multi-part model fields
+  isMultiPart?: boolean;
+  totalParts?: number;
+  allPartFiles?: string[];
+  totalSize?: number;
 }
 
 interface AvailableModelsState {
@@ -76,6 +86,7 @@ interface AvailableModelsState {
   clearSearch: () => void;
   loadAvailableModels: () => Promise<void>;
   loadCachedModels: () => Promise<boolean>;
+  checkForModelUpdates: (visibleModelIds?: string[]) => Promise<void>;
   setCurrentPage: (page: number) => void;
 
   // Getters
@@ -145,7 +156,9 @@ export const useAvailableModelsStore = create<AvailableModelsState>(
           throw new Error('Failed to search models');
         }
 
-        const data = await response.json();
+        const data = (await response.json()) as {
+          models?: AvailableModel[];
+        };
         set({
           searchResults: data.models ?? [],
           hasSearched: true,
@@ -200,7 +213,7 @@ export const useAvailableModelsStore = create<AvailableModelsState>(
       try {
         const response = await fetch('/api/local-llm/available-models-cached');
         if (response.ok) {
-          const data = await response.json();
+          const data = (await response.json()) as AvailableModel[];
           const models = data ?? [];
           set({ availableModels: models });
           return models.length > 0;
@@ -220,7 +233,7 @@ export const useAvailableModelsStore = create<AvailableModelsState>(
 
         const response = await fetch('/api/local-llm/available-models');
         if (response.ok) {
-          const data = await response.json();
+          const data = (await response.json()) as AvailableModel[];
           set({ availableModels: data ?? [] });
         } else {
           logger.error('Failed to load available models:', response.statusText);
@@ -229,6 +242,170 @@ export const useAvailableModelsStore = create<AvailableModelsState>(
         logger.error('Error loading available models:', error);
       } finally {
         set({ loadingAvailable: false });
+      }
+    },
+
+    checkForModelUpdates: async (visibleModelIds?: string[]) => {
+      const { availableModels, searchResults } = get();
+
+      // Get all current model IDs
+      const allModels = [...availableModels, ...searchResults];
+      const allModelIds = allModels.map(m => m.modelId ?? m.filename);
+
+      // Determine which models are visible and need VRAM data
+      let modelsToFetchVram: string[] = [];
+      if (visibleModelIds && visibleModelIds.length > 0) {
+        // Only fetch VRAM for visible models that don't have it yet
+        const visibleModels = allModels.filter(m =>
+          visibleModelIds.includes(m.modelId ?? m.filename)
+        );
+        modelsToFetchVram = visibleModels
+          .filter(m => !m.hasVramData && !m.isFetchingVram && !m.vramError)
+          .map(m => m.modelId ?? m.filename);
+
+        // Mark visible models as fetching
+        if (modelsToFetchVram.length > 0) {
+          set(state => {
+            const updatedAvailable = state.availableModels.map(model => {
+              const shouldFetch = modelsToFetchVram.includes(
+                model.modelId ?? model.filename
+              );
+              return shouldFetch ? { ...model, isFetchingVram: true } : model;
+            });
+
+            const updatedSearch = state.searchResults.map(model => {
+              const shouldFetch = modelsToFetchVram.includes(
+                model.modelId ?? model.filename
+              );
+              return shouldFetch ? { ...model, isFetchingVram: true } : model;
+            });
+
+            return {
+              availableModels: updatedAvailable,
+              searchResults: updatedSearch,
+            };
+          });
+        }
+      }
+
+      try {
+        const response = await fetch('/api/local-llm/check-model-updates', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            modelIds: allModelIds,
+            visibleModelIds: modelsToFetchVram,
+          }),
+        });
+
+        if (response.ok) {
+          const data = (await response.json()) as {
+            models?: AvailableModel[];
+          };
+          const updatedModels = data.models ?? [];
+
+          if (updatedModels.length > 0) {
+            // Update both availableModels and searchResults with new data
+            set(state => {
+              const updatedAvailable = state.availableModels.map(model => {
+                const update = updatedModels.find(
+                  (u: AvailableModel) =>
+                    (u.modelId ?? u.filename) ===
+                    (model.modelId ?? model.filename)
+                );
+                if (update) {
+                  return { ...update, isFetchingVram: false } as AvailableModel;
+                }
+                // If no update found but was marked as fetching, unmark it
+                const wasFetching = modelsToFetchVram.includes(
+                  model.modelId ?? model.filename
+                );
+                return wasFetching
+                  ? { ...model, isFetchingVram: false }
+                  : model;
+              });
+
+              const updatedSearch = state.searchResults.map(model => {
+                const update = updatedModels.find(
+                  (u: AvailableModel) =>
+                    (u.modelId ?? u.filename) ===
+                    (model.modelId ?? model.filename)
+                );
+                if (update) {
+                  return { ...update, isFetchingVram: false } as AvailableModel;
+                }
+                // If no update found but was marked as fetching, unmark it
+                const wasFetching = modelsToFetchVram.includes(
+                  model.modelId ?? model.filename
+                );
+                return wasFetching
+                  ? { ...model, isFetchingVram: false }
+                  : model;
+              });
+
+              return {
+                availableModels: updatedAvailable,
+                searchResults: updatedSearch,
+              };
+            });
+          } else {
+            // No updates found, unmark fetching status
+            set(state => {
+              const updatedAvailable = state.availableModels.map(model => {
+                const wasFetching = modelsToFetchVram.includes(
+                  model.modelId ?? model.filename
+                );
+                return wasFetching
+                  ? { ...model, isFetchingVram: false }
+                  : model;
+              });
+
+              const updatedSearch = state.searchResults.map(model => {
+                const wasFetching = modelsToFetchVram.includes(
+                  model.modelId ?? model.filename
+                );
+                return wasFetching
+                  ? { ...model, isFetchingVram: false }
+                  : model;
+              });
+
+              return {
+                availableModels: updatedAvailable,
+                searchResults: updatedSearch,
+              };
+            });
+          }
+        }
+      } catch (error) {
+        logger.debug('Error checking for model updates:', {
+          error: String(error),
+        });
+
+        // Unmark fetching status on error
+        if (modelsToFetchVram.length > 0) {
+          set(state => {
+            const updatedAvailable = state.availableModels.map(model => {
+              const wasFetching = modelsToFetchVram.includes(
+                model.modelId ?? model.filename
+              );
+              return wasFetching ? { ...model, isFetchingVram: false } : model;
+            });
+
+            const updatedSearch = state.searchResults.map(model => {
+              const wasFetching = modelsToFetchVram.includes(
+                model.modelId ?? model.filename
+              );
+              return wasFetching ? { ...model, isFetchingVram: false } : model;
+            });
+
+            return {
+              availableModels: updatedAvailable,
+              searchResults: updatedSearch,
+            };
+          });
+        }
       }
     },
 

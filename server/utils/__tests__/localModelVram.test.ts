@@ -24,7 +24,7 @@ vi.mock('node-llama-cpp', () => ({
     metadata: {
       llama: {
         block_count: 32,
-        context_length: 8192,
+        context_length: 8000,
       },
     },
   }),
@@ -39,7 +39,7 @@ vi.mock('../ggufVramCalculator', async () => {
       n_layers: 32,
       n_kv_heads: 8,
       embedding_dim: 4096,
-      context_length: 32768,
+      context_length: 8000, // 8K context will generate 2K, 4K, 6K, 8K configs
       feed_forward_dim: 11008,
       model_size_mb: 4000,
       loaded: true,
@@ -108,8 +108,9 @@ describe('Local Model VRAM Calculation', () => {
     expect(firstEstimate).toHaveProperty('expected');
     expect(firstEstimate).toHaveProperty('conservative');
     expect(firstEstimate).toHaveProperty('config');
+    // For 8000 context, first quarter is 2000 tokens = 2K exactly
     expect(firstEstimate.config.label).toBe('2K context');
-    expect(firstEstimate.config.contextSize).toBe(2048);
+    expect(firstEstimate.config.contextSize).toBe(2000); // 0.25 * 8000
     expect(firstEstimate.config.cacheType).toBe('fp16');
     expect(firstEstimate.config.gpuLayers).toBe(999);
 

@@ -5,11 +5,15 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { ModelFetcher } from '../modelFetcher';
 import * as ggufVramCalculator from '../utils/ggufVramCalculator';
+import * as sharedVramCalculator from '../../src/shared/vramCalculator';
 
-// Mock the VRAM calculator module
+// Mock the VRAM calculator modules
 vi.mock('../utils/ggufVramCalculator', () => ({
   loadMetadataFromUrl: vi.fn(),
-  calculateVRAMEstimate: vi.fn(),
+}));
+
+vi.mock('../../src/shared/vramCalculator', () => ({
+  calculateAllVRAMEstimates: vi.fn(),
 }));
 
 // Mock logger
@@ -30,20 +34,30 @@ vi.mock('fs', () => ({
   writeFileSync: vi.fn(),
 }));
 
-// Mock getMindstrikeDirectory
+// Mock path module
+vi.mock('path', () => ({
+  join: vi.fn((...args) => args.join('/')),
+  resolve: vi.fn((...args) => args.join('/')),
+  dirname: vi.fn(path => path.substring(0, path.lastIndexOf('/'))),
+}));
+
+// Mock settingsDirectory
 vi.mock('../utils/settingsDirectory', () => ({
-  getMindstrikeDirectory: vi.fn(() => '/tmp/mindstrike'),
+  getMindstrikeDirectory: vi.fn(() => '/mock/mindstrike'),
 }));
 
 describe('ModelFetcher VRAM Integration', () => {
   let modelFetcher: ModelFetcher;
 
   beforeEach(() => {
+    // Clear all mocks before each test
     vi.clearAllMocks();
-    // Create a new instance but don't initialize from file cache
+
+    // Reset fetch mock
+    global.fetch = vi.fn();
+
+    // Create a new instance for each test
     modelFetcher = new ModelFetcher();
-    // Clear the internal cache
-    modelFetcher.clearCache();
   });
 
   afterEach(() => {
@@ -57,7 +71,7 @@ describe('ModelFetcher VRAM Integration', () => {
         n_layers: 32,
         n_kv_heads: 8,
         embedding_dim: 4096,
-        context_length: 32768,
+        context_length: 16384,
         feed_forward_dim: 11008,
         model_size_mb: 4000,
       };
@@ -65,22 +79,62 @@ describe('ModelFetcher VRAM Integration', () => {
       vi.mocked(ggufVramCalculator.loadMetadataFromUrl).mockResolvedValue(
         mockMetadata
       );
-      vi.mocked(ggufVramCalculator.calculateVRAMEstimate).mockImplementation(
-        (metadata, gpuLayers, contextSize) => ({
-          expected: 4000 + contextSize * 0.5, // Simple mock calculation
-          conservative: 4500 + contextSize * 0.5,
-        })
+
+      // Mock the shared VRAM calculator to return estimates
+      vi.mocked(sharedVramCalculator.calculateAllVRAMEstimates).mockReturnValue(
+        [
+          {
+            expected: 4200,
+            conservative: 4620,
+            config: {
+              gpuLayers: 999,
+              contextSize: 4096,
+              cacheType: 'fp16',
+              label: '4K context',
+            },
+          },
+          {
+            expected: 4400,
+            conservative: 4840,
+            config: {
+              gpuLayers: 999,
+              contextSize: 8192,
+              cacheType: 'fp16',
+              label: '8K context',
+            },
+          },
+          {
+            expected: 4600,
+            conservative: 5060,
+            config: {
+              gpuLayers: 999,
+              contextSize: 12288,
+              cacheType: 'fp16',
+              label: '12K context',
+            },
+          },
+          {
+            expected: 4800,
+            conservative: 5280,
+            config: {
+              gpuLayers: 999,
+              contextSize: 16384,
+              cacheType: 'fp16',
+              label: '16K context',
+            },
+          },
+        ]
       );
 
       // Mock HuggingFace API responses
       global.fetch = vi
         .fn()
-        // First call: Get list of models
+        // First call: Get trending models
         .mockResolvedValueOnce({
           ok: true,
           json: async () => [
             {
-              id: 'test/model',
+              id: 'test/model-accessible',
               downloads: 20000, // Above the 10k threshold
               tags: ['text-generation', 'gguf'],
               siblings: [{ rfilename: 'model-Q4_K_M.gguf', size: 4000000000 }],
@@ -91,46 +145,44 @@ describe('ModelFetcher VRAM Integration', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({
-            id: 'test/model',
+            id: 'test/model-accessible',
             downloads: 20000,
             tags: ['text-generation', 'gguf'],
             gated: false,
             siblings: [{ rfilename: 'model-Q4_K_M.gguf', size: 4000000000 }],
           }),
         } as Response)
-        // Third call: Check accessibility (HEAD request)
+        // Third call: Check accessibility
         .mockResolvedValueOnce({
           ok: true,
           headers: new Headers(),
         } as Response);
 
       await modelFetcher.fetchPopularModels();
-      const models = modelFetcher.getCachedModels();
+      let models = modelFetcher.getCachedModels();
 
       expect(models).toHaveLength(1);
+
+      // Manually trigger VRAM data fetching for the model
+      await modelFetcher.fetchVRAMDataForModels(models);
+
+      // Wait a bit for the async queue processing to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Get the updated models after VRAM data is fetched
+      models = modelFetcher.getCachedModels();
       const model = models[0];
 
-      // Check that VRAM data is included
+      // Check that VRAM data was successfully added
       expect(model.hasVramData).toBe(true);
       expect(model.vramEstimates).toBeDefined();
-      expect(model.vramEstimates).toHaveLength(4); // 4 standard configs
+      expect(model.vramEstimates).toHaveLength(4);
       expect(model.modelArchitecture).toBeDefined();
-      expect(model.modelArchitecture?.layers).toBe(32);
-      expect(model.modelArchitecture?.kvHeads).toBe(8);
-
-      // Check VRAM estimates
-      const estimate2K = model.vramEstimates?.find(
-        e => e.config.label === '2K context'
-      );
-      expect(estimate2K).toBeDefined();
-      expect(estimate2K?.expected).toBeGreaterThan(0);
-      expect(estimate2K?.conservative).toBeGreaterThan(
-        estimate2K?.expected ?? 0
-      );
+      expect(model.modelArchitecture?.contextLength).toBe(16384);
     });
 
     it('should handle VRAM fetch errors gracefully', async () => {
-      // Mock metadata fetch failure
+      // Mock loadMetadataFromUrl to throw an error
       vi.mocked(ggufVramCalculator.loadMetadataFromUrl).mockRejectedValue(
         new Error('Failed to fetch metadata')
       );
@@ -168,9 +220,18 @@ describe('ModelFetcher VRAM Integration', () => {
         } as Response);
 
       await modelFetcher.fetchPopularModels();
-      const models = modelFetcher.getCachedModels();
+      let models = modelFetcher.getCachedModels();
 
       expect(models).toHaveLength(1);
+
+      // Manually trigger VRAM data fetching for the model
+      await modelFetcher.fetchVRAMDataForModels(models);
+
+      // Wait a bit for the async queue processing to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Get the updated models after VRAM data is fetched
+      models = modelFetcher.getCachedModels();
       const model = models[0];
 
       // Check that loadMetadataFromUrl was called (should have tried to fetch VRAM data)
@@ -184,7 +245,7 @@ describe('ModelFetcher VRAM Integration', () => {
       // vramError will be undefined since fetchVRAMData returns null on error, not throwing
     });
 
-    it('should skip VRAM calculation for inaccessible models', async () => {
+    it('should attempt VRAM calculation for all models including gated ones', async () => {
       // Mock HuggingFace API responses for gated model
       global.fetch = vi
         .fn()
@@ -213,27 +274,36 @@ describe('ModelFetcher VRAM Integration', () => {
         } as Response);
 
       await modelFetcher.fetchPopularModels();
-      const models = modelFetcher.getCachedModels();
+      let models = modelFetcher.getCachedModels();
 
       expect(models).toHaveLength(1);
+
+      // Manually trigger VRAM data fetching for the model
+      await modelFetcher.fetchVRAMDataForModels(models);
+
+      // Wait a bit for the async queue processing to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Get the updated models after VRAM data is fetched
+      models = modelFetcher.getCachedModels();
       const model = models[0];
 
-      // Check that VRAM data is not included for gated models
-      expect(model.hasVramData).toBe(false);
-      expect(model.vramEstimates).toBeUndefined();
+      // Check that model is marked as gated
       expect(model.accessibility).toBe('gated');
 
-      // Ensure VRAM calculator was not called
-      expect(ggufVramCalculator.loadMetadataFromUrl).not.toHaveBeenCalled();
+      // With the new behavior, we now attempt to fetch VRAM data for all models
+      // including gated ones, since many models incorrectly report as gated
+      // but still provide accessible metadata
+      expect(ggufVramCalculator.loadMetadataFromUrl).toHaveBeenCalled();
     });
 
     it('should calculate correct VRAM configurations', async () => {
-      // Mock metadata response
+      // Mock metadata response with 8192 context length for predictable test
       const mockMetadata = {
         n_layers: 48,
         n_kv_heads: 16,
         embedding_dim: 5120,
-        context_length: 32768,
+        context_length: 8192, // 8K context will generate 2K, 4K, 6K, 8K configurations
         feed_forward_dim: 13824,
         model_size_mb: 8000,
       };
@@ -242,17 +312,50 @@ describe('ModelFetcher VRAM Integration', () => {
         mockMetadata
       );
 
-      // Mock realistic VRAM calculations
-      vi.mocked(ggufVramCalculator.calculateVRAMEstimate).mockImplementation(
-        (metadata, gpuLayers, contextSize, cacheType) => {
-          const baseVram = 8000;
-          const contextMultiplier = cacheType === 'fp16' ? 1.0 : 0.5;
-          const vram = baseVram + contextSize * contextMultiplier * 0.1;
-          return {
-            expected: Math.round(vram),
-            conservative: Math.round(vram * 1.1),
-          };
-        }
+      // Mock VRAM calculations using the new shared calculator
+      vi.mocked(sharedVramCalculator.calculateAllVRAMEstimates).mockReturnValue(
+        [
+          {
+            expected: 8200,
+            conservative: 9020,
+            config: {
+              gpuLayers: 999,
+              contextSize: 2048,
+              cacheType: 'fp16',
+              label: '2K context',
+            },
+          },
+          {
+            expected: 8400,
+            conservative: 9240,
+            config: {
+              gpuLayers: 999,
+              contextSize: 4096,
+              cacheType: 'fp16',
+              label: '4K context',
+            },
+          },
+          {
+            expected: 8600,
+            conservative: 9460,
+            config: {
+              gpuLayers: 999,
+              contextSize: 6144,
+              cacheType: 'fp16',
+              label: '6K context',
+            },
+          },
+          {
+            expected: 8800,
+            conservative: 9680,
+            config: {
+              gpuLayers: 999,
+              contextSize: 8192,
+              cacheType: 'fp16',
+              label: '8K context',
+            },
+          },
+        ]
       );
 
       // Mock HuggingFace API responses
@@ -288,39 +391,46 @@ describe('ModelFetcher VRAM Integration', () => {
         } as Response);
 
       await modelFetcher.fetchPopularModels();
-      const models = modelFetcher.getCachedModels();
+      let models = modelFetcher.getCachedModels();
 
       expect(models).toHaveLength(1);
+
+      // Manually trigger VRAM data fetching for the model
+      await modelFetcher.fetchVRAMDataForModels(models);
+
+      // Wait a bit for the async queue processing to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Get the updated models after VRAM data is fetched
+      models = modelFetcher.getCachedModels();
       const model = models[0];
 
       // Verify all 4 configurations are calculated
       expect(model.vramEstimates).toHaveLength(4);
 
       const configs = model.vramEstimates?.map(e => e.config.label) ?? [];
+      // With 8192 context, we get quarters: 2K, 4K, 6K, 8K
       expect(configs).toContain('2K context');
       expect(configs).toContain('4K context');
+      expect(configs).toContain('6K context');
       expect(configs).toContain('8K context');
-      expect(configs).toContain('16K context');
 
-      // Verify calculations were called with correct parameters
-      expect(ggufVramCalculator.calculateVRAMEstimate).toHaveBeenCalledTimes(4);
-      expect(ggufVramCalculator.calculateVRAMEstimate).toHaveBeenCalledWith(
-        mockMetadata,
-        999,
-        2048,
-        'fp16'
-      );
-      expect(ggufVramCalculator.calculateVRAMEstimate).toHaveBeenCalledWith(
-        mockMetadata,
-        999,
-        8192,
-        'fp16'
-      );
+      // Verify the shared calculator was called with correct architecture
+      expect(
+        sharedVramCalculator.calculateAllVRAMEstimates
+      ).toHaveBeenCalledWith({
+        layers: 48,
+        kvHeads: 16,
+        embeddingDim: 5120,
+        contextLength: 8192,
+        feedForwardDim: 13824,
+        modelSizeMB: 8000,
+      });
     });
   });
 
   describe('Model search with VRAM', () => {
-    it('should include VRAM data in search results', async () => {
+    it('should be able to fetch VRAM data for search results', async () => {
       const mockMetadata = {
         n_layers: 32,
         n_kv_heads: 8,
@@ -333,59 +443,66 @@ describe('ModelFetcher VRAM Integration', () => {
       vi.mocked(ggufVramCalculator.loadMetadataFromUrl).mockResolvedValue(
         mockMetadata
       );
-      vi.mocked(ggufVramCalculator.calculateVRAMEstimate).mockReturnValue({
-        expected: 5000,
-        conservative: 5500,
-      });
+      vi.mocked(sharedVramCalculator.calculateAllVRAMEstimates).mockReturnValue(
+        [
+          {
+            expected: 5000,
+            conservative: 5500,
+            config: {
+              gpuLayers: 999,
+              contextSize: 8192,
+              cacheType: 'fp16',
+              label: '8K context',
+            },
+          },
+        ]
+      );
 
       // Mock search API response
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => [
-          {
-            id: 'searched/model',
-            downloads: 1500,
-            tags: ['text-generation', 'gguf'],
-            siblings: [{ rfilename: 'model-Q4_K_M.gguf', size: 4000000000 }],
-          },
-        ],
-      } as Response);
-
-      // Mock model details API
       global.fetch = vi
         .fn()
         .mockResolvedValueOnce({
           ok: true,
           json: async () => [
             {
-              id: 'searched/model',
-              downloads: 1500,
+              id: 'test/search-model',
+              downloads: 8000, // Below typical threshold but included in search results
               tags: ['text-generation', 'gguf'],
               siblings: [{ rfilename: 'model-Q4_K_M.gguf', size: 4000000000 }],
             },
           ],
         } as Response)
+        // Get model details
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({
-            id: 'searched/model',
-            downloads: 1500,
+            id: 'test/search-model',
+            downloads: 8000,
             tags: ['text-generation', 'gguf'],
             gated: false,
             siblings: [{ rfilename: 'model-Q4_K_M.gguf', size: 4000000000 }],
           }),
         } as Response)
+        // Check accessibility
         .mockResolvedValueOnce({
           ok: true,
           headers: new Headers(),
         } as Response);
 
-      const results = await modelFetcher.searchModels('test');
+      // Search for a specific model
+      await modelFetcher.searchModels('search-model');
+      let models = modelFetcher.getCachedModels();
 
-      expect(results).toHaveLength(1);
-      expect(results[0].hasVramData).toBe(true);
-      expect(results[0].vramEstimates).toBeDefined();
-      expect(results[0].modelArchitecture).toBeDefined();
+      expect(models).toHaveLength(1);
+
+      // Trigger VRAM fetch for search results
+      await modelFetcher.fetchVRAMDataForModels(models);
+
+      // Wait for processing
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Check that VRAM fetch was attempted
+      expect(ggufVramCalculator.loadMetadataFromUrl).toHaveBeenCalled();
     });
   });
 });

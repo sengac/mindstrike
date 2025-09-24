@@ -81,6 +81,7 @@ interface LocalModelsState {
   isLoading: boolean;
   loadingModelId: string | null;
   error: string | null;
+  modelLoadErrors: Map<string, string>; // Track per-model load errors
 
   // Actions
   setLocalModels: (models: LocalModelInfo[]) => void;
@@ -88,6 +89,8 @@ interface LocalModelsState {
   setIsLoading: (loading: boolean) => void;
   setLoadingModelId: (modelId: string | null) => void;
   setError: (error: string | null) => void;
+  setModelLoadError: (modelId: string, error: string | null) => void;
+  clearModelLoadError: (modelId: string) => void;
 
   // Business logic actions
   fetchModelsAndStatuses: () => Promise<void>;
@@ -105,6 +108,7 @@ interface LocalModelsState {
   getModelStatus: (modelId: string) => ModelStatus | undefined;
   isModelLoaded: (modelId: string) => boolean;
   isModelLoading: (modelId: string) => boolean;
+  getModelLoadError: (modelId: string) => string | undefined;
 }
 
 export const useLocalModelsStore = create<LocalModelsState>()(
@@ -115,6 +119,7 @@ export const useLocalModelsStore = create<LocalModelsState>()(
     isLoading: false,
     loadingModelId: null,
     error: null,
+    modelLoadErrors: new Map(),
 
     // Basic setters
     setLocalModels: models => set({ localModels: models }),
@@ -122,6 +127,24 @@ export const useLocalModelsStore = create<LocalModelsState>()(
     setIsLoading: loading => set({ isLoading: loading }),
     setLoadingModelId: modelId => set({ loadingModelId: modelId }),
     setError: error => set({ error }),
+    setModelLoadError: (modelId, error) => {
+      set(state => {
+        const newErrors = new Map(state.modelLoadErrors);
+        if (error) {
+          newErrors.set(modelId, error);
+        } else {
+          newErrors.delete(modelId);
+        }
+        return { modelLoadErrors: newErrors };
+      });
+    },
+    clearModelLoadError: modelId => {
+      set(state => {
+        const newErrors = new Map(state.modelLoadErrors);
+        newErrors.delete(modelId);
+        return { modelLoadErrors: newErrors };
+      });
+    },
 
     // Main fetch function
     fetchModelsAndStatuses: async () => {
@@ -131,21 +154,24 @@ export const useLocalModelsStore = create<LocalModelsState>()(
         // Load local models
         const modelsResponse = await fetch('/api/local-llm/models');
         if (modelsResponse.ok) {
-          const models = await modelsResponse.json();
+          const models = (await modelsResponse.json()) as LocalModelInfo[];
 
           // Load all model settings from server
-          let allSettings: Record<string, any> = {};
+          let allSettings: Record<string, ModelLoadingSettings> = {};
           try {
             const settingsResponse = await fetch('/api/local-llm/settings');
             if (settingsResponse.ok) {
-              allSettings = await settingsResponse.json();
+              allSettings = (await settingsResponse.json()) as Record<
+                string,
+                ModelLoadingSettings
+              >;
             }
           } catch (error) {
             logger.error('Error loading server-side settings:', error);
           }
 
           // Merge server-calculated settings with user settings from server
-          const modelsWithSettings = models.map((model: LocalModelInfo) => {
+          const modelsWithSettings = models.map(model => {
             const savedSettings = allSettings[model.id] ?? {};
             return {
               ...model,
@@ -161,13 +187,13 @@ export const useLocalModelsStore = create<LocalModelsState>()(
           // Load status for each model
           const statuses = new Map<string, ModelStatus>();
           await Promise.all(
-            models.map(async (model: LocalModelInfo) => {
+            models.map(async model => {
               try {
                 const statusResponse = await fetch(
                   `/api/local-llm/models/${model.id}/status`
                 );
                 if (statusResponse.ok) {
-                  const status = await statusResponse.json();
+                  const status = (await statusResponse.json()) as ModelStatus;
                   statuses.set(model.id, status);
                 }
               } catch (error) {
@@ -240,7 +266,11 @@ export const useLocalModelsStore = create<LocalModelsState>()(
 
           // Retry after a brief delay
           setTimeout(() => {
-            get().loadModel(targetModelId, true);
+            get()
+              .loadModel(targetModelId, true)
+              .catch(retryError => {
+                logger.error('Failed to retry model loading:', retryError);
+              });
           }, 1000);
         } catch (error) {
           logger.error('Error during memory issue retry:', error);
@@ -250,6 +280,8 @@ export const useLocalModelsStore = create<LocalModelsState>()(
 
       try {
         set({ loadingModelId: modelId });
+        // Clear any previous error for this model
+        get().clearModelLoadError(modelId);
 
         const response = await fetch(`/api/local-llm/models/${modelId}/load`, {
           method: 'POST',
@@ -260,6 +292,9 @@ export const useLocalModelsStore = create<LocalModelsState>()(
             toast.success('Model loaded successfully');
           }
 
+          // Clear any previous errors
+          get().clearModelLoadError(modelId);
+
           // Refresh model status
           await get().fetchModelsAndStatuses();
 
@@ -267,26 +302,36 @@ export const useLocalModelsStore = create<LocalModelsState>()(
           const { useSystemInformationStore } = await import(
             './useSystemInformationStore'
           );
-          useSystemInformationStore.getState().updateSystemInfo();
+          await useSystemInformationStore.getState().updateSystemInfo();
 
           // Emit event to trigger global model rescan since local model state changed
           modelEvents.emit('models-changed');
         } else {
-          const error = await response.json();
+          const error = (await response.json()) as { error?: string };
+          const errorMessage = error.error ?? 'Failed to load model';
 
           // Handle memory issues with auto-retry
-          if (isAutoLoad && error.error?.toLowerCase().includes('memory')) {
+          if (isAutoLoad && errorMessage.toLowerCase().includes('memory')) {
             await handleMemoryIssueRetry(modelId);
             return;
           }
 
+          // Store the error for UI display
+          get().setModelLoadError(modelId, errorMessage);
+
           const message = isAutoLoad
-            ? `Failed to start model: ${error.error ?? 'Unknown error'}`
-            : (error.error ?? 'Failed to load model');
+            ? `Failed to start model: ${errorMessage}`
+            : errorMessage;
           toast.error(message);
         }
       } catch (error) {
         logger.error('Error loading model:', error);
+        const errorMessage =
+          error instanceof Error ? error.message : 'Connection error';
+
+        // Store the error for UI display
+        get().setModelLoadError(modelId, errorMessage);
+
         const message = isAutoLoad
           ? 'Failed to start model due to connection error'
           : 'Failed to load model';
@@ -316,12 +361,12 @@ export const useLocalModelsStore = create<LocalModelsState>()(
           const { useSystemInformationStore } = await import(
             './useSystemInformationStore'
           );
-          useSystemInformationStore.getState().updateSystemInfo();
+          await useSystemInformationStore.getState().updateSystemInfo();
 
           // Emit event to trigger global model rescan since local model state changed
           modelEvents.emit('models-changed');
         } else {
-          const error = await response.json();
+          const error = (await response.json()) as { error?: string };
           toast.error(error.error ?? 'Failed to unload model');
         }
       } catch (error) {
@@ -344,7 +389,7 @@ export const useLocalModelsStore = create<LocalModelsState>()(
           // Emit event to trigger global model rescan
           modelEvents.emit('models-changed');
         } else {
-          const error = await response.json();
+          const error = (await response.json()) as { error?: string };
           toast.error(error.error ?? 'Failed to delete model');
         }
       } catch (error) {
@@ -360,7 +405,7 @@ export const useLocalModelsStore = create<LocalModelsState>()(
           `/api/local-llm/models/${modelId}/status`
         );
         if (statusResponse.ok) {
-          const status = await statusResponse.json();
+          const status = (await statusResponse.json()) as ModelStatus;
           const { modelStatuses } = get();
           const newStatuses = new Map(modelStatuses);
           newStatuses.set(modelId, status);
@@ -403,7 +448,7 @@ export const useLocalModelsStore = create<LocalModelsState>()(
 
           toast.success('Model settings updated successfully');
         } else {
-          const error = await response.json();
+          const error = (await response.json()) as { error?: string };
           toast.error(error.error ?? 'Failed to update model settings');
         }
       } catch (error) {
@@ -431,11 +476,15 @@ export const useLocalModelsStore = create<LocalModelsState>()(
     },
 
     isModelLoaded: (modelId: string) => {
-      return get().modelStatuses.get(modelId)?.loaded || false;
+      return get().modelStatuses.get(modelId)?.loaded ?? false;
     },
 
     isModelLoading: (modelId: string) => {
       return get().loadingModelId === modelId;
+    },
+
+    getModelLoadError: (modelId: string) => {
+      return get().modelLoadErrors.get(modelId);
     },
   }))
 );

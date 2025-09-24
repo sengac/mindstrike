@@ -9,6 +9,7 @@ import { getLocalModelsDirectory } from '../utils/settingsDirectory';
 import { modelSettingsManager } from '../utils/modelSettingsManager';
 import { SSEEventType } from '../../src/types';
 import { HTTP_STATUS } from '../llm/constants';
+import { logger } from '../logger';
 
 const router = Router();
 const llmManager = getLocalLLMManager();
@@ -21,7 +22,7 @@ router.get('/models', async (req, res) => {
     const models = await llmManager.getLocalModels();
     res.json(models);
   } catch (error) {
-    console.error('Error getting local models:', error);
+    logger.error('Error getting local models:', error);
     res.status(500).json({ error: 'Failed to get local models' });
   }
 });
@@ -35,8 +36,74 @@ router.get('/available-models-cached', async (req, res) => {
     const models = modelFetcher.getCachedModels();
     res.json(models);
   } catch (error) {
-    console.error('Error getting cached models:', error);
+    logger.error('Error getting cached models:', error);
     res.status(500).json({ error: 'Failed to get cached models' });
+  }
+});
+
+/**
+ * Get updated VRAM data for specific models and trigger fetch for visible ones
+ */
+router.post('/check-model-updates', async (req, res) => {
+  try {
+    const { modelIds, visibleModelIds } = req.body as {
+      modelIds: unknown;
+      visibleModelIds?: unknown;
+    };
+    if (!Array.isArray(modelIds)) {
+      return res.status(400).json({ error: 'modelIds must be an array' });
+    }
+
+    const { modelFetcher } = await import('../modelFetcher');
+
+    // If visible model IDs are provided, queue them for VRAM fetching
+    if (Array.isArray(visibleModelIds) && visibleModelIds.length > 0) {
+      const visibleModels = modelFetcher.getModelsById(
+        visibleModelIds as string[]
+      );
+      const modelsNeedingVram = visibleModels.filter(
+        m => !m.hasVramData && !m.vramError && !m.isFetchingVram && m.url
+      );
+
+      if (modelsNeedingVram.length > 0) {
+        logger.info(
+          `Queueing VRAM fetch for ${modelsNeedingVram.length} visible models`
+        );
+        // Fire and forget - we don't wait for VRAM fetching to complete
+        modelFetcher.fetchVRAMDataForModels(modelsNeedingVram).catch(error => {
+          logger.error('Error queuing VRAM fetch:', error);
+        });
+      }
+    }
+
+    // Return all requested models (with updated data if available)
+    const updatedModels = modelFetcher.getModelsById(modelIds as string[]);
+
+    res.json({
+      success: true,
+      models: updatedModels,
+    });
+  } catch (error) {
+    logger.error('Error checking model updates:', error);
+    res.status(500).json({ error: 'Failed to check model updates' });
+  }
+});
+
+/**
+ * Manually retry VRAM fetching for all models that need it
+ */
+router.post('/retry-vram-fetch', async (req, res) => {
+  try {
+    const { modelFetcher } = await import('../modelFetcher');
+    modelFetcher.retryVramFetching();
+
+    res.json({
+      success: true,
+      message: 'VRAM fetching retry initiated',
+    });
+  } catch (error) {
+    logger.error('Error retrying VRAM fetch:', error);
+    res.status(500).json({ error: 'Failed to retry VRAM fetch' });
   }
 });
 
@@ -48,7 +115,7 @@ router.get('/available-models', async (req, res) => {
     const models = await llmManager.getAvailableModels();
     res.json(models);
   } catch (error) {
-    console.error('Error getting available models:', error);
+    logger.error('Error getting available models:', error);
     res.status(500).json({ error: 'Failed to get available models' });
   }
 });
@@ -62,7 +129,7 @@ router.post('/refresh-models', async (req, res) => {
     const models = await modelFetcher.refreshAvailableModels(); // Force refresh
     res.json({ success: true, models });
   } catch (error) {
-    console.error('Error refreshing models:', error);
+    logger.error('Error refreshing models:', error);
     res.status(500).json({ error: 'Failed to refresh models' });
   }
 });
@@ -92,7 +159,7 @@ router.post('/open-models-directory', async (req, res) => {
 
     exec(command, error => {
       if (error) {
-        console.error('Error opening models directory:', error);
+        logger.error('Error opening models directory:', error);
         return res
           .status(500)
           .json({ error: 'Failed to open models directory' });
@@ -100,7 +167,7 @@ router.post('/open-models-directory', async (req, res) => {
       res.json({ success: true, directory: modelsDir });
     });
   } catch (error) {
-    console.error('Error opening models directory:', error);
+    logger.error('Error opening models directory:', error);
     res.status(500).json({ error: 'Failed to open models directory' });
   }
 });
@@ -115,7 +182,7 @@ router.post('/refresh-accessibility', async (req, res) => {
     const models = await modelFetcher.refreshAvailableModels(); // Force refresh
     res.json({ success: true, models });
   } catch (error) {
-    console.error('Error refreshing accessibility:', error);
+    logger.error('Error refreshing accessibility:', error);
     res.status(500).json({ error: 'Failed to refresh accessibility' });
   }
 });
@@ -138,7 +205,7 @@ router.post('/hf-token', async (req, res) => {
       message: 'Hugging Face token saved. Rechecking gated models...',
     });
   } catch (error) {
-    console.error('Error setting Hugging Face token:', error);
+    logger.error('Error setting Hugging Face token:', error);
     res.status(500).json({ error: 'Failed to save Hugging Face token' });
   }
 });
@@ -153,7 +220,7 @@ router.delete('/hf-token', async (req, res) => {
 
     res.json({ success: true, message: 'Hugging Face token removed' });
   } catch (error) {
-    console.error('Error removing Hugging Face token:', error);
+    logger.error('Error removing Hugging Face token:', error);
     res.status(500).json({ error: 'Failed to remove Hugging Face token' });
   }
 });
@@ -174,7 +241,7 @@ router.get('/hf-token', async (req, res) => {
 
     res.json({ token: token.trim() });
   } catch (error) {
-    console.error('Error reading Hugging Face token:', error);
+    logger.error('Error reading Hugging Face token:', error);
     res.status(404).json({ error: 'Token not found' });
   }
 });
@@ -189,7 +256,7 @@ router.get('/hf-token/status', async (req, res) => {
 
     res.json({ hasToken });
   } catch (error) {
-    console.error('Error checking Hugging Face token status:', error);
+    logger.error('Error checking Hugging Face token status:', error);
     res.status(500).json({ error: 'Failed to check token status' });
   }
 });
@@ -234,7 +301,7 @@ router.get('/update-models-stream', async (req: Request, res: Response) => {
 
     // Handle client disconnect
     req.on('close', () => {
-      console.log(`Model update stream client ${clientId} disconnected`);
+      logger.info(`Model update stream client ${clientId} disconnected`);
     });
 
     // Start the model update process
@@ -267,7 +334,7 @@ router.get('/update-models-stream', async (req: Request, res: Response) => {
     // Close the connection
     res.end();
   } catch (error) {
-    console.error('Error setting up model update stream:', error);
+    logger.error('Error setting up model update stream:', error);
     res.status(500).json({ error: 'Failed to start model update stream' });
   }
 });
@@ -283,7 +350,7 @@ router.post('/update-models', async (req, res) => {
     const models = await modelFetcher.refreshAvailableModels();
     res.json({ success: true, models, count: models.length });
   } catch (error) {
-    console.error('Error updating models:', error);
+    logger.error('Error updating models:', error);
     res.status(500).json({ error: 'Failed to update models' });
   }
 });
@@ -311,7 +378,7 @@ router.post('/search-models', async (req, res) => {
       searchType,
     });
   } catch (error) {
-    console.error('Error searching models:', error);
+    logger.error('Error searching models:', error);
 
     // Handle specific timeout errors
     if (error instanceof Error && error.message.includes('504')) {
@@ -347,7 +414,7 @@ router.post('/clear-search-cache', async (req, res) => {
     modelFetcher.clearSearchCacheForQuery(query);
     res.json({ success: true, message: `Cleared search cache for: ${query}` });
   } catch (error) {
-    console.error('Error clearing search cache:', error);
+    logger.error('Error clearing search cache:', error);
     res.status(500).json({ error: 'Failed to clear search cache' });
   }
 });
@@ -365,6 +432,11 @@ router.post('/download', async (req, res) => {
     contextLength,
     parameterCount,
     quantization,
+    // Multi-part model fields
+    isMultiPart,
+    totalParts,
+    allPartFiles,
+    totalSize,
   } = req.body;
 
   if (!modelUrl || !filename) {
@@ -383,6 +455,11 @@ router.post('/download', async (req, res) => {
       contextLength,
       parameterCount,
       quantization,
+      // Include multi-part fields
+      isMultiPart,
+      totalParts,
+      allPartFiles,
+      totalSize,
     };
 
     // Start download in background
@@ -464,12 +541,12 @@ router.post('/download', async (req, res) => {
           data: errorDetails,
         });
 
-        console.error(`Download failed: ${filename}`, error);
+        logger.error(`Download failed: ${filename}`, error);
       });
 
     res.json({ message: 'Download started', filename });
   } catch (error) {
-    console.error('Error starting download:', error);
+    logger.error('Error starting download:', error);
     res.status(500).json({
       error:
         error instanceof Error ? error.message : 'Failed to start download',
@@ -491,7 +568,7 @@ router.post('/download/:filename/cancel', async (req, res) => {
       res.status(404).json({ error: 'Download not found or not in progress' });
     }
   } catch (error) {
-    console.error('Error cancelling download:', error);
+    logger.error('Error cancelling download:', error);
     res.status(500).json({ error: 'Failed to cancel download' });
   }
 });
@@ -518,7 +595,7 @@ router.delete('/models/:modelId', async (req, res) => {
 
     res.json({ message: 'Model deleted successfully' });
   } catch (error) {
-    console.error('Error deleting model:', error);
+    logger.error('Error deleting model:', error);
     res.status(500).json({
       error: error instanceof Error ? error.message : 'Failed to delete model',
     });
@@ -542,7 +619,7 @@ router.post('/models/:modelId/load', async (req, res) => {
 
     res.json({ message: 'Model loaded successfully' });
   } catch (error) {
-    console.error('Error loading model:', error);
+    logger.error('Error loading model:', error);
     res.status(500).json({
       error: error instanceof Error ? error.message : 'Failed to load model',
     });
@@ -566,7 +643,7 @@ router.post('/models/:modelId/unload', async (req, res) => {
 
     res.json({ message: 'Model unloaded successfully' });
   } catch (error) {
-    console.error('Error unloading model:', error);
+    logger.error('Error unloading model:', error);
     res.status(500).json({
       error: error instanceof Error ? error.message : 'Failed to unload model',
     });
@@ -584,7 +661,7 @@ router.get('/models/:modelId/status', async (req, res) => {
     const runtimeInfo = await llmManager.getModelRuntimeInfo(modelId);
     res.json({ ...status, runtimeInfo });
   } catch (error) {
-    console.error('Error getting model status:', error);
+    logger.error('Error getting model status:', error);
     res.status(500).json({
       error:
         error instanceof Error ? error.message : 'Failed to get model status',
@@ -603,7 +680,7 @@ router.put('/models/:modelId/settings', async (req, res) => {
     await llmManager.setModelSettings(modelId, settings);
     res.json({ message: 'Model settings updated successfully' });
   } catch (error) {
-    console.error('Error updating model settings:', error);
+    logger.error('Error updating model settings:', error);
     res.status(500).json({
       error:
         error instanceof Error
@@ -623,7 +700,7 @@ router.get('/models/:modelId/settings', async (req, res) => {
     const settings = await llmManager.getModelSettings(modelId);
     res.json(settings);
   } catch (error) {
-    console.error('Error getting model settings:', error);
+    logger.error('Error getting model settings:', error);
     res.status(500).json({
       error:
         error instanceof Error ? error.message : 'Failed to get model settings',
@@ -641,7 +718,7 @@ router.get('/models/:modelId/optimal-settings', async (req, res) => {
     const optimalSettings = await llmManager.calculateOptimalSettings(modelId);
     res.json(optimalSettings);
   } catch (error) {
-    console.error('Error calculating optimal settings:', error);
+    logger.error('Error calculating optimal settings:', error);
     res.status(500).json({
       error:
         error instanceof Error
@@ -659,7 +736,7 @@ router.get('/settings', async (req, res) => {
     const settings = await modelSettingsManager.loadAllModelSettings();
     res.json(settings);
   } catch (error) {
-    console.error('Error getting all model settings:', error);
+    logger.error('Error getting all model settings:', error);
     res.status(500).json({
       error:
         error instanceof Error
@@ -688,7 +765,7 @@ router.post('/models/:modelId/generate', async (req, res) => {
 
     res.json({ response });
   } catch (error) {
-    console.error('Error generating response:', error);
+    logger.error('Error generating response:', error);
     res.status(500).json({
       error:
         error instanceof Error ? error.message : 'Failed to generate response',
@@ -724,7 +801,7 @@ router.post('/models/:modelId/generate-stream', async (req, res) => {
     res.write('data: [DONE]\n\n');
     res.end();
   } catch (error) {
-    console.error('Error generating streaming response:', error);
+    logger.error('Error generating streaming response:', error);
     res.status(500).json({
       error:
         error instanceof Error

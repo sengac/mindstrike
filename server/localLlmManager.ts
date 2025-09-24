@@ -1,6 +1,7 @@
 import type { LlamaModel, LlamaContext } from 'node-llama-cpp';
 import { LocalLLMOrchestrator } from './llm/localLlmOrchestrator';
-import type { VRAMEstimateInfo, ModelArchitecture } from './modelFetcher';
+import type { ModelArchitecture } from './modelFetcher';
+import type { VRAMEstimateInfo } from '../src/shared/vramCalculator';
 
 // Re-export types
 export interface LocalModelInfo {
@@ -22,6 +23,12 @@ export interface LocalModelInfo {
   modelArchitecture?: ModelArchitecture;
   hasVramData?: boolean;
   vramError?: string;
+
+  // Multi-part model fields
+  isMultiPart?: boolean;
+  totalParts?: number;
+  allPartFiles?: string[];
+  totalSize?: number;
 }
 
 export interface ModelDownloadInfo {
@@ -33,6 +40,11 @@ export interface ModelDownloadInfo {
   contextLength?: number;
   parameterCount?: string;
   quantization?: string;
+  // Multi-part model fields
+  isMultiPart?: boolean;
+  totalParts?: number;
+  allPartFiles?: string[];
+  totalSize?: number;
 }
 
 export interface ModelLoadingSettings {

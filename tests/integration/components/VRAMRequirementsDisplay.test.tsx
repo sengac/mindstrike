@@ -1,5 +1,8 @@
+/**
+ * @vitest-environment jsdom
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { VRAMRequirementsDisplay } from '../../../src/components/shared/VRAMRequirementsDisplay';
 import { useSystemInformationStore } from '../../../src/store/useSystemInformationStore';
 import type {
@@ -80,6 +83,9 @@ describe('VRAMRequirementsDisplay', () => {
     layers: 32,
     kvHeads: 8,
     embeddingDim: 4096,
+    contextLength: 8000,
+    feedForwardDim: 11008,
+    modelSizeMB: 4000,
   };
 
   beforeEach(() => {
@@ -465,6 +471,240 @@ describe('VRAMRequirementsDisplay', () => {
 
       const element = container.firstChild as HTMLElement;
       expect(element.className).toContain('custom-test-class');
+    });
+  });
+
+  describe('Context Slider Functionality', () => {
+    it('should show settings button when model architecture is provided', () => {
+      mockSystemInfoStore({
+        free: 10000 * 1024 * 1024,
+        total: 16000 * 1024 * 1024,
+        used: 6000 * 1024 * 1024,
+      });
+
+      render(
+        <VRAMRequirementsDisplay
+          vramEstimates={mockEstimates}
+          modelArchitecture={mockArchitecture}
+          hasVramData={true}
+          compactMode={false}
+        />
+      );
+
+      // Settings button should be visible
+      const settingsButton = screen.getByTitle(
+        'Adjust context size for VRAM calculation'
+      );
+      expect(settingsButton).toBeTruthy();
+    });
+
+    it('should toggle slider visibility when settings button is clicked', async () => {
+      mockSystemInfoStore({
+        free: 10000 * 1024 * 1024,
+        total: 16000 * 1024 * 1024,
+        used: 6000 * 1024 * 1024,
+      });
+
+      render(
+        <VRAMRequirementsDisplay
+          vramEstimates={mockEstimates}
+          modelArchitecture={mockArchitecture}
+          hasVramData={true}
+          compactMode={false}
+        />
+      );
+
+      // Initially slider should not be visible
+      expect(screen.queryByText('Max Context for Calculation')).toBeNull();
+
+      // Click settings button
+      const settingsButton = screen.getByTitle(
+        'Adjust context size for VRAM calculation'
+      );
+      fireEvent.click(settingsButton);
+
+      // Slider should now be visible
+      await waitFor(() => {
+        expect(screen.getByText('Max Context for Calculation')).toBeTruthy();
+      });
+
+      // Should show the max context value
+      expect(screen.getByText('8K tokens')).toBeTruthy();
+    });
+
+    it('should update VRAM estimates when slider value changes', async () => {
+      mockSystemInfoStore({
+        free: 10000 * 1024 * 1024,
+        total: 16000 * 1024 * 1024,
+        used: 6000 * 1024 * 1024,
+      });
+
+      const { container } = render(
+        <VRAMRequirementsDisplay
+          vramEstimates={mockEstimates}
+          modelArchitecture={mockArchitecture}
+          hasVramData={true}
+          compactMode={false}
+        />
+      );
+
+      // Click settings button to show slider
+      const settingsButton = screen.getByTitle(
+        'Adjust context size for VRAM calculation'
+      );
+      fireEvent.click(settingsButton);
+
+      // Find the slider input
+      const slider = container.querySelector(
+        'input[type="range"]'
+      ) as HTMLInputElement;
+      expect(slider).toBeTruthy();
+      expect(slider.min).toBe('1000');
+      expect(slider.max).toBe('8000');
+      expect(slider.value).toBe('8000'); // Should start at max
+
+      // Change slider to 4000 (4K)
+      fireEvent.change(slider, { target: { value: '4000' } });
+
+      // Should update the display
+      await waitFor(() => {
+        expect(screen.getByText('4K tokens')).toBeTruthy();
+      });
+
+      // Should show quarters of 4000: 1K, 2K, 3K, 4K
+      expect(screen.getByText('1K context')).toBeTruthy();
+      expect(screen.getByText('2K context')).toBeTruthy();
+      expect(screen.getByText('3K context')).toBeTruthy();
+      expect(screen.getByText('4K context')).toBeTruthy();
+    });
+
+    it('should show correct labels for slider range', async () => {
+      mockSystemInfoStore({
+        free: 10000 * 1024 * 1024,
+        total: 16000 * 1024 * 1024,
+        used: 6000 * 1024 * 1024,
+      });
+
+      render(
+        <VRAMRequirementsDisplay
+          vramEstimates={mockEstimates}
+          modelArchitecture={mockArchitecture}
+          hasVramData={true}
+          compactMode={false}
+        />
+      );
+
+      // Click settings button to show slider
+      const settingsButton = screen.getByTitle(
+        'Adjust context size for VRAM calculation'
+      );
+      fireEvent.click(settingsButton);
+
+      // Check range labels
+      expect(screen.getByText('1K')).toBeTruthy(); // Min
+      expect(screen.getByText('4K')).toBeTruthy(); // Middle
+      expect(screen.getByText('8K (max)')).toBeTruthy(); // Max
+    });
+
+    it('should not show settings button when model architecture is missing', () => {
+      mockSystemInfoStore({
+        free: 10000 * 1024 * 1024,
+        total: 16000 * 1024 * 1024,
+        used: 6000 * 1024 * 1024,
+      });
+
+      render(
+        <VRAMRequirementsDisplay
+          vramEstimates={mockEstimates}
+          hasVramData={true}
+          compactMode={false}
+        />
+      );
+
+      // Settings button should not be present
+      const settingsButton = screen.queryByTitle(
+        'Adjust context size for VRAM calculation'
+      );
+      expect(settingsButton).toBeNull();
+    });
+
+    it('should dynamically calculate VRAM for small contexts', async () => {
+      mockSystemInfoStore({
+        free: 10000 * 1024 * 1024,
+        total: 16000 * 1024 * 1024,
+        used: 6000 * 1024 * 1024,
+      });
+
+      const { container } = render(
+        <VRAMRequirementsDisplay
+          vramEstimates={mockEstimates}
+          modelArchitecture={mockArchitecture}
+          hasVramData={true}
+          compactMode={false}
+        />
+      );
+
+      // Click settings button to show slider
+      const settingsButton = screen.getByTitle(
+        'Adjust context size for VRAM calculation'
+      );
+      fireEvent.click(settingsButton);
+
+      // Find the slider input
+      const slider = container.querySelector(
+        'input[type="range"]'
+      ) as HTMLInputElement;
+
+      // Change slider to minimum (1000)
+      fireEvent.change(slider, { target: { value: '1000' } });
+
+      // Should show quarters of 1000 as raw token counts
+      await waitFor(() => {
+        expect(screen.getByText('250 tokens')).toBeTruthy();
+        expect(screen.getByText('500 tokens')).toBeTruthy();
+        expect(screen.getByText('750 tokens')).toBeTruthy();
+        expect(screen.getByText('1000 tokens')).toBeTruthy();
+      });
+    });
+
+    it('should use same slider style as ModelCard', () => {
+      mockSystemInfoStore({
+        free: 10000 * 1024 * 1024,
+        total: 16000 * 1024 * 1024,
+        used: 6000 * 1024 * 1024,
+      });
+
+      const { container } = render(
+        <VRAMRequirementsDisplay
+          vramEstimates={mockEstimates}
+          modelArchitecture={mockArchitecture}
+          hasVramData={true}
+          compactMode={false}
+        />
+      );
+
+      // Click settings button to show slider
+      const settingsButton = screen.getByTitle(
+        'Adjust context size for VRAM calculation'
+      );
+      fireEvent.click(settingsButton);
+
+      // Find the slider input
+      const slider = container.querySelector(
+        'input[type="range"]'
+      ) as HTMLInputElement;
+
+      // Should have the standard Tailwind classes
+      expect(slider.className).toContain('flex-1');
+      expect(slider.className).toContain('h-2');
+      expect(slider.className).toContain('bg-gray-600');
+      expect(slider.className).toContain('rounded-lg');
+      expect(slider.className).toContain('appearance-none');
+      expect(slider.className).toContain('cursor-pointer');
+      expect(slider.className).toContain('focus:outline-none');
+      expect(slider.className).toContain('focus:ring-2');
+      expect(slider.className).toContain('focus:ring-blue-500');
+      expect(slider.className).toContain('focus:ring-opacity-50');
     });
   });
 });

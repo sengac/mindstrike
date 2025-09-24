@@ -15,16 +15,25 @@ import {
   X,
   AlertTriangle,
   CheckCircle,
+  Info,
 } from 'lucide-react';
-import { useState } from 'react';
-import { logger } from '../../utils/logger';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import type {
   VRAMEstimateInfo,
   ModelArchitecture,
 } from '../../store/useAvailableModelsStore';
 import { useSystemInformationStore } from '../../store/useSystemInformationStore';
-import { getModelSafetyLevel } from '../../utils/vramSafety';
+import {
+  getModelSafetyLevel,
+  calculateVRAMSafety,
+  formatBytes,
+} from '../../utils/vramSafety';
 import { VRAMRequirementsDisplay } from './VRAMRequirementsDisplay';
+import {
+  calculateSettingsVRAM,
+  getRecommendedSettings,
+  type ModelArchitectureInfo,
+} from '../../shared/vramCalculator';
 
 interface ModelLoadingSettings {
   gpuLayers?: number;
@@ -87,6 +96,7 @@ interface ModelCardProps {
     runtimeInfo?: ModelRuntimeInfo;
   };
   isLoading?: boolean;
+  loadError?: string;
   isTarget?: boolean;
   isDownloadable?: boolean;
   isAlreadyDownloaded?: boolean;
@@ -105,6 +115,7 @@ export function ModelCard({
   model,
   status,
   isLoading = false,
+  loadError,
   isTarget = false,
   isDownloadable = false,
   isAlreadyDownloaded = false,
@@ -126,6 +137,25 @@ export function ModelCard({
   const [validationErrors, setValidationErrors] = useState<
     Record<string, string>
   >({});
+  const [selectedPreset, setSelectedPreset] = useState<
+    'conservative' | 'balanced' | 'performance' | 'custom'
+  >('custom');
+  const [showSuccessFlash, setShowSuccessFlash] = useState(false);
+  const wasLoadingRef = useRef(false);
+  const [showContextTooltip, setShowContextTooltip] = useState(false);
+
+  // Track when loading completes successfully
+  useEffect(() => {
+    if (wasLoadingRef.current && !isLoading && isLoaded) {
+      // Just finished loading successfully
+      setShowSuccessFlash(true);
+      const timer = setTimeout(() => {
+        setShowSuccessFlash(false);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+    wasLoadingRef.current = isLoading;
+  }, [isLoading, isLoaded]);
 
   // Get system VRAM information for safety badge
   const systemInfo = useSystemInformationStore(state => state.systemInfo);
@@ -138,6 +168,47 @@ export function ModelCard({
     model.vramEstimates,
     availableVramMB
   );
+
+  // Calculate current VRAM usage based on settings
+  const estimatedVramUsage = useMemo(() => {
+    if (!model.modelArchitecture) {
+      return 0;
+    }
+
+    const architecture: ModelArchitectureInfo = {
+      layers: model.modelArchitecture.layers,
+      kvHeads: model.modelArchitecture.kvHeads,
+      embeddingDim: model.modelArchitecture.embeddingDim,
+      contextLength: model.modelArchitecture.contextLength,
+      feedForwardDim: model.modelArchitecture.feedForwardDim,
+      modelSizeMB: model.modelArchitecture.modelSizeMB,
+    };
+
+    return calculateSettingsVRAM(architecture, {
+      gpuLayers: tempSettings.gpuLayers ?? -1,
+      contextSize:
+        tempSettings.contextSize ?? model.trainedContextLength ?? 8000,
+      batchSize: tempSettings.batchSize ?? 512,
+    });
+  }, [
+    model.modelArchitecture,
+    tempSettings.gpuLayers,
+    tempSettings.contextSize,
+    tempSettings.batchSize,
+    model.trainedContextLength,
+  ]);
+
+  // Calculate safety level for current settings
+  const settingsSafety = useMemo(() => {
+    if (!availableVramMB || estimatedVramUsage === 0) {
+      return {
+        level: 'unknown',
+        percentageUsed: 0,
+        description: 'Unknown VRAM usage',
+      };
+    }
+    return calculateVRAMSafety(estimatedVramUsage, availableVramMB);
+  }, [estimatedVramUsage, availableVramMB]);
 
   const handleSaveSettings = () => {
     // Check if there are any validation errors
@@ -154,36 +225,38 @@ export function ModelCard({
     setShowSettings(false);
   };
 
-  const handleResetSettings = async () => {
-    try {
-      // Fetch calculated optimal settings from server
-      const response = await fetch(
-        `/api/local-llm/models/${model.id}/optimal-settings`
-      );
-      if (!response.ok) {
-        throw new Error('Failed to fetch optimal settings');
-      }
-
-      const optimalSettings = (await response.json()) as ModelLoadingSettings;
-
-      // Show user the calculated optimal settings
-      setTempSettings(optimalSettings);
-      setValidationErrors({});
-
-      // Apply the optimal settings
-      if (onUpdateSettings) {
-        onUpdateSettings(model.id, optimalSettings);
-      }
-    } catch (error) {
-      logger.error('Error fetching optimal settings:', error);
-      // Fallback to clearing settings if API fails
-      const defaultSettings: ModelLoadingSettings = {};
-      setTempSettings(defaultSettings);
-      setValidationErrors({});
-      if (onUpdateSettings) {
-        onUpdateSettings(model.id, defaultSettings);
-      }
+  const handleApplyPreset = (
+    preset: 'conservative' | 'balanced' | 'performance'
+  ) => {
+    if (!model.modelArchitecture || !availableVramMB) {
+      return;
     }
+
+    const architecture: ModelArchitectureInfo = {
+      layers: model.modelArchitecture.layers,
+      kvHeads: model.modelArchitecture.kvHeads,
+      embeddingDim: model.modelArchitecture.embeddingDim,
+      contextLength: model.modelArchitecture.contextLength,
+      feedForwardDim: model.modelArchitecture.feedForwardDim,
+      modelSizeMB: model.modelArchitecture.modelSizeMB,
+    };
+
+    const recommended = getRecommendedSettings(
+      architecture,
+      availableVramMB,
+      preset
+    );
+
+    setTempSettings({
+      gpuLayers: recommended.gpuLayers,
+      contextSize: recommended.contextSize,
+      batchSize: recommended.batchSize,
+      temperature: tempSettings.temperature,
+      threads: tempSettings.threads,
+    });
+
+    setSelectedPreset(preset);
+    setValidationErrors({});
   };
 
   const handleCancelSettings = () => {
@@ -207,6 +280,7 @@ export function ModelCard({
 
   // Validation functions
   const validateAndSetGpuLayers = (value: string) => {
+    setSelectedPreset('custom'); // User is manually adjusting
     const num = parseInt(value);
     const maxLayers = model.layerCount ?? 100;
     if (value === '' || isNaN(num)) {
@@ -224,8 +298,9 @@ export function ModelCard({
   };
 
   const validateAndSetContextSize = (value: string) => {
+    setSelectedPreset('custom'); // User is manually adjusting
     const num = parseInt(value);
-    const maxContext = model.maxContextLength;
+    const maxContext = model.trainedContextLength ?? model.maxContextLength;
     if (value === '' || isNaN(num)) {
       setTempSettings(prev => ({ ...prev, contextSize: undefined }));
       setValidationErrors(prev => ({ ...prev, contextSize: '' }));
@@ -247,6 +322,7 @@ export function ModelCard({
   };
 
   const validateAndSetBatchSize = (value: string) => {
+    setSelectedPreset('custom'); // User is manually adjusting
     const num = parseInt(value);
     if (value === '' || isNaN(num)) {
       setTempSettings(prev => ({ ...prev, batchSize: undefined }));
@@ -264,6 +340,7 @@ export function ModelCard({
   };
 
   const validateAndSetThreads = (value: string) => {
+    setSelectedPreset('custom'); // User is manually adjusting
     const num = parseInt(value);
     const maxThreads = Math.min(32, (navigator.hardwareConcurrency ?? 8) * 2); // Cap at 32 or 2x CPU cores
     if (value === '' || isNaN(num)) {
@@ -281,6 +358,7 @@ export function ModelCard({
   };
 
   const validateAndSetTemperature = (value: string) => {
+    setSelectedPreset('custom'); // User is manually adjusting
     const num = parseFloat(value);
     if (value === '' || isNaN(num)) {
       setTempSettings(prev => ({ ...prev, temperature: undefined }));
@@ -437,16 +515,55 @@ export function ModelCard({
       {/* Basic Details */}
       <div className="space-y-1 text-sm mb-3">
         <div className="flex items-center gap-2">
-          <span className="text-gray-400 w-20">File:</span>
+          <span className="text-gray-400 w-28">File:</span>
           <span className="text-gray-300 font-mono">{model.filename}</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-gray-400 w-20">Size:</span>
+          <span className="text-gray-400 w-28">Size:</span>
           <span className="text-gray-300">{formatFileSize(model.size)}</span>
         </div>
         {(model.trainedContextLength ?? model.maxContextLength) && (
           <div className="flex items-center gap-2">
-            <span className="text-gray-400 w-20">Context:</span>
+            <div className="text-gray-400 min-w-[7rem] flex items-center gap-1 whitespace-nowrap">
+              <span>Training context:</span>
+              <div className="relative inline-flex">
+                <Info
+                  size={14}
+                  className="text-gray-500 hover:text-gray-300 cursor-help transition-colors"
+                  onMouseEnter={() => setShowContextTooltip(true)}
+                  onMouseLeave={() => setShowContextTooltip(false)}
+                />
+                {showContextTooltip && (
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 z-50 pointer-events-none">
+                    <div
+                      className="bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-3 pointer-events-auto"
+                      style={{ width: '280px' }}
+                    >
+                      <div className="text-xs text-gray-300 space-y-2">
+                        <p className="font-semibold text-gray-200 whitespace-normal">
+                          What is Training Context?
+                        </p>
+                        <p className="whitespace-normal leading-relaxed">
+                          The training context (or context window) is the
+                          maximum number of tokens the model can process at
+                          once. This includes both your input and the model's
+                          response.
+                        </p>
+                        <p className="text-gray-400 whitespace-normal leading-relaxed">
+                          <span className="font-medium">Note:</span> This is the
+                          absolute maximum. Actual usable context may be limited
+                          by available VRAM.
+                        </p>
+                      </div>
+                    </div>
+                    <div
+                      className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-gray-900 border-r border-b border-gray-700 rotate-45"
+                      style={{ marginLeft: '-4px' }}
+                    ></div>
+                  </div>
+                )}
+              </div>
+            </div>
             <span className="text-gray-300">
               {model.trainedContextLength ? (
                 <>
@@ -468,7 +585,7 @@ export function ModelCard({
         {model.username && (
           <div className="flex items-center gap-2">
             <User size={12} className="text-gray-400" />
-            <span className="text-gray-400 w-16">By:</span>
+            <span className="text-gray-400 w-24">By:</span>
             <a
               href={`https://huggingface.co/${model.username}`}
               target="_blank"
@@ -481,14 +598,23 @@ export function ModelCard({
         )}
       </div>
 
-      {/* VRAM Requirements Display */}
-      <VRAMRequirementsDisplay
-        vramEstimates={model.vramEstimates}
-        modelArchitecture={model.modelArchitecture}
-        hasVramData={model.hasVramData}
-        vramError={model.vramError}
-        compactMode={false}
-      />
+      {/* VRAM Requirements Display or Loading Indicator */}
+      {isDownloadable && !model.hasVramData && !model.vramError ? (
+        <div className="mt-2 flex items-center gap-2">
+          <Loader2 size={12} className="animate-spin text-purple-400" />
+          <span className="text-xs text-purple-300">
+            Fetching VRAM requirements and training context...
+          </span>
+        </div>
+      ) : (
+        <VRAMRequirementsDisplay
+          vramEstimates={model.vramEstimates}
+          modelArchitecture={model.modelArchitecture}
+          hasVramData={model.hasVramData}
+          vramError={model.vramError}
+          compactMode={false}
+        />
+      )}
 
       {/* Model Stats for downloadable models */}
       {(model.downloads ?? model.likes ?? model.updatedAt) && (
@@ -629,6 +755,39 @@ export function ModelCard({
         </div>
       )}
 
+      {/* Load Error Display */}
+      {loadError && !isLoading && (
+        <div className="mt-3 p-3 bg-red-900/20 border border-red-600/30 rounded-lg">
+          <div className="flex items-start gap-3">
+            <AlertTriangle
+              size={16}
+              className="text-red-400 mt-0.5 flex-shrink-0"
+            />
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-sm font-medium text-red-200">
+                  Model Load Failed
+                </span>
+              </div>
+              <p className="text-sm text-red-300">{loadError}</p>
+              {loadError.toLowerCase().includes('memory') && (
+                <p className="text-xs text-red-400 mt-2">
+                  Try reducing GPU layers, context size, or unload other models
+                  to free up memory.
+                </p>
+              )}
+            </div>
+            <button
+              onClick={onLoad ? () => onLoad(model.id) : undefined}
+              className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-xs text-white transition-colors"
+              title="Retry loading"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Action Buttons - Floating */}
       <div className="absolute top-4 right-4 flex items-center gap-2">
         {/* Settings button */}
@@ -668,22 +827,59 @@ export function ModelCard({
           <button
             onClick={onUnload ? () => onUnload(model.id) : undefined}
             disabled={!onUnload}
-            className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-orange-400 disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`px-3 py-1.5 rounded transition-all duration-200 flex items-center gap-1.5 border ${
+              showSuccessFlash
+                ? 'bg-green-600/20 text-green-400 border-green-500 animate-pulse'
+                : 'hover:bg-gray-700 text-gray-400 hover:text-orange-400 disabled:opacity-50 disabled:cursor-not-allowed border-gray-600 hover:border-orange-500'
+            }`}
             title="Unload model"
           >
-            <Square size={14} />
+            {showSuccessFlash ? (
+              <>
+                <CheckCircle size={14} />
+                <span className="text-xs">Loaded!</span>
+              </>
+            ) : (
+              <>
+                <Square size={14} />
+                <span className="text-xs">Unload</span>
+              </>
+            )}
           </button>
         ) : (
           <button
             onClick={onLoad ? () => onLoad(model.id) : undefined}
             disabled={isLoading || !onLoad}
-            className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-green-400 disabled:text-gray-600 disabled:cursor-not-allowed"
-            title="Load model"
+            className={`px-3 py-1.5 rounded transition-all duration-200 flex items-center gap-1.5 border ${
+              isLoading
+                ? 'bg-blue-600/20 text-blue-400 border-blue-500 cursor-wait animate-pulse'
+                : loadError
+                  ? 'bg-red-600/20 text-red-400 border-red-500 hover:bg-red-600/30'
+                  : 'hover:bg-gray-700 text-gray-400 hover:text-green-400 disabled:text-gray-600 disabled:cursor-not-allowed border-gray-600 hover:border-green-500'
+            }`}
+            title={
+              isLoading
+                ? 'Loading model...'
+                : loadError
+                  ? 'Retry loading model'
+                  : 'Load model'
+            }
           >
             {isLoading ? (
-              <Loader2 size={14} className="animate-spin" />
+              <>
+                <Loader2 size={14} className="animate-spin" />
+                <span className="text-xs">Loading...</span>
+              </>
+            ) : loadError ? (
+              <>
+                <AlertTriangle size={14} />
+                <span className="text-xs">Retry</span>
+              </>
             ) : (
-              <Play size={14} />
+              <>
+                <Play size={14} />
+                <span className="text-xs">Load</span>
+              </>
             )}
           </button>
         )}
@@ -705,6 +901,111 @@ export function ModelCard({
           <h5 className="text-white text-sm font-medium mb-3">
             Advanced Settings
           </h5>
+
+          {/* VRAM Usage Monitor */}
+          {model.modelArchitecture &&
+            availableVramMB &&
+            estimatedVramUsage > 0 && (
+              <div className="mb-4 p-3 bg-gray-800 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-gray-400">
+                    Estimated VRAM Usage
+                  </span>
+                  <span
+                    className={`text-xs font-medium ${
+                      settingsSafety.level === 'safe'
+                        ? 'text-green-400'
+                        : settingsSafety.level === 'caution'
+                          ? 'text-yellow-400'
+                          : settingsSafety.level === 'risky'
+                            ? 'text-orange-400'
+                            : settingsSafety.level === 'unsafe'
+                              ? 'text-red-400'
+                              : 'text-gray-400'
+                    }`}
+                  >
+                    {formatBytes(estimatedVramUsage * 1024 * 1024)} /{' '}
+                    {formatBytes(availableVramMB * 1024 * 1024)}
+                  </span>
+                </div>
+                <div className="w-full bg-gray-700 rounded-full h-2.5">
+                  <div
+                    className={`h-2.5 rounded-full transition-all ${
+                      settingsSafety.level === 'safe'
+                        ? 'bg-green-500'
+                        : settingsSafety.level === 'caution'
+                          ? 'bg-yellow-500'
+                          : settingsSafety.level === 'risky'
+                            ? 'bg-orange-500'
+                            : settingsSafety.level === 'unsafe'
+                              ? 'bg-red-500'
+                              : 'bg-gray-500'
+                    }`}
+                    style={{
+                      width: `${Math.min(100, settingsSafety.percentageUsed)}%`,
+                    }}
+                  />
+                </div>
+                <div className="mt-1 text-xs text-gray-500">
+                  {settingsSafety.description}
+                </div>
+              </div>
+            )}
+
+          {/* Preset Buttons */}
+          {model.modelArchitecture && availableVramMB && (
+            <div className="mb-4">
+              <label className="block text-xs text-gray-400 mb-2">
+                Quick Presets
+              </label>
+              <div className="grid grid-cols-4 gap-2">
+                <button
+                  onClick={() => handleApplyPreset('conservative')}
+                  className={`px-3 py-2 text-xs rounded transition-colors ${
+                    selectedPreset === 'conservative'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                  title="Use 50% of available VRAM for maximum stability"
+                >
+                  Conservative
+                </button>
+                <button
+                  onClick={() => handleApplyPreset('balanced')}
+                  className={`px-3 py-2 text-xs rounded transition-colors ${
+                    selectedPreset === 'balanced'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                  title="Use 70% of available VRAM for good balance"
+                >
+                  Balanced
+                </button>
+                <button
+                  onClick={() => handleApplyPreset('performance')}
+                  className={`px-3 py-2 text-xs rounded transition-colors ${
+                    selectedPreset === 'performance'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                  title="Use 90% of available VRAM for maximum performance"
+                >
+                  Performance
+                </button>
+                <button
+                  disabled
+                  className={`px-3 py-2 text-xs rounded transition-colors cursor-not-allowed ${
+                    selectedPreset === 'custom'
+                      ? 'bg-gray-600 text-white'
+                      : 'bg-gray-700 text-gray-500'
+                  }`}
+                  title="Manual settings"
+                >
+                  Custom
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-4">
             <div>
@@ -769,10 +1070,9 @@ export function ModelCard({
                   type="range"
                   min="512"
                   max={
+                    model.trainedContextLength ??
                     model.maxContextLength ??
-                    (model.trainedContextLength
-                      ? model.trainedContextLength * 8
-                      : 32768)
+                    32768
                   }
                   step="512"
                   value={
@@ -789,10 +1089,9 @@ export function ModelCard({
                     type="number"
                     min="512"
                     max={
+                      model.trainedContextLength ??
                       model.maxContextLength ??
-                      (model.trainedContextLength
-                        ? model.trainedContextLength * 8
-                        : undefined)
+                      undefined
                     }
                     step="512"
                     value={tempSettings.contextSize ?? ''}
@@ -814,11 +1113,13 @@ export function ModelCard({
                   {validationErrors.contextSize}
                 </div>
               )}
-              {!validationErrors.contextSize && model.maxContextLength && (
-                <div className="text-xs text-gray-500 mt-1">
-                  512 - {model.maxContextLength} tokens
-                </div>
-              )}
+              {!validationErrors.contextSize &&
+                (model.trainedContextLength ?? model.maxContextLength) && (
+                  <div className="text-xs text-gray-500 mt-1">
+                    512 - {model.trainedContextLength ?? model.maxContextLength}{' '}
+                    tokens
+                  </div>
+                )}
             </div>
 
             <div>
@@ -971,25 +1272,44 @@ export function ModelCard({
             </div>
           </div>
 
+          {/* VRAM Warning */}
+          {settingsSafety.level === 'risky' && (
+            <div className="mt-3 p-2 bg-orange-900/20 border border-orange-600/50 rounded-lg flex items-start gap-2">
+              <AlertTriangle size={14} className="text-orange-400 mt-0.5" />
+              <div className="text-xs text-orange-400">
+                <p className="font-medium mb-1">High VRAM Usage Warning</p>
+                <p>
+                  These settings will use{' '}
+                  {Math.round(settingsSafety.percentageUsed)}% of available
+                  VRAM. This may cause instability or crashes.
+                </p>
+              </div>
+            </div>
+          )}
+          {settingsSafety.level === 'unsafe' && (
+            <div className="mt-3 p-2 bg-red-900/20 border border-red-600/50 rounded-lg flex items-start gap-2">
+              <AlertTriangle size={14} className="text-red-400 mt-0.5" />
+              <div className="text-xs text-red-400">
+                <p className="font-medium mb-1">Exceeds Available VRAM</p>
+                <p>
+                  These settings require{' '}
+                  {Math.round(settingsSafety.percentageUsed)}% of available
+                  VRAM. The model will likely fail to load or crash.
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-2 mt-3">
             <button
               onClick={handleSaveSettings}
-              disabled={Object.values(validationErrors).some(
-                error => error !== ''
-              )}
+              disabled={
+                Object.values(validationErrors).some(error => error !== '') ||
+                settingsSafety.level === 'unsafe'
+              }
               className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white rounded transition-colors"
             >
               Save Settings
-            </button>
-            <button
-              onClick={() => {
-                handleResetSettings().catch(error => {
-                  logger.error('Failed to reset settings:', error);
-                });
-              }}
-              className="px-3 py-1 text-xs bg-yellow-600 hover:bg-yellow-700 text-white rounded transition-colors"
-            >
-              Reset
             </button>
             <button
               onClick={handleCancelSettings}

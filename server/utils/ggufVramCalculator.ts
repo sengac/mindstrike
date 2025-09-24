@@ -4,6 +4,7 @@
  */
 
 import { promises as fs } from 'fs';
+import { logger } from '../logger';
 
 // Types and Interfaces
 export enum GGUFValueType {
@@ -440,15 +441,29 @@ export const loadMetadataFromUrl = async (
     throw new Error('Please enter a model URL');
   }
 
+  logger.debug(`[VRAM] Starting metadata fetch for: ${modelUrl}`);
+
   // Get model size
+  logger.debug(`[VRAM] Getting model size...`);
   const modelSizeMb = await getModelSizeFromUrl(modelUrl);
+  logger.debug(`[VRAM] Model size: ${modelSizeMb}MB`);
 
   // Normalize and download partial file
   const normalizedUrl = normalizeHuggingFaceUrl(modelUrl);
+  logger.debug(
+    `[VRAM] Downloading GGUF header (up to 25MB) from: ${normalizedUrl}`
+  );
+  const startTime = Date.now();
   const buffer = await downloadGGUFPartial(normalizedUrl);
+  const downloadTime = Date.now() - startTime;
+  logger.debug(`[VRAM] Downloaded ${buffer.length} bytes in ${downloadTime}ms`);
 
   // Parse metadata
+  logger.debug(`[VRAM] Parsing GGUF metadata...`);
   const metadata = parseGGUFMetadata(buffer);
+  logger.debug(
+    `[VRAM] Successfully parsed metadata, context length: ${metadata.context_length}`
+  );
 
   // Extract model name from URL
   let modelName = modelUrl;

@@ -1,20 +1,18 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { createHash } from 'crypto';
-import { readGgufFileInfo } from 'node-llama-cpp';
+import { readGgufFileInfo, GgufInsights } from 'node-llama-cpp';
 import { getLocalModelsDirectory } from '../utils/settingsDirectory';
 import type { LocalModelInfo } from '../localLlmManager';
 import { modelFetcher } from '../modelFetcher';
-import type {
-  VRAMEstimateInfo,
-  ModelArchitecture,
-  VRAMConfiguration,
-} from '../modelFetcher';
+import type { ModelArchitecture } from '../modelFetcher';
+import { loadMetadataFromFile } from '../utils/ggufVramCalculator';
+import { logger } from '../logger';
 import {
-  loadMetadataFromFile,
-  calculateVRAMEstimate,
-  type CacheType,
-} from '../utils/ggufVramCalculator';
+  calculateAllVRAMEstimates,
+  type ModelArchitectureInfo,
+  type VRAMEstimateInfo,
+} from '../../src/shared/vramCalculator';
 // import { MEMORY } from './constants'; // Not needed anymore since we use 1000 instead of 1024
 
 export interface ModelMetadata {
@@ -39,6 +37,31 @@ export class ModelFileManager {
   }
 
   /**
+   * Check if a filename is part of a multi-part GGUF model
+   */
+  private isMultiPartFile(filename: string): {
+    isMultiPart: boolean;
+    partNumber?: number;
+    totalParts?: number;
+    baseFilename?: string;
+  } {
+    // Match pattern like: model.Q6_K.gguf-00001-of-00006.gguf
+    const multiPartPattern = /^(.+\.gguf)-(\d{5})-of-(\d{5})\.gguf$/;
+    const match = filename.match(multiPartPattern);
+
+    if (match) {
+      return {
+        isMultiPart: true,
+        partNumber: parseInt(match[2], 10),
+        totalParts: parseInt(match[3], 10),
+        baseFilename: match[1],
+      };
+    }
+
+    return { isMultiPart: false };
+  }
+
+  /**
    * Get all locally available models
    */
   async getLocalModels(): Promise<LocalModelInfo[]> {
@@ -50,8 +73,24 @@ export class ModelFileManager {
 
     const files = fs.readdirSync(this.modelsDir);
     const ggufFiles = files.filter(file => file.endsWith('.gguf'));
+    const processedMultiParts = new Set<string>();
 
     for (const filename of ggufFiles) {
+      const multiPartInfo = this.isMultiPartFile(filename);
+
+      // Skip non-first parts of multi-part models
+      if (multiPartInfo.isMultiPart && multiPartInfo.partNumber !== 1) {
+        continue;
+      }
+
+      // Skip if we've already processed this multi-part model
+      if (multiPartInfo.isMultiPart && multiPartInfo.baseFilename) {
+        if (processedMultiParts.has(multiPartInfo.baseFilename)) {
+          continue;
+        }
+        processedMultiParts.add(multiPartInfo.baseFilename);
+      }
+
       const fullPath = path.join(this.modelsDir, filename);
       const stats = fs.statSync(fullPath);
 
@@ -59,13 +98,52 @@ export class ModelFileManager {
       const id = createHash('md5').update(fullPath).digest('hex');
 
       // Try to extract model info from filename
-      const modelInfo = this.parseModelFilename(filename);
+      const modelInfo = this.parseModelFilename(
+        multiPartInfo.isMultiPart && multiPartInfo.baseFilename
+          ? multiPartInfo.baseFilename
+          : filename
+      );
+
+      // For multi-part models, calculate total size and collect all parts
+      let totalSize = stats.size;
+      let allPartFiles: string[] = [];
+
+      if (multiPartInfo.isMultiPart && multiPartInfo.totalParts) {
+        allPartFiles = [];
+        totalSize = 0;
+
+        // Check all parts exist and calculate total size
+        for (let i = 1; i <= multiPartInfo.totalParts; i++) {
+          const partFilename = `${multiPartInfo.baseFilename}-${String(i).padStart(5, '0')}-of-${String(multiPartInfo.totalParts).padStart(5, '0')}.gguf`;
+          const partPath = path.join(this.modelsDir, partFilename);
+
+          if (fs.existsSync(partPath)) {
+            const partStats = fs.statSync(partPath);
+            totalSize += partStats.size;
+            allPartFiles.push(partFilename);
+          }
+        }
+
+        // If not all parts are present, skip this model
+        if (allPartFiles.length !== multiPartInfo.totalParts) {
+          logger.warn(
+            `Multi-part model ${filename} is incomplete: ${allPartFiles.length}/${multiPartInfo.totalParts} parts found`
+          );
+          continue;
+        }
+      }
 
       // Try to get remote model info from cache if available
-      const remoteModels = await modelFetcher.getAvailableModels();
-      const matchingRemoteModel = remoteModels.find(
-        rm => rm.filename === filename
-      );
+      // Skip remote model fetching to avoid hanging on API calls
+      let matchingRemoteModel = undefined;
+      try {
+        // Only try to get remote models if they're already cached
+        const remoteModels = modelFetcher.getCachedModels();
+        matchingRemoteModel = remoteModels.find(rm => rm.filename === filename);
+      } catch (fetchError) {
+        // Log but continue - remote model info is optional
+        logger.debug('Could not fetch remote model info:', fetchError);
+      }
 
       // Try to read GGUF metadata for layer count and context length
       let layerCount: number | undefined;
@@ -75,81 +153,86 @@ export class ModelFileManager {
         const ggufMetadata = this.extractGgufMetadata(ggufInfo);
         layerCount = ggufMetadata.layerCount;
         trainedContextLength = ggufMetadata.trainedContextLength;
-      } catch {
-        // Silently fail - metadata is optional
+      } catch (ggufError) {
+        // Log but continue - metadata is optional
+        logger.debug('Could not read GGUF metadata:', ggufError);
       }
 
-      // Get trained context length from various sources (no fallback)
-      const trainedContext =
-        trainedContextLength ??
-        matchingRemoteModel?.contextLength ??
-        modelInfo.contextLength;
-
-      // The trained context IS the maximum the model supports
-      // The resolver calculates what's practical given memory constraints
-      const maxContext = trainedContext;
-
-      // Note: contextSizeResolver calculates recommended context based on available memory
-      // but we're not using it for display purposes anymore
+      // Note: We'll calculate context length after loading all metadata sources
 
       // Calculate VRAM estimates for local models
       let vramEstimates: VRAMEstimateInfo[] | undefined;
       let modelArchitecture: ModelArchitecture | undefined;
       let hasVramData = false;
       let vramError: string | undefined;
+      let metadataContextLength: number | undefined;
+      let ggufInsights: GgufInsights | undefined;
 
       try {
-        const metadata = await loadMetadataFromFile(fullPath);
+        // First try to get GgufInsights for accurate VRAM calculation
+        try {
+          const ggufFileInfo = await readGgufFileInfo(fullPath);
+          ggufInsights = await GgufInsights.from(ggufFileInfo);
 
-        // Extract architecture info
-        modelArchitecture = {
-          layers: metadata.n_layers ?? 0,
-          kvHeads: metadata.n_kv_heads ?? 0,
-          embeddingDim: metadata.embedding_dim ?? 0,
-          contextLength: metadata.context_length ?? undefined,
-          feedForwardDim: metadata.feed_forward_dim ?? 0,
+          // Store context length from GgufInsights
+          metadataContextLength = ggufInsights.trainContextSize;
+        } catch (insightsError) {
+          // GgufInsights failed, continue with fallback
+          logger.debug('GgufInsights failed, using fallback:', insightsError);
+        }
+
+        // If GgufInsights didn't work, fall back to metadata loading
+        if (!ggufInsights) {
+          const metadata = await loadMetadataFromFile(fullPath);
+          metadataContextLength = metadata.context_length;
+
+          // Extract architecture info for fallback calculation
+          modelArchitecture = {
+            layers: metadata.n_layers ?? 0,
+            kvHeads: metadata.n_kv_heads ?? 0,
+            embeddingDim: metadata.embedding_dim ?? 0,
+            contextLength: metadata.context_length ?? undefined,
+            feedForwardDim: metadata.feed_forward_dim ?? 0,
+            modelSizeMB: metadata.model_size_mb ?? undefined,
+          };
+        } else {
+          // Use GgufInsights data to populate architecture
+          modelArchitecture = {
+            layers: ggufInsights.totalLayers,
+            kvHeads: 0, // Will be populated from metadata if needed
+            embeddingDim: ggufInsights.embeddingVectorSize ?? 0,
+            contextLength: ggufInsights.trainContextSize,
+            feedForwardDim: 0, // Will be populated from metadata if needed
+            modelSizeMB: Math.round(ggufInsights.modelSize / (1024 * 1024)),
+          };
+
+          // Try to get additional metadata for complete architecture info
+          try {
+            const metadata = await loadMetadataFromFile(fullPath);
+            modelArchitecture.kvHeads = metadata.n_kv_heads ?? 0;
+            modelArchitecture.feedForwardDim = metadata.feed_forward_dim ?? 0;
+          } catch (metadataError) {
+            // Log but continue - we have enough info from GgufInsights
+            logger.debug(
+              'Could not load additional metadata, using GgufInsights data only:',
+              metadataError
+            );
+          }
+        }
+
+        // Prepare architecture info for shared VRAM calculator
+        const architectureInfo: ModelArchitectureInfo = {
+          layers: modelArchitecture.layers,
+          kvHeads: modelArchitecture.kvHeads,
+          embeddingDim: modelArchitecture.embeddingDim,
+          contextLength: modelArchitecture.contextLength,
+          feedForwardDim: modelArchitecture.feedForwardDim,
+          modelSizeMB: modelArchitecture.modelSizeMB,
+          ggufInsights, // Pass GgufInsights for accurate calculation
         };
 
-        // Calculate VRAM for different context sizes
-        const vramConfigs: VRAMConfiguration[] = [
-          {
-            gpuLayers: 999,
-            contextSize: 2048,
-            cacheType: 'fp16' as CacheType,
-            label: '2K context',
-          },
-          {
-            gpuLayers: 999,
-            contextSize: 4096,
-            cacheType: 'fp16' as CacheType,
-            label: '4K context',
-          },
-          {
-            gpuLayers: 999,
-            contextSize: 8192,
-            cacheType: 'fp16' as CacheType,
-            label: '8K context',
-          },
-          {
-            gpuLayers: 999,
-            contextSize: 16384,
-            cacheType: 'fp16' as CacheType,
-            label: '16K context',
-          },
-        ];
-
-        vramEstimates = vramConfigs.map(config => {
-          const estimate = calculateVRAMEstimate(
-            metadata,
-            config.gpuLayers,
-            config.contextSize,
-            config.cacheType
-          );
-          return {
-            ...estimate,
-            config,
-          };
-        });
+        // Calculate VRAM estimates using shared calculator
+        vramEstimates = calculateAllVRAMEstimates(architectureInfo);
 
         hasVramData = true;
       } catch (error) {
@@ -157,6 +240,17 @@ export class ModelFileManager {
         vramError =
           error instanceof Error ? error.message : 'Failed to calculate VRAM';
       }
+
+      // Get trained context length from various sources (no fallback)
+      // Priority: GGUF metadata > loadMetadataFromFile > remote model
+      const trainedContext =
+        trainedContextLength ??
+        metadataContextLength ??
+        matchingRemoteModel?.trainedContextLength;
+
+      // The trained context IS the maximum the model supports
+      // The resolver calculates what's practical given memory constraints
+      const maxContext = trainedContext;
 
       models.push({
         id,
@@ -166,7 +260,7 @@ export class ModelFileManager {
           filename.replace('.gguf', ''),
         filename,
         path: fullPath,
-        size: stats.size,
+        size: multiPartInfo.isMultiPart ? totalSize : stats.size,
         downloaded: true,
         downloading: false,
         trainedContextLength: trainedContext,
@@ -180,6 +274,11 @@ export class ModelFileManager {
         modelArchitecture,
         hasVramData,
         vramError,
+        // Add multi-part model info
+        isMultiPart: multiPartInfo.isMultiPart,
+        totalParts: multiPartInfo.totalParts,
+        allPartFiles: multiPartInfo.isMultiPart ? allPartFiles : undefined,
+        totalSize: multiPartInfo.isMultiPart ? totalSize : undefined,
       });
     }
 
@@ -209,7 +308,26 @@ export class ModelFileManager {
         trainedContextLength = metadata.llama.context_length;
       } else {
         // Try other common architecture names
-        const architectures = ['llama', 'mistral', 'gpt', 'qwen'];
+        // Note: Some models use versioned names like 'qwen2' or 'gemma3'
+        const architectures = [
+          'llama',
+          'mistral',
+          'gpt',
+          'qwen',
+          'qwen2',
+          'qwen2.5',
+          'gemma',
+          'gemma2',
+          'gemma3',
+          'phi',
+          'phi2',
+          'phi3',
+          'starcoder',
+          'codellama',
+          'deepseek',
+          'yi',
+          'falcon',
+        ];
         for (const arch of architectures) {
           const archData = metadata[arch] as
             | { block_count?: number; context_length?: number }
@@ -286,11 +404,34 @@ export class ModelFileManager {
   }
 
   /**
-   * Delete a model file
+   * Delete a model file (handles multi-part models)
    */
   async deleteModelFile(modelPath: string): Promise<void> {
-    if (fs.existsSync(modelPath)) {
-      fs.unlinkSync(modelPath);
+    const filename = path.basename(modelPath);
+    const multiPartInfo = this.isMultiPartFile(filename);
+
+    if (
+      multiPartInfo.isMultiPart &&
+      multiPartInfo.baseFilename &&
+      multiPartInfo.totalParts
+    ) {
+      // Delete all parts of a multi-part model
+      const dirPath = path.dirname(modelPath);
+      for (let i = 1; i <= multiPartInfo.totalParts; i++) {
+        const partFilename = `${multiPartInfo.baseFilename}-${String(i).padStart(5, '0')}-of-${String(multiPartInfo.totalParts).padStart(5, '0')}.gguf`;
+        const partPath = path.join(dirPath, partFilename);
+        if (fs.existsSync(partPath)) {
+          fs.unlinkSync(partPath);
+          logger.info(
+            `Deleted part ${i} of ${multiPartInfo.totalParts}: ${partFilename}`
+          );
+        }
+      }
+    } else {
+      // Delete single file
+      if (fs.existsSync(modelPath)) {
+        fs.unlinkSync(modelPath);
+      }
     }
   }
 
@@ -302,9 +443,28 @@ export class ModelFileManager {
   }
 
   /**
-   * Check if a model file exists
+   * Check if a model file exists (checks all parts for multi-part models)
    */
   modelExists(filename: string): boolean {
-    return fs.existsSync(this.getModelPath(filename));
+    const multiPartInfo = this.isMultiPartFile(filename);
+
+    if (
+      multiPartInfo.isMultiPart &&
+      multiPartInfo.baseFilename &&
+      multiPartInfo.totalParts
+    ) {
+      // Check if all parts exist for multi-part model
+      for (let i = 1; i <= multiPartInfo.totalParts; i++) {
+        const partFilename = `${multiPartInfo.baseFilename}-${String(i).padStart(5, '0')}-of-${String(multiPartInfo.totalParts).padStart(5, '0')}.gguf`;
+        const partPath = this.getModelPath(partFilename);
+        if (!fs.existsSync(partPath)) {
+          return false;
+        }
+      }
+      return true;
+    } else {
+      // Check single file
+      return fs.existsSync(this.getModelPath(filename));
+    }
   }
 }

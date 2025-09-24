@@ -38,10 +38,16 @@ interface ModelDownloadInfo {
   modelId?: string;
   size?: number;
   description?: string;
-  contextLength?: number;
+  trainedContextLength?: number;
+  maxContextLength?: number;
   parameterCount?: string;
   quantization?: string;
   huggingFaceUrl?: string;
+  // Multi-part model fields
+  isMultiPart?: boolean;
+  totalParts?: number;
+  allPartFiles?: string[];
+  totalSize?: number;
   downloads?: number;
   username?: string;
   likes?: number;
@@ -54,6 +60,8 @@ export function LocalLLMManager() {
     localModels,
     modelStatuses,
     isLoading: loadingLocalModels,
+    loadingModelId,
+    modelLoadErrors,
     fetchModelsAndStatuses: loadLocalModels,
     loadModel: handleLoadModel,
     unloadModel: handleUnloadModel,
@@ -111,6 +119,7 @@ export function LocalLLMManager() {
     loadingAvailable,
     loadCachedModels,
     getDisplayModels,
+    checkForModelUpdates,
   } = useAvailableModelsStore();
 
   // Use download store for progress tracking
@@ -272,10 +281,47 @@ export function LocalLLMManager() {
     setLocalCurrentPage(1);
   }, [selectedParameterSize, sortBy, sortOrder]);
 
-  // Reset pagination when search results change
+  // Reset pagination only when search query changes or search is performed
   useEffect(() => {
     setLocalCurrentPage(1);
-  }, [searchResults, availableModels, hasSearched]);
+  }, [searchQuery, hasSearched]);
+
+  // Check for VRAM data updates for visible models only
+  useEffect(() => {
+    // Get IDs of currently visible models
+    const visibleModelIds = filteredAvailableModels.map(
+      m => m.modelId ?? m.filename
+    );
+
+    // Check if any visible models need VRAM data
+    const hasModelsWithoutVram = filteredAvailableModels.some(
+      m => !m.hasVramData && !m.isFetchingVram && !m.vramError
+    );
+
+    if (
+      !hasModelsWithoutVram ||
+      loadingAvailable ||
+      isSearching ||
+      visibleModelIds.length === 0
+    ) {
+      return;
+    }
+
+    // Check for updates every 5 seconds while visible models are missing VRAM data
+    const interval = setInterval(() => {
+      logger.info(
+        `Checking for VRAM data updates for ${visibleModelIds.length} visible models...`
+      );
+      checkForModelUpdates(visibleModelIds);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [
+    filteredAvailableModels,
+    loadingAvailable,
+    isSearching,
+    checkForModelUpdates,
+  ]);
 
   const handleSearchButton = async () => {
     // If there's no search query and no advanced filters, trigger a model scan
@@ -368,9 +414,15 @@ export function LocalLLMManager() {
           filename: model.filename,
           size: model.size,
           description: model.description,
-          contextLength: model.contextLength,
+          trainedContextLength: model.trainedContextLength,
+          maxContextLength: model.maxContextLength,
           parameterCount: model.parameterCount,
           quantization: model.quantization,
+          // Pass multi-part info if available
+          isMultiPart: model.isMultiPart,
+          totalParts: model.totalParts,
+          allPartFiles: model.allPartFiles,
+          totalSize: model.totalSize,
         }),
       });
 
@@ -487,6 +539,8 @@ export function LocalLLMManager() {
           models={localModels}
           modelStatuses={modelStatuses}
           loading={loadingLocalModels}
+          loadingModelId={loadingModelId}
+          modelLoadErrors={modelLoadErrors}
           onLoad={handleLoadModel}
           onUnload={handleUnloadModel}
           onDelete={handleDelete}
@@ -854,7 +908,8 @@ export function LocalLLMManager() {
                   modelId: model.modelId,
                   filename: model.filename,
                   size: model.size || 0,
-                  contextLength: model.contextLength,
+                  trainedContextLength: model.trainedContextLength,
+                  maxContextLength: model.maxContextLength,
                   parameterCount: model.parameterCount,
                   quantization: model.quantization,
                   vramEstimates: model.vramEstimates,
@@ -867,6 +922,11 @@ export function LocalLLMManager() {
                   username: model.username,
                   likes: model.likes,
                   updatedAt: model.updatedAt,
+                  // Multi-part model fields
+                  isMultiPart: model.isMultiPart,
+                  totalParts: model.totalParts,
+                  allPartFiles: model.allPartFiles,
+                  totalSize: model.totalSize,
                 };
 
                 return (

@@ -51,7 +51,8 @@ vi.mock('fs', () => ({
   unlinkSync: vi.fn(),
 }));
 vi.mock('path', () => ({
-  join: vi.fn(),
+  join: vi.fn((...args: string[]) => args.join('/')),
+  basename: vi.fn((p: string) => p.split('/').pop() || ''),
 }));
 vi.mock('node-llama-cpp', () => ({
   readGgufFileInfo: vi.fn(),

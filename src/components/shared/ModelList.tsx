@@ -50,7 +50,8 @@ interface ModelListProps {
   models: ModelInfo[];
   modelStatuses: Map<string, ModelStatus>;
   loading: boolean;
-  loadingModelId?: string;
+  loadingModelId?: string | null;
+  modelLoadErrors?: Map<string, string>;
   targetModelId?: string;
   onLoad?: (modelId: string) => void;
   onUnload?: (modelId: string) => void;
@@ -68,6 +69,7 @@ export function ModelList({
   modelStatuses,
   loading,
   loadingModelId,
+  modelLoadErrors,
   targetModelId,
   onLoad,
   onUnload,
@@ -114,6 +116,7 @@ export function ModelList({
           model={model}
           status={modelStatuses.get(model.id)}
           isLoading={loadingModelId === model.id}
+          loadError={modelLoadErrors?.get(model.id)}
           isTarget={targetModelId === model.id}
           onLoad={onLoad}
           onUnload={onUnload}

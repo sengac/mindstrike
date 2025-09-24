@@ -5,22 +5,13 @@ import { getMindstrikeDirectory } from './utils/settingsDirectory';
 import { SSEEventType } from '../src/types';
 import {
   loadMetadataFromUrl,
-  calculateVRAMEstimate,
   type GGUFMetadata,
-  type VRAMEstimate,
-  type CacheType,
 } from './utils/ggufVramCalculator';
-
-export interface VRAMConfiguration {
-  gpuLayers: number;
-  contextSize: number;
-  cacheType: CacheType;
-  label: string;
-}
-
-export interface VRAMEstimateInfo extends VRAMEstimate {
-  config: VRAMConfiguration;
-}
+import {
+  calculateAllVRAMEstimates,
+  type ModelArchitectureInfo,
+  type VRAMEstimateInfo,
+} from '../src/shared/vramCalculator';
 
 export interface ModelArchitecture {
   layers?: number;
@@ -28,6 +19,7 @@ export interface ModelArchitecture {
   embeddingDim?: number;
   contextLength?: number;
   feedForwardDim?: number;
+  modelSizeMB?: number;
 }
 
 export interface DynamicModelInfo extends Record<string, unknown> {
@@ -36,7 +28,8 @@ export interface DynamicModelInfo extends Record<string, unknown> {
   filename: string;
   size: number;
   description: string;
-  contextLength?: number;
+  trainedContextLength?: number;
+  maxContextLength?: number;
   parameterCount?: string;
   quantization?: string;
   downloads: number;
@@ -52,6 +45,11 @@ export interface DynamicModelInfo extends Record<string, unknown> {
   modelArchitecture?: ModelArchitecture;
   hasVramData?: boolean;
   vramError?: string;
+  // Multi-part model fields
+  isMultiPart?: boolean;
+  totalParts?: number;
+  allPartFiles?: string[];
+  totalSize?: number;
 }
 
 interface HuggingFaceModel {
@@ -75,6 +73,13 @@ interface ModelAccessibilityCache {
   };
 }
 
+interface MultiPartInfo {
+  isMultiPart: boolean;
+  partNumber?: number;
+  totalParts?: number;
+  baseFilename?: string;
+}
+
 export class ModelFetcher {
   private cache: Map<string, DynamicModelInfo> = new Map(); // Use Map for deduplication by modelId
   private lastFetch: number = 0;
@@ -88,6 +93,12 @@ export class ModelFetcher {
   private isFetching: boolean = false;
   private fetchPromise: Promise<void> | null = null;
   private fetchPromiseResolve: (() => void) | null = null;
+  private vramFetchQueue: DynamicModelInfo[] = []; // Queue for VRAM fetching
+  private isProcessingVramQueue: boolean = false;
+  private vramFetchAttempts: Map<string, number> = new Map(); // Track retry attempts
+  private readonly MAX_VRAM_RETRIES = 2;
+  private readonly VRAM_FETCH_CONCURRENCY = 2; // Process 2 models at a time
+  private readonly VRAM_FETCH_TIMEOUT = 30000; // 30 seconds timeout for VRAM fetch
   private progressCallback?: (progress: {
     type:
       | 'started'
@@ -165,11 +176,9 @@ export class ModelFetcher {
   }
 
   private async waitForFetch(): Promise<void> {
-    if (!this.fetchPromise) {
-      this.fetchPromise = new Promise<void>(resolve => {
-        this.fetchPromiseResolve = resolve;
-      });
-    }
+    this.fetchPromise ??= new Promise<void>(resolve => {
+      this.fetchPromiseResolve = resolve;
+    });
     return this.fetchPromise;
   }
 
@@ -188,6 +197,19 @@ export class ModelFetcher {
     return Array.from(this.cache.values())
       .sort((a, b) => b.downloads - a.downloads)
       .slice(0, 100); // Limit to 100 as requested
+  }
+
+  /**
+   * Get specific models by their IDs
+   */
+  getModelsById(modelIds: string[]): DynamicModelInfo[] {
+    const models = modelIds
+      .map(id => this.cache.get(id))
+      .filter((model): model is DynamicModelInfo => model !== undefined);
+
+    // Don't automatically fetch VRAM data - let frontend explicitly request it
+
+    return models;
   }
 
   /**
@@ -519,14 +541,14 @@ export class ModelFetcher {
     ) => void,
     signal?: AbortSignal
   ): Promise<void> {
-    // Search for popular GGUF models sorted by downloads - get more models now
-    const url =
-      'https://huggingface.co/api/models?filter=gguf&sort=downloads&direction=-1&limit=200';
-
     this.progressCallback?.({
       type: 'fetching-models',
-      message: 'Fetching model list from Hugging Face...',
+      message: 'Fetching trending models from Hugging Face...',
     });
+
+    // Fetch trending models (balances popularity and recency)
+    const url =
+      'https://huggingface.co/api/models?filter=gguf&sort=trending&direction=-1&limit=150';
 
     const response = await fetch(url, {
       headers: {
@@ -540,7 +562,10 @@ export class ModelFetcher {
       );
     }
 
-    const allModels: HuggingFaceModel[] = await response.json();
+    const allModels = (await response.json()) as HuggingFaceModel[];
+    logger.info(
+      `Fetched ${allModels.length} trending models from Hugging Face`
+    );
 
     // Filter for text generation models with broader criteria
     const textGenModels = allModels.filter(model => {
@@ -573,8 +598,8 @@ export class ModelFetcher {
 
     const modelInfos: DynamicModelInfo[] = [];
 
-    // Get detailed info for more models now (up to 60)
-    const topModels = textGenModels.slice(0, 60);
+    // Process more models now that we're fetching both popular and recent (up to 80)
+    const topModels = textGenModels.slice(0, 80);
 
     for (let i = 0; i < topModels.length; i++) {
       if (signal?.aborted) {
@@ -669,10 +694,10 @@ export class ModelFetcher {
   private async fetchModelsBySearch(
     query: string
   ): Promise<DynamicModelInfo[]> {
-    // Use HuggingFace search API with query
-    const url = `https://huggingface.co/api/models?search=${encodeURIComponent(query)}&filter=gguf&sort=downloads&direction=-1&limit=100`;
+    // Use HuggingFace search API with query - using trending sort
+    const url = `https://huggingface.co/api/models?search=${encodeURIComponent(query)}&filter=gguf&sort=trending&direction=-1&limit=100`;
 
-    logger.info(`Fetching models from: ${url}`);
+    logger.info(`Fetching trending models for query: ${query}`);
 
     this.progressCallback?.({
       type: 'fetching-models',
@@ -680,15 +705,14 @@ export class ModelFetcher {
     });
 
     // Add timeout and retry logic
-    let lastError: Error;
-    let response: Response | undefined;
+    let allModels: HuggingFaceModel[] = [];
 
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
-        response = await fetch(url, {
+        const response = await fetch(url, {
           headers: {
             'User-Agent': 'mindstrike-local-llm/1.0',
           },
@@ -703,28 +727,24 @@ export class ModelFetcher {
           );
         }
 
+        allModels = (await response.json()) as HuggingFaceModel[];
+
         // Success - exit retry loop
         break;
       } catch (error) {
-        lastError = error as Error;
-        response = undefined;
         logger.warn(`Search attempt ${attempt} failed:`, error);
 
         if (attempt < 2) {
           logger.info(`Retrying search in 2 seconds...`);
           await new Promise(resolve => setTimeout(resolve, 2000));
+        } else {
+          throw error;
         }
       }
     }
 
-    // If we get here without a successful response, throw the last error
-    if (!response) {
-      throw lastError!;
-    }
-
-    const allModels: HuggingFaceModel[] = await response.json();
     logger.info(
-      `HuggingFace returned ${allModels.length} models for query: ${query}`
+      `HuggingFace returned ${allModels.length} trending models for query: ${query}`
     );
 
     // Filter for text generation models with broader criteria
@@ -800,7 +820,178 @@ export class ModelFetcher {
       }
     }
 
+    // Don't fetch VRAM data here - let frontend request it for visible models only
+
     return modelInfos;
+  }
+
+  /**
+   * Add models to VRAM fetch queue and start processing
+   */
+  async fetchVRAMDataForModels(models: DynamicModelInfo[]): Promise<void> {
+    // Only fetch for models that don't already have VRAM data (cached models will have hasVramData=true)
+    const modelsNeedingVram = models.filter(
+      m => !m.hasVramData && !m.vramError && m.url
+    );
+
+    if (modelsNeedingVram.length === 0) {
+      logger.debug(
+        `All ${models.length} models already have VRAM data cached or have errors`
+      );
+      return;
+    }
+
+    logger.info(
+      `Adding ${modelsNeedingVram.length} models to VRAM fetch queue (${models.length - modelsNeedingVram.length} already cached)`
+    );
+
+    // Add models to queue (avoiding duplicates)
+    const currentQueueIds = new Set(this.vramFetchQueue.map(m => m.modelId));
+    const newModels = modelsNeedingVram.filter(
+      m => !currentQueueIds.has(m.modelId)
+    );
+
+    if (newModels.length > 0) {
+      this.vramFetchQueue.push(...newModels);
+      logger.info(
+        `Added ${newModels.length} new models to queue, ${modelsNeedingVram.length - newModels.length} were already queued`
+      );
+    }
+
+    // Start processing queue if not already running
+    if (!this.isProcessingVramQueue && this.vramFetchQueue.length > 0) {
+      this.processVramFetchQueue().catch(error => {
+        logger.error('Error processing VRAM fetch queue:', error);
+      });
+    }
+  }
+
+  /**
+   * Process VRAM fetch queue with concurrency control
+   */
+  private async processVramFetchQueue(): Promise<void> {
+    if (this.isProcessingVramQueue) {
+      return;
+    }
+
+    this.isProcessingVramQueue = true;
+    logger.info('Starting VRAM fetch queue processing');
+
+    while (this.vramFetchQueue.length > 0) {
+      // Take up to VRAM_FETCH_CONCURRENCY models from queue
+      const batch = this.vramFetchQueue.splice(0, this.VRAM_FETCH_CONCURRENCY);
+
+      logger.info(`Processing batch of ${batch.length} models for VRAM fetch`);
+
+      // Process batch in parallel
+      const promises = batch.map(async model => {
+        const attempts = this.vramFetchAttempts.get(model.modelId) ?? 0;
+
+        if (attempts >= this.MAX_VRAM_RETRIES) {
+          logger.warn(
+            `Max retries reached for ${model.modelId}, skipping VRAM fetch`
+          );
+          model.vramError = 'Max retries exceeded';
+          this.cache.set(model.modelId, model);
+          return;
+        }
+
+        try {
+          logger.debug(
+            `Fetching VRAM data for ${model.modelId} (attempt ${attempts + 1})`
+          );
+
+          // Longer timeout for VRAM fetching
+          const vramData = await Promise.race([
+            this.fetchVRAMData(model.url),
+            new Promise<null>((_, reject) =>
+              setTimeout(
+                () => reject(new Error('VRAM fetch timeout')),
+                this.VRAM_FETCH_TIMEOUT
+              )
+            ),
+          ]);
+
+          if (vramData) {
+            model.vramEstimates = vramData.estimates;
+            model.modelArchitecture = vramData.architecture;
+            model.hasVramData = true;
+
+            // Add the trained context length from GGUF metadata
+            if (vramData.architecture.contextLength) {
+              model.trainedContextLength = vramData.architecture.contextLength;
+              model.maxContextLength = vramData.architecture.contextLength;
+            }
+
+            logger.info(
+              `Successfully fetched VRAM data for ${model.modelId}, context: ${model.trainedContextLength}`
+            );
+
+            // Update cache with the new data
+            this.cache.set(model.modelId, model);
+
+            // Clear retry attempts on success
+            this.vramFetchAttempts.delete(model.modelId);
+          } else {
+            throw new Error('VRAM data fetch returned null');
+          }
+        } catch (error) {
+          const errorMsg =
+            error instanceof Error ? error.message : 'Unknown error';
+          logger.warn(
+            `Failed to fetch VRAM data for ${model.modelId}: ${errorMsg}`
+          );
+
+          // Increment retry counter
+          this.vramFetchAttempts.set(model.modelId, attempts + 1);
+
+          // Re-add to queue if retries remaining
+          if (attempts + 1 < this.MAX_VRAM_RETRIES) {
+            logger.debug(
+              `Re-queueing ${model.modelId} for VRAM fetch (retry ${attempts + 2})`
+            );
+            this.vramFetchQueue.push(model);
+          } else {
+            model.vramError = errorMsg;
+            this.cache.set(model.modelId, model);
+          }
+        }
+      });
+
+      // Wait for batch to complete
+      await Promise.allSettled(promises);
+
+      // Save cache after each batch
+      this.saveCacheToFile();
+
+      // Small delay between batches to avoid overwhelming the network
+      if (this.vramFetchQueue.length > 0) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+
+    this.isProcessingVramQueue = false;
+    logger.info('VRAM fetch queue processing completed');
+  }
+
+  /**
+   * Check if a filename is part of a multi-part GGUF model
+   */
+  private isMultiPartFile(filename: string): MultiPartInfo {
+    // Match pattern like: model.Q6_K.gguf-00001-of-00006.gguf
+    const multiPartPattern = /^(.+\.gguf)-(\d{5})-of-(\d{5})\.gguf$/;
+    const match = filename.match(multiPartPattern);
+
+    if (match) {
+      return {
+        isMultiPart: true,
+        partNumber: parseInt(match[2], 10),
+        totalParts: parseInt(match[3], 10),
+        baseFilename: match[1],
+      };
+    }
+
+    return { isMultiPart: false };
   }
 
   /**
@@ -824,13 +1015,37 @@ export class ModelFetcher {
       return null;
     }
 
-    const details: HuggingFaceModel = await response.json();
+    const details = (await response.json()) as HuggingFaceModel;
 
     // Check if this is a gated model and mark it as such
     const isGated = details.gated === true;
 
     if (!details.siblings) {
       return null;
+    }
+
+    // Filter out non-first parts of multi-part models
+    const ggufFiles = details.siblings.filter(s =>
+      s.rfilename.endsWith('.gguf')
+    );
+    const validFiles: Array<{
+      rfilename: string;
+      size: number;
+      multiPartInfo?: MultiPartInfo;
+    }> = [];
+
+    for (const file of ggufFiles) {
+      const multiPartInfo = this.isMultiPartFile(file.rfilename);
+
+      if (multiPartInfo.isMultiPart) {
+        // Only include the first part of multi-part models
+        if (multiPartInfo.partNumber === 1) {
+          validFiles.push({ ...file, multiPartInfo });
+        }
+      } else {
+        // Include all non-multi-part files
+        validFiles.push({ ...file, multiPartInfo });
+      }
     }
 
     // Look for Q4_K_M quantization first (good balance), then other common ones
@@ -842,28 +1057,67 @@ export class ModelFetcher {
       'Q4_0',
     ];
 
-    let selectedFile: { rfilename: string; size: number } | null = null;
+    let selectedFile: {
+      rfilename: string;
+      size: number;
+      multiPartInfo?: MultiPartInfo;
+    } | null = null;
 
     for (const quant of preferredQuantizations) {
-      const file = details.siblings.find(
-        s => s.rfilename.endsWith(`${quant}.gguf`) && s.size < 15000000000 // Max 15GB
-      );
+      const file = validFiles.find(s => {
+        // For multi-part files, check if the base filename contains the quantization
+        if (s.multiPartInfo?.isMultiPart) {
+          return (
+            s.multiPartInfo.baseFilename?.includes(quant) &&
+            s.size < 15000000000
+          );
+        }
+        // For single files, check as before
+        return s.rfilename.endsWith(`${quant}.gguf`) && s.size < 15000000000;
+      });
       if (file) {
         selectedFile = file;
         break;
       }
     }
 
-    // Fallback to any .gguf file under 15GB
-    if (!selectedFile) {
-      selectedFile =
-        details.siblings.find(
-          s => s.rfilename.endsWith('.gguf') && s.size < 15000000000
-        ) || null;
-    }
-
+    // NO FALLBACK - if we don't find a preferred quantization, skip this model
     if (!selectedFile) {
       return null;
+    }
+
+    // Handle multi-part models
+    let isMultiPart = false;
+    let totalParts = 1;
+    let allPartFiles: string[] = [];
+    let totalSize = selectedFile.size;
+
+    if (selectedFile.multiPartInfo?.isMultiPart) {
+      isMultiPart = true;
+      totalParts = selectedFile.multiPartInfo.totalParts ?? 1;
+
+      // Find all parts of this multi-part model
+      const baseFilename = selectedFile.multiPartInfo.baseFilename;
+      allPartFiles = [];
+      totalSize = 0;
+
+      for (let i = 1; i <= totalParts; i++) {
+        const partFilename = `${baseFilename}-${String(i).padStart(5, '0')}-of-${String(totalParts).padStart(5, '0')}.gguf`;
+        const partFile = details.siblings.find(
+          s => s.rfilename === partFilename
+        );
+
+        if (!partFile) {
+          // If any part is missing, skip this model entirely
+          logger.debug(
+            `Missing part ${i} of ${totalParts} for model ${model.id}`
+          );
+          return null;
+        }
+
+        allPartFiles.push(partFilename);
+        totalSize += partFile.size;
+      }
     }
 
     // Extract model info
@@ -873,7 +1127,11 @@ export class ModelFetcher {
       selectedFile.rfilename,
       username
     );
-    const quantization = this.extractQuantization(selectedFile.rfilename);
+    const quantization = this.extractQuantization(
+      isMultiPart && selectedFile.multiPartInfo?.baseFilename
+        ? selectedFile.multiPartInfo.baseFilename
+        : selectedFile.rfilename
+    );
 
     // Generate download URL
     const downloadUrl = `https://huggingface.co/${model.id}/resolve/main/${selectedFile.rfilename}`;
@@ -902,7 +1160,9 @@ export class ModelFetcher {
           checkedAt: now,
           downloadUrl,
         };
-        this.saveAccessibilityCache();
+        this.saveAccessibilityCache().catch(error => {
+          logger.warn('Failed to save accessibility cache:', error);
+        });
       }
     }
 
@@ -911,13 +1171,14 @@ export class ModelFetcher {
       name: this.formatModelName(model.id, parameterCount, quantization),
       url: downloadUrl,
       filename: selectedFile.rfilename.replace(/[/\\]/g, '_'),
-      size: selectedFile.size,
+      size: isMultiPart ? totalSize : selectedFile.size,
       description: this.generateDescription(
         model.id,
         parameterCount,
-        quantization
+        quantization,
+        isMultiPart,
+        totalParts
       ),
-      contextLength: this.estimateContextLength(model.tags, model.id),
       parameterCount,
       quantization,
       downloads: model.downloads,
@@ -929,23 +1190,18 @@ export class ModelFetcher {
       likes: model.likes,
       updatedAt: model.lastModified,
       hasVramData: false,
+      // Add multi-part info
+      isMultiPart,
+      totalParts: isMultiPart ? totalParts : undefined,
+      allPartFiles: isMultiPart ? allPartFiles : undefined,
+      totalSize: isMultiPart ? totalSize : undefined,
     };
 
-    // Try to fetch VRAM data for accessible models
-    if (accessibility === 'accessible') {
-      try {
-        const vramData = await this.fetchVRAMData(downloadUrl);
-        if (vramData) {
-          modelInfo.vramEstimates = vramData.estimates;
-          modelInfo.modelArchitecture = vramData.architecture;
-          modelInfo.hasVramData = true;
-        }
-      } catch (error) {
-        logger.debug(`Could not fetch VRAM data for ${model.id}:`, error);
-        modelInfo.vramError =
-          error instanceof Error ? error.message : 'Unknown error';
-      }
-    }
+    // Skip initial VRAM fetch - let the queue handle it
+    // This ensures all models get processed fairly
+    logger.debug(
+      `Model ${model.id} will have VRAM data fetched in background queue`
+    );
 
     return modelInfo;
   }
@@ -1061,15 +1317,22 @@ export class ModelFetcher {
   private generateDescription(
     modelId: string,
     parameterCount: string,
-    quantization: string
+    quantization: string,
+    isMultiPart?: boolean,
+    totalParts?: number
   ): string {
-    const modelName = modelId.split('/').pop() || modelId;
+    const modelName = modelId.split('/').pop() ?? modelId;
 
     // Show parameter count if available, otherwise show username
     const paramInfo = parameterCount.includes('B')
       ? `(${parameterCount})`
       : `by ${parameterCount}`;
-    const description = `${modelName} ${paramInfo} with ${quantization} quantization`;
+
+    let description = `${modelName} ${paramInfo} with ${quantization} quantization`;
+
+    if (isMultiPart && totalParts) {
+      description += ` [${totalParts}-part model]`;
+    }
 
     return description;
   }
@@ -1082,47 +1345,10 @@ export class ModelFetcher {
     architecture: ModelArchitecture;
   } | null> {
     try {
-      // Define standard configurations to calculate
-      const configurations: VRAMConfiguration[] = [
-        {
-          gpuLayers: 999,
-          contextSize: 2048,
-          cacheType: 'fp16',
-          label: '2K context',
-        },
-        {
-          gpuLayers: 999,
-          contextSize: 4096,
-          cacheType: 'fp16',
-          label: '4K context',
-        },
-        {
-          gpuLayers: 999,
-          contextSize: 8192,
-          cacheType: 'fp16',
-          label: '8K context',
-        },
-        {
-          gpuLayers: 999,
-          contextSize: 16384,
-          cacheType: 'fp16',
-          label: '16K context',
-        },
-      ];
-
-      // Set a timeout for metadata fetching
-      const metadataPromise = loadMetadataFromUrl(modelUrl);
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(
-          () => reject(new Error('VRAM metadata fetch timeout')),
-          10000
-        )
-      );
-
-      const metadata: GGUFMetadata = await Promise.race([
-        metadataPromise,
-        timeoutPromise,
-      ]);
+      // Fetch metadata without internal timeout (handled by caller)
+      logger.debug(`Starting GGUF metadata fetch from: ${modelUrl}`);
+      const metadata: GGUFMetadata = await loadMetadataFromUrl(modelUrl);
+      logger.debug(`Successfully fetched GGUF metadata`);
 
       // Extract architecture info
       const architecture: ModelArchitecture = {
@@ -1131,29 +1357,21 @@ export class ModelFetcher {
         embeddingDim: metadata.embedding_dim,
         contextLength: metadata.context_length,
         feedForwardDim: metadata.feed_forward_dim,
+        modelSizeMB: metadata.model_size_mb,
       };
 
-      // Calculate VRAM for each configuration
-      const estimates: VRAMEstimateInfo[] = [];
-      for (const config of configurations) {
-        try {
-          const estimate = calculateVRAMEstimate(
-            metadata,
-            config.gpuLayers,
-            config.contextSize,
-            config.cacheType
-          );
-          estimates.push({
-            ...estimate,
-            config,
-          });
-        } catch (error) {
-          logger.debug(
-            `Could not calculate VRAM for config ${config.label}:`,
-            error
-          );
-        }
-      }
+      // Prepare architecture info for shared VRAM calculator
+      const architectureInfo: ModelArchitectureInfo = {
+        layers: metadata.n_layers,
+        kvHeads: metadata.n_kv_heads,
+        embeddingDim: metadata.embedding_dim,
+        contextLength: metadata.context_length,
+        feedForwardDim: metadata.feed_forward_dim,
+        modelSizeMB: metadata.model_size_mb,
+      };
+
+      // Calculate VRAM estimates using shared calculator
+      const estimates = calculateAllVRAMEstimates(architectureInfo);
 
       return estimates.length > 0 ? { estimates, architecture } : null;
     } catch (error) {
@@ -1322,7 +1540,9 @@ export class ModelFetcher {
    */
   clearAccessibilityCache(): void {
     this.accessibilityCache = {};
-    this.saveAccessibilityCache();
+    this.saveAccessibilityCache().catch(error => {
+      logger.warn('Failed to save accessibility cache:', error);
+    });
   }
 
   /**
@@ -1380,6 +1600,28 @@ export class ModelFetcher {
    */
   hasHuggingFaceToken(): boolean {
     return this.huggingFaceToken !== null;
+  }
+
+  /**
+   * Manually retry VRAM fetching for all models that need it
+   */
+  retryVramFetching(): void {
+    const modelsNeedingVram = Array.from(this.cache.values()).filter(
+      m => !m.hasVramData && !m.vramError && m.url
+    );
+
+    if (modelsNeedingVram.length > 0) {
+      logger.info(
+        `Manually retrying VRAM fetch for ${modelsNeedingVram.length} models`
+      );
+      // Clear retry attempts to allow fresh retries
+      this.vramFetchAttempts.clear();
+      this.fetchVRAMDataForModels(modelsNeedingVram).catch(error => {
+        logger.error('Failed to retry VRAM fetching:', error);
+      });
+    } else {
+      logger.info('No models need VRAM fetching');
+    }
   }
 }
 

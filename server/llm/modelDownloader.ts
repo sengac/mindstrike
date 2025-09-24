@@ -56,9 +56,30 @@ export class ModelDownloader {
   }
 
   /**
-   * Download a model
+   * Download a model (handles both single and multi-part models)
    */
   async downloadModel(
+    modelInfo: DynamicModelInfo,
+    outputPath: string,
+    options?: DownloadOptions
+  ): Promise<void> {
+    // Check if this is a multi-part model
+    if (
+      modelInfo.isMultiPart &&
+      modelInfo.allPartFiles &&
+      modelInfo.totalParts
+    ) {
+      return this.downloadMultiPartModel(modelInfo, outputPath, options);
+    }
+
+    // Single file download (existing logic)
+    return this.downloadSingleModel(modelInfo, outputPath, options);
+  }
+
+  /**
+   * Download a single model file
+   */
+  private async downloadSingleModel(
     modelInfo: DynamicModelInfo,
     outputPath: string,
     options?: DownloadOptions
@@ -139,6 +160,242 @@ export class ModelDownloader {
       this.downloadingModels.delete(filename);
       this.downloadControllers.delete(filename);
       this.downloadProgress.delete(filename);
+    }
+  }
+
+  /**
+   * Download a multi-part model (all parts sequentially)
+   */
+  private async downloadMultiPartModel(
+    modelInfo: DynamicModelInfo,
+    outputPath: string,
+    options?: DownloadOptions
+  ): Promise<void> {
+    const filename = modelInfo.filename;
+    const totalParts = modelInfo.totalParts!;
+    const allPartFiles = modelInfo.allPartFiles!;
+    const totalSize = modelInfo.totalSize || modelInfo.size;
+
+    // Check if already downloading
+    if (this.downloadingModels.has(filename)) {
+      throw new Error('Model is already being downloaded');
+    }
+
+    this.downloadingModels.add(filename);
+
+    // Create abort controller for this download
+    const abortController = new AbortController();
+    this.downloadControllers.set(filename, abortController);
+
+    // Combine abort signals if provided
+    if (options?.signal) {
+      options.signal.addEventListener('abort', () => abortController.abort());
+    }
+
+    const downloadedFiles: string[] = [];
+    let totalBytesDownloaded = 0;
+
+    try {
+      console.log(
+        `Starting multi-part download of ${modelInfo.name} (${totalParts} parts)...`
+      );
+
+      // Get headers with HF token if available
+      const headers = await this.getDownloadHeaders();
+
+      // Get the directory path from the output path
+      const dirPath = path.dirname(outputPath);
+
+      // Download each part sequentially
+      for (let i = 0; i < allPartFiles.length; i++) {
+        const partFile = allPartFiles[i];
+        const partNumber = i + 1;
+        const partPath = path.join(dirPath, partFile);
+
+        // Check if part already exists
+        if (fs.existsSync(partPath)) {
+          console.log(
+            `Part ${partNumber} of ${totalParts} already exists, skipping...`
+          );
+          downloadedFiles.push(partPath);
+          // Add the size of existing file to total bytes
+          const stats = fs.statSync(partPath);
+          totalBytesDownloaded += stats.size;
+          continue;
+        }
+
+        console.log(
+          `Downloading part ${partNumber} of ${totalParts}: ${partFile}...`
+        );
+
+        // Construct URL for this part
+        const baseUrl = modelInfo.url.substring(
+          0,
+          modelInfo.url.lastIndexOf('/') + 1
+        );
+        const partUrl = baseUrl + partFile;
+
+        const response = await fetch(partUrl, {
+          signal: abortController.signal,
+          headers,
+        });
+
+        if (!response.ok) {
+          if (response.status === HTTP_STATUS.UNAUTHORIZED) {
+            throw new Error('UNAUTHORIZED_HF_TOKEN_REQUIRED');
+          } else if (response.status === HTTP_STATUS.FORBIDDEN) {
+            throw new Error('FORBIDDEN_MODEL_ACCESS_REQUIRED');
+          } else {
+            throw new Error(
+              `HTTP error for part ${partNumber}! status: ${response.status}`
+            );
+          }
+        }
+
+        const contentLength = response.headers.get('Content-Length');
+        const partSize = contentLength ? parseInt(contentLength, 10) : 0;
+
+        // Stream this part with progress tracking
+        await this.streamMultiPartFile(
+          response.body!,
+          partPath,
+          partSize,
+          filename,
+          abortController.signal,
+          partNumber,
+          totalParts,
+          totalBytesDownloaded,
+          totalSize,
+          options?.onProgress
+        );
+
+        downloadedFiles.push(partPath);
+        totalBytesDownloaded += partSize;
+
+        console.log(
+          `Part ${partNumber} of ${totalParts} downloaded successfully`
+        );
+      }
+
+      console.log(
+        `Successfully downloaded all ${totalParts} parts of ${modelInfo.name}`
+      );
+    } catch (error) {
+      // Clean up all partial downloads
+      console.log(
+        `Download failed, cleaning up ${downloadedFiles.length} partial files...`
+      );
+      for (const file of downloadedFiles) {
+        if (fs.existsSync(file)) {
+          try {
+            fs.unlinkSync(file);
+            console.log(`Deleted partial file: ${file}`);
+          } catch (deleteError) {
+            console.error(
+              `Failed to delete partial file ${file}:`,
+              deleteError
+            );
+          }
+        }
+      }
+
+      if (error instanceof Error && error.message === 'Download cancelled') {
+        console.log(`Multi-part download cancelled: ${filename}`);
+      } else {
+        console.error(`Multi-part download failed: ${filename}`, error);
+      }
+
+      throw error;
+    } finally {
+      this.downloadingModels.delete(filename);
+      this.downloadControllers.delete(filename);
+      this.downloadProgress.delete(filename);
+    }
+  }
+
+  /**
+   * Stream download for multi-part files with progress tracking
+   */
+  private async streamMultiPartFile(
+    body: ReadableStream<Uint8Array>,
+    outputPath: string,
+    partSize: number,
+    filename: string,
+    signal: AbortSignal,
+    currentPart: number,
+    totalParts: number,
+    previousBytesDownloaded: number,
+    totalSize: number,
+    onProgress?: (progress: number, speed?: string) => void
+  ): Promise<void> {
+    const fileStream = fs.createWriteStream(outputPath);
+    const reader = body.getReader();
+
+    let partBytesDownloaded = 0;
+    let lastUpdate = Date.now();
+    let lastBytes = 0;
+
+    try {
+      while (true) {
+        if (signal.aborted) {
+          fileStream.destroy();
+          throw new Error('Download cancelled');
+        }
+
+        const { done, value } = await reader.read();
+
+        if (done) {
+          break;
+        }
+
+        fileStream.write(value);
+        partBytesDownloaded += value.length;
+
+        const now = Date.now();
+        const timeDiff = now - lastUpdate;
+
+        if (timeDiff >= TIMING.SPEED_CALCULATION_INTERVAL) {
+          // Calculate overall progress across all parts
+          const totalDownloaded = previousBytesDownloaded + partBytesDownloaded;
+          const overallProgress =
+            totalSize > 0
+              ? (totalDownloaded / totalSize) * PROGRESS.COMPLETE
+              : ((currentPart - 1 + partBytesDownloaded / partSize) /
+                  totalParts) *
+                PROGRESS.COMPLETE;
+
+          const bytesDiff = partBytesDownloaded - lastBytes;
+          const speed = this.formatSpeed(
+            bytesDiff / (timeDiff / TIMING.SPEED_CALCULATION_INTERVAL)
+          );
+
+          // Format speed with part info
+          const speedWithPart = `${speed} (Part ${currentPart}/${totalParts})`;
+
+          this.downloadProgress.set(filename, {
+            progress: Math.round(overallProgress),
+            speed: speedWithPart,
+          });
+
+          if (onProgress) {
+            onProgress(Math.round(overallProgress), speedWithPart);
+          }
+
+          lastUpdate = now;
+          lastBytes = partBytesDownloaded;
+        }
+      }
+
+      fileStream.end();
+
+      // Wait for file write to complete
+      await new Promise<void>((resolve, reject) => {
+        fileStream.on('finish', resolve);
+        fileStream.on('error', reject);
+      });
+    } catch (error) {
+      fileStream.destroy();
+      throw error;
     }
   }
 
