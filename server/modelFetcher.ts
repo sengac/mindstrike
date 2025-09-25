@@ -105,6 +105,8 @@ export class ModelFetcher {
       | 'fetching-models'
       | 'checking-model'
       | 'model-checked'
+      | 'info'
+      | 'error'
       | typeof SSEEventType.COMPLETED
       | typeof SSEEventType.ERROR;
     message: string;
@@ -357,6 +359,8 @@ export class ModelFetcher {
         | 'fetching-models'
         | 'checking-model'
         | 'model-checked'
+        | 'info'
+        | 'error'
         | typeof SSEEventType.COMPLETED
         | typeof SSEEventType.ERROR;
       message: string;
@@ -485,6 +489,8 @@ export class ModelFetcher {
         | 'fetching-models'
         | 'checking-model'
         | 'model-checked'
+        | 'info'
+        | 'error'
         | typeof SSEEventType.COMPLETED
         | typeof SSEEventType.ERROR;
       message: string;
@@ -543,29 +549,156 @@ export class ModelFetcher {
   ): Promise<void> {
     this.progressCallback?.({
       type: 'fetching-models',
-      message: 'Fetching trending models from Hugging Face...',
+      message: 'Fetching popular models from Hugging Face...',
     });
 
-    // Fetch trending models (balances popularity and recency)
-    const url =
-      'https://huggingface.co/api/models?filter=gguf&sort=trending&direction=-1&limit=150';
+    // Fetch popular models using verified working API parameters
+    // All these URLs have been tested and confirmed to work
+    const fallbackUrls = [
+      'https://huggingface.co/api/models?filter=gguf&sort=downloads&direction=-1&limit=150', // Most downloaded GGUF models
+      'https://huggingface.co/api/models?filter=gguf&sort=lastModified&direction=-1&limit=150', // Recently updated GGUF models
+      'https://huggingface.co/api/models?library=gguf&sort=downloads&direction=-1&limit=150', // Alternative filter approach
+      'https://huggingface.co/api/models?filter=gguf&sort=downloads&limit=150', // Without direction parameter
+      'https://huggingface.co/api/models?filter=gguf&limit=100', // Minimal fallback
+    ];
 
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'mindstrike-local-llm/1.0',
-      },
-    });
+    let currentUrlIndex = 0;
+    let url = fallbackUrls[currentUrlIndex];
 
-    if (!response.ok) {
-      throw new Error(
-        `HTTP ${response.status}: ${response.status !== 429 ? response.statusText : 'Rate limit exceeded'}`
-      );
+    // Implement retry logic with exponential backoff for rate limiting
+    let retries = 0;
+    const maxRetries = 3;
+    let response: Response | null = null;
+
+    while (retries <= maxRetries) {
+      try {
+        response = await fetch(url, {
+          headers: {
+            'User-Agent': 'mindstrike-local-llm/1.0',
+          },
+          signal,
+        });
+
+        if (response.ok) {
+          break; // Success, exit retry loop
+        }
+
+        if (response.status === 429) {
+          // Rate limited - implement exponential backoff
+          if (retries >= maxRetries) {
+            this.progressCallback?.({
+              type: 'error',
+              message:
+                'Rate limit exceeded. Please wait a few minutes before trying again.',
+            });
+            throw new Error(
+              'Rate limit exceeded. Please wait a few minutes before trying again.'
+            );
+          }
+
+          const retryAfter = response.headers.get('Retry-After');
+          let waitTime: number;
+
+          if (retryAfter) {
+            // If server provides Retry-After header, use it
+            waitTime = isNaN(Number(retryAfter))
+              ? new Date(retryAfter).getTime() - Date.now()
+              : Number(retryAfter) * 1000;
+          } else {
+            // Otherwise use exponential backoff: 2^retries * 1000ms + jitter
+            waitTime = Math.pow(2, retries) * 1000 + Math.random() * 1000;
+          }
+
+          // Cap wait time at 30 seconds
+          waitTime = Math.min(waitTime, 30000);
+
+          logger.warn(
+            `HuggingFace API rate limit hit. Retrying in ${Math.ceil(waitTime / 1000)} seconds (attempt ${retries + 1}/${maxRetries})`
+          );
+
+          this.progressCallback?.({
+            type: 'info',
+            message: `Rate limited. Retrying in ${Math.ceil(waitTime / 1000)} seconds (attempt ${retries + 1}/${maxRetries})...`,
+          });
+
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          retries++;
+          continue;
+        }
+
+        // HTTP 400 Bad Request - could be temporary API issue or parameter problem
+        if (response.status === 400) {
+          logger.warn(
+            `HuggingFace API returned 400 Bad Request. URL: ${url}. Attempt ${retries + 1}/${maxRetries + 1}`
+          );
+
+          // Try next URL in fallback list before retrying
+          if (currentUrlIndex < fallbackUrls.length - 1) {
+            currentUrlIndex++;
+            url = fallbackUrls[currentUrlIndex];
+            logger.info(`Trying fallback URL: ${url}`);
+
+            this.progressCallback?.({
+              type: 'info',
+              message: `API request failed, trying alternative URL...`,
+            });
+
+            // Reset retries for the new URL
+            retries = 0;
+            continue;
+          }
+
+          if (retries >= maxRetries) {
+            this.progressCallback?.({
+              type: 'error',
+              message:
+                'Unable to fetch models from HuggingFace. All URL variations failed.',
+            });
+            throw new Error(
+              `HTTP ${response.status}: ${response.statusText}. All verified API endpoints failed.`
+            );
+          }
+
+          this.progressCallback?.({
+            type: 'info',
+            message: 'API request failed, retrying...',
+          });
+
+          // For 400 errors, wait a bit and retry (shorter wait than 429s)
+          const waitTime = Math.min(1000 + Math.random() * 1000, 3000); // 1-2 second wait, max 3s
+          logger.info(
+            `Waiting ${Math.ceil(waitTime / 1000)} seconds before retrying due to 400 error`
+          );
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+
+          retries++;
+          continue;
+        } else {
+          // Other HTTP errors (not 400 or 429)
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          this.progressCallback?.({
+            type: 'info',
+            message: 'Fetch aborted by user',
+          });
+          throw error;
+        }
+        if (retries >= maxRetries) {
+          throw error;
+        }
+        retries++;
+      }
+    }
+
+    if (!response?.ok) {
+      throw new Error('Failed to fetch models after multiple attempts');
     }
 
     const allModels = (await response.json()) as HuggingFaceModel[];
-    logger.info(
-      `Fetched ${allModels.length} trending models from Hugging Face`
-    );
+    logger.info(`Fetched ${allModels.length} popular models from Hugging Face`);
 
     // Filter for text generation models with broader criteria
     const textGenModels = allModels.filter(model => {

@@ -18,6 +18,7 @@ import {
   Info,
 } from 'lucide-react';
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { FloatingTooltip } from './FloatingTooltip';
 import type {
   VRAMEstimateInfo,
   ModelArchitecture,
@@ -143,6 +144,7 @@ export function ModelCard({
   const [showSuccessFlash, setShowSuccessFlash] = useState(false);
   const wasLoadingRef = useRef(false);
   const [showContextTooltip, setShowContextTooltip] = useState(false);
+  const infoIconRef = useRef<SVGSVGElement>(null);
 
   // Track when loading completes successfully
   useEffect(() => {
@@ -528,40 +530,35 @@ export function ModelCard({
               <span>Training context:</span>
               <div className="relative inline-flex">
                 <Info
+                  ref={infoIconRef}
                   size={14}
                   className="text-gray-500 hover:text-gray-300 cursor-help transition-colors"
                   onMouseEnter={() => setShowContextTooltip(true)}
                   onMouseLeave={() => setShowContextTooltip(false)}
                 />
-                {showContextTooltip && (
-                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 z-50 pointer-events-none">
-                    <div
-                      className="bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-3 pointer-events-auto"
-                      style={{ width: '280px' }}
-                    >
-                      <div className="text-xs text-gray-300 space-y-2">
-                        <p className="font-semibold text-gray-200 whitespace-normal">
-                          What is Training Context?
-                        </p>
-                        <p className="whitespace-normal leading-relaxed">
-                          The training context (or context window) is the
-                          maximum number of tokens the model can process at
-                          once. This includes both your input and the model's
-                          response.
-                        </p>
-                        <p className="text-gray-400 whitespace-normal leading-relaxed">
-                          <span className="font-medium">Note:</span> This is the
-                          absolute maximum. Actual usable context may be limited
-                          by available VRAM.
-                        </p>
-                      </div>
-                    </div>
-                    <div
-                      className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-gray-900 border-r border-b border-gray-700 rotate-45"
-                      style={{ marginLeft: '-4px' }}
-                    ></div>
+                <FloatingTooltip
+                  targetRef={infoIconRef}
+                  isVisible={showContextTooltip}
+                >
+                  <div
+                    className="text-xs text-gray-300 space-y-2"
+                    style={{ width: '260px' }}
+                  >
+                    <p className="font-semibold text-gray-200 whitespace-normal">
+                      What is Training Context?
+                    </p>
+                    <p className="whitespace-normal leading-relaxed">
+                      The training context (or context window) is the maximum
+                      number of tokens the model can process at once. This
+                      includes both your input and the model's response.
+                    </p>
+                    <p className="text-gray-400 whitespace-normal leading-relaxed">
+                      <span className="font-medium">Note:</span> This is the
+                      absolute maximum. Actual usable context may be limited by
+                      available VRAM.
+                    </p>
                   </div>
-                )}
+                </FloatingTooltip>
               </div>
             </div>
             <span className="text-gray-300">
@@ -1235,7 +1232,7 @@ export function ModelCard({
                   min="0"
                   max="2"
                   step="0.1"
-                  value={tempSettings.temperature ?? 1.0}
+                  value={tempSettings.temperature ?? 0.7}
                   onChange={e => validateAndSetTemperature(e.target.value)}
                   className="flex-1 h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
                 />
@@ -1249,7 +1246,7 @@ export function ModelCard({
                     onChange={e => validateAndSetTemperature(e.target.value)}
                     onKeyDown={e => handleKeyDown(e)}
                     onPaste={e => handlePaste(e, validateAndSetTemperature)}
-                    placeholder="1.0"
+                    placeholder="0.7"
                     className={`w-16 px-2 py-1 text-xs bg-gray-700 border rounded text-white focus:outline-none ${
                       validationErrors.temperature
                         ? 'border-red-500 focus:border-red-500'

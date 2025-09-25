@@ -53,7 +53,7 @@ interface MCPToolExecutionRequest {
   };
 }
 
-export class LLMWorkerProxy extends EventEmitter {
+export class LLMWorkerProxyEnhanced extends EventEmitter {
   private worker: Worker | null = null;
   private readonly pendingRequests = new Map<string, PendingRequest<unknown>>();
   private readonly streamingRequests = new Map<string, StreamingRequest>();
@@ -61,6 +61,7 @@ export class LLMWorkerProxy extends EventEmitter {
   private isInitialized = false;
   private restartCount = 0;
   private readonly maxRestarts = 3;
+  private isRestarting = false;
 
   constructor() {
     super();
@@ -69,41 +70,40 @@ export class LLMWorkerProxy extends EventEmitter {
   }
 
   private initializeWorker() {
+    if (this.isRestarting) {
+      logger.info(
+        'Worker restart already in progress, skipping duplicate initialization'
+      );
+      return;
+    }
+
     try {
       let workerPath: string;
       const workerOptions: Record<string, unknown> = {};
 
+      // Use the enhanced worker
       if (process.env.NODE_ENV === 'development') {
-        // In development, create a small ESM wrapper that uses tsx
-        const wrapperPath = join(__dirname, 'llmWorker.wrapper.mjs');
-
-        // Create ESM wrapper content for worker
+        const wrapperPath = join(__dirname, 'llmWorkerEnhanced.wrapper.mjs');
         const wrapperLines = [
           "import { register } from 'tsx/esm/api';",
           'const unregister = register();',
-          "await import('./llmWorker.ts');",
+          "await import('./llmWorkerEnhanced.ts');",
         ];
         const wrapperContent = wrapperLines.join('\n');
 
-        // Create wrapper if it doesn't exist
         if (!existsSync(wrapperPath)) {
-          import('fs')
-            .then(({ writeFileSync }) => {
-              writeFileSync(wrapperPath, wrapperContent, 'utf-8');
-            })
-            .catch(error => {
-              logger.error('Failed to create wrapper file:', error);
-            });
+          import('fs').then(({ writeFileSync }) => {
+            writeFileSync(wrapperPath, wrapperContent, 'utf-8');
+          });
         }
 
         workerPath = wrapperPath;
       } else {
-        // In production, use the compiled worker
-        workerPath = join(__dirname, 'llmWorker.js');
+        workerPath = join(__dirname, 'llmWorkerEnhanced.js');
       }
 
       if (!existsSync(workerPath)) {
-        logger.warn(`LLM worker not found at ${workerPath}`);
+        logger.warn(`Enhanced LLM worker not found at ${workerPath}`);
         return;
       }
 
@@ -113,24 +113,14 @@ export class LLMWorkerProxy extends EventEmitter {
         if (response.type === 'streamChunk') {
           this.handleStreamChunk(response);
         } else if (response.type === 'downloadProgress') {
-          // Progress messages are handled by individual request handlers via event listeners
-          // Don't process these as regular responses to avoid false errors
+          // Progress messages are handled by individual request handlers
           return;
         } else if (response.type === 'mcpToolsRequest') {
-          this.handleMCPToolsRequest(response as MCPToolsRequest).catch(
-            error => {
-              logger.error('Failed to handle MCP tools request:', error);
-            }
-          );
+          this.handleMCPToolsRequest(response as MCPToolsRequest);
         } else if (response.type === 'executeMCPTool') {
-          this.handleMCPToolRequest(response as MCPToolExecutionRequest).catch(
-            error => {
-              logger.error('Failed to handle MCP tool request:', error);
-            }
-          );
+          this.handleMCPToolRequest(response as MCPToolExecutionRequest);
         } else if (response.type === 'error') {
           logger.error('Worker reported error:', response.error);
-          // Just log it, don't crash
         } else {
           this.handleResponse(response);
         }
@@ -138,30 +128,31 @@ export class LLMWorkerProxy extends EventEmitter {
 
       this.worker.on('error', error => {
         logger.error('Worker error:', error);
-        // Don't crash the server if worker has errors
-        this.worker = null;
-        this.isInitialized = false;
+        this.handleWorkerCrash(error);
       });
 
       this.worker.on('exit', code => {
         logger.info(`Worker exited with code ${code}`);
         this.worker = null;
         this.isInitialized = false;
-        // Don't crash the server if worker exits
-        logger.error(`Worker exited with code ${code}`);
+
+        if (code !== 0 && !this.isRestarting) {
+          this.handleWorkerCrash(new Error(`Worker exited with code ${code}`));
+        }
       });
 
       // Initialize the worker
       this.sendMessage('init')
         .then(() => {
           this.isInitialized = true;
-          logger.info('LLM Worker initialized');
+          this.restartCount = 0; // Reset on successful init
+          logger.info('Enhanced LLM Worker initialized');
         })
         .catch(error => {
-          logger.error('Failed to initialize LLM Worker:', error);
+          logger.error('Failed to initialize Enhanced LLM Worker:', error);
         });
     } catch (error) {
-      logger.error('Failed to create LLM Worker:', error);
+      logger.error('Failed to create Enhanced LLM Worker:', error);
       throw error;
     }
   }
@@ -243,7 +234,7 @@ export class LLMWorkerProxy extends EventEmitter {
   }
 
   private rejectAllPending(error: Error) {
-    for (const [, request] of this.pendingRequests) {
+    for (const [id, request] of this.pendingRequests) {
       // Abort any active operations
       if (request.abortController) {
         request.abortController.abort();
@@ -252,7 +243,7 @@ export class LLMWorkerProxy extends EventEmitter {
     }
     this.pendingRequests.clear();
 
-    for (const [, request] of this.streamingRequests) {
+    for (const [id, request] of this.streamingRequests) {
       // Abort any active streaming operations
       if (request.abortController) {
         request.abortController.abort();
@@ -268,8 +259,10 @@ export class LLMWorkerProxy extends EventEmitter {
     this.emit('error', error);
 
     // Try to restart if we haven't exceeded the limit
-    if (this.restartCount < this.maxRestarts) {
+    if (this.restartCount < this.maxRestarts && !this.isRestarting) {
       this.restartCount++;
+      this.isRestarting = true;
+
       logger.info(
         `Attempting to restart worker (attempt ${this.restartCount}/${this.maxRestarts})`
       );
@@ -279,6 +272,8 @@ export class LLMWorkerProxy extends EventEmitter {
           this.initializeWorker();
         } catch (restartError) {
           logger.error('Failed to restart worker:', restartError);
+        } finally {
+          this.isRestarting = false;
         }
       }, 2000); // Wait 2 seconds before restarting
     } else {
@@ -312,6 +307,7 @@ export class LLMWorkerProxy extends EventEmitter {
       const timeout = setTimeout(() => {
         if (this.pendingRequests.has(id)) {
           this.pendingRequests.delete(id);
+          abortController.abort();
           reject(new Error('Worker request timeout'));
         }
       }, 60000); // 60 second timeout
@@ -329,56 +325,6 @@ export class LLMWorkerProxy extends EventEmitter {
           originalReject(error);
         },
         abortController,
-      });
-
-      this.worker!.postMessage(message);
-    });
-  }
-
-  private async sendStreamMessage(
-    type: string,
-    data?: unknown
-  ): Promise<AsyncGenerator<string>> {
-    if (!this.worker) {
-      throw new Error('Worker not available');
-    }
-
-    const id = (++this.requestId).toString();
-    const message = { id, type, data };
-
-    return new Promise<AsyncGenerator<string>>((resolve, reject) => {
-      this.streamingRequests.set(id, {
-        resolve: (chunks: string[]) =>
-          resolve(this.createAsyncGenerator(chunks)),
-        reject,
-        chunks: [],
-      });
-      this.pendingRequests.set(id, {
-        resolve: (result: unknown) => resolve(result as AsyncGenerator<string>),
-        reject,
-      });
-
-      // Set timeout for requests
-      const timeout = setTimeout(() => {
-        if (this.pendingRequests.has(id)) {
-          this.pendingRequests.delete(id);
-          this.streamingRequests.delete(id);
-          reject(new Error('Worker streaming request timeout'));
-        }
-      }, 300000); // 5 minute timeout for streaming
-
-      const originalResolve = resolve;
-      const originalReject = reject;
-
-      this.pendingRequests.set(id, {
-        resolve: (result: unknown) => {
-          clearTimeout(timeout);
-          originalResolve(result as AsyncGenerator<string>);
-        },
-        reject: (error: unknown) => {
-          clearTimeout(timeout);
-          originalReject(error);
-        },
       });
 
       this.worker!.postMessage(message);
@@ -432,7 +378,6 @@ export class LLMWorkerProxy extends EventEmitter {
   ): Promise<string> {
     await this.waitForInitialization();
 
-    // Store the callback and pass only the request ID to worker
     const id = (++this.requestId).toString();
     const progressCallbacks = new Map<
       string,
@@ -446,16 +391,19 @@ export class LLMWorkerProxy extends EventEmitter {
     const message = { id, type: 'downloadModel', data: { modelInfo } };
 
     return new Promise<string>((resolve, reject) => {
+      const abortController = new AbortController();
+
       this.pendingRequests.set(id, {
         resolve: (result: unknown) => resolve(result as string),
         reject,
+        abortController,
       });
 
-      // Set timeout for requests
       const timeout = setTimeout(() => {
         if (this.pendingRequests.has(id)) {
           this.pendingRequests.delete(id);
           progressCallbacks.delete(id);
+          abortController.abort();
           reject(new Error('Worker request timeout'));
         }
       }, 600000); // 10 minute timeout for downloads
@@ -474,6 +422,7 @@ export class LLMWorkerProxy extends EventEmitter {
           progressCallbacks.delete(id);
           originalReject(error);
         },
+        abortController,
       });
 
       // Handle progress messages from worker
@@ -505,6 +454,7 @@ export class LLMWorkerProxy extends EventEmitter {
           cleanup();
           originalReject(error);
         },
+        abortController,
       });
 
       this.worker!.postMessage(message);
@@ -698,14 +648,6 @@ export class LLMWorkerProxy extends EventEmitter {
     }
   }
 
-  private async *createAsyncGenerator(
-    chunks: string[]
-  ): AsyncGenerator<string> {
-    for (const chunk of chunks) {
-      yield chunk;
-    }
-  }
-
   async setModelSettings(
     modelId: string,
     settings: ModelLoadingSettings
@@ -771,23 +713,24 @@ export class LLMWorkerProxy extends EventEmitter {
   terminate(): void {
     if (this.worker) {
       // Send abort to all active generations before terminating
-      for (const [, request] of this.streamingRequests) {
+      for (const [id, request] of this.streamingRequests) {
         if (request.abortController) {
           request.abortController.abort();
         }
       }
 
-      for (const [, request] of this.pendingRequests) {
+      for (const [id, request] of this.pendingRequests) {
         if (request.abortController) {
           request.abortController.abort();
         }
       }
 
-      this.worker.terminate().catch(error => {
-        logger.error('Error terminating worker:', error);
-      });
+      this.worker.terminate();
       this.worker = null;
       this.isInitialized = false;
     }
   }
 }
+
+// Export as default for compatibility
+export default LLMWorkerProxyEnhanced;

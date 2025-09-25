@@ -5,6 +5,7 @@ import { MindMapsPanel } from './MindMapsPanel';
 import { MindMapCanvas } from './MindMapCanvas';
 import type { ThreadMetadata } from '../../store/useThreadsStore';
 import type { MindMap } from '../hooks/useMindMaps';
+import { logger } from '../../utils/logger';
 interface MindMapsViewProps {
   mindMaps: MindMap[];
   activeMindMapId?: string;
@@ -50,7 +51,7 @@ export function MindMapsView({
         try {
           callback(...args);
         } catch (error) {
-          console.error(`Error in ${errorContext}:`, error);
+          logger.error(`Error in ${errorContext}`, error);
           // Optionally, you could show a toast notification here
           // toast.error(`Failed to ${errorContext}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
@@ -69,7 +70,7 @@ export function MindMapsView({
         try {
           await callback(...args);
         } catch (error) {
-          console.error(`Error in ${errorContext}:`, error);
+          logger.error(`Error in ${errorContext}`, error);
           // Optionally, you could show a toast notification here
           // toast.error(`Failed to ${errorContext}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
@@ -80,57 +81,68 @@ export function MindMapsView({
 
   // Create error-safe versions of all callbacks
   const safeMindMapSelect = useCallback(
-    createSafeCallback(onMindMapSelect, 'mind map selection'),
+    (...args: Parameters<typeof onMindMapSelect>) =>
+      createSafeCallback(onMindMapSelect, 'mind map selection')(...args),
     [createSafeCallback, onMindMapSelect]
   );
 
   const safeMindMapCreate = useCallback(
-    createSafeCallback(onMindMapCreate, 'mind map creation'),
+    (...args: Parameters<typeof onMindMapCreate>) =>
+      createSafeCallback(onMindMapCreate, 'mind map creation')(...args),
     [createSafeCallback, onMindMapCreate]
   );
 
   const safeMindMapRename = useCallback(
-    createSafeCallback(onMindMapRename, 'mind map renaming'),
+    (...args: Parameters<typeof onMindMapRename>) =>
+      createSafeCallback(onMindMapRename, 'mind map renaming')(...args),
     [createSafeCallback, onMindMapRename]
   );
 
   const safeMindMapDelete = useCallback(
-    createSafeCallback(onMindMapDelete, 'mind map deletion'),
+    (...args: Parameters<typeof onMindMapDelete>) =>
+      createSafeCallback(onMindMapDelete, 'mind map deletion')(...args),
     [createSafeCallback, onMindMapDelete]
   );
 
   const safeThreadCreate = useCallback(
-    createSafeCallback(onThreadCreate, 'thread creation'),
+    (...args: Parameters<typeof onThreadCreate>) =>
+      createSafeCallback(onThreadCreate, 'thread creation')(...args),
     [createSafeCallback, onThreadCreate]
   );
 
   const safeThreadRename = useCallback(
-    createSafeCallback(onThreadRename, 'thread renaming'),
+    (...args: Parameters<typeof onThreadRename>) =>
+      createSafeCallback(onThreadRename, 'thread renaming')(...args),
     [createSafeCallback, onThreadRename]
   );
 
   const safeThreadDelete = useCallback(
-    createSafeCallback(onThreadDelete, 'thread deletion'),
+    (...args: Parameters<typeof onThreadDelete>) =>
+      createSafeCallback(onThreadDelete, 'thread deletion')(...args),
     [createSafeCallback, onThreadDelete]
   );
 
   const safeNavigateToChat = useCallback(
-    createSafeCallback(onNavigateToChat, 'navigation to chat'),
+    (...args: Parameters<typeof onNavigateToChat>) =>
+      createSafeCallback(onNavigateToChat, 'navigation to chat')(...args),
     [createSafeCallback, onNavigateToChat]
   );
 
   const safePromptUpdate = useCallback(
-    createSafeCallback(onPromptUpdate, 'prompt update'),
+    (...args: Parameters<typeof onPromptUpdate>) =>
+      createSafeCallback(onPromptUpdate, 'prompt update')(...args),
     [createSafeCallback, onPromptUpdate]
   );
 
   const safeCustomizePrompts = useCallback(
-    createSafeCallback(onCustomizePrompts, 'prompt customization'),
+    (...args: Parameters<typeof onCustomizePrompts>) =>
+      createSafeCallback(onCustomizePrompts, 'prompt customization')(...args),
     [createSafeCallback, onCustomizePrompts]
   );
 
   const safeLoadMindMaps = useCallback(
-    createSafeAsyncCallback(loadMindMaps, 'mind maps loading'),
+    (...args: Parameters<typeof loadMindMaps>) =>
+      createSafeAsyncCallback(loadMindMaps, 'mind maps loading')(...args),
     [createSafeAsyncCallback, loadMindMaps]
   );
   return (

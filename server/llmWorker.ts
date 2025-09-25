@@ -7,8 +7,11 @@ import {
 import { logger } from './logger';
 import { SSEEventType } from '../src/types';
 
-// Worker thread for local LLM operations to prevent main thread crashes
+// Worker thread for local LLM operations with enhanced abort handling
 let llmManager: LocalLLMManager;
+
+// Track active generation tasks for proper abort handling
+const activeGenerations = new Map<string, AbortController>();
 
 interface WorkerMessage {
   id: string;
@@ -60,6 +63,10 @@ interface GenerateStreamResponseData {
   modelIdOrName: string;
   messages: unknown;
   options?: StreamResponseOptions;
+}
+
+interface AbortGenerationData {
+  requestId: string;
 }
 
 interface SetModelSettingsData {
@@ -171,6 +178,15 @@ function isGenerateStreamResponseData(
   );
 }
 
+function isAbortGenerationData(data: unknown): data is AbortGenerationData {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'requestId' in data &&
+    typeof (data as AbortGenerationData).requestId === 'string'
+  );
+}
+
 function isSetModelSettingsData(data: unknown): data is SetModelSettingsData {
   return (
     typeof data === 'object' &&
@@ -255,22 +271,25 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
         llmManager = new LocalLLMManager();
         return { id: message.id, success: true };
 
-      case 'getLocalModels':
+      case 'getLocalModels': {
         const models = await llmManager.getLocalModels();
         return { id: message.id, success: true, data: models };
+      }
 
-      case 'getAvailableModels':
+      case 'getAvailableModels': {
         const availableModels = await llmManager.getAvailableModels();
         return { id: message.id, success: true, data: availableModels };
+      }
 
-      case 'searchModels':
+      case 'searchModels': {
         if (!isSearchModelsData(message.data)) {
           throw new Error('Invalid searchModels data');
         }
         const searchResults = await llmManager.searchModels(message.data.query);
         return { id: message.id, success: true, data: searchResults };
+      }
 
-      case 'downloadModel':
+      case 'downloadModel': {
         if (!isDownloadModelData(message.data)) {
           throw new Error('Invalid downloadModel data');
         }
@@ -289,6 +308,7 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
           }
         );
         return { id: message.id, success: true, data: downloadPath };
+      }
 
       case 'deleteModel':
         if (!isDeleteModelData(message.data)) {
@@ -329,33 +349,56 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
           if (!isGenerateResponseData(message.data)) {
             throw new Error('Invalid generateResponse data');
           }
-          const response = await llmManager.generateResponse(
-            message.data.modelIdOrName,
-            message.data.messages as Parameters<
-              typeof llmManager.generateResponse
-            >[1],
-            message.data.options as
-              | {
-                  temperature?: number;
-                  maxTokens?: number;
-                  threadId?: string;
-                  disableFunctions?: boolean;
-                  disableChatHistory?: boolean;
-                  signal?: AbortSignal;
-                }
-              | undefined
-          );
-          return { id: message.id, success: true, data: response };
+
+          // Create abort controller for this generation
+          const abortController = new AbortController();
+          activeGenerations.set(message.id, abortController);
+
+          try {
+            const response = await llmManager.generateResponse(
+              message.data.modelIdOrName,
+              message.data.messages as Parameters<
+                typeof llmManager.generateResponse
+              >[1],
+              {
+                ...message.data.options,
+                signal: abortController.signal,
+              } as
+                | {
+                    temperature?: number;
+                    maxTokens?: number;
+                    threadId?: string;
+                    disableFunctions?: boolean;
+                    disableChatHistory?: boolean;
+                    signal?: AbortSignal;
+                  }
+                | undefined
+            );
+            return { id: message.id, success: true, data: response };
+          } finally {
+            // Clean up
+            activeGenerations.delete(message.id);
+          }
         } catch (error) {
-          logger.error(
-            'Generate response error (returning as message):',
-            error
-          );
-          // Return error as the final message instead of throwing
+          // Clean up on error
+          activeGenerations.delete(message.id);
+          logger.error('Generate response error:', error);
           const errorMessage =
             error instanceof Error ? error.message : 'Unknown error occurred';
-          let userFriendlyMessage = errorMessage;
 
+          // Check if it was an abort
+          if (
+            errorMessage.includes('AbortError') ||
+            errorMessage.includes('abort')
+          ) {
+            return {
+              id: message.id,
+              success: false,
+              error: 'AbortError: Generation aborted',
+            };
+          }
+
+          let userFriendlyMessage = errorMessage;
           if (errorMessage.includes('KV slot')) {
             userFriendlyMessage =
               'Model memory is full. Try reducing conversation length or restart the model.';
@@ -373,44 +416,81 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
           if (!isGenerateStreamResponseData(message.data)) {
             throw new Error('Invalid generateStreamResponse data');
           }
-          // For streaming, we need to handle this differently
-          // We'll send multiple messages back for each chunk
-          const generator = llmManager.generateStreamResponse(
-            message.data.modelIdOrName,
-            message.data.messages as Parameters<
-              typeof llmManager.generateStreamResponse
-            >[1],
-            message.data.options
-          );
 
-          // Send chunks as they come
-          for await (const chunk of generator) {
-            if (parentPort) {
-              parentPort.postMessage({
-                id: message.id,
-                type: 'streamChunk',
-                data: chunk,
-              });
+          // Create abort controller for this generation
+          const abortController = new AbortController();
+          activeGenerations.set(message.id, abortController);
+
+          try {
+            // For streaming, we need to handle this differently
+            const generator = llmManager.generateStreamResponse(
+              message.data.modelIdOrName,
+              message.data.messages as Parameters<
+                typeof llmManager.generateStreamResponse
+              >[1],
+              {
+                ...message.data.options,
+                signal: abortController.signal,
+              }
+            );
+
+            // Send chunks as they come
+            for await (const chunk of generator) {
+              // Check if aborted
+              if (abortController.signal.aborted) {
+                break;
+              }
+
+              if (parentPort) {
+                parentPort.postMessage({
+                  id: message.id,
+                  type: 'streamChunk',
+                  data: chunk,
+                });
+              }
             }
-          }
 
-          // Send completion signal
-          return { id: message.id, success: true, data: 'STREAM_COMPLETE' };
+            // Check if we completed or were aborted
+            if (abortController.signal.aborted) {
+              return {
+                id: message.id,
+                success: false,
+                error: 'AbortError: Stream aborted',
+              };
+            }
+
+            // Send completion signal
+            return { id: message.id, success: true, data: 'STREAM_COMPLETE' };
+          } finally {
+            // Clean up
+            activeGenerations.delete(message.id);
+          }
         } catch (error) {
-          logger.error(
-            'Generate stream response error (returning as chunk):',
-            error
-          );
-          // Send error as a final chunk
+          // Clean up on error
+          activeGenerations.delete(message.id);
+          logger.error('Generate stream response error:', error);
           const errorMessage =
             error instanceof Error ? error.message : 'Unknown error occurred';
-          let userFriendlyMessage = errorMessage;
 
+          // Check if it was an abort
+          if (
+            errorMessage.includes('AbortError') ||
+            errorMessage.includes('abort')
+          ) {
+            return {
+              id: message.id,
+              success: false,
+              error: 'AbortError: Stream aborted',
+            };
+          }
+
+          let userFriendlyMessage = errorMessage;
           if (errorMessage.includes('KV slot')) {
             userFriendlyMessage =
               'Model memory is full. Try reducing conversation length or restart the model.';
           }
 
+          // Send error as a final chunk
           if (parentPort) {
             parentPort.postMessage({
               id: message.id,
@@ -419,7 +499,11 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
             });
           }
 
-          return { id: message.id, success: true, data: 'STREAM_COMPLETE' };
+          return {
+            id: message.id,
+            success: false,
+            error: userFriendlyMessage,
+          };
         }
 
       case 'setModelSettings':
@@ -432,7 +516,7 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
         );
         return { id: message.id, success: true };
 
-      case 'getModelSettings':
+      case 'getModelSettings': {
         if (!isGetModelSettingsData(message.data)) {
           throw new Error('Invalid getModelSettings data');
         }
@@ -440,8 +524,9 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
           message.data.modelId
         );
         return { id: message.id, success: true, data: settings };
+      }
 
-      case 'calculateOptimalSettings':
+      case 'calculateOptimalSettings': {
         if (!isCalculateOptimalSettingsData(message.data)) {
           throw new Error('Invalid calculateOptimalSettings data');
         }
@@ -449,8 +534,9 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
           message.data.modelId
         );
         return { id: message.id, success: true, data: optimalSettings };
+      }
 
-      case 'getModelRuntimeInfo':
+      case 'getModelRuntimeInfo': {
         if (!isGetModelRuntimeInfoData(message.data)) {
           throw new Error('Invalid getModelRuntimeInfo data');
         }
@@ -458,12 +544,13 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
           message.data.modelId
         );
         return { id: message.id, success: true, data: runtimeInfo };
+      }
 
       case 'clearContextSizeCache':
         llmManager.clearContextSizeCache();
         return { id: message.id, success: true };
 
-      case 'getModelStatus':
+      case 'getModelStatus': {
         if (!isGetModelStatusData(message.data)) {
           throw new Error('Invalid getModelStatus data');
         }
@@ -471,20 +558,39 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
           message.data.modelId
         );
         return { id: message.id, success: true, data: modelStatus };
+      }
 
-      case 'cancelDownload':
+      case 'cancelDownload': {
         if (!isCancelDownloadData(message.data)) {
           throw new Error('Invalid cancelDownload data');
         }
         const cancelled = llmManager.cancelDownload(message.data.filename);
         return { id: message.id, success: true, data: cancelled };
+      }
 
-      case 'getDownloadProgress':
+      case 'getDownloadProgress': {
         if (!isGetDownloadProgressData(message.data)) {
           throw new Error('Invalid getDownloadProgress data');
         }
         const progress = llmManager.getDownloadProgress(message.data.filename);
         return { id: message.id, success: true, data: progress };
+      }
+
+      case 'abortGeneration': {
+        if (!isAbortGenerationData(message.data)) {
+          throw new Error('Invalid abortGeneration data');
+        }
+
+        // Find and abort the active generation
+        const controller = activeGenerations.get(message.data.requestId);
+        if (controller) {
+          controller.abort();
+          activeGenerations.delete(message.data.requestId);
+          logger.info(`Aborted generation ${message.data.requestId}`);
+        }
+
+        return { id: message.id, success: true };
+      }
 
       default:
         throw new Error(`Unknown message type: ${message.type}`);
@@ -500,7 +606,7 @@ async function handleMessage(message: WorkerMessage): Promise<WorkerResponse> {
 }
 
 if (parentPort) {
-  parentPort.on('message', async (message: WorkerMessage) => {
+  parentPort.on('message', (message: WorkerMessage) => {
     // Skip MCP response messages - they're handled by LocalLLMManager promises
     if (
       message.type === 'mcpToolsResponse' ||
@@ -509,21 +615,22 @@ if (parentPort) {
       return;
     }
 
-    try {
-      const response = await handleMessage(message);
-      if (parentPort) {
-        parentPort.postMessage(response);
-      }
-    } catch (error) {
-      logger.error('Unhandled worker error:', error);
-      if (parentPort) {
-        parentPort.postMessage({
-          id: message.id,
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
-      }
-    }
+    handleMessage(message)
+      .then(response => {
+        if (parentPort) {
+          parentPort.postMessage(response);
+        }
+      })
+      .catch(error => {
+        logger.error('Unhandled worker error:', error);
+        if (parentPort) {
+          parentPort.postMessage({
+            id: message.id,
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+        }
+      });
   });
 
   // Handle all unhandled promise rejections
@@ -563,3 +670,17 @@ if (parentPort) {
 
   logger.info('LLM Worker started');
 }
+
+// Clean up function for worker shutdown
+function cleanup() {
+  // Abort all active generations
+  for (const [id, controller] of activeGenerations) {
+    logger.info(`Aborting generation ${id} during cleanup`);
+    controller.abort();
+  }
+  activeGenerations.clear();
+}
+
+// Handle process termination
+process.on('SIGTERM', cleanup);
+process.on('SIGINT', cleanup);

@@ -491,7 +491,7 @@ describe('ModelFetcher VRAM Integration', () => {
 
       // Search for a specific model
       await modelFetcher.searchModels('search-model');
-      let models = modelFetcher.getCachedModels();
+      const models = modelFetcher.getCachedModels();
 
       expect(models).toHaveLength(1);
 

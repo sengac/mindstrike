@@ -280,6 +280,9 @@ export function ApplicationLogsView({
       {/* Header */}
       <AppBar icon={FileText} title="Application Logs" />
 
+      {/* Music Visualization Background */}
+      <MusicVisualization className="fixed inset-0 w-full h-full pointer-events-none z-0" />
+
       {/* Tab Navigation */}
       <div className="border-b border-gray-700">
         <div className="px-6">
@@ -405,9 +408,8 @@ export function ApplicationLogsView({
       )}
 
       {/* Content */}
-      <div className="relative flex-1 overflow-y-auto p-6">
-        <MusicVisualization className="absolute inset-0 w-full h-full pointer-events-none z-0" />
-        <div className="relative z-10">
+      <div className="relative flex-1 overflow-y-auto p-6 z-10">
+        <div className="relative">
           {activeTab === 'llm' ? (
             // LLM Logs Tab
             filteredEntries.length === 0 ? (

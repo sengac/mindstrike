@@ -169,10 +169,12 @@ export function AgentsView() {
         }
       />
 
+      {/* Music Visualization Background */}
+      <MusicVisualization className="fixed inset-0 w-full h-full pointer-events-none z-0" />
+
       {/* Content */}
-      <div className="relative flex-1 overflow-y-auto p-6">
-        <MusicVisualization className="absolute inset-0 w-full h-full pointer-events-none z-0" />
-        <div className="relative z-10">
+      <div className="relative flex-1 overflow-y-auto p-6 z-10">
+        <div className="relative">
           {loading ? (
             <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
               <div className="text-center text-gray-400">

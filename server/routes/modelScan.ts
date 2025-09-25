@@ -5,6 +5,8 @@ import { modelFetcher } from '../modelFetcher';
 import { logger } from '../logger';
 import { SSEEventType } from '../../src/types';
 import type { ScanProgress } from '../../src/store/useModelScanStore';
+import type { ModelFetcher } from '../modelFetcher';
+import type { SSEManager } from '../sseManager';
 
 interface ModelSearchParams {
   query: string;
@@ -24,15 +26,34 @@ const activeScanSessions = new Map<
   }
 >();
 
+// Export for testing
+export const testUtils = {
+  setActiveScanSession: (
+    scanId: string,
+    session: {
+      id: string;
+      controller: AbortController;
+      status: 'running' | 'completed' | 'cancelled' | 'error';
+      startTime: number;
+    }
+  ) => {
+    activeScanSessions.set(scanId, session);
+  },
+  clearActiveScanSessions: () => {
+    activeScanSessions.clear();
+  },
+};
+
 // Progress update helper
 function broadcastProgress(
   scanId: string,
   progress: Partial<ScanProgress> & {
     operationType?: 'scan' | 'search';
     error?: string;
-  }
+  },
+  sseManagerInstance = sseManager
 ) {
-  sseManager.broadcast('unified-events', {
+  sseManagerInstance.broadcast('unified-events', {
     type: SSEEventType.SCAN_PROGRESS,
     scanId,
     progress,
@@ -51,7 +72,7 @@ router.get('/progress', (req, res) => {
 /**
  * Start a new model search
  */
-router.post('/search', async (req, res) => {
+router.post('/search', (req, res) => {
   const searchId = uuidv4();
   const controller = new AbortController();
 
@@ -72,16 +93,22 @@ router.post('/search', async (req, res) => {
   });
 
   // Start the search process asynchronously
-  performModelSearch(searchId, req.body, controller.signal).catch(error => {
+  performModelSearch(
+    searchId,
+    req.body as ModelSearchParams,
+    controller.signal
+  ).catch(error => {
     logger.error(`Model search ${searchId} failed:`, error);
 
     const session = activeScanSessions.get(searchId);
     if (session && session.status === 'running') {
       session.status = 'error';
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
       broadcastProgress(searchId, {
         stage: 'error',
         message: 'Search failed',
-        error: error.message,
+        error: errorMessage,
         operationType: 'search',
       });
     }
@@ -91,7 +118,7 @@ router.post('/search', async (req, res) => {
 /**
  * Start a new model scan
  */
-router.post('/start', async (req, res) => {
+router.post('/start', (req, res) => {
   const scanId = uuidv4();
   const controller = new AbortController();
 
@@ -112,20 +139,24 @@ router.post('/start', async (req, res) => {
   });
 
   // Start the scan process asynchronously
-  performModelScan(scanId, controller.signal).catch(error => {
-    logger.error(`Model scan ${scanId} failed:`, error);
+  performModelScan(scanId, modelFetcher, sseManager, controller.signal).catch(
+    error => {
+      logger.error(`Model scan ${scanId} failed:`, error);
 
-    const session = activeScanSessions.get(scanId);
-    if (session && session.status === 'running') {
-      session.status = 'error';
-      broadcastProgress(scanId, {
-        stage: 'error',
-        message: 'Scan failed',
-        error: error.message,
-        operationType: 'scan',
-      });
+      const session = activeScanSessions.get(scanId);
+      if (session && session.status === 'running') {
+        session.status = 'error';
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown error';
+        broadcastProgress(scanId, {
+          stage: 'error',
+          message: 'Scan failed',
+          error: errorMessage,
+          operationType: 'scan',
+        });
+      }
     }
-  });
+  );
 });
 
 /**
@@ -343,8 +374,10 @@ async function performModelSearch(
 /**
  * Perform the actual model scanning with progress updates
  */
-async function performModelScan(
+export async function performModelScan(
   scanId: string,
+  modelFetcher: ModelFetcher,
+  sseManagerInstance: SSEManager,
   signal: AbortSignal
 ): Promise<void> {
   const session = activeScanSessions.get(scanId);
@@ -352,12 +385,20 @@ async function performModelScan(
     return;
   }
 
+  // Helper function for broadcasting progress within this scan
+  const broadcast = (
+    progress: Partial<ScanProgress> & {
+      operationType?: 'scan' | 'search';
+      error?: string;
+    }
+  ) => broadcastProgress(scanId, progress, sseManagerInstance);
+
   try {
     // Stage 1: Initialize
     if (signal.aborted) {
       return;
     }
-    broadcastProgress(scanId, {
+    broadcast({
       stage: 'initializing',
       message: 'Preparing to fetch model list...',
       progress: 0,
@@ -370,7 +411,7 @@ async function performModelScan(
     if (signal.aborted) {
       return;
     }
-    broadcastProgress(scanId, {
+    broadcast({
       stage: 'fetching-huggingface',
       message: 'Fetching popular models from HuggingFace...',
       progress: 10,
@@ -378,28 +419,31 @@ async function performModelScan(
     });
 
     // Fetch popular models with progress tracking
-    await modelFetcher.fetchPopularModels((current, total, modelId) => {
-      if (signal.aborted) {
-        return;
-      }
+    await modelFetcher.fetchPopularModels(
+      (current: number, total: number, modelId?: string) => {
+        if (signal.aborted) {
+          return;
+        }
 
-      const progress = 10 + Math.round((current / total) * 40); // 10-50%
-      broadcastProgress(scanId, {
-        stage: 'fetching-huggingface',
-        message: `Fetching model details from HuggingFace (${current}/${total})...`,
-        progress,
-        currentItem: modelId || `Model ${current}`,
-        totalItems: total,
-        completedItems: current,
-        operationType: 'scan',
-      });
-    }, signal);
+        const progress = 10 + Math.round((current / total) * 40); // 10-50%
+        broadcast({
+          stage: 'fetching-huggingface',
+          message: `Fetching model details from HuggingFace (${current}/${total})...`,
+          progress,
+          currentItem: modelId ?? `Model ${current}`,
+          totalItems: total,
+          completedItems: current,
+          operationType: 'scan',
+        });
+      },
+      signal
+    );
 
     // Stage 3: Check model availability
     if (signal.aborted) {
       return;
     }
-    broadcastProgress(scanId, {
+    broadcast({
       stage: 'checking-models',
       message: 'Checking model availability and metadata...',
       progress: 50,
@@ -420,7 +464,7 @@ async function performModelScan(
       checkedModels++;
       const progress = 50 + Math.round((checkedModels / totalModels) * 40); // 50-90%
 
-      broadcastProgress(scanId, {
+      broadcast({
         stage: 'checking-models',
         message: `Checking model: ${model.name}`,
         progress,
@@ -435,7 +479,7 @@ async function performModelScan(
     if (signal.aborted) {
       return;
     }
-    broadcastProgress(scanId, {
+    broadcast({
       stage: 'completing',
       message: 'Finalizing scan results...',
       progress: 90,
@@ -449,7 +493,7 @@ async function performModelScan(
       return;
     }
     session.status = 'completed';
-    broadcastProgress(scanId, {
+    broadcast({
       stage: 'completed',
       message: `Scan completed! Found ${models.length} models available for download.`,
       progress: 100,
@@ -475,10 +519,40 @@ async function performModelScan(
 
     if (session) {
       session.status = 'error';
-      broadcastProgress(scanId, {
+
+      // Provide specific error messages for common scenarios
+      let errorMessage = 'Scan failed due to an error';
+      let userFriendlyMessage = errorMessage;
+
+      if (error instanceof Error) {
+        errorMessage = error.message;
+
+        // Handle rate limit errors specifically
+        if (errorMessage.includes('Rate limit exceeded')) {
+          userFriendlyMessage =
+            'HuggingFace API rate limit reached. Please wait a few minutes before trying again.';
+        } else if (errorMessage.includes('HTTP 400')) {
+          if (errorMessage.includes('All fallback URLs failed')) {
+            userFriendlyMessage =
+              'HuggingFace API is currently unavailable. Multiple request formats were tried but all failed. Please try again later.';
+          } else {
+            userFriendlyMessage =
+              'HuggingFace API request failed. The service may be temporarily unavailable.';
+          }
+        } else if (errorMessage.includes('Failed to fetch')) {
+          userFriendlyMessage =
+            'Unable to connect to HuggingFace. Please check your internet connection.';
+        } else if (errorMessage.includes('AbortError')) {
+          userFriendlyMessage = 'Scan was cancelled by user.';
+        } else {
+          userFriendlyMessage = errorMessage;
+        }
+      }
+
+      broadcast({
         stage: 'error',
-        message: 'Scan failed due to an error',
-        error: error instanceof Error ? error.message : 'Unknown error',
+        message: userFriendlyMessage,
+        error: errorMessage,
         operationType: 'scan',
       });
 

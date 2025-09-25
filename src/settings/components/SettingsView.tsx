@@ -340,10 +340,12 @@ export function SettingsView() {
         </div>
       </div>
 
+      {/* Music Visualization Background */}
+      <MusicVisualization className="fixed inset-0 w-full h-full pointer-events-none z-0" />
+
       {/* Content */}
-      <div className="relative flex-1 overflow-y-auto p-6">
-        <MusicVisualization className="absolute inset-0 w-full h-full pointer-events-none z-0" />
-        <div className="relative z-10">
+      <div className="relative flex-1 overflow-y-auto p-6 z-10">
+        <div className="relative">
           <div className="max-w-4xl space-y-8">
             {/* Built-in LLM Tab */}
             {activeTab === 'builtin-llm' && (

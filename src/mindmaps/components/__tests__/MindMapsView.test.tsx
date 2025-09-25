@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MindMapsView } from '../MindMapsView';
 import type { MindMap } from '../../hooks/useMindMaps';
 import type { ThreadMetadata } from '../../../store/useThreadsStore';
+import { logger } from '../../../utils/logger';
 
 // Mock the AppBar component
 vi.mock('../../../components/AppBar', () => ({
@@ -147,7 +148,25 @@ vi.mock('../MindMapCanvas', () => ({
       {/* Action button for testing prop forwarding */}
       <button
         data-testid="canvas-load-mindmaps"
-        onClick={() => loadMindMaps(true)}
+        onClick={() => {
+          const result: unknown = loadMindMaps(true);
+          // Type guard to check if result is a promise
+          const isPromise = (value: unknown): value is Promise<unknown> => {
+            return (
+              value !== null &&
+              typeof value === 'object' &&
+              'then' in value &&
+              typeof (value as Record<string, unknown>).then === 'function'
+            );
+          };
+
+          if (isPromise(result)) {
+            result.catch(error => {
+              // Re-throw to let the test fail if there's an error
+              throw error;
+            });
+          }
+        }}
       >
         Load MindMaps
       </button>
@@ -662,6 +681,8 @@ describe('MindMapsView', () => {
     });
 
     it('should handle async callback rejections', async () => {
+      const loggerSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
+
       const errorProps = {
         ...defaultProps,
         onMindMapSelect: vi.fn().mockImplementation(() => {
@@ -677,6 +698,8 @@ describe('MindMapsView', () => {
       expect(async () => {
         await user.click(selectButton);
       }).not.toThrow();
+
+      loggerSpy.mockRestore();
 
       await waitFor(() => {
         expect(errorProps.onMindMapSelect).toHaveBeenCalled();

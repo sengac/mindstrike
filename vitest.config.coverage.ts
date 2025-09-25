@@ -20,20 +20,38 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    // Use a function to determine environment based on file path
-    environmentMatchGlobs: [
-      ['src/**', 'jsdom'],
-      ['server/**', 'node'],
-      ['tests/integration/**/*.ts', 'node'],
-      ['tests/integration/**/*.tsx', 'jsdom'], // tsx files need jsdom for React components
-    ],
     setupFiles: ['./tests/setupCoverage.ts'],
-    include: [
-      'server/**/*.{test,spec}.{js,ts}',
-      'tests/integration/**/*.{test,spec}.{js,ts,tsx}',
-      'src/**/*.{test,spec}.{js,ts,jsx,tsx}',
-    ],
     exclude: ['node_modules/**', 'dist/**', 'tests/e2e/**'],
+
+    // Use projects configuration for different environments
+    projects: [
+      {
+        // Frontend tests with jsdom environment
+        extends: true,
+        test: {
+          name: 'frontend',
+          environment: 'jsdom',
+          include: [
+            'src/**/*.{test,spec}.{js,ts,jsx,tsx}',
+            'tests/integration/**/*.{test,spec}.tsx',
+          ],
+        },
+      },
+      {
+        // Backend tests with node environment
+        extends: true,
+        test: {
+          name: 'backend',
+          environment: 'node',
+          include: [
+            'server/**/*.{test,spec}.{js,ts}',
+            'tests/integration/**/*.{test,spec}.ts',
+          ],
+        },
+      },
+    ],
+
+    // Shared coverage configuration
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
@@ -58,12 +76,11 @@ export default defineConfig({
         'tailwind.config.js',
       ],
     },
+
+    // Use parallel execution for speed
     pool: 'threads',
-    poolOptions: {
-      threads: {
-        singleThread: true,
-      },
-    },
+
+    // Server deps configuration
     server: {
       deps: {
         external: [

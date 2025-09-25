@@ -8,7 +8,7 @@ interface SSEClient {
   topic: string;
 }
 
-class SSEManager {
+export class SSEManager {
   private readonly clients: Map<string, SSEClient> = new Map();
   private readonly clientsByTopic: Map<string, Set<string>> = new Map();
   private readonly largeContentStore: Map<string, string> = new Map();

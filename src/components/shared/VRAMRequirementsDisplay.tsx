@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { HardDrive, Zap, Settings2 } from 'lucide-react';
+import { useState, useMemo, useRef } from 'react';
+import { HardDrive, Zap, Settings2, Info } from 'lucide-react';
 import { useSystemInformationStore } from '../../store/useSystemInformationStore';
 import {
   calculateVRAMSafety,
@@ -12,6 +12,7 @@ import {
   type ModelArchitectureInfo,
 } from '../../shared/vramCalculator';
 import type { ModelArchitecture } from '../../store/useAvailableModelsStore';
+import { FloatingTooltip } from './FloatingTooltip';
 
 interface VRAMRequirementsDisplayProps {
   vramEstimates?: VRAMEstimateInfo[];
@@ -40,6 +41,8 @@ export function VRAMRequirementsDisplay({
   const defaultContext = modelArchitecture?.contextLength ?? 8192;
   const [userMaxContext, setUserMaxContext] = useState(defaultContext);
   const [showContextSlider, setShowContextSlider] = useState(false);
+  const [showArchitectureTooltip, setShowArchitectureTooltip] = useState(false);
+  const architectureInfoRef = useRef<SVGSVGElement>(null);
 
   // Calculate VRAM estimates dynamically if we have architecture info
   const vramEstimates = useMemo(() => {
@@ -249,22 +252,69 @@ export function VRAMRequirementsDisplay({
       </div>
 
       {modelArchitecture && (
-        <div className="mt-2 text-xs text-gray-500">
-          {modelArchitecture.layers && (
-            <span>Layers: {modelArchitecture.layers} • </span>
-          )}
-          {modelArchitecture.kvHeads && (
-            <span>KV Heads: {modelArchitecture.kvHeads} • </span>
-          )}
-          {modelArchitecture.embeddingDim && (
-            <span>Embedding: {modelArchitecture.embeddingDim}</span>
-          )}
-          {modelArchitecture.contextLength && (
-            <span>
-              {' '}
-              • Training: {Math.round(modelArchitecture.contextLength / 1000)}K
-            </span>
-          )}
+        <div className="mt-2 text-xs text-gray-500 flex items-center gap-1">
+          <div>
+            {modelArchitecture.layers && (
+              <span>Layers: {modelArchitecture.layers} • </span>
+            )}
+            {modelArchitecture.kvHeads && (
+              <span>KV Heads: {modelArchitecture.kvHeads} • </span>
+            )}
+            {modelArchitecture.embeddingDim && (
+              <span>Embedding: {modelArchitecture.embeddingDim}</span>
+            )}
+            {modelArchitecture.contextLength && (
+              <span>
+                {' '}
+                • Training: {Math.round(modelArchitecture.contextLength / 1000)}
+                K
+              </span>
+            )}
+          </div>
+          <div className="relative inline-flex">
+            <Info
+              ref={architectureInfoRef}
+              size={14}
+              className="text-gray-500 hover:text-gray-300 cursor-help transition-colors"
+              onMouseEnter={() => setShowArchitectureTooltip(true)}
+              onMouseLeave={() => setShowArchitectureTooltip(false)}
+            />
+            <FloatingTooltip
+              targetRef={architectureInfoRef}
+              isVisible={showArchitectureTooltip}
+            >
+              <div
+                className="text-xs text-gray-300 space-y-2"
+                style={{ width: '280px' }}
+              >
+                <p className="font-semibold text-gray-200 whitespace-normal">
+                  Model Architecture Details
+                </p>
+                <div className="space-y-1 whitespace-normal leading-relaxed">
+                  <p>
+                    <span className="text-gray-400">Layers:</span> The number of
+                    transformer layers in the model. More layers generally mean
+                    better understanding but require more VRAM.
+                  </p>
+                  <p>
+                    <span className="text-gray-400">KV Heads:</span> Key-Value
+                    attention heads used for caching during inference. Affects
+                    memory usage for context.
+                  </p>
+                  <p>
+                    <span className="text-gray-400">Embedding:</span> The
+                    dimension of the model's internal representations. Larger
+                    dimensions can capture more nuanced information.
+                  </p>
+                  <p>
+                    <span className="text-gray-400">Training:</span> The context
+                    length (in thousands of tokens) the model was trained on.
+                    This is the model's native context window.
+                  </p>
+                </div>
+              </div>
+            </FloatingTooltip>
+          </div>
         </div>
       )}
     </div>
