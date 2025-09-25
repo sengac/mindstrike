@@ -11,7 +11,7 @@ if [ ! -d "website" ]; then
 fi
 
 BUCKET_NAME=$(aws cloudformation describe-stacks \
-    --stack-name SengacWebsiteStack \
+    --stack-name MindstrikeWebsiteStack \
     --query 'Stacks[0].Outputs[?OutputKey==`BucketName`].OutputValue' \
     --output text \
     --region us-east-1 2>/dev/null)
@@ -33,7 +33,7 @@ aws s3 sync ./website "s3://${BUCKET_NAME}" \
 echo ""
 echo "🔄 Invalidating CloudFront cache..."
 DISTRIBUTION_ID=$(aws cloudformation describe-stacks \
-    --stack-name SengacWebsiteStack \
+    --stack-name MindstrikeWebsiteStack \
     --query 'Stacks[0].Outputs[?OutputKey==`DistributionId`].OutputValue' \
     --output text \
     --region us-east-1)
@@ -51,6 +51,6 @@ fi
 
 echo ""
 echo "✅ Content sync complete!"
-echo "🌐 Your updated content will be available at: https://sengac.com"
+echo "🌐 Your updated content will be available at: https://mindstrike.ai"
 echo ""
 echo "Note: CloudFront cache invalidation may take a few minutes to complete."

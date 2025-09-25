@@ -2,7 +2,7 @@
 
 set -e
 
-echo "🔧 Configuring Google Workspace MX Records for sengac.com"
+echo "🔧 Configuring Google Workspace MX Records for mindstrike.ai"
 echo ""
 
 # Colors for output
@@ -12,7 +12,7 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 HOSTED_ZONE_ID="Z06191511DF11ZVTE10MY"
-DOMAIN="sengac.com"
+DOMAIN="mindstrike.ai"
 
 echo "Hosted Zone ID: $HOSTED_ZONE_ID"
 echo "Domain: $DOMAIN"
@@ -45,7 +45,7 @@ cat > /tmp/mx-records-change.json << 'EOF'
     {
       "Action": "UPSERT",
       "ResourceRecordSet": {
-        "Name": "sengac.com.",
+        "Name": "mindstrike.ai.",
         "Type": "MX",
         "TTL": 3600,
         "ResourceRecords": [
@@ -105,8 +105,8 @@ echo -e "${GREEN}✅ Google Workspace MX records configured successfully!${NC}"
 echo ""
 echo "📊 Verification Steps:"
 echo "1. DNS propagation may take up to 48 hours (usually much faster)"
-echo "2. You can verify the MX records with: dig MX sengac.com"
-echo "3. Or check with: nslookup -type=mx sengac.com"
+echo "2. You can verify the MX records with: dig MX mindstrike.ai"
+echo "3. Or check with: nslookup -type=mx mindstrike.ai"
 echo ""
 echo "📧 Next Steps in Google Workspace Admin:"
 echo "1. Sign in to your Google Admin console"

@@ -1,6 +1,6 @@
-# Sengac.com AWS CDK Infrastructure
+# MindStrike.ai AWS CDK Infrastructure
 
-This project sets up a static website hosting infrastructure for sengac.com using AWS CDK with:
+This project sets up a static website hosting infrastructure for mindstrike.ai using AWS CDK with:
 - S3 bucket for website content storage
 - CloudFront CDN for global content delivery
 - Route 53 for DNS management
@@ -12,15 +12,15 @@ This project sets up a static website hosting infrastructure for sengac.com usin
 - AWS CLI configured with appropriate credentials
 - Node.js 18+ and npm installed
 - AWS CDK CLI (`npm install -g aws-cdk`)
-- Domain name (sengac.com) ready to be configured
+- Domain name (mindstrike.ai) ready to be configured
 
 ## Project Structure
 
 ```
-sengac.com/
+mindstrike.ai/
 ├── lib/                    # CDK TypeScript code
 │   ├── app.ts             # CDK app entry point
-│   └── sengac-website-stack.ts  # Main stack definition
+│   └── mindstrike-website-stack.ts  # Main stack definition
 ├── website/               # Static website content
 │   ├── index.html        # Main page
 │   └── error.html        # Error page
@@ -81,7 +81,7 @@ To update your website content without redeploying infrastructure:
 
 ## Using Existing Route 53 Hosted Zone
 
-If you already have a Route 53 hosted zone for sengac.com, you can use it by providing the hosted zone ID:
+If you already have a Route 53 hosted zone for mindstrike.ai, you can use it by providing the hosted zone ID:
 
 ```bash
 npx cdk deploy -c hostedZoneId=YOUR_HOSTED_ZONE_ID
@@ -94,7 +94,7 @@ The infrastructure includes:
 1. **S3 Bucket**: Stores website files with versioning enabled
 2. **CloudFront Distribution**: 
    - Global CDN with HTTPS enforcement
-   - Custom domain names (sengac.com and www.sengac.com)
+   - Custom domain names (mindstrike.ai and www.mindstrike.ai)
    - Optimized caching policies
    - HTTP/2 and HTTP/3 support
 3. **Route 53**: DNS records pointing to CloudFront

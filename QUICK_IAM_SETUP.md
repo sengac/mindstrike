@@ -10,7 +10,7 @@ Go to: https://console.aws.amazon.com/iam/home#/users
 ### 2. Click "Create user"
 
 ### 3. Set User Details
-- **User name:** `sengac-deploy`
+- **User name:** `mindstrike-deploy`
 - Click **"Next"**
 
 ### 4. Set Permissions
@@ -25,7 +25,7 @@ Go to: https://console.aws.amazon.com/iam/home#/users
 ### 6. Create Access Keys
 You'll be on the user list page. Now:
 
-1. Click on **`sengac-deploy`** (the user you just created)
+1. Click on **`mindstrike-deploy`** (the user you just created)
 2. Click the **"Security credentials"** tab
 3. Scroll down to **"Access keys"**
 4. Click **"Create access key"**
@@ -49,7 +49,7 @@ Click **"Download .csv file"** to save a backup.
 
 In your terminal, run:
 ```bash
-cd /home/rquast/projects/sengac.com
+cd /home/rquast/projects/mindstrike.ai
 ./configure-aws.sh
 ```
 
@@ -84,10 +84,10 @@ If you want to use minimal permissions instead of AdministratorAccess:
 - **DELETE** everything in the editor
 - **COPY & PASTE** the entire contents from: `iam-policies/cdk-deploy-policy.json`
 - Click **"Next"**
-- **Policy name:** `SengacDeployPolicy`
+- **Policy name:** `MindstrikeDeployPolicy`
 - Click **"Create policy"**
 - Go back to the user creation tab
-- Search for: `SengacDeployPolicy`
+- Search for: `MindstrikeDeployPolicy`
 - ✅ Check the box
 - Continue from Step 5 above
 

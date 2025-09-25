@@ -11,7 +11,7 @@ NC='\033[0m'
 
 # Check stack status
 STACK_STATUS=$(aws cloudformation describe-stacks \
-    --stack-name SengacWebsiteStack \
+    --stack-name MindstrikeWebsiteStack \
     --query 'Stacks[0].StackStatus' \
     --output text \
     --region us-east-1 2>/dev/null)
@@ -29,7 +29,7 @@ if [ "$STACK_STATUS" == "CREATE_IN_PROGRESS" ] || [ "$STACK_STATUS" == "UPDATE_I
     echo ""
     echo "Resources being created:"
     aws cloudformation list-stack-resources \
-        --stack-name SengacWebsiteStack \
+        --stack-name MindstrikeWebsiteStack \
         --query "StackResourceSummaries[?ResourceStatus=='CREATE_IN_PROGRESS'].{Resource:LogicalResourceId,Type:ResourceType}" \
         --output table \
         --region us-east-1
@@ -43,19 +43,19 @@ elif [ "$STACK_STATUS" == "CREATE_COMPLETE" ] || [ "$STACK_STATUS" == "UPDATE_CO
     
     # Get outputs
     BUCKET_NAME=$(aws cloudformation describe-stacks \
-        --stack-name SengacWebsiteStack \
+        --stack-name MindstrikeWebsiteStack \
         --query 'Stacks[0].Outputs[?OutputKey==`BucketName`].OutputValue' \
         --output text \
         --region us-east-1)
     
     DISTRIBUTION_ID=$(aws cloudformation describe-stacks \
-        --stack-name SengacWebsiteStack \
+        --stack-name MindstrikeWebsiteStack \
         --query 'Stacks[0].Outputs[?OutputKey==`DistributionId`].OutputValue' \
         --output text \
         --region us-east-1)
     
     WEBSITE_URL=$(aws cloudformation describe-stacks \
-        --stack-name SengacWebsiteStack \
+        --stack-name MindstrikeWebsiteStack \
         --query 'Stacks[0].Outputs[?OutputKey==`WebsiteURL`].OutputValue' \
         --output text \
         --region us-east-1)
@@ -98,7 +98,7 @@ elif [ "$STACK_STATUS" == "ROLLBACK_IN_PROGRESS" ] || [ "$STACK_STATUS" == "ROLL
     echo -e "${RED}❌ Stack deployment failed and rolled back${NC}"
     echo ""
     echo "To see what went wrong:"
-    echo "aws cloudformation describe-stack-events --stack-name SengacWebsiteStack --region us-east-1"
+    echo "aws cloudformation describe-stack-events --stack-name MindstrikeWebsiteStack --region us-east-1"
     echo ""
     echo "To delete and retry:"
     echo "npx cdk destroy"

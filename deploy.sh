@@ -2,7 +2,7 @@
 
 set -e
 
-echo "🚀 Deploying sengac.com website infrastructure and content..."
+echo "🚀 Deploying mindstrike.ai website infrastructure and content..."
 echo ""
 
 # Check for AWS CLI
@@ -39,7 +39,7 @@ if [ ! -f "website/index.html" ]; then
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SENGAC</title>
+    <title>MindStrike</title>
     <style>
         * {
             margin: 0;
@@ -127,12 +127,12 @@ if [ ! -f "website/index.html" ]; then
 </head>
 <body>
     <div class="container">
-        <h1>SENGAC</h1>
+        <h1>MindStrike</h1>
         <p class="subtitle">Software Engineering & Consulting Pty Ltd</p>
         <div class="divider"></div>
         <p class="info">
             Phone: 0478 914 599<br>
-            Email: <a href="mailto:info@sengac.com">info@sengac.com</a>
+            Email: <a href="mailto:info@mindstrike.ai">info@mindstrike.ai</a>
         </p>
     </div>
 </body>
@@ -162,7 +162,7 @@ sleep 2
 echo ""
 echo "📤 Syncing website content to S3..."
 BUCKET_NAME=$(aws cloudformation describe-stacks \
-    --stack-name SengacWebsiteStack \
+    --stack-name MindstrikeWebsiteStack \
     --query 'Stacks[0].Outputs[?OutputKey==`BucketName`].OutputValue' \
     --output text \
     --region us-east-1)
@@ -197,7 +197,7 @@ fi
 echo ""
 echo "🔄 Invalidating CloudFront cache..."
 DISTRIBUTION_ID=$(aws cloudformation describe-stacks \
-    --stack-name SengacWebsiteStack \
+    --stack-name MindstrikeWebsiteStack \
     --query 'Stacks[0].Outputs[?OutputKey==`DistributionId`].OutputValue' \
     --output text \
     --region us-east-1)
@@ -217,20 +217,20 @@ echo "✅ Deployment complete!"
 echo ""
 echo "📊 Stack Outputs:"
 aws cloudformation describe-stacks \
-    --stack-name SengacWebsiteStack \
+    --stack-name MindstrikeWebsiteStack \
     --query 'Stacks[0].Outputs[*].[OutputKey,OutputValue]' \
     --output table \
     --region us-east-1
 
 # Get the nameservers for display
 NAMESERVERS=$(aws cloudformation describe-stacks \
-    --stack-name SengacWebsiteStack \
+    --stack-name MindstrikeWebsiteStack \
     --query 'Stacks[0].Outputs[?OutputKey==`NameServers`].OutputValue' \
     --output text \
     --region us-east-1)
 
 echo ""
-echo "🌐 Your website will be available at: https://sengac.com"
+echo "🌐 Your website will be available at: https://mindstrike.ai"
 echo ""
 
 if [ -n "$NAMESERVERS" ]; then
@@ -261,7 +261,7 @@ echo ""
 # Check if the website is accessible
 echo "🔍 Testing website accessibility..."
 sleep 5
-if curl -s -o /dev/null -w "%{http_code}" https://sengac.com | grep -q "200\|301\|302"; then
+if curl -s -o /dev/null -w "%{http_code}" https://mindstrike.ai | grep -q "200\|301\|302"; then
     echo "✅ Website is accessible!"
 else
     echo "⏳ Website is not yet accessible. This is normal for new deployments."

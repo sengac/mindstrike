@@ -8,17 +8,17 @@ import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 
-export interface SengacWebsiteStackProps extends cdk.StackProps {
+export interface MindstrikeWebsiteStackProps extends cdk.StackProps {
   domainName: string;
   hostedZoneId?: string;
 }
 
-export class SengacWebsiteStack extends cdk.Stack {
+export class MindstrikeWebsiteStack extends cdk.Stack {
   public readonly bucketName: string;
   public readonly distributionId: string;
   public readonly distributionDomainName: string;
 
-  constructor(scope: Construct, id: string, props: SengacWebsiteStackProps) {
+  constructor(scope: Construct, id: string, props: MindstrikeWebsiteStackProps) {
     super(scope, id, props);
 
     const { domainName, hostedZoneId } = props;

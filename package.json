@@ -1,12 +1,12 @@
 {
-  "name": "sengac-website-cdk",
+  "name": "mindstrike-website-cdk",
   "version": "1.0.0",
-  "description": "CDK infrastructure for sengac.com static website",
+  "description": "CDK infrastructure for mindstrike.ai static website",
   "scripts": {
     "build": "tsc",
     "cdk": "cdk",
     "deploy": "npm run build && cdk deploy",
-    "sync": "aws s3 sync ./website s3://$(aws cloudformation describe-stacks --stack-name SengacWebsiteStack --query 'Stacks[0].Outputs[?OutputKey==`BucketName`].OutputValue' --output text) --delete",
+    "sync": "aws s3 sync ./website s3://$(aws cloudformation describe-stacks --stack-name MindstrikeWebsiteStack --query 'Stacks[0].Outputs[?OutputKey==`BucketName`].OutputValue' --output text) --delete",
     "destroy": "cdk destroy"
   },
   "devDependencies": {

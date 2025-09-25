@@ -1,6 +1,6 @@
 # IAM User Setup Guide for AWS CDK Deployment
 
-This guide will walk you through creating an IAM user with the necessary permissions to deploy the sengac.com infrastructure.
+This guide will walk you through creating an IAM user with the necessary permissions to deploy the mindstrike.ai infrastructure.
 
 ## Quick Setup (Administrator Access)
 
@@ -13,7 +13,7 @@ For the simplest setup during development, you can create a user with Administra
 3. **Create User**:
    - Click "Users" in the left sidebar
    - Click "Create user" button
-   - User name: `sengac-cdk-deploy`
+   - User name: `mindstrike-cdk-deploy`
    - Click "Next"
 
 ### Step 2: Set Permissions
@@ -26,14 +26,14 @@ For the simplest setup during development, you can create a user with Administra
 
 ### Step 3: Create Access Keys
 
-1. **Click on the username** `sengac-cdk-deploy` you just created
+1. **Click on the username** `mindstrike-cdk-deploy` you just created
 2. Go to **"Security credentials"** tab
 3. Scroll to **"Access keys"** section
 4. Click **"Create access key"**
 5. Select **"Command Line Interface (CLI)"**
 6. Check the confirmation box
 7. Click **"Next"**
-8. Optional: Add a description like "CDK deployment for sengac.com"
+8. Optional: Add a description like "CDK deployment for mindstrike.ai"
 9. Click **"Create access key"**
 10. **IMPORTANT**: Save both the "Access key" and "Secret access key"
     - Click "Download .csv file" to save them
@@ -65,21 +65,21 @@ For production, use the principle of least privilege with a custom policy:
 3. Click "JSON" tab
 4. Copy and paste the contents from `iam-policies/cdk-deploy-policy.json`
 5. Click "Next"
-6. Policy name: `SengacCDKDeployPolicy`
-7. Description: "Permissions for deploying sengac.com infrastructure via CDK"
+6. Policy name: `MindstrikeCDKDeployPolicy`
+7. Description: "Permissions for deploying mindstrike.ai infrastructure via CDK"
 8. Click "Create policy"
 
 ### Step 2: Create IAM User
 
 1. Go to IAM → Users
 2. Click "Create user"
-3. User name: `sengac-cdk-deploy`
+3. User name: `mindstrike-cdk-deploy`
 4. Click "Next"
 
 ### Step 3: Attach Custom Policy
 
 1. Select "Attach policies directly"
-2. Search for: `SengacCDKDeployPolicy`
+2. Search for: `MindstrikeCDKDeployPolicy`
 3. Check the box next to your custom policy
 4. Click "Next"
 5. Click "Create user"
