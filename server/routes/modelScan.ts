@@ -215,7 +215,7 @@ router.get('/status/:scanId', (req, res) => {
 /**
  * Perform the actual model search with progress updates
  */
-async function performModelSearch(
+export async function performModelSearch(
   searchId: string,
   searchParams: ModelSearchParams,
   signal: AbortSignal

@@ -188,7 +188,8 @@ class LLMThreadCalculator {
    */
   private static detectGenericCPUs(): SystemInfo {
     // Fallback to logical CPU count
-    const logicalCores = navigator.hardwareConcurrency || 4;
+    const logicalCores =
+      (typeof navigator !== 'undefined' && navigator?.hardwareConcurrency) || 4;
 
     return {
       platform: 'unknown',
@@ -256,36 +257,44 @@ class LLMThreadCalculator {
     );
 
     let recommended: number;
+    let maximum: number;
     let reasoning: string;
 
     switch (useCase) {
       case 'inference':
         // For inference, use performance cores only
         recommended = optimalThreads;
+        maximum = optimalThreads;
         reasoning = `Using ${optimalThreads} performance cores for optimal inference latency`;
         break;
 
       case 'training':
         // For training, can use more threads but still prefer performance cores
-        recommended = Math.min(optimalThreads * 1.5, totalLogicalCores);
+        recommended = Math.min(
+          Math.floor(optimalThreads * 1.5),
+          totalLogicalCores
+        );
+        maximum = Math.min(totalLogicalCores, optimalThreads * 2);
         reasoning = `Using up to ${recommended} threads for training throughput`;
         break;
 
       case 'serving':
         // For serving multiple requests, use fewer threads to allow parallelism
         recommended = Math.max(1, Math.floor(optimalThreads / 2));
+        maximum = optimalThreads;
         reasoning = `Using ${recommended} threads to allow concurrent request processing`;
         break;
 
       default:
         recommended = optimalThreads;
-        reasoning = `Using ${optimalThreads} performance cores as default`;
+        maximum = optimalThreads;
+        reasoning = `Using ${optimalThreads} performance cores for optimal inference latency`;
     }
 
     return {
       recommended,
       minimum: 1,
-      maximum: optimalThreads,
+      maximum,
       reasoning,
     };
   }

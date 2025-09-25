@@ -991,6 +991,83 @@ class QualityChecker {
         });
       }
 
+      // Check for trivial test assertions like expect(true).toBe(true)
+      const trivialTestRule = config._fileConfig.rules?.trivialTests || {};
+      if (this.fileType === 'test' && trivialTestRule.enabled !== false) {
+        // Patterns that indicate LLM is trying to skip writing real tests
+        const trivialTestPatterns = [
+          // Direct true/false assertions
+          {
+            pattern: /expect\s*\(\s*true\s*\)\s*\.toBe\s*\(\s*true\s*\)/,
+            description: 'expect(true).toBe(true)',
+          },
+          {
+            pattern: /expect\s*\(\s*false\s*\)\s*\.toBe\s*\(\s*false\s*\)/,
+            description: 'expect(false).toBe(false)',
+          },
+          // Numeric literal assertions
+          {
+            pattern: /expect\s*\(\s*\d+\s*\)\s*\.toBe\s*\(\s*\1\s*\)/,
+            description: 'expect(number).toBe(same number)',
+          },
+          // String literal assertions with same value
+          {
+            pattern:
+              /expect\s*\(\s*(['"`])([^'"`]*)\1\s*\)\s*\.toBe\s*\(\s*\1\2\1\s*\)/,
+            description: 'expect(string).toBe(same string)',
+          },
+          // toEqual variants
+          {
+            pattern: /expect\s*\(\s*true\s*\)\s*\.toEqual\s*\(\s*true\s*\)/,
+            description: 'expect(true).toEqual(true)',
+          },
+          {
+            pattern: /expect\s*\(\s*false\s*\)\s*\.toEqual\s*\(\s*false\s*\)/,
+            description: 'expect(false).toEqual(false)',
+          },
+          // toBeTruthy/toBeFalsy on literals
+          {
+            pattern: /expect\s*\(\s*true\s*\)\s*\.toBeTruthy\s*\(\s*\)/,
+            description: 'expect(true).toBeTruthy()',
+          },
+          {
+            pattern: /expect\s*\(\s*false\s*\)\s*\.toBeFalsy\s*\(\s*\)/,
+            description: 'expect(false).toBeFalsy()',
+          },
+        ];
+
+        lines.forEach((line, index) => {
+          // Skip comments
+          const trimmedLine = line.trim();
+          if (trimmedLine.startsWith('//') || trimmedLine.startsWith('*')) {
+            return;
+          }
+
+          for (const { pattern, description } of trivialTestPatterns) {
+            if (pattern.test(line)) {
+              const severity = trivialTestRule.severity || 'error';
+              const message =
+                trivialTestRule.message ||
+                'This is a trivial test assertion that tests nothing meaningful. Write real tests that verify actual functionality.';
+
+              if (severity === 'error') {
+                this.errors.push(
+                  `Found trivial test assertion '${description}' in ${this.filePath} - ${message}`
+                );
+                console.error(`  Line ${index + 1}: ${line.trim()}`);
+                foundIssues = true;
+              } else {
+                // Warning level - just warn, don't block
+                log.warning(
+                  `Trivial test '${description}' at line ${index + 1}: ${message}`
+                );
+              }
+              break; // Only report once per line
+            }
+          }
+        });
+      }
+
       // Check for console statements based on React app rules
       const consoleRule = config._fileConfig.rules?.console || {};
       let allowConsole = false;
@@ -1561,6 +1638,7 @@ async function main() {
       (e.includes('Found') &&
         e.includes('unknown as') &&
         e.includes('double assertion')) ||
+      e.includes('trivial test assertion') ||
       e.includes('were auto-fixed') ||
       e.includes('CommonJS syntax') ||
       e.includes('ESLint disable comment') ||

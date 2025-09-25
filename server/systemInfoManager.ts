@@ -1,5 +1,5 @@
-import os from 'os';
-import fs from 'fs/promises';
+import * as os from 'os';
+import * as fs from 'fs/promises';
 import { RealCPUDetector } from './utils/system/cpuDetector';
 import { LLMThreadCalculator } from './utils/system/llmThreadCalculator';
 import { sharedLlamaInstance } from './sharedLlamaInstance';

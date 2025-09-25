@@ -92,8 +92,10 @@ export class LLMConfigManager {
     return (
       typeof obj === 'object' &&
       obj !== null &&
-      'providers' in obj &&
-      Array.isArray((obj as { providers: unknown }).providers) &&
+      'models' in obj &&
+      Array.isArray((obj as { models: unknown }).models) &&
+      'customServices' in obj &&
+      Array.isArray((obj as { customServices: unknown }).customServices) &&
       'lastUpdated' in obj
     );
   }

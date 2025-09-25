@@ -94,12 +94,16 @@ export class SSEManager {
       return result;
     } catch (error) {
       logger.error('Failed to stringify SSE data:', error);
-      logger.error(
-        'Problematic data:',
-        typeof data === 'object'
-          ? JSON.stringify(data).substring(0, 1000)
-          : String(data).substring(0, 1000)
-      );
+      // Don't try to JSON.stringify problematic data - it will fail again
+      if (typeof data === 'object' && data !== null) {
+        logger.error(
+          'Problematic data type:',
+          data.constructor?.name || 'Unknown'
+        );
+        logger.error('Data keys:', Object.keys(data).slice(0, 10));
+      } else {
+        logger.error('Problematic data:', String(data).substring(0, 1000));
+      }
 
       // Return a safe fallback
       return JSON.stringify({

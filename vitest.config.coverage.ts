@@ -77,8 +77,9 @@ export default defineConfig({
       ],
     },
 
-    // Use parallel execution for speed
-    pool: 'threads',
+    // Use forks for better test isolation
+    pool: 'forks',
+    isolate: true, // Run each test file in isolation
 
     // Server deps configuration
     server: {

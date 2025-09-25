@@ -21,7 +21,11 @@ export function getLocalLLMManager(): LLMWorkerProxy {
 // Cleanup function to terminate worker on process exit
 export function cleanup(): void {
   if (instance) {
-    instance.terminate();
+    try {
+      instance.terminate();
+    } catch (error) {
+      logger.error('Error during LLM Worker Proxy cleanup:', error);
+    }
     instance = null;
   }
 }

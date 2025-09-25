@@ -923,9 +923,13 @@ describe('MindMap', () => {
         />
       );
 
-      // ReactFlow is mocked globally in setup.ts
-      if (vi.isMockFunction(ReactFlow)) {
+      // ReactFlow should be mocked - check if it's a function
+      const isReactFlowMocked = typeof ReactFlow === 'function';
+
+      if (isReactFlowMocked && vi.isMockFunction(ReactFlow)) {
         const mockReactFlowCalls = vi.mocked(ReactFlow).mock.calls;
+        expect(mockReactFlowCalls.length).toBeGreaterThan(0);
+
         const lastCall = mockReactFlowCalls[mockReactFlowCalls.length - 1];
         const props = lastCall?.[0];
 
@@ -937,8 +941,9 @@ describe('MindMap', () => {
           proOptions: { hideAttribution: true },
         });
       } else {
-        // Skip this test if ReactFlow is not properly mocked
-        expect(true).toBe(true);
+        // If ReactFlow is not mocked properly, verify the component renders
+        const rfWrapper = screen.queryByTestId('rf__wrapper');
+        expect(rfWrapper).toBeTruthy();
       }
     });
   });

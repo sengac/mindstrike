@@ -162,11 +162,14 @@ async function syncCurrentAgentWithThread(threadId: string): Promise<void> {
   const { globalSessionManager } = await import('./sessionManager');
   const currentAgent = agentPool.getCurrentAgent();
 
-  await globalSessionManager.switchToThread(
-    currentAgent.llmConfig.type || 'openai',
-    currentAgent.llmConfig.model || 'gpt-4',
-    threadId
-  );
+  // Check if llmConfig exists and has required properties
+  if (currentAgent.llmConfig) {
+    await globalSessionManager.switchToThread(
+      currentAgent.llmConfig.type || 'openai',
+      currentAgent.llmConfig.model || 'gpt-4',
+      threadId
+    );
+  }
 }
 
 // Increase max listeners for development
@@ -1741,15 +1744,27 @@ app.get('/api/conversation/:threadId', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Thread ID is required' });
   }
 
-  // Temporarily set the thread to get its conversation
-  const previousThreadId = agentPool['currentThreadId'];
-  await agentPool.setCurrentThread(threadId);
-  const conversation = agentPool.getCurrentAgent().getConversation(threadId);
+  try {
+    // Temporarily set the thread to get its conversation
+    const previousThreadId = agentPool['currentThreadId'];
+    await agentPool.setCurrentThread(threadId);
+    const agent = agentPool.getCurrentAgent();
 
-  // Restore the previous thread
-  await agentPool.setCurrentThread(previousThreadId);
+    // Check if getConversation method exists
+    if (typeof agent.getConversation !== 'function') {
+      throw new Error('getConversation method not implemented');
+    }
 
-  res.json(conversation);
+    const conversation = agent.getConversation(threadId);
+
+    // Restore the previous thread
+    await agentPool.setCurrentThread(previousThreadId);
+
+    res.json(conversation);
+  } catch (error) {
+    logger.error('Error getting conversation:', error);
+    res.status(500).json({ error: 'Failed to get conversation' });
+  }
 });
 
 app.post('/api/message', async (req: Request, res: Response) => {
