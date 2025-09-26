@@ -54,6 +54,10 @@ export enum SSEEventType {
   MCP_STDERR_LOG = 'mcp-stderr-log',
   MCP_SERVER_CONNECTED = 'mcp-server-connected',
   MCP_SERVER_DISCONNECTED = 'mcp-server-disconnected',
+  MCP_TOOLS_UPDATED = 'mcp-tools-updated',
+  MCP_SERVER_STARTED = 'mcp-server-started',
+  MCP_SERVER_STOPPED = 'mcp-server-stopped',
+  MCP_SERVER_ERROR = 'mcp-server-error',
 
   // Mindmap events
   MINDMAP_CHANGE = 'mindmap_change',

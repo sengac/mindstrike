@@ -13,12 +13,22 @@ export default defineConfig({
       '@server': resolve(currentDir, 'server'),
     },
   },
+  esbuild: {
+    target: 'es2021',
+    tsconfigRaw: {
+      compilerOptions: {
+        experimentalDecorators: true,
+        emitDecoratorMetadata: true,
+      },
+    },
+  },
   test: {
     globals: true,
     environment: 'node',
     setupFiles: ['./tests/setupMinimal.ts'],
     include: [
       'server/**/*.{test,spec}.{js,ts}',
+      'server-nest/**/*.{test,spec}.{js,ts}',
       'tests/integration/**/*.{test,spec}.{js,ts,tsx}',
     ],
     exclude: [

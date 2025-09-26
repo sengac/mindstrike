@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest';
+import type { Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { spawn, execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
@@ -694,10 +695,13 @@ describe('CommandResolver', () => {
       // Mock directory structure for glob expansion
       mockFs.existsSync.mockImplementation((filePath: string) => {
         // Parent directory exists
-        if (filePath === '/Users/testuser/.nvm/versions/node') return true;
-        // Expanded paths exist
-        if (filePath === '/Users/testuser/.nvm/versions/node/v18.0.0/bin/npx')
+        if (filePath === '/Users/testuser/.nvm/versions/node') {
           return true;
+        }
+        // Expanded paths exist
+        if (filePath === '/Users/testuser/.nvm/versions/node/v18.0.0/bin/npx') {
+          return true;
+        }
         return false;
       });
 

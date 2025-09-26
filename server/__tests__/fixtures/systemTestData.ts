@@ -455,7 +455,9 @@ DESKTOP-TEST,${firstCpu.vendorId},${firstCpu.clockSpeed / 1000000},${firstCpu.mo
             coreOffset += cpuConfigs[i].coreCount;
           }
 
-          if (match[2] === 'physical_package_id') return String(physicalId);
+          if (match[2] === 'physical_package_id') {
+            return String(physicalId);
+          }
           if (match[2] === 'core_id') {
             const threadsPerCore =
               cpuConfigs[physicalId].threadCount /
@@ -464,8 +466,9 @@ DESKTOP-TEST,${firstCpu.vendorId},${firstCpu.clockSpeed / 1000000},${firstCpu.mo
               coreOffset + Math.floor(currentThreadIndex / threadsPerCore)
             );
           }
-          if (path.includes('cpuinfo_max_freq'))
-            return String(cpuConfigs[physicalId].clockSpeed / 1000); // Hz to KHz
+          if (path.includes('cpuinfo_max_freq')) {
+            return String(cpuConfigs[physicalId].clockSpeed / 1000);
+          } // Hz to KHz
         }
       }
 

@@ -1013,7 +1013,7 @@ describe('settingsDirectory utilities', () => {
       mockFs.writeFile.mockImplementation(
         async (path: string, content: string) => {
           writeCallCount++;
-          writeCalls.push({ path: path as string, content: content as string });
+          writeCalls.push({ path: path, content: content });
           // Simulate some async delay
           await TestUtils.delay(1);
           return undefined;

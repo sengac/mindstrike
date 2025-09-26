@@ -64,8 +64,7 @@ export class LLMWorkerProxy extends EventEmitter {
 
   constructor() {
     super();
-    // Initialize worker asynchronously to not block server startup
-    setTimeout(() => this.initializeWorker(), 0);
+    this.initializeWorker();
   }
 
   private initializeWorker() {

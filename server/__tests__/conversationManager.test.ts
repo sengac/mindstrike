@@ -556,8 +556,12 @@ describe('ConversationManager', () => {
 
     it('should get thread list sorted by update time', async () => {
       const thread1 = await conversationManager.createThread('Thread 1');
-      await new Promise(resolve => setTimeout(resolve, 1)); // Ensure different timestamps
+      // Wait for the first thread to be fully saved
+      await new Promise(resolve => setTimeout(resolve, 10));
+
       const thread2 = await conversationManager.createThread('Thread 2');
+      // Wait for the second thread to be fully saved
+      await new Promise(resolve => setTimeout(resolve, 10));
 
       const threadList = conversationManager.getThreadList();
 

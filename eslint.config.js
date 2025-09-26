@@ -38,6 +38,7 @@ export default [
           './tsconfig.json',
           './server/tsconfig.json',
           './tests/tsconfig.json',
+          './tsconfig.nest.json',
         ],
         ecmaFeatures: {
           jsx: true,

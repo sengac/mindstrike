@@ -1,12 +1,5 @@
-import {
-  describe,
-  it,
-  expect,
-  vi,
-  beforeEach,
-  afterEach,
-  MockedFunction,
-} from 'vitest';
+import type { MockedFunction } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   LocalLLMSessionManager,
   StatelessLLMSessionManager,

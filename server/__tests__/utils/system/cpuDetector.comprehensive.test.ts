@@ -58,7 +58,9 @@ describe('RealCPUDetector', () => {
             ] || ''
           );
         }
-        if (command === 'uname -m') return 'arm64';
+        if (command === 'uname -m') {
+          return 'arm64';
+        }
         return '';
       });
 
@@ -191,15 +193,23 @@ describe('RealCPUDetector', () => {
         execSync.mockImplementation((command: string) => {
           if (command.includes('sysctl -n')) {
             const key = command.replace('sysctl -n ', '');
-            if (key === 'hw.perflevel0.physicalcpu')
+            if (key === 'hw.perflevel0.physicalcpu') {
               throw new Error('unknown oid');
-            if (key === 'hw.perflevel1.physicalcpu')
+            }
+            if (key === 'hw.perflevel1.physicalcpu') {
               throw new Error('unknown oid');
-            if (key === 'hw.logicalcpu') return '8';
-            if (key === 'machdep.cpu.brand_string') return 'Apple M1';
+            }
+            if (key === 'hw.logicalcpu') {
+              return '8';
+            }
+            if (key === 'machdep.cpu.brand_string') {
+              return 'Apple M1';
+            }
             return '';
           }
-          if (command === 'uname -m') return 'arm64';
+          if (command === 'uname -m') {
+            return 'arm64';
+          }
           return '';
         });
 
@@ -227,7 +237,9 @@ describe('RealCPUDetector', () => {
         totalmem.mockReturnValue(32 * 1024 * 1024 * 1024);
 
         readFileSync.mockImplementation((path: string) => {
-          if (path === '/proc/cpuinfo') return mockSystemCalls.linuxCpuInfo;
+          if (path === '/proc/cpuinfo') {
+            return mockSystemCalls.linuxCpuInfo;
+          }
           throw new Error('ENOENT: no such file or directory');
         });
         readdirSync.mockReturnValue([

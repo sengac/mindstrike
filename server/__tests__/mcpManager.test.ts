@@ -1,13 +1,7 @@
-import {
-  describe,
-  it,
-  expect,
-  vi,
-  beforeEach,
-  afterEach,
-  MockedFunction,
-} from 'vitest';
-import { MCPManager, MCPServerConfig, MCPTool } from '../mcpManager';
+import type { MockedFunction } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { MCPServerConfig } from '../mcpManager';
+import { MCPManager, MCPTool } from '../mcpManager';
 import fs from 'fs/promises';
 import { EventEmitter, Readable } from 'stream';
 import { logger } from '../logger';
@@ -52,8 +46,12 @@ vi.mock('child_process', () => ({
     pid: 12345,
   })),
   execSync: vi.fn((cmd: string) => {
-    if (cmd.includes('node')) return 'v18.0.0';
-    if (cmd.includes('npm')) return '9.0.0';
+    if (cmd.includes('node')) {
+      return 'v18.0.0';
+    }
+    if (cmd.includes('npm')) {
+      return '9.0.0';
+    }
     return '';
   }),
 }));

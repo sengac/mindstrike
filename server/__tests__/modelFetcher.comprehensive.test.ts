@@ -7,7 +7,8 @@ import {
   afterEach,
   MockedFunction,
 } from 'vitest';
-import { ModelFetcher, DynamicModelInfo } from '../modelFetcher';
+import type { DynamicModelInfo } from '../modelFetcher';
+import { ModelFetcher } from '../modelFetcher';
 import fs from 'fs';
 import * as fsPromises from 'fs/promises';
 import path from 'path';

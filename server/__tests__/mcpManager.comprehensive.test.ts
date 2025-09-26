@@ -107,8 +107,12 @@ vi.mock('../logger', () => ({
 
 vi.mock('child_process', () => ({
   execSync: vi.fn().mockImplementation((cmd: string) => {
-    if (cmd.includes('node')) return 'v18.0.0';
-    if (cmd.includes('npm')) return '9.0.0';
+    if (cmd.includes('node')) {
+      return 'v18.0.0';
+    }
+    if (cmd.includes('npm')) {
+      return '9.0.0';
+    }
     return '';
   }),
 }));

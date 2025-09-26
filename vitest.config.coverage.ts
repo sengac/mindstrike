@@ -5,6 +5,17 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  esbuild: {
+    target: 'node18',
+    keepNames: true,
+    tsconfigRaw: {
+      compilerOptions: {
+        experimentalDecorators: true,
+        emitDecoratorMetadata: true,
+        useDefineForClassFields: false,
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': resolve(fileURLToPath(new URL('.', import.meta.url)), 'src'),

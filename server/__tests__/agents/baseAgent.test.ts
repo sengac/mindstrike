@@ -1,9 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  BaseAgent,
-  AgentConfig,
-  ConversationMessage,
-} from '../../agents/baseAgent';
+import type { AgentConfig } from '../../agents/baseAgent';
+import { BaseAgent, ConversationMessage } from '../../agents/baseAgent';
 import {
   HumanMessage,
   AIMessage,
