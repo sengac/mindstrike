@@ -4,13 +4,12 @@ import { ChatController } from './chat.controller';
 import { ConversationController } from './conversation.controller';
 import { MessageController } from './message.controller';
 import { ChatService } from './chat.service';
-import { ConversationService } from './services/conversation.service';
 import { MessageService } from './services/message.service';
-import { SessionService } from './services/session.service';
 import { EventsModule } from '../events/events.module';
+import { LlmModule } from '../llm/llm.module';
 
 @Module({
-  imports: [ConfigModule, EventsModule],
+  imports: [ConfigModule, EventsModule, LlmModule],
   controllers: [ChatController, ConversationController, MessageController],
   providers: [ChatService, MessageService],
   exports: [ChatService, MessageService],

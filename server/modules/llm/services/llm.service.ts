@@ -698,4 +698,110 @@ export class LlmService implements OnModuleInit, OnModuleDestroy {
 
     return generations;
   }
+
+  async getOptimalSettings(modelId: string) {
+    try {
+      const systemInfo = await this.getSystemInfo();
+      const modelInfo = await this.llmManager.getModelInfo(modelId);
+
+      // Calculate optimal settings based on system resources and model size
+      const gpuLayers = systemInfo.gpuInfo.available
+        ? Math.min(35, Math.floor(modelInfo.layerCount || 32))
+        : 0;
+
+      const contextSize = Math.min(
+        4096,
+        systemInfo.memoryInfo.available > 8192 ? 4096 : 2048
+      );
+
+      const threads = Math.min(
+        systemInfo.cpuInfo.cores,
+        Math.floor(systemInfo.cpuInfo.cores / 2)
+      );
+
+      return {
+        gpuLayers,
+        contextSize,
+        threads,
+      };
+    } catch (error) {
+      this.logger.error('Error getting optimal settings:', error);
+      throw error;
+    }
+  }
+
+  async getAllSettings() {
+    try {
+      await this.loadSettings();
+      const settings: Record<string, ModelLoadingSettings> = {};
+
+      for (const [modelId, modelSettings] of this.modelSettings) {
+        settings[modelId] = modelSettings;
+      }
+
+      return settings;
+    } catch (error) {
+      this.logger.error('Error getting all settings:', error);
+      throw error;
+    }
+  }
+
+  async generateStream(
+    modelId: string,
+    generateDto: GenerateResponseDto,
+    res: import('express').Response
+  ) {
+    try {
+      const { prompt, threadId, ...options } = generateDto;
+
+      // Set up SSE headers
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+      });
+
+      const generationId = threadId ?? `gen-${Date.now()}`;
+      const abortController = new AbortController();
+
+      this.abortControllers.set(generationId, abortController);
+      this.activeGenerations.set(generationId, {
+        threadId: generationId,
+        startTime: new Date(),
+      });
+
+      try {
+        // Generate streaming response
+        const responseStream = await this.llmManager.generateStreamingResponse(
+          modelId,
+          [{ role: 'user', content: prompt }],
+          {
+            temperature: options.temperature ?? 0.7,
+            maxTokens: options.maxTokens ?? 1024,
+            signal: abortController.signal,
+          }
+        );
+
+        // Stream the response
+        for await (const chunk of responseStream) {
+          res.write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
+        }
+
+        res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+        res.end();
+      } finally {
+        this.abortControllers.delete(generationId);
+        this.activeGenerations.delete(generationId);
+      }
+    } catch (error) {
+      this.logger.error('Error generating stream:', error);
+      res.write(
+        `data: ${JSON.stringify({
+          error: error instanceof Error ? error.message : 'Unknown error',
+        })}\n\n`
+      );
+      res.end();
+    }
+  }
 }

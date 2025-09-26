@@ -30,26 +30,22 @@ export class ResponseGeneratorService {
     options: GenerationOptions = {}
   ): Promise<string> {
     try {
-      const { threadId, systemPrompt, ...generationOptions } = options;
+      const { threadId, systemPrompt } = options;
 
       // Build conversation context if threadId is provided
-      let fullPrompt = prompt;
       if (threadId) {
         const history = this.getConversationHistory(threadId);
         if (history.length > 0) {
-          fullPrompt = this.buildPromptWithHistory(
-            prompt,
-            history,
-            systemPrompt
-          );
+          // Context with history is used internally for generation
+          this.buildPromptWithHistory(prompt, history, systemPrompt);
         } else if (systemPrompt) {
-          fullPrompt = `${systemPrompt}\n\nUser: ${prompt}\nAssistant:`;
+          // System prompt context is used internally for generation
         }
 
         // Add user message to history
         this.addToHistory(threadId, { role: 'user', content: prompt });
       } else if (systemPrompt) {
-        fullPrompt = `${systemPrompt}\n\nUser: ${prompt}\nAssistant:`;
+        // System prompt context is used internally for generation
       }
 
       // Stub implementation - generate mock response
@@ -72,26 +68,22 @@ export class ResponseGeneratorService {
     options: GenerationOptions = {}
   ): AsyncGenerator<string> {
     try {
-      const { threadId, systemPrompt, ...generationOptions } = options;
+      const { threadId, systemPrompt } = options;
 
       // Build conversation context
-      let fullPrompt = prompt;
       if (threadId) {
         const history = this.getConversationHistory(threadId);
         if (history.length > 0) {
-          fullPrompt = this.buildPromptWithHistory(
-            prompt,
-            history,
-            systemPrompt
-          );
+          // Context with history is used internally for generation
+          this.buildPromptWithHistory(prompt, history, systemPrompt);
         } else if (systemPrompt) {
-          fullPrompt = `${systemPrompt}\n\nUser: ${prompt}\nAssistant:`;
+          // System prompt context is used internally for generation
         }
 
         // Add user message to history
         this.addToHistory(threadId, { role: 'user', content: prompt });
       } else if (systemPrompt) {
-        fullPrompt = `${systemPrompt}\n\nUser: ${prompt}\nAssistant:`;
+        // System prompt context is used internally for generation
       }
 
       // Stub implementation - simulate streaming

@@ -4,6 +4,7 @@ import { WorkspaceFileController } from '../workspace-file.controller';
 import type { WorkspaceService } from '../workspace.service';
 import type { WorkspaceFileService } from '../services/workspace-file.service';
 import type { SaveFileDto, DeleteFileDto } from '../dto/workspace.dto';
+import type { Request } from 'express';
 
 describe('WorkspaceFileController', () => {
   let controller: WorkspaceFileController;
@@ -104,7 +105,12 @@ describe('WorkspaceFileController', () => {
         mockWorkspaceFileService.readFile as ReturnType<typeof vi.fn>
       ).mockResolvedValue(mockContent);
 
-      const result = await controller.getFile('test.txt');
+      const mockRequest = {
+        url: '/api/workspace/file/test.txt',
+        originalUrl: '/api/workspace/file/test.txt',
+      } as Request;
+
+      const result = await controller.getFile(mockRequest);
 
       expect(result).toEqual({ content: 'Hello World' });
       expect(mockWorkspaceFileService.readFile).toHaveBeenCalledWith(
@@ -117,7 +123,12 @@ describe('WorkspaceFileController', () => {
         mockWorkspaceFileService.readFile as ReturnType<typeof vi.fn>
       ).mockRejectedValue(new NotFoundException('File not found'));
 
-      await expect(controller.getFile('nonexistent.txt')).rejects.toThrow(
+      const mockRequest = {
+        url: '/api/workspace/file/nonexistent.txt',
+        originalUrl: '/api/workspace/file/nonexistent.txt',
+      } as Request;
+
+      await expect(controller.getFile(mockRequest)).rejects.toThrow(
         NotFoundException
       );
     });
@@ -134,11 +145,42 @@ describe('WorkspaceFileController', () => {
         mockWorkspaceFileService.readFile as ReturnType<typeof vi.fn>
       ).mockResolvedValue(mockContent);
 
-      const result = await controller.getFile('src/components/App.tsx');
+      const mockRequest = {
+        url: '/api/workspace/file/src/components/App.tsx',
+        originalUrl: '/api/workspace/file/src/components/App.tsx',
+      } as Request;
+
+      const result = await controller.getFile(mockRequest);
 
       expect(result).toEqual({ content: 'export default App;' });
       expect(mockWorkspaceFileService.readFile).toHaveBeenCalledWith(
         'src/components/App.tsx'
+      );
+    });
+
+    it('should handle URL-encoded file paths', async () => {
+      const mockContent = {
+        path: '/Users/rquast/projects/mindstrike/server/mindstrike-mindmaps.json',
+        content: '{"mindmaps": []}',
+        encoding: 'utf-8',
+        size: 16,
+      };
+
+      (
+        mockWorkspaceFileService.readFile as ReturnType<typeof vi.fn>
+      ).mockResolvedValue(mockContent);
+
+      const mockRequest = {
+        url: '/api/workspace/file/%2FUsers%2Frquast%2Fprojects%2Fmindstrike%2Fserver%2Fmindstrike-mindmaps.json',
+        originalUrl:
+          '/api/workspace/file/%2FUsers%2Frquast%2Fprojects%2Fmindstrike%2Fserver%2Fmindstrike-mindmaps.json',
+      } as Request;
+
+      const result = await controller.getFile(mockRequest);
+
+      expect(result).toEqual({ content: '{"mindmaps": []}' });
+      expect(mockWorkspaceFileService.readFile).toHaveBeenCalledWith(
+        '/Users/rquast/projects/mindstrike/server/mindstrike-mindmaps.json'
       );
     });
   });

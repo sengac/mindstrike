@@ -1,11 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { InternalServerErrorException } from '@nestjs/common';
 import { LlmConfigController } from '../llm-config.controller';
 import type { LlmConfigService } from '../services/llm-config.service';
+import type { GlobalLlmConfigService } from '../../shared/services/global-llm-config.service';
+import type { ModuleRef } from '@nestjs/core';
 
 describe('LlmConfigController', () => {
   let controller: LlmConfigController;
   let mockLlmConfigService: Partial<LlmConfigService>;
+  let mockGlobalLlmConfigService: Partial<GlobalLlmConfigService>;
+  let mockModuleRef: Partial<ModuleRef>;
 
   beforeEach(() => {
     mockLlmConfigService = {
@@ -14,8 +17,18 @@ describe('LlmConfigController', () => {
       setDefaultModel: vi.fn(),
     };
 
+    mockGlobalLlmConfigService = {
+      refreshLLMConfig: vi.fn(),
+    };
+
+    mockModuleRef = {
+      get: vi.fn(),
+    };
+
     controller = new LlmConfigController(
-      mockLlmConfigService as LlmConfigService
+      mockLlmConfigService as LlmConfigService,
+      mockGlobalLlmConfigService as GlobalLlmConfigService,
+      mockModuleRef as ModuleRef
     );
   });
 
@@ -56,15 +69,13 @@ describe('LlmConfigController', () => {
       expect(mockLlmConfigService.getModels).toHaveBeenCalled();
     });
 
-    it('should throw InternalServerErrorException when service fails', async () => {
+    it('should throw error when service fails', async () => {
       const error = new Error('Service error');
       (
         mockLlmConfigService.getModels as ReturnType<typeof vi.fn>
       ).mockRejectedValue(error);
 
-      await expect(controller.getModels()).rejects.toThrow(
-        InternalServerErrorException
-      );
+      await expect(controller.getModels()).rejects.toThrow('Service error');
     });
 
     it('should return empty array when no models configured', async () => {
@@ -102,24 +113,24 @@ describe('LlmConfigController', () => {
       expect(mockLlmConfigService.getDefaultModel).toHaveBeenCalled();
     });
 
-    it('should throw InternalServerErrorException when no default model configured', async () => {
+    it('should throw HttpException when no default model configured', async () => {
       (
         mockLlmConfigService.getDefaultModel as ReturnType<typeof vi.fn>
       ).mockResolvedValue(null);
 
       await expect(controller.getDefaultModel()).rejects.toThrow(
-        InternalServerErrorException
+        'No default model configured'
       );
     });
 
-    it('should throw InternalServerErrorException when service fails', async () => {
+    it('should throw error when service fails', async () => {
       const error = new Error('Service error');
       (
         mockLlmConfigService.getDefaultModel as ReturnType<typeof vi.fn>
       ).mockRejectedValue(error);
 
       await expect(controller.getDefaultModel()).rejects.toThrow(
-        InternalServerErrorException
+        'Service error'
       );
     });
   });
@@ -132,19 +143,27 @@ describe('LlmConfigController', () => {
       (
         mockLlmConfigService.setDefaultModel as ReturnType<typeof vi.fn>
       ).mockResolvedValue(undefined);
+      (
+        mockGlobalLlmConfigService.refreshLLMConfig as ReturnType<typeof vi.fn>
+      ).mockResolvedValue(undefined);
+      (
+        mockModuleRef.get as ReturnType<typeof vi.fn>
+      ).mockReturnValue({
+        updateAllAgentsLLMConfig: vi.fn().mockResolvedValue(undefined),
+      });
 
       const result = await controller.setDefaultModel(body);
 
       expect(result).toEqual({
-        success: true,
-        modelId,
+        message: 'Default model updated successfully',
       });
       expect(mockLlmConfigService.setDefaultModel).toHaveBeenCalledWith(
         modelId
       );
+      expect(mockGlobalLlmConfigService.refreshLLMConfig).toHaveBeenCalled();
     });
 
-    it('should throw InternalServerErrorException when service fails', async () => {
+    it('should throw error when service fails', async () => {
       const modelId = 'invalid-model';
       const body = { modelId };
       const error = new Error('Model not found');
@@ -154,7 +173,7 @@ describe('LlmConfigController', () => {
       ).mockRejectedValue(error);
 
       await expect(controller.setDefaultModel(body)).rejects.toThrow(
-        InternalServerErrorException
+        'Model not found'
       );
       expect(mockLlmConfigService.setDefaultModel).toHaveBeenCalledWith(
         modelId

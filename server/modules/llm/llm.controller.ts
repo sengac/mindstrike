@@ -6,6 +6,7 @@ import {
   Body,
   Param,
   Delete,
+  Res,
   HttpStatus,
   HttpCode,
   BadRequestException,
@@ -27,6 +28,7 @@ import {
   GenerateResponseDto,
   DownloadModelDto,
 } from './dto/llm.dto';
+import type { Response } from 'express';
 
 @ApiTags('llm')
 @Controller('api/local-llm')
@@ -173,14 +175,6 @@ export class LlmController {
     return this.localLlmService.getModelStatus(modelId);
   }
 
-  @Post('unload')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Unload the current model' })
-  @ApiResponse({ status: 200, description: 'Model unloaded successfully' })
-  async unloadModel() {
-    return this.localLlmService.unloadCurrentModel();
-  }
-
   @Get('models/:modelId/settings')
   @ApiOperation({ summary: 'Get model settings' })
   @ApiParam({ name: 'modelId', description: 'Model ID to get settings for' })
@@ -237,15 +231,6 @@ export class LlmController {
     };
   }
 
-  @Post('abort/:threadId')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Abort generation for a thread' })
-  @ApiParam({ name: 'threadId', description: 'Thread ID to abort' })
-  @ApiResponse({ status: 200, description: 'Generation aborted' })
-  async abortGeneration(@Param('threadId') threadId: string) {
-    return this.llmService.abortGeneration(threadId);
-  }
-
   @Post('download')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Download a model' })
@@ -261,25 +246,6 @@ export class LlmController {
   @ApiResponse({ status: 200, description: 'Model deleted successfully' })
   async deleteModel(@Param('modelId') modelId: string) {
     return this.localLlmService.deleteModel(modelId);
-  }
-
-  @Get('system-info')
-  @ApiOperation({ summary: 'Get system information for LLM' })
-  @ApiResponse({
-    status: 200,
-    description: 'System information',
-    schema: {
-      type: 'object',
-      properties: {
-        gpuInfo: { type: 'object', additionalProperties: true },
-        cpuInfo: { type: 'object', additionalProperties: true },
-        memoryInfo: { type: 'object', additionalProperties: true },
-        recommendedSettings: { type: 'object', additionalProperties: true },
-      },
-    },
-  })
-  async getSystemInfo() {
-    return this.llmService.getSystemInfo();
   }
 
   @Post('models/:modelId/load')
@@ -332,34 +298,287 @@ export class LlmController {
     }
   }
 
-  @Get('ollama/models')
-  @ApiOperation({ summary: 'Get Ollama models' })
+  @Post('refresh-models')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Refresh available models cache' })
   @ApiResponse({
     status: 200,
-    description: 'List of Ollama models',
+    description: 'Models refreshed successfully',
     schema: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          name: { type: 'string' },
-          size: { type: 'number' },
-          digest: { type: 'string' },
-          modifiedAt: { type: 'string' },
-        },
-        additionalProperties: true,
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        models: { type: 'array' },
       },
     },
   })
-  async getOllamaModels() {
-    return this.discoveryService.getOllamaModels();
+  async refreshModels() {
+    return this.discoveryService.refreshModels();
   }
 
-  @Post('scan')
+  @Post('open-models-directory')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Scan for local models' })
-  @ApiResponse({ status: 200, description: 'Scan completed' })
-  async scanForModels() {
-    return this.discoveryService.scanForModels();
+  @ApiOperation({ summary: 'Open models directory in file explorer' })
+  @ApiResponse({
+    status: 200,
+    description: 'Directory opened successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        directory: { type: 'string' },
+      },
+    },
+  })
+  async openModelsDirectory() {
+    return this.localLlmService.openModelsDirectory();
+  }
+
+  @Post('refresh-accessibility')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Clear accessibility cache and recheck all models' })
+  @ApiResponse({
+    status: 200,
+    description: 'Accessibility refreshed successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        models: { type: 'array' },
+      },
+    },
+  })
+  async refreshAccessibility() {
+    return this.discoveryService.refreshAccessibility();
+  }
+
+  @Post('hf-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Set Hugging Face token' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        token: { type: 'string' },
+      },
+      required: ['token'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Token saved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+      },
+    },
+  })
+  async setHfToken(@Body('token') token: string) {
+    if (!token) {
+      throw new BadRequestException('Token is required');
+    }
+    return this.discoveryService.setHuggingFaceToken(token);
+  }
+
+  @Delete('hf-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Remove Hugging Face token' })
+  @ApiResponse({
+    status: 200,
+    description: 'Token removed successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+      },
+    },
+  })
+  async removeHfToken() {
+    return this.discoveryService.removeHuggingFaceToken();
+  }
+
+  @Get('hf-token')
+  @ApiOperation({ summary: 'Get Hugging Face token' })
+  @ApiResponse({
+    status: 200,
+    description: 'Token retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        token: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Token not found' })
+  async getHfToken() {
+    return this.discoveryService.getHuggingFaceToken();
+  }
+
+  @Get('hf-token/status')
+  @ApiOperation({ summary: 'Check if Hugging Face token is set' })
+  @ApiResponse({
+    status: 200,
+    description: 'Token status retrieved',
+    schema: {
+      type: 'object',
+      properties: {
+        hasToken: { type: 'boolean' },
+      },
+    },
+  })
+  async getHfTokenStatus() {
+    return this.discoveryService.getHuggingFaceTokenStatus();
+  }
+
+  @Get('update-models-stream')
+  @ApiOperation({
+    summary: 'Update model list with real-time progress via SSE',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'SSE stream established',
+  })
+  async updateModelsStream(@Res() res: Response) {
+    return this.discoveryService.updateModelsStream(res);
+  }
+
+  @Post('update-models')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update model list (non-streaming)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Models updated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        models: { type: 'array' },
+      },
+    },
+  })
+  async updateModels() {
+    return this.discoveryService.updateModels();
+  }
+
+  @Post('search-models')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Search for models' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string' },
+        searchType: { type: 'string', enum: ['all', 'name', 'description'] },
+      },
+      required: ['query'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Search results',
+    schema: {
+      type: 'object',
+      properties: {
+        models: { type: 'array' },
+      },
+    },
+  })
+  async searchModels(
+    @Body() searchParams: { query: string; searchType?: string }
+  ) {
+    return this.discoveryService.searchModels(
+      searchParams.query,
+      searchParams.searchType
+    );
+  }
+
+  @Post('clear-search-cache')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Clear search cache' })
+  @ApiResponse({
+    status: 200,
+    description: 'Cache cleared successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+      },
+    },
+  })
+  async clearSearchCache() {
+    return this.discoveryService.clearSearchCache();
+  }
+
+  @Post('download/:filename/cancel')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cancel model download' })
+  @ApiParam({ name: 'filename', type: 'string' })
+  @ApiResponse({
+    status: 200,
+    description: 'Download cancelled',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+      },
+    },
+  })
+  async cancelDownload(@Param('filename') filename: string) {
+    return this.downloadService.cancelDownload(filename);
+  }
+
+  @Get('models/:modelId/optimal-settings')
+  @ApiOperation({ summary: 'Get optimal settings for a model' })
+  @ApiParam({ name: 'modelId', type: 'string' })
+  @ApiResponse({
+    status: 200,
+    description: 'Optimal settings retrieved',
+    schema: {
+      type: 'object',
+      properties: {
+        gpuLayers: { type: 'number' },
+        contextSize: { type: 'number' },
+        threads: { type: 'number' },
+      },
+    },
+  })
+  async getOptimalSettings(@Param('modelId') modelId: string) {
+    return this.llmService.getOptimalSettings(modelId);
+  }
+
+  @Get('settings')
+  @ApiOperation({ summary: 'Get all model settings' })
+  @ApiResponse({
+    status: 200,
+    description: 'Settings retrieved',
+    schema: {
+      type: 'object',
+      additionalProperties: true,
+    },
+  })
+  async getSettings() {
+    return this.llmService.getAllSettings();
+  }
+
+  @Post('models/:modelId/generate-stream')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Generate response with streaming' })
+  @ApiParam({ name: 'modelId', type: 'string' })
+  @ApiBody({ type: GenerateResponseDto })
+  @ApiResponse({
+    status: 200,
+    description: 'SSE stream established',
+  })
+  async generateStream(
+    @Param('modelId') modelId: string,
+    @Body() generateDto: GenerateResponseDto,
+    @Res() res: Response
+  ) {
+    return this.llmService.generateStream(modelId, generateDto, res);
   }
 }

@@ -27,7 +27,7 @@ export class UtilityController {
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
   async generateTitle(@Body() dto: GenerateTitleDto) {
-    const title = await this.chatService.generateTitle(dto.messages || []);
+    const title = await this.chatService.generateTitle(dto.context);
     return { title };
   }
 

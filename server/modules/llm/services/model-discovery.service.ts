@@ -328,9 +328,9 @@ export class ModelDiscoveryService {
   }
 
   /**
-   * Set HuggingFace token for API access
+   * Set HuggingFace token for API access in memory
    */
-  setHuggingFaceToken(token: string | null): void {
+  setHuggingFaceTokenInMemory(token: string | null): void {
     this.huggingFaceToken = token;
   }
 
@@ -393,6 +393,201 @@ export class ModelDiscoveryService {
       };
     } catch (error) {
       this.logger.error('Failed to scan for models:', error);
+      throw error;
+    }
+  }
+
+  async refreshModels(): Promise<{
+    success: boolean;
+    models: DynamicModelInfo[];
+  }> {
+    try {
+      const { modelFetcher } = await import('../../../modelFetcher');
+      const models = await modelFetcher.refreshAvailableModels();
+      return { success: true, models };
+    } catch (error) {
+      this.logger.error('Error refreshing models:', error);
+      throw error;
+    }
+  }
+
+  async refreshAccessibility(): Promise<{
+    success: boolean;
+    models: DynamicModelInfo[];
+  }> {
+    try {
+      const { modelFetcher } = await import('../../../modelFetcher');
+      modelFetcher.clearAccessibilityCache();
+      const models = await modelFetcher.refreshAvailableModels();
+      return { success: true, models };
+    } catch (error) {
+      this.logger.error('Error refreshing accessibility:', error);
+      throw error;
+    }
+  }
+
+  async setHuggingFaceToken(
+    token: string
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      const { modelFetcher } = await import('../../../modelFetcher');
+      await modelFetcher.setHuggingFaceToken(token);
+      return {
+        success: true,
+        message: 'Hugging Face token saved. Rechecking gated models...',
+      };
+    } catch (error) {
+      this.logger.error('Error setting Hugging Face token:', error);
+      throw error;
+    }
+  }
+
+  async removeHuggingFaceToken(): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    try {
+      const { modelFetcher } = await import('../../../modelFetcher');
+      await modelFetcher.removeHuggingFaceToken();
+      return { success: true, message: 'Hugging Face token removed' };
+    } catch (error) {
+      this.logger.error('Error removing Hugging Face token:', error);
+      throw error;
+    }
+  }
+
+  async getHuggingFaceToken(): Promise<{ token: string }> {
+    try {
+      const fs = await import('fs/promises');
+      const path = await import('path');
+      const tokenFile = path.join(getMindstrikeDirectory(), 'hf-token');
+      const token = await fs.readFile(tokenFile, 'utf-8');
+      return { token: token.trim() };
+    } catch (error) {
+      this.logger.error('Error reading Hugging Face token:', error);
+      throw error;
+    }
+  }
+
+  async getHuggingFaceTokenStatus(): Promise<{ hasToken: boolean }> {
+    try {
+      const { modelFetcher } = await import('../../../modelFetcher');
+      const hasToken = modelFetcher.hasHuggingFaceToken();
+      return { hasToken };
+    } catch (error) {
+      this.logger.error('Error checking Hugging Face token status:', error);
+      throw error;
+    }
+  }
+
+  async updateModelsStream(res: import('express').Response): Promise<void> {
+    try {
+      const { modelFetcher } = await import('../../../modelFetcher');
+      const { getLocalLLMManager } = await import('../../../localLlmSingleton');
+      const llmManager = getLocalLLMManager();
+
+      // Set up SSE
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+      });
+
+      // Send initial connection event
+      res.write(
+        `data: {"type": "${SSEEventType.CONNECTED}", "message": "Connected to model update stream"}\n\n`
+      );
+      if ('flush' in res && typeof res.flush === 'function') {
+        (res.flush as () => void)();
+      }
+
+      // Progress callback that sends updates via SSE
+      const progressCallback = (progress: { [key: string]: unknown }) => {
+        res.write(
+          `data: ${JSON.stringify({
+            type: 'progress',
+            ...progress,
+          })}\n\n`
+        );
+        if ('flush' in res && typeof res.flush === 'function') {
+          (res.flush as () => void)();
+        }
+      };
+
+      try {
+        // Force refresh with progress
+        const models =
+          await modelFetcher.getAvailableModelsWithProgress(progressCallback);
+
+        // Update the local LLM manager's cache
+        const updatedModels = await llmManager.getAvailableModels();
+
+        // Send final success event
+        res.write(
+          `data: ${JSON.stringify({
+            type: SSEEventType.COMPLETED,
+            message: `✅ Model update completed! Found ${models.length} models.`,
+            models: updatedModels,
+          })}\n\n`
+        );
+      } catch (error) {
+        // Send error event
+        res.write(
+          `data: ${JSON.stringify({
+            type: SSEEventType.ERROR,
+            message: `❌ Failed to update models: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          })}\n\n`
+        );
+      }
+
+      // Close the connection
+      res.end();
+    } catch (error) {
+      this.logger.error('Error setting up model update stream:', error);
+      throw error;
+    }
+  }
+
+  async updateModels(): Promise<{
+    success: boolean;
+    models: DynamicModelInfo[];
+  }> {
+    try {
+      const { modelFetcher } = await import('../../../modelFetcher');
+      await modelFetcher.fetchPopularModels();
+      const models = await modelFetcher.getAvailableModels();
+      return { success: true, models };
+    } catch (error) {
+      this.logger.error('Error updating models:', error);
+      throw error;
+    }
+  }
+
+  async searchModels(
+    query: string,
+    searchType?: string
+  ): Promise<{ models: DynamicModelInfo[] }> {
+    try {
+      const { modelFetcher } = await import('../../../modelFetcher');
+      const models = await modelFetcher.searchModels(
+        query,
+        searchType || 'all'
+      );
+      return { models };
+    } catch (error) {
+      this.logger.error('Error searching models:', error);
+      throw error;
+    }
+  }
+
+  async clearSearchCache(): Promise<{ success: boolean; message: string }> {
+    try {
+      const { modelFetcher } = await import('../../../modelFetcher');
+      modelFetcher.clearSearchCache();
+      return { success: true, message: 'Search cache cleared' };
+    } catch (error) {
+      this.logger.error('Error clearing search cache:', error);
       throw error;
     }
   }

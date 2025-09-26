@@ -221,7 +221,7 @@ describe('LlmConfigController - POST /api/llm/test-service', () => {
         BadRequestException
       );
       await expect(controller.testService(body)).rejects.toThrow(
-        'BaseURL and type are required'
+        'baseURL and type are required'
       );
     });
 
@@ -235,7 +235,7 @@ describe('LlmConfigController - POST /api/llm/test-service', () => {
         BadRequestException
       );
       await expect(controller.testService(body)).rejects.toThrow(
-        'BaseURL and type are required'
+        'baseURL and type are required'
       );
     });
 

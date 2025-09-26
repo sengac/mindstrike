@@ -7,24 +7,52 @@ import {
   Body,
   Param,
   HttpStatus,
-  HttpCode,
-  BadRequestException,
+  HttpException,
   InternalServerErrorException,
+  BadRequestException,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBody,
+  ApiParam,
+} from '@nestjs/swagger';
+import { ModuleRef } from '@nestjs/core';
 import { LlmConfigService } from './services/llm-config.service';
+import type { CustomLLMService } from '../../llmConfigManager';
+import { GlobalLlmConfigService } from '../shared/services/global-llm-config.service';
 
-@ApiTags('llm-config')
+interface CustomServiceDto {
+  id?: string;
+  name: string;
+  baseURL: string;
+  type:
+    | 'ollama'
+    | 'vllm'
+    | 'openai-compatible'
+    | 'openai'
+    | 'anthropic'
+    | 'perplexity'
+    | 'google';
+  apiKey?: string;
+  enabled?: boolean;
+}
+
+@ApiTags('llm')
 @Controller('api/llm')
 export class LlmConfigController {
-  constructor(private readonly llmConfigService: LlmConfigService) {}
+  constructor(
+    private readonly llmConfigService: LlmConfigService,
+    private readonly globalLlmConfigService: GlobalLlmConfigService,
+    private readonly moduleRef: ModuleRef
+  ) {}
 
   @Get('models')
   @ApiOperation({ summary: 'Get all configured LLM models' })
   @ApiResponse({
     status: 200,
-    description:
-      'List of all configured models (OpenAI, Anthropic, local, etc.)',
+    description: 'List of configured LLM models',
     schema: {
       type: 'array',
       items: {
@@ -60,14 +88,7 @@ export class LlmConfigController {
     },
   })
   async getModels() {
-    try {
-      const models = await this.llmConfigService.getModels();
-      return models;
-    } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Failed to get models';
-      throw new InternalServerErrorException(errorMessage);
-    }
+    return this.llmConfigService.getModels();
   }
 
   @Get('default-model')
@@ -84,101 +105,78 @@ export class LlmConfigController {
         model: { type: 'string' },
         displayName: { type: 'string' },
         baseURL: { type: 'string' },
-        type: {
-          type: 'string',
-          enum: [
-            'ollama',
-            'vllm',
-            'openai-compatible',
-            'openai',
-            'anthropic',
-            'perplexity',
-            'google',
-            'local',
-          ],
-        },
-        contextLength: { type: 'number' },
-        parameterCount: { type: 'string' },
-        quantization: { type: 'string' },
+        type: { type: 'string' },
         available: { type: 'boolean' },
-        isDefault: { type: 'boolean' },
       },
     },
   })
-  @ApiResponse({ status: 404, description: 'No default model configured' })
+  @ApiResponse({
+    status: 404,
+    description: 'No default model configured',
+  })
   async getDefaultModel() {
-    try {
-      const defaultModel = await this.llmConfigService.getDefaultModel();
-      if (!defaultModel) {
-        throw new InternalServerErrorException('No default model configured');
-      }
-      return defaultModel;
-    } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Failed to get default model';
-      throw new InternalServerErrorException(errorMessage);
+    const defaultModel = await this.llmConfigService.getDefaultModel();
+    if (!defaultModel) {
+      throw new HttpException(
+        'No default model configured',
+        HttpStatus.NOT_FOUND
+      );
     }
+    return defaultModel;
   }
 
   @Post('default-model')
-  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Set default LLM model' })
-  @ApiResponse({
-    status: 200,
-    description: 'Default model set successfully',
+  @ApiBody({
     schema: {
       type: 'object',
       properties: {
-        success: { type: 'boolean' },
         modelId: { type: 'string' },
       },
+      required: ['modelId'],
     },
   })
-  async setDefaultModel(@Body() body: { modelId: string }) {
-    try {
-      await this.llmConfigService.setDefaultModel(body.modelId);
-      return {
-        success: true,
-        modelId: body.modelId,
-      };
-    } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Failed to set default model';
-      throw new InternalServerErrorException(errorMessage);
-    }
-  }
-
-  @Post('rescan')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Rescan LLM services and update model list' })
   @ApiResponse({
     status: 200,
-    description: 'LLM services rescanned successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        scannedServices: { type: 'array', items: { type: 'object' } },
-        addedServices: { type: 'array', items: { type: 'object' } },
-        removedServices: { type: 'array', items: { type: 'object' } },
-      },
-    },
+    description: 'Default model updated successfully',
   })
-  @ApiResponse({ status: 500, description: 'Failed to rescan LLM services' })
-  async rescanServices() {
-    try {
-      const result = await this.llmConfigService.rescanServices();
-      return result;
-    } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : 'Failed to rescan LLM services';
-      throw new InternalServerErrorException(errorMessage);
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid model ID',
+  })
+  async setDefaultModel(@Body() body: { modelId: string }) {
+    if (!body.modelId) {
+      throw new HttpException('Model ID is required', HttpStatus.BAD_REQUEST);
     }
+
+    await this.llmConfigService.setDefaultModel(body.modelId);
+
+    // Update global LLM config like Express does
+    await this.globalLlmConfigService.refreshLLMConfig();
+
+    // Update all agents with new LLM config (like Express does) - use dynamic import to avoid circular dependency
+    try {
+      const { AgentPoolService } = await import(
+        '../agents/services/agent-pool.service'
+      );
+      const agentPoolService = this.moduleRef.get(AgentPoolService, {
+        strict: false,
+      });
+      if (agentPoolService) {
+        const currentLlmConfig =
+          this.globalLlmConfigService.getCurrentLlmConfig();
+        await agentPoolService.updateAllAgentsLLMConfig(currentLlmConfig);
+      }
+    } catch (error) {
+      // AgentPoolService might not be available during testing
+      console.warn('Could not update agents with new LLM config:', error);
+    }
+
+    return { message: 'Default model updated successfully' };
   }
 
   @Get('custom-services')
-  @ApiOperation({ summary: 'Get all custom LLM services' })
+  @ApiOperation({ summary: 'Get custom LLM services' })
   @ApiResponse({
     status: 200,
     description: 'List of custom LLM services',
@@ -190,19 +188,7 @@ export class LlmConfigController {
           id: { type: 'string' },
           name: { type: 'string' },
           baseURL: { type: 'string' },
-          type: {
-            type: 'string',
-            enum: [
-              'ollama',
-              'vllm',
-              'openai-compatible',
-              'openai',
-              'anthropic',
-              'perplexity',
-              'google',
-              'local',
-            ],
-          },
+          type: { type: 'string' },
           apiKey: { type: 'string' },
           enabled: { type: 'boolean' },
           custom: { type: 'boolean' },
@@ -211,161 +197,102 @@ export class LlmConfigController {
     },
   })
   async getCustomServices() {
-    try {
-      const customServices = await this.llmConfigService.getCustomServices();
-      return customServices;
-    } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : 'Failed to get custom services';
-      throw new InternalServerErrorException(errorMessage);
-    }
+    return this.llmConfigService.getCustomServices();
   }
 
   @Post('custom-services')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Add a new custom LLM service' })
-  @ApiResponse({
-    status: 200,
-    description: 'Custom service added successfully',
+  @ApiOperation({ summary: 'Add or update custom LLM service' })
+  @ApiBody({
     schema: {
       type: 'object',
       properties: {
         id: { type: 'string' },
         name: { type: 'string' },
         baseURL: { type: 'string' },
-        type: { type: 'string' },
+        type: {
+          type: 'string',
+          enum: [
+            'ollama',
+            'vllm',
+            'openai-compatible',
+            'openai',
+            'anthropic',
+            'perplexity',
+            'google',
+          ],
+        },
         apiKey: { type: 'string' },
         enabled: { type: 'boolean' },
-        custom: { type: 'boolean' },
       },
+      required: ['name', 'baseURL', 'type'],
     },
   })
-  @ApiResponse({ status: 400, description: 'Invalid service configuration' })
-  async addCustomService(
-    @Body()
-    body: {
-      name: string;
-      baseURL: string;
-      type:
-        | 'ollama'
-        | 'vllm'
-        | 'openai-compatible'
-        | 'openai'
-        | 'anthropic'
-        | 'perplexity'
-        | 'google'
-        | 'local';
-      apiKey?: string;
-      enabled?: boolean;
-    }
-  ) {
-    try {
-      const { name, baseURL, type, apiKey, enabled } = body;
-
-      if (!name || !baseURL || !type) {
-        throw new BadRequestException('Name, baseURL, and type are required');
-      }
-
-      const newService = await this.llmConfigService.addCustomService({
-        name,
-        baseURL,
-        type,
-        apiKey,
-        enabled: enabled !== false,
-      });
-
-      return newService;
-    } catch (error: unknown) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-      const errorMessage =
-        error instanceof Error ? error.message : 'Failed to add custom service';
-      throw new InternalServerErrorException(errorMessage);
-    }
-  }
-
-  @Put('custom-services/:id')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Update a custom LLM service' })
   @ApiResponse({
     status: 200,
-    description: 'Custom service updated successfully',
+    description: 'Custom service saved successfully',
+  })
+  async saveCustomService(@Body() service: CustomServiceDto) {
+    // The service expects either addCustomService for new or updateCustomService for existing
+    if (service.id) {
+      await this.llmConfigService.updateCustomService(service.id, service);
+    } else {
+      await this.llmConfigService.addCustomService(service);
+    }
+    return { message: 'Custom service saved successfully' };
+  }
+
+  @Post('rescan')
+  @ApiOperation({ summary: 'Rescan for available LLM services' })
+  @ApiResponse({
+    status: 200,
+    description: 'Services rescanned successfully',
     schema: {
       type: 'object',
       properties: {
-        id: { type: 'string' },
-        name: { type: 'string' },
-        baseURL: { type: 'string' },
-        type: { type: 'string' },
-        apiKey: { type: 'string' },
-        enabled: { type: 'boolean' },
-        custom: { type: 'boolean' },
+        scannedServices: { type: 'array' },
+        addedServices: { type: 'array' },
+        removedServices: { type: 'array' },
       },
     },
   })
-  @ApiResponse({ status: 404, description: 'Service not found' })
-  async updateCustomService(
-    @Param('id') id: string,
-    @Body()
-    updates: {
-      name?: string;
-      baseURL?: string;
-      type?: string;
-      apiKey?: string;
-      enabled?: boolean;
-    }
-  ) {
+  async rescanServices() {
     try {
-      const updatedService = await this.llmConfigService.updateCustomService(
-        id,
-        updates
-      );
-      return updatedService;
-    } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : 'Failed to update custom service';
-      throw new InternalServerErrorException(errorMessage);
-    }
-  }
-
-  @Delete('custom-services/:id')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Remove a custom LLM service' })
-  @ApiResponse({
-    status: 200,
-    description: 'Custom service removed successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean' },
-      },
-    },
-  })
-  @ApiResponse({ status: 404, description: 'Service not found' })
-  async removeCustomService(@Param('id') id: string) {
-    try {
-      await this.llmConfigService.removeCustomService(id);
-      return { success: true };
-    } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : 'Failed to remove custom service';
-      throw new InternalServerErrorException(errorMessage);
+      return await this.llmConfigService.rescanServices();
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new InternalServerErrorException(error.message);
+      }
+      throw new InternalServerErrorException('Failed to rescan LLM services');
     }
   }
 
   @Post('test-service')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Test a custom LLM service' })
+  @ApiOperation({ summary: 'Test connection to an LLM service' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        baseURL: { type: 'string' },
+        type: {
+          type: 'string',
+          enum: [
+            'ollama',
+            'vllm',
+            'openai-compatible',
+            'openai',
+            'anthropic',
+            'perplexity',
+            'google',
+          ],
+        },
+        apiKey: { type: 'string' },
+      },
+      required: ['baseURL', 'type'],
+    },
+  })
   @ApiResponse({
     status: 200,
-    description: 'Service test results',
+    description: 'Service test result',
     schema: {
       type: 'object',
       properties: {
@@ -377,33 +304,23 @@ export class LlmConfigController {
     },
   })
   async testService(
-    @Body()
-    body: {
-      baseURL: string;
-      type: string;
-      apiKey?: string;
-    }
+    @Body() body: { baseURL: string; type: string; apiKey?: string }
   ) {
+    if (!body.baseURL || !body.type) {
+      throw new BadRequestException('baseURL and type are required');
+    }
+
     try {
-      const { baseURL, type, apiKey } = body;
-
-      if (!baseURL || !type) {
-        throw new BadRequestException('BaseURL and type are required');
-      }
-
-      const result = await this.llmConfigService.testService(
-        baseURL,
-        type,
-        apiKey
+      return await this.llmConfigService.testService(
+        body.baseURL,
+        body.type,
+        body.apiKey
       );
-      return result;
-    } catch (error: unknown) {
-      if (error instanceof BadRequestException) {
-        throw error;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new InternalServerErrorException(error.message);
       }
-      const errorMessage =
-        error instanceof Error ? error.message : 'Failed to test service';
-      throw new InternalServerErrorException(errorMessage);
+      throw new InternalServerErrorException('Failed to test service');
     }
   }
 }

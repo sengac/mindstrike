@@ -40,6 +40,10 @@ describe('McpManagerService', () => {
     refreshConnections: vi.fn().mockResolvedValue(undefined),
     executeTool: vi.fn().mockResolvedValue({ success: true }),
     reload: vi.fn().mockResolvedValue(undefined),
+    getLogs: vi.fn().mockResolvedValue([]),
+    getServerLogs: vi.fn().mockResolvedValue([]),
+    shutdown: vi.fn().mockResolvedValue(undefined),
+    removeServerConfig: vi.fn().mockResolvedValue({ success: true }),
     on: vi.fn(),
     off: vi.fn(),
     removeAllListeners: vi.fn(),
@@ -359,17 +363,20 @@ describe('McpManagerService', () => {
     it('should get server logs', async () => {
       const mockLogs = ['log1', 'log2', 'log3'];
 
-      mockMcpManager.getDiagnostics.mockResolvedValue(mockLogs);
+      mockMcpManager.getServerLogs.mockResolvedValue(mockLogs);
 
       const result = await service.getServerLogs();
 
-      expect(mockMcpManager.getDiagnostics).toHaveBeenCalled();
+      expect(mockMcpManager.getServerLogs).toHaveBeenCalledWith(
+        undefined,
+        undefined
+      );
       expect(result).toEqual(mockLogs);
     });
 
     it('should handle errors when getting server logs', async () => {
       const error = new Error('Failed to get logs');
-      mockMcpManager.getDiagnostics.mockRejectedValue(error);
+      mockMcpManager.getServerLogs.mockRejectedValue(error);
 
       await expect(service.getServerLogs()).rejects.toThrow(
         'Failed to get logs'

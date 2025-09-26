@@ -85,7 +85,8 @@ describe('McpController', () => {
         .fn()
         .mockResolvedValue({ success: true, message: 'Removed' }),
       getAvailableTools: vi.fn().mockResolvedValue([]),
-      getServerLogs: vi.fn().mockResolvedValue({ logs: [] }),
+      getLogs: vi.fn().mockResolvedValue([]),
+      getServerLogs: vi.fn().mockResolvedValue([]),
       refreshAll: vi
         .fn()
         .mockResolvedValue({ success: true, message: 'Refreshed' }),
@@ -394,14 +395,18 @@ describe('McpController', () => {
     it('should get server logs with query parameters', async () => {
       (
         mcpManagerMock.getServerLogs as ReturnType<typeof vi.fn>
-      ).mockResolvedValue({ logs: ['log1', 'log2'] });
+      ).mockResolvedValue(['log1', 'log2']);
 
       const result = await controller.getServerLogs('test-server', 'true');
 
-      expect(result).toEqual({ logs: [] }); // Currently returns empty array
+      expect(result).toEqual({ logs: ['log1', 'log2'] });
     });
 
     it('should handle missing query parameters', async () => {
+      (
+        mcpManagerMock.getServerLogs as ReturnType<typeof vi.fn>
+      ).mockResolvedValue([]);
+
       const result = await controller.getServerLogs();
 
       expect(result).toEqual({ logs: [] });
@@ -467,9 +472,9 @@ describe('McpController', () => {
 
   describe('GET /api/mcp/logs', () => {
     it('should return logs', async () => {
-      (
-        mcpManagerMock.getServerLogs as ReturnType<typeof vi.fn>
-      ).mockResolvedValue({ logs: [] });
+      (mcpManagerMock.getLogs as ReturnType<typeof vi.fn>).mockResolvedValue(
+        []
+      );
 
       const result = await controller.getLogs();
 
@@ -477,9 +482,9 @@ describe('McpController', () => {
     });
 
     it('should handle errors', async () => {
-      (
-        mcpManagerMock.getServerLogs as ReturnType<typeof vi.fn>
-      ).mockRejectedValue(new Error('Failed to get logs'));
+      (mcpManagerMock.getLogs as ReturnType<typeof vi.fn>).mockRejectedValue(
+        new Error('Failed to get logs')
+      );
 
       await expect(controller.getLogs()).rejects.toThrow(
         InternalServerErrorException

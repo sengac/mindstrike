@@ -72,7 +72,7 @@ export default defineConfig({
         preserveModules: false,
       },
     },
-    outDir: 'dist/server-nest',
+    outDir: 'dist/server',
   },
   resolve: {
     conditions: ['node'],

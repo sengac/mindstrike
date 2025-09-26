@@ -14,9 +14,10 @@ export enum ThreadType {
 }
 
 export class CreateThreadDto {
-  @ApiProperty({ description: 'Thread title', type: String })
+  @ApiPropertyOptional({ description: 'Thread name', type: String })
+  @IsOptional()
   @IsString()
-  title: string;
+  name?: string;
 
   @ApiPropertyOptional({
     description: 'Thread type',
@@ -38,10 +39,10 @@ export class CreateThreadDto {
 }
 
 export class UpdateThreadDto {
-  @ApiPropertyOptional({ description: 'Updated title', type: String })
+  @ApiPropertyOptional({ description: 'Updated name', type: String })
   @IsOptional()
   @IsString()
-  title?: string;
+  name?: string;
 
   @ApiPropertyOptional({
     description: 'Updated metadata',

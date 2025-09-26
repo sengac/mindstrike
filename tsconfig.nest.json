@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "module": "CommonJS",
+    "module": "ESNext",
     "declaration": true,
     "removeComments": true,
     "emitDecoratorMetadata": true,
@@ -20,12 +20,12 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "paths": {
-      "@/*": ["server-nest/src/*"],
-      "@modules/*": ["server-nest/src/modules/*"],
-      "@common/*": ["server-nest/src/common/*"],
-      "@config/*": ["server-nest/src/config/*"]
+      "@/*": ["server/*"],
+      "@modules/*": ["server/modules/*"],
+      "@common/*": ["server/common/*"],
+      "@config/*": ["server/config/*"]
     }
   },
-  "include": ["server-nest/**/*.ts"],
+  "include": ["server/**/*.ts"],
   "exclude": ["node_modules", "dist", "test", "**/*spec.ts", "**/*test.ts"]
 }

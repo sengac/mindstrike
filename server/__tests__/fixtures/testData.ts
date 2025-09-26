@@ -9,6 +9,7 @@ import type {
   ModelLoadingSettings,
 } from '../../localLlmManager';
 import type { DynamicModelInfo } from '../../modelFetcher';
+import type { Response } from 'express';
 
 // LLM Config Manager Test Data
 export const mockLLMModels: LLMModel[] = [
@@ -338,8 +339,8 @@ export class MockFactories {
    * Creates a mock Response object for Express.js testing
    */
   static createMockResponse(
-    overrides: Partial<import('express').Response> = {}
-  ): Partial<import('express').Response> {
+    overrides: Partial<Response> = {}
+  ): Partial<Response> {
     return {
       writeHead: vi.fn(),
       write: vi.fn().mockReturnValue(true),

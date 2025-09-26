@@ -9,6 +9,7 @@ import {
   NotFoundException,
   InternalServerErrorException,
   Logger,
+  OnModuleInit,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { WorkspaceService } from './workspace.service';
@@ -17,11 +18,15 @@ import { AgentPoolService } from '../agents/services/agent-pool.service';
 import { ConversationService } from '../chat/services/conversation.service';
 import * as path from 'path';
 import { existsSync, statSync } from 'fs';
-import { setWorkspaceRoot } from '../../shared/utils/settings-directory';
+import {
+  setWorkspaceRoot,
+  getWorkspaceRoot,
+} from '../../shared/utils/settings-directory';
+import { getHomeDirectory } from '../../utils/settingsDirectory';
 
 @ApiTags('workspace')
 @Controller('api/workspace')
-export class WorkspaceController {
+export class WorkspaceController implements OnModuleInit {
   private readonly logger = new Logger(WorkspaceController.name);
   private currentWorkingDirectory: string = process.cwd();
   private workspaceRoot: string = process.cwd();
@@ -32,6 +37,25 @@ export class WorkspaceController {
     private readonly agentPoolService: AgentPoolService,
     private readonly conversationService: ConversationService
   ) {}
+
+  async onModuleInit() {
+    // Load persisted workspace root from settings
+    const persistedWorkspaceRoot = await getWorkspaceRoot();
+
+    if (persistedWorkspaceRoot) {
+      this.workspaceRoot = persistedWorkspaceRoot;
+      this.currentWorkingDirectory = persistedWorkspaceRoot;
+      this.logger.log(
+        `Loaded workspace root from settings: ${this.workspaceRoot}`
+      );
+    } else {
+      // Use default if no persisted root
+      const defaultRoot = process.env.WORKSPACE_ROOT || getHomeDirectory();
+      this.workspaceRoot = defaultRoot;
+      this.currentWorkingDirectory = defaultRoot;
+      this.logger.log(`Using default workspace root: ${this.workspaceRoot}`);
+    }
+  }
 
   @Get('directory')
   @ApiOperation({ summary: 'Get current workspace directory' })

@@ -1329,8 +1329,8 @@ export abstract class BaseAgentService {
         );
         const sessionService = new SessionService();
         await sessionService.updateSessionHistory(
-          this.config.llmConfig.type ?? 'openai',
-          this.config.llmConfig.model ?? 'gpt-4',
+          this.config.llmConfig.type ?? 'local',
+          this.config.llmConfig.model ?? 'unknown',
           threadId,
           []
         );

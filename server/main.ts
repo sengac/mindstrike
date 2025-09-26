@@ -62,8 +62,8 @@ async function bootstrap() {
     .addTag('content', 'Large content management')
     .addTag('lfs', 'Large file storage')
     .addTag('debug', 'Debug and development tools')
-    .addServer('http://localhost:3002', 'NestJS Development Server')
-    .addServer('http://localhost:3001', 'Express Development Server (primary)')
+    .addServer('http://localhost:3001', 'NestJS Development Server (primary)')
+    .addServer('http://localhost:3002', 'Express Development Server')
     .build();
 
   logger.info('Creating Swagger document...');
@@ -82,8 +82,8 @@ async function bootstrap() {
     },
   });
 
-  // Start server on port 3002 (to run alongside Express on 3001)
-  const port = process.env.NEST_PORT || 3002;
+  // Start server on port 3001 (primary server, Express now on 3002)
+  const port = process.env.PORT || 3001;
   logger.info(`Starting server on port ${port}...`);
   await app.listen(port);
 
@@ -91,9 +91,7 @@ async function bootstrap() {
   logger.info(
     `📚 Swagger documentation available at http://localhost:${port}/api`
   );
-  logger.info(
-    `🔄 Running alongside Express server on port 3001 for comparison`
-  );
+  logger.info(`🔄 Express server available on port 3002 for comparison`);
 }
 
 bootstrap().catch(error => {

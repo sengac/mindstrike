@@ -4,12 +4,14 @@ import { logger } from '../logger';
 
 const router = express.Router();
 
+let clientCounter = 0;
+
 /**
  * SSE endpoint for task progress updates
  */
 router.get('/stream/:workflowId', (req, res) => {
   const { workflowId } = req.params;
-  const clientId = `task-${workflowId}-${Date.now()}`;
+  const clientId = `task-${workflowId}-${Date.now()}-${++clientCounter}`;
   const topic = `tasks-${workflowId}`;
 
   logger.info('Task SSE client connected', { clientId, workflowId, topic });

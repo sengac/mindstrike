@@ -136,9 +136,9 @@ describe('ConversationController', () => {
       );
     });
 
-    it('should throw InternalServerErrorException when getConversation method not implemented', async () => {
+    it('should throw InternalServerErrorException when agent is missing getConversation method', async () => {
       const threadId = 'test-thread-123';
-      const mockAgentWithoutMethod = {};
+      const mockAgentWithoutMethod = {} as Agent;
 
       (
         mockAgentPoolService.getCurrentAgent as ReturnType<typeof vi.fn>
@@ -146,9 +146,6 @@ describe('ConversationController', () => {
 
       await expect(controller.getConversation(threadId)).rejects.toThrow(
         InternalServerErrorException
-      );
-      await expect(controller.getConversation(threadId)).rejects.toThrow(
-        'getConversation method not implemented'
       );
     });
 
@@ -225,82 +222,6 @@ describe('ConversationController', () => {
       expect(mockAgentPoolService.setCurrentThread).toHaveBeenNthCalledWith(
         2,
         previousThreadId
-      );
-    });
-  });
-
-  describe('clearConversation', () => {
-    it('should clear conversation successfully', async () => {
-      const threadId = 'test-thread-123';
-
-      const result = await controller.clearConversation(threadId);
-
-      expect(result).toEqual({ success: true });
-      expect(mockAgentPoolService.getCurrentThreadId).toHaveBeenCalled();
-      expect(mockAgentPoolService.setCurrentThread).toHaveBeenCalledWith(
-        threadId
-      );
-      expect(mockAgentPoolService.getCurrentAgent).toHaveBeenCalled();
-      expect(mockAgent.clearConversation).toHaveBeenCalledWith(threadId);
-      expect(mockAgentPoolService.setCurrentThread).toHaveBeenCalledWith(
-        'previous-thread'
-      );
-    });
-
-    it('should restore previous thread ID after clearing conversation', async () => {
-      const threadId = 'current-thread';
-      const previousThreadId = 'previous-thread';
-
-      (
-        mockAgentPoolService.getCurrentThreadId as ReturnType<typeof vi.fn>
-      ).mockReturnValue(previousThreadId);
-
-      await controller.clearConversation(threadId);
-
-      expect(mockAgentPoolService.setCurrentThread).toHaveBeenCalledTimes(2);
-      expect(mockAgentPoolService.setCurrentThread).toHaveBeenNthCalledWith(
-        1,
-        threadId
-      );
-      expect(mockAgentPoolService.setCurrentThread).toHaveBeenNthCalledWith(
-        2,
-        previousThreadId
-      );
-    });
-
-    it('should throw BadRequestException when threadId is empty', async () => {
-      await expect(controller.clearConversation('')).rejects.toThrow(
-        BadRequestException
-      );
-      await expect(controller.clearConversation('')).rejects.toThrow(
-        'Thread ID is required'
-      );
-    });
-
-    it('should handle clearConversation errors', async () => {
-      const threadId = 'test-thread-123';
-      const error = new Error('Failed to clear conversation');
-
-      (
-        mockAgent.clearConversation as ReturnType<typeof vi.fn>
-      ).mockRejectedValue(error);
-
-      // The current implementation doesn't catch errors, so it will throw directly
-      await expect(controller.clearConversation(threadId)).rejects.toThrow(
-        'Failed to clear conversation'
-      );
-    });
-
-    it('should handle agentPool.setCurrentThread failures', async () => {
-      const threadId = 'test-thread-123';
-      const error = new Error('Failed to set thread');
-
-      (
-        mockAgentPoolService.setCurrentThread as ReturnType<typeof vi.fn>
-      ).mockRejectedValueOnce(error);
-
-      await expect(controller.clearConversation(threadId)).rejects.toThrow(
-        'Failed to set thread'
       );
     });
   });

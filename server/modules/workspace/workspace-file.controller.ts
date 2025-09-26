@@ -6,6 +6,7 @@ import {
   Param,
   HttpStatus,
   HttpCode,
+  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -14,6 +15,7 @@ import {
   ApiParam,
   ApiBody,
 } from '@nestjs/swagger';
+import type { Request } from 'express';
 import { SaveFileDto, DeleteFileDto } from './dto/workspace.dto';
 import { WorkspaceService } from './workspace.service';
 import { WorkspaceFileService } from './services/workspace-file.service';
@@ -46,7 +48,6 @@ export class WorkspaceFileController {
 
   @Get('file/*')
   @ApiOperation({ summary: 'Get file content' })
-  @ApiParam({ name: '0', type: 'string', description: 'File path' })
   @ApiResponse({
     status: 200,
     description: 'File content',
@@ -58,9 +59,14 @@ export class WorkspaceFileController {
     },
   })
   @ApiResponse({ status: 404, description: 'File not found' })
-  async getFile(@Param('0') path: string) {
+  async getFile(@Req() req: Request) {
+    // Extract the file path from the URL
+    const fullUrl = req.url || req.originalUrl || '';
+    const filePath = fullUrl.replace(/^\/api\/workspace\/file\//, '');
+    const decodedPath = decodeURIComponent(filePath);
+
     // Express returns only { content }
-    const fileContent = await this.workspaceFileService.readFile(path);
+    const fileContent = await this.workspaceFileService.readFile(decodedPath);
     return {
       content: fileContent.content,
     };

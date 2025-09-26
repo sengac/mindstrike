@@ -104,7 +104,7 @@ interface MessageWithTools {
 // Removed unused interface _MindMapData
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.EXPRESS_PORT || 3002;
 
 // Conditionally setup OpenAPI generator for documentation generation
 if (process.env.GENERATE_OPENAPI === 'true') {

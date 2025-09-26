@@ -23,7 +23,7 @@ interface MCPLogsState {
 }
 
 export const useMCPLogsStore = create<MCPLogsState>()(
-  subscribeWithSelector((set, _get) => ({
+  subscribeWithSelector(set => ({
     logs: [],
     isConnected: false,
 
@@ -46,10 +46,14 @@ export const useMCPLogsStore = create<MCPLogsState>()(
         const response = await fetch('/api/mcp/logs');
         if (response.ok) {
           const data = await response.json();
-          set({ logs: data.logs ?? [] });
+          // Ensure logs is always an array
+          const logs = Array.isArray(data.logs) ? data.logs : [];
+          set({ logs });
         }
       } catch (error) {
         logger.error('Failed to fetch MCP logs:', error);
+        // Reset to empty array on error
+        set({ logs: [] });
       }
     },
   }))

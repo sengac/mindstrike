@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { Stats } from 'fs';
+import { getWorkspaceRoot } from '../../../utils/settingsDirectory';
 
 export interface FileInfo {
   name: string;
@@ -30,12 +31,40 @@ export class WorkspaceFileService {
   private readonly logger = new Logger(WorkspaceFileService.name);
   private workspaceRoot: string;
   private currentWorkingDirectory: string;
+  private initialized = false;
 
   constructor(private configService: ConfigService) {
+    // Initialize immediately with synchronous call for constructor logging
+    this.initializeSync();
+  }
+
+  private initializeSync(): void {
+    // Use fallback values initially - will be replaced with persisted values in ensureInitialized
+    // Get the project root - if we're in server directory, go up one level
+    const cwd = process.cwd();
+    const defaultRoot = cwd.endsWith('/server') ? path.dirname(cwd) : cwd;
+
     this.workspaceRoot =
-      this.configService?.get<string>('WORKSPACE_ROOT') ?? process.cwd();
+      this.configService?.get<string>('WORKSPACE_ROOT') ?? defaultRoot;
     this.currentWorkingDirectory = this.workspaceRoot;
     this.logger.log(`Workspace root: ${this.workspaceRoot}`);
+  }
+
+  private async ensureInitialized(): Promise<void> {
+    if (this.initialized) {
+      return;
+    }
+
+    // Load persisted workspace root
+    const persistedWorkspaceRoot = await getWorkspaceRoot();
+
+    if (persistedWorkspaceRoot) {
+      this.workspaceRoot = persistedWorkspaceRoot;
+      this.currentWorkingDirectory = persistedWorkspaceRoot;
+      this.logger.log(`Using persisted workspace root: ${this.workspaceRoot}`);
+    }
+
+    this.initialized = true;
   }
 
   /**
@@ -77,6 +106,8 @@ export class WorkspaceFileService {
     directoryPath?: string,
     recursive = false
   ): Promise<FileInfo[]> {
+    await this.ensureInitialized();
+
     const targetDir = directoryPath
       ? path.resolve(this.workspaceRoot, directoryPath)
       : this.currentWorkingDirectory;
@@ -138,6 +169,13 @@ export class WorkspaceFileService {
    * Read file content
    */
   async readFile(filePath: string): Promise<FileContent> {
+    await this.ensureInitialized();
+
+    // Ensure workspace root is defined
+    if (!this.workspaceRoot) {
+      throw new BadRequestException('Workspace root not configured');
+    }
+
     const fullPath = path.resolve(this.workspaceRoot, filePath);
 
     // Security check: ensure path is within workspace
@@ -167,6 +205,8 @@ export class WorkspaceFileService {
    * Save file content
    */
   async saveFile(filePath: string, content: string): Promise<FileInfo> {
+    await this.ensureInitialized();
+
     const fullPath = path.resolve(this.workspaceRoot, filePath);
 
     // Security check
@@ -205,6 +245,8 @@ export class WorkspaceFileService {
    * Delete a file
    */
   async deleteFile(filePath: string): Promise<void> {
+    await this.ensureInitialized();
+
     const fullPath = path.resolve(this.workspaceRoot, filePath);
 
     // Security check
@@ -227,6 +269,8 @@ export class WorkspaceFileService {
    * Create a directory
    */
   async createDirectory(directoryPath: string): Promise<void> {
+    await this.ensureInitialized();
+
     const fullPath = path.resolve(this.workspaceRoot, directoryPath);
 
     // Security check
@@ -246,6 +290,8 @@ export class WorkspaceFileService {
    * Delete a directory
    */
   async deleteDirectory(directoryPath: string): Promise<void> {
+    await this.ensureInitialized();
+
     const fullPath = path.resolve(this.workspaceRoot, directoryPath);
 
     // Security check

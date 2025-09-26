@@ -75,7 +75,7 @@ export class MindmapService {
     try {
       const data = await fs.readFile(this.mindmapsPath, 'utf-8');
       return JSON.parse(data);
-    } catch (error) {
+    } catch {
       // File doesn't exist or is invalid, return empty array
       this.logger.debug('No mindmaps file found, returning empty array');
       return [];
@@ -115,6 +115,21 @@ export class MindmapService {
     }
 
     return mindmap;
+  }
+
+  async getMindmapData(mindmapId: string): Promise<Record<string, unknown>> {
+    const mindmaps = await this.getAllMindmaps();
+    const mindmap = mindmaps.find(
+      (m: MindMap & { mindmapData?: Record<string, unknown> }) =>
+        m.id === mindmapId
+    );
+
+    if (!mindmap) {
+      throw new NotFoundException(`Mindmap with ID ${mindmapId} not found`);
+    }
+
+    // Return the mindmapData field, or empty object if not found
+    return mindmap.mindmapData || {};
   }
 
   async iterateMindmap(
@@ -301,6 +316,65 @@ export class MindmapService {
 
     mindmaps[index] = mindmap;
     await this.saveMindmapsToFile(mindmaps);
+  }
+
+  async saveMindmapData(
+    mindmapId: string,
+    mindmapData: Record<string, unknown>
+  ): Promise<void> {
+    const mindmaps = await this.getAllMindmaps();
+    const mindmapIndex = mindmaps.findIndex(m => m.id === mindmapId);
+
+    if (mindmapIndex === -1) {
+      throw new NotFoundException(`Mindmap with ID ${mindmapId} not found`);
+    }
+
+    // Update the mindmap with the new mindmapData
+    (
+      mindmaps[mindmapIndex] as MindMap & {
+        mindmapData?: Record<string, unknown>;
+      }
+    ).mindmapData = mindmapData;
+    mindmaps[mindmapIndex].updatedAt = new Date();
+
+    await this.saveMindmapsToFile(mindmaps);
+    this.logger.log(`Saved mindmap data for mindmap: ${mindmapId}`);
+  }
+
+  async saveMindmaps(mindmaps: Array<Record<string, unknown>>): Promise<void> {
+    // Read existing data to preserve mindmap data
+    let existingMindMaps: Array<Record<string, unknown>> = [];
+    try {
+      existingMindMaps = await this.getAllMindmaps();
+    } catch {
+      // File doesn't exist, that's fine
+      this.logger.debug('No existing mindmaps file found');
+    }
+
+    // Create a map of existing mindmap data
+    const existingMindmapData = new Map<string, unknown>();
+    existingMindMaps.forEach((mindmap: Record<string, unknown>) => {
+      if (mindmap.id) {
+        existingMindmapData.set(mindmap.id as string, mindmap);
+      }
+    });
+
+    // Merge new data with existing data
+    const mergedMindmaps = mindmaps.map((mindmap: Record<string, unknown>) => {
+      const existing =
+        (existingMindmapData.get(mindmap.id as string) as Record<
+          string,
+          unknown
+        >) || {};
+      return {
+        ...existing,
+        ...mindmap,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+
+    await this.saveMindmapsToFile(mergedMindmaps as MindMap[]);
+    this.logger.log(`Saved ${mergedMindmaps.length} mindmaps`);
   }
 
   private async saveMindmapsToFile(mindmaps: MindMap[]): Promise<void> {

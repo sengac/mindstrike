@@ -108,11 +108,7 @@ export class MessageController {
       },
     },
   })
-  async loadThread(
-    @Param('threadId') threadId: string,
-    @Body() dto?: LoadThreadDto
-  ) {
-    // dto parameter is for API compatibility but not used in implementation
+  async loadThread(@Param('threadId') threadId: string) {
     return this.messageService.loadThread(threadId);
   }
 }

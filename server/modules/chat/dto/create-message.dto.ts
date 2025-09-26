@@ -92,18 +92,11 @@ export class StreamMessageDto extends CreateMessageDto {
 
 export class GenerateTitleDto {
   @ApiProperty({
-    description: 'Messages to generate title from',
-    type: 'array',
-    items: {
-      type: 'object',
-      properties: {
-        role: { type: 'string' },
-        content: { type: 'string' },
-      },
-    },
+    description: 'Context to generate title from',
+    type: String,
   })
-  @IsArray()
-  messages: Array<{ role: string; content: string }>;
+  @IsString()
+  context: string;
 
   @ApiPropertyOptional({
     description: 'Model to use for title generation',

@@ -10,9 +10,10 @@ import { EventsService } from '../events/events.service';
 import { McpModule } from '../mcp/mcp.module';
 import { ContentModule } from '../content/content.module';
 import { EventsModule } from '../events/events.module';
+import { LlmModule } from '../llm/llm.module';
 
 @Module({
-  imports: [McpModule, ContentModule, EventsModule],
+  imports: [McpModule, ContentModule, EventsModule, LlmModule],
   controllers: [ThreadsController, RolesController, DebugController],
   providers: [
     AgentsService,

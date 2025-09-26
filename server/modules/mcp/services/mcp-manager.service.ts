@@ -197,9 +197,18 @@ export class McpManagerService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async getServerLogs(serverId?: string) {
+  async getLogs() {
     try {
-      return await this.mcpManager.getDiagnostics();
+      return this.mcpManager.getLogs();
+    } catch (error) {
+      this.logger.error('Error getting logs:', error);
+      throw error;
+    }
+  }
+
+  async getServerLogs(serverId?: string, stderrOnly?: boolean) {
+    try {
+      return this.mcpManager.getServerLogs(serverId, stderrOnly);
     } catch (error) {
       this.logger.error('Error getting server logs:', error);
       throw error;

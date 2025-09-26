@@ -25,30 +25,10 @@ export class RolesController {
   constructor(private readonly agentPoolService: AgentPoolService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get default prompt configuration' })
+  @ApiOperation({ summary: 'Get prompt configuration (default)' })
   @ApiResponse({
     status: 200,
-    description: 'Default prompt configuration',
-    schema: {
-      type: 'object',
-      properties: {
-        currentPrompt: { type: 'string' },
-        defaultPrompt: { type: 'string' },
-        isDefault: { type: 'boolean' },
-        hasCustomPrompt: { type: 'boolean' },
-      },
-    },
-  })
-  async getDefaultPrompt() {
-    return this.getPrompt('default');
-  }
-
-  @Get(':threadId')
-  @ApiOperation({ summary: 'Get prompt for specific thread' })
-  @ApiParam({ name: 'threadId', type: 'string' })
-  @ApiResponse({
-    status: 200,
-    description: 'Thread prompt configuration',
+    description: 'Prompt configuration',
     schema: {
       type: 'object',
       properties: {
@@ -60,8 +40,31 @@ export class RolesController {
     },
   })
   @ApiResponse({ status: 500, description: 'Error getting prompt' })
-  async getThreadPrompt(@Param('threadId') threadId: string) {
-    return this.getPrompt(threadId);
+  async getPromptHandlerDefault() {
+    return this.getPrompt('default');
+  }
+
+  @Get(':threadId')
+  @ApiOperation({ summary: 'Get prompt configuration for thread' })
+  @ApiParam({ name: 'threadId', type: 'string', required: true })
+  @ApiResponse({
+    status: 200,
+    description: 'Prompt configuration',
+    schema: {
+      type: 'object',
+      properties: {
+        currentPrompt: { type: 'string' },
+        defaultPrompt: { type: 'string' },
+        isDefault: { type: 'boolean' },
+        hasCustomPrompt: { type: 'boolean' },
+      },
+    },
+  })
+  @ApiResponse({ status: 500, description: 'Error getting prompt' })
+  async getPromptHandlerWithThread(@Param('threadId') threadId: string) {
+    const effectiveThreadId =
+      threadId && threadId.trim() !== '' ? threadId : 'default';
+    return this.getPrompt(effectiveThreadId);
   }
 
   private async getPrompt(threadId: string) {
@@ -85,7 +88,7 @@ export class RolesController {
 
   @Post()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Set default prompt configuration' })
+  @ApiOperation({ summary: 'Set prompt configuration (default)' })
   @ApiBody({
     schema: {
       type: 'object',
@@ -94,15 +97,16 @@ export class RolesController {
       },
     },
   })
-  @ApiResponse({ status: 200, description: 'Default prompt set successfully' })
-  async setDefaultPrompt(@Body() body: { customPrompt?: string }) {
+  @ApiResponse({ status: 200, description: 'Prompt set successfully' })
+  @ApiResponse({ status: 500, description: 'Error updating prompt' })
+  async setPromptHandlerDefault(@Body() body: { customPrompt?: string }) {
     return this.setPrompt('default', body.customPrompt);
   }
 
   @Post(':threadId')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Set prompt for specific thread' })
-  @ApiParam({ name: 'threadId', type: 'string' })
+  @ApiOperation({ summary: 'Set prompt configuration for thread' })
+  @ApiParam({ name: 'threadId', type: 'string', required: true })
   @ApiBody({
     schema: {
       type: 'object',
@@ -111,13 +115,15 @@ export class RolesController {
       },
     },
   })
-  @ApiResponse({ status: 200, description: 'Thread prompt set successfully' })
+  @ApiResponse({ status: 200, description: 'Prompt set successfully' })
   @ApiResponse({ status: 500, description: 'Error updating prompt' })
-  async setThreadPrompt(
+  async setPromptHandlerWithThread(
     @Param('threadId') threadId: string,
     @Body() body: { customPrompt?: string }
   ) {
-    return this.setPrompt(threadId, body.customPrompt);
+    const effectiveThreadId =
+      threadId && threadId.trim() !== '' ? threadId : 'default';
+    return this.setPrompt(effectiveThreadId, body.customPrompt);
   }
 
   private async setPrompt(threadId: string, customPrompt?: string) {

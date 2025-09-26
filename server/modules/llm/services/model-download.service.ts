@@ -79,8 +79,8 @@ export class ModelDownloadService {
     };
   }
 
-  private async saveModelMetadata(modelPath: string, metadata: unknown) {
-    // Stub implementation
+  private async saveModelMetadata(modelPath: string) {
+    // Stub implementation - metadata parameter will be added when implemented
     this.logger.log(`Saving metadata for ${modelPath}`);
   }
 }

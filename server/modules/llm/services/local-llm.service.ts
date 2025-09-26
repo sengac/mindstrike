@@ -99,6 +99,52 @@ export class LocalLlmService {
     }
   }
 
+  async openModelsDirectory(): Promise<{
+    success: boolean;
+    directory: string;
+  }> {
+    try {
+      const { exec } = await import('child_process');
+      const fs = await import('fs');
+      const os = await import('os');
+      const { getLocalModelsDirectory } = await import(
+        '../../../utils/settingsDirectory'
+      );
+
+      const modelsDir = getLocalModelsDirectory();
+      const platform = os.platform();
+
+      // Ensure the directory exists before trying to open it
+      if (!fs.existsSync(modelsDir)) {
+        fs.mkdirSync(modelsDir, { recursive: true });
+      }
+
+      let command: string;
+      if (platform === 'win32') {
+        command = `explorer "${modelsDir}"`;
+      } else if (platform === 'darwin') {
+        command = `open "${modelsDir}"`;
+      } else {
+        // Linux and other Unix-like systems
+        command = `xdg-open "${modelsDir}"`;
+      }
+
+      return new Promise((resolve, reject) => {
+        exec(command, error => {
+          if (error) {
+            this.logger.error('Error opening models directory:', error);
+            reject(error);
+            return;
+          }
+          resolve({ success: true, directory: modelsDir });
+        });
+      });
+    } catch (error) {
+      this.logger.error('Error opening models directory:', error);
+      throw error;
+    }
+  }
+
   async *generateStreamResponse(
     modelId: string,
     messages: Array<{ role: string; content: string }>,

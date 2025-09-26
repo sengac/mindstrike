@@ -10,6 +10,7 @@ import {
   MessageNote,
 } from '../dto/create-message.dto';
 import { SSEEventType, ConversationMessage, Thread } from '../../../types';
+import { GlobalLlmConfigService } from '../../shared/services/global-llm-config.service';
 
 export interface MessageCancellationManager {
   startTask(threadId: string): AbortController;
@@ -104,21 +105,18 @@ export class MessageService {
   private readonly cancellationManager = new MessageCancellationManagerImpl();
   private agentPoolService: AgentPoolService | null = null;
 
-  // Mock current LLM config - this should be injected from a proper config service
-  private readonly currentLlmConfig: CurrentLlmConfig = {
-    baseURL: '',
-    model: '',
-    displayName: '',
-    apiKey: '',
-    type: '',
-    contextLength: 4096,
-  };
+  // Reference to global LLM config (shared like Express)
+  private currentLlmConfig: CurrentLlmConfig;
 
   constructor(
     private readonly conversationService: ConversationService,
     private readonly sseService: SseService,
-    private readonly moduleRef: ModuleRef
-  ) {}
+    private readonly moduleRef: ModuleRef,
+    private readonly globalLlmConfigService: GlobalLlmConfigService
+  ) {
+    // Get reference to global config (shared object like Express)
+    this.currentLlmConfig = this.globalLlmConfigService.getCurrentLlmConfig();
+  }
 
   private async getAgentPoolService(): Promise<AgentPoolService> {
     if (!this.agentPoolService) {
@@ -752,6 +750,6 @@ export class MessageService {
 
   // For testing purposes - allows setting LLM config
   setCurrentLlmConfig(config: Partial<CurrentLlmConfig>): void {
-    Object.assign(this.currentLlmConfig, config);
+    this.globalLlmConfigService.updateCurrentLlmConfig(config);
   }
 }

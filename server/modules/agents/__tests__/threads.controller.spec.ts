@@ -38,6 +38,7 @@ describe('ThreadsController', () => {
       updateThreadPrompt: vi.fn().mockResolvedValue(true),
       deleteThread: vi.fn().mockResolvedValue(true),
       clearThread: vi.fn().mockResolvedValue(true),
+      getThreadMessages: vi.fn().mockReturnValue([]),
     };
 
     controller = new ThreadsController(
@@ -53,7 +54,7 @@ describe('ThreadsController', () => {
       expect(result).toEqual([
         {
           id: 'thread-123',
-          title: 'Test Thread',
+          name: 'Test Thread',
           type: 'chat',
           createdAt: '2024-01-01T00:00:00Z',
           updatedAt: '2024-01-01T00:00:00Z',
@@ -104,7 +105,7 @@ describe('ThreadsController', () => {
 
       expect(result).toEqual({
         id: 'thread-123',
-        title: 'Test Thread',
+        name: 'Test Thread',
         type: 'chat',
         metadata: {
           customPrompt: 'Custom prompt',
@@ -131,14 +132,16 @@ describe('ThreadsController', () => {
 
   describe('createThread', () => {
     it('should create a new thread', async () => {
-      const dto = { title: 'New Thread' };
+      const dto = { name: 'New Thread' };
 
       const result = await controller.createThread(dto);
 
       expect(result).toEqual({
         id: 'thread-123',
-        title: 'Test Thread',
+        name: 'Test Thread',
         type: 'chat',
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
       });
       expect(mockConversationService.createThread).toHaveBeenCalledWith(
         'New Thread'
@@ -147,7 +150,7 @@ describe('ThreadsController', () => {
 
     it('should update custom prompt if provided', async () => {
       const dto = {
-        title: 'New Thread',
+        name: 'New Thread',
         metadata: { customPrompt: 'Custom prompt' },
       };
 
@@ -162,7 +165,7 @@ describe('ThreadsController', () => {
 
   describe('updateThread', () => {
     it('should update thread title', async () => {
-      const dto = { title: 'Updated Title', metadata: {} };
+      const dto = { name: 'Updated Title', metadata: {} };
 
       const result = await controller.updateThread('thread-123', dto);
 
@@ -188,7 +191,7 @@ describe('ThreadsController', () => {
 
     it('should handle both title and prompt updates', async () => {
       const dto = {
-        title: 'New Title',
+        name: 'New Title',
         metadata: { customPrompt: 'New prompt' },
       };
 
@@ -196,6 +199,368 @@ describe('ThreadsController', () => {
 
       expect(mockConversationService.renameThread).toHaveBeenCalled();
       expect(mockConversationService.updateThreadPrompt).toHaveBeenCalled();
+    });
+
+    // New comprehensive test cases for edge cases and error scenarios
+    describe('edge cases and error scenarios', () => {
+      it('should update thread with only name field (no metadata)', async () => {
+        const dto = { name: 'Just Name Update' };
+
+        const result = await controller.updateThread('thread-123', dto);
+
+        expect(result).toEqual({ success: true });
+        expect(mockConversationService.load).toHaveBeenCalled();
+        expect(mockConversationService.renameThread).toHaveBeenCalledWith(
+          'thread-123',
+          'Just Name Update'
+        );
+        expect(
+          mockConversationService.updateThreadPrompt
+        ).not.toHaveBeenCalled();
+      });
+
+      it('should update thread with metadata but no customPrompt', async () => {
+        const dto = {
+          metadata: {
+            someOtherField: 'value',
+            anotherField: 123,
+            booleanField: true,
+          },
+        };
+
+        const result = await controller.updateThread('thread-123', dto);
+
+        expect(result).toEqual({ success: true });
+        expect(mockConversationService.load).toHaveBeenCalled();
+        expect(mockConversationService.renameThread).not.toHaveBeenCalled();
+        expect(
+          mockConversationService.updateThreadPrompt
+        ).not.toHaveBeenCalled();
+      });
+
+      it('should update thread with name and metadata containing customPrompt', async () => {
+        const dto = {
+          name: 'Updated Name',
+          metadata: {
+            customPrompt: 'Updated custom prompt',
+            otherData: 'some value',
+          },
+        };
+
+        const result = await controller.updateThread('thread-123', dto);
+
+        expect(result).toEqual({ success: true });
+        expect(mockConversationService.load).toHaveBeenCalled();
+        expect(mockConversationService.renameThread).toHaveBeenCalledWith(
+          'thread-123',
+          'Updated Name'
+        );
+        expect(mockConversationService.updateThreadPrompt).toHaveBeenCalledWith(
+          'thread-123',
+          'Updated custom prompt'
+        );
+      });
+
+      it('should handle empty string name', async () => {
+        const dto = { name: '' };
+
+        const result = await controller.updateThread('thread-123', dto);
+
+        expect(result).toEqual({ success: true });
+        expect(mockConversationService.renameThread).toHaveBeenCalledWith(
+          'thread-123',
+          ''
+        );
+      });
+
+      it('should handle empty metadata object', async () => {
+        const dto = { metadata: {} };
+
+        const result = await controller.updateThread('thread-123', dto);
+
+        expect(result).toEqual({ success: true });
+        expect(mockConversationService.load).toHaveBeenCalled();
+        expect(mockConversationService.renameThread).not.toHaveBeenCalled();
+        expect(
+          mockConversationService.updateThreadPrompt
+        ).not.toHaveBeenCalled();
+      });
+
+      it('should handle null customPrompt in metadata', async () => {
+        const dto = { metadata: { customPrompt: null } };
+
+        const result = await controller.updateThread('thread-123', dto);
+
+        expect(result).toEqual({ success: true });
+        expect(mockConversationService.updateThreadPrompt).toHaveBeenCalledWith(
+          'thread-123',
+          null
+        );
+      });
+
+      it('should handle undefined customPrompt in metadata (field exists but undefined)', async () => {
+        const dto = { metadata: { customPrompt: undefined } };
+
+        const result = await controller.updateThread('thread-123', dto);
+
+        expect(result).toEqual({ success: true });
+        expect(mockConversationService.updateThreadPrompt).toHaveBeenCalledWith(
+          'thread-123',
+          undefined
+        );
+      });
+
+      it('should handle number as customPrompt (type coercion edge case)', async () => {
+        const dto = { metadata: { customPrompt: 12345 } };
+
+        const result = await controller.updateThread('thread-123', dto);
+
+        expect(result).toEqual({ success: true });
+        expect(mockConversationService.updateThreadPrompt).toHaveBeenCalledWith(
+          'thread-123',
+          12345
+        );
+      });
+
+      it('should handle boolean as customPrompt (type coercion edge case)', async () => {
+        const dto = { metadata: { customPrompt: false } };
+
+        const result = await controller.updateThread('thread-123', dto);
+
+        expect(result).toEqual({ success: true });
+        expect(mockConversationService.updateThreadPrompt).toHaveBeenCalledWith(
+          'thread-123',
+          false
+        );
+      });
+
+      it('should handle object as customPrompt (potential serialization issue)', async () => {
+        const dto = { metadata: { customPrompt: { nested: 'object' } } };
+
+        const result = await controller.updateThread('thread-123', dto);
+
+        expect(result).toEqual({ success: true });
+        expect(mockConversationService.updateThreadPrompt).toHaveBeenCalledWith(
+          'thread-123',
+          { nested: 'object' }
+        );
+      });
+
+      // Error scenario tests
+      it('should handle ConversationService.load() failure', async () => {
+        const testError = new Error('Failed to load conversation service');
+        (
+          mockConversationService.load as ReturnType<typeof vi.fn>
+        ).mockRejectedValue(testError);
+
+        const dto = { name: 'New Name' };
+
+        await expect(
+          controller.updateThread('thread-123', dto)
+        ).rejects.toThrow('Failed to load conversation service');
+
+        expect(mockConversationService.renameThread).not.toHaveBeenCalled();
+        expect(
+          mockConversationService.updateThreadPrompt
+        ).not.toHaveBeenCalled();
+      });
+
+      it('should handle ConversationService.renameThread() failure', async () => {
+        const testError = new Error('Failed to rename thread');
+        (
+          mockConversationService.renameThread as ReturnType<typeof vi.fn>
+        ).mockRejectedValue(testError);
+
+        const dto = { name: 'New Name' };
+
+        await expect(
+          controller.updateThread('thread-123', dto)
+        ).rejects.toThrow('Failed to rename thread');
+
+        expect(mockConversationService.load).toHaveBeenCalled();
+        expect(mockConversationService.renameThread).toHaveBeenCalledWith(
+          'thread-123',
+          'New Name'
+        );
+      });
+
+      it('should handle ConversationService.updateThreadPrompt() failure', async () => {
+        const testError = new Error('Failed to update thread prompt');
+        (
+          mockConversationService.updateThreadPrompt as ReturnType<typeof vi.fn>
+        ).mockRejectedValue(testError);
+
+        const dto = { metadata: { customPrompt: 'New prompt' } };
+
+        await expect(
+          controller.updateThread('thread-123', dto)
+        ).rejects.toThrow('Failed to update thread prompt');
+
+        expect(mockConversationService.load).toHaveBeenCalled();
+        expect(mockConversationService.updateThreadPrompt).toHaveBeenCalledWith(
+          'thread-123',
+          'New prompt'
+        );
+      });
+
+      it('should handle failure in renameThread but still attempt updateThreadPrompt', async () => {
+        const renameError = new Error('Rename failed');
+        (
+          mockConversationService.renameThread as ReturnType<typeof vi.fn>
+        ).mockRejectedValue(renameError);
+
+        const dto = {
+          name: 'New Name',
+          metadata: { customPrompt: 'New prompt' },
+        };
+
+        await expect(
+          controller.updateThread('thread-123', dto)
+        ).rejects.toThrow('Rename failed');
+
+        expect(mockConversationService.load).toHaveBeenCalled();
+        expect(mockConversationService.renameThread).toHaveBeenCalledWith(
+          'thread-123',
+          'New Name'
+        );
+        // updateThreadPrompt should not be called if renameThread fails
+        expect(
+          mockConversationService.updateThreadPrompt
+        ).not.toHaveBeenCalled();
+      });
+
+      it('should handle invalid threadId format', async () => {
+        const dto = { name: 'New Name' };
+
+        // Test with various invalid thread IDs that might cause issues
+        const invalidThreadIds = [
+          '',
+          '   ',
+          'not-a-uuid',
+          'null',
+          'undefined',
+          '../../../../etc/passwd',
+          '<script>alert("xss")</script>',
+          String.fromCharCode(0),
+        ];
+
+        for (const invalidId of invalidThreadIds) {
+          const result = await controller.updateThread(invalidId, dto);
+
+          expect(result).toEqual({ success: true });
+          expect(mockConversationService.renameThread).toHaveBeenCalledWith(
+            invalidId,
+            'New Name'
+          );
+        }
+      });
+
+      it('should handle very long thread name', async () => {
+        const veryLongName = 'a'.repeat(10000); // 10k character name
+        const dto = { name: veryLongName };
+
+        const result = await controller.updateThread('thread-123', dto);
+
+        expect(result).toEqual({ success: true });
+        expect(mockConversationService.renameThread).toHaveBeenCalledWith(
+          'thread-123',
+          veryLongName
+        );
+      });
+
+      it('should handle very long customPrompt', async () => {
+        const veryLongPrompt = 'This is a very long custom prompt. '.repeat(
+          1000
+        ); // ~35k characters
+        const dto = { metadata: { customPrompt: veryLongPrompt } };
+
+        const result = await controller.updateThread('thread-123', dto);
+
+        expect(result).toEqual({ success: true });
+        expect(mockConversationService.updateThreadPrompt).toHaveBeenCalledWith(
+          'thread-123',
+          veryLongPrompt
+        );
+      });
+
+      it('should handle special characters in thread name', async () => {
+        const specialCharName = '特殊字符 🚀 \n\t\r\0 <>&"\'';
+        const dto = { name: specialCharName };
+
+        const result = await controller.updateThread('thread-123', dto);
+
+        expect(result).toEqual({ success: true });
+        expect(mockConversationService.renameThread).toHaveBeenCalledWith(
+          'thread-123',
+          specialCharName
+        );
+      });
+
+      it('should handle special characters in customPrompt', async () => {
+        const specialCharPrompt =
+          'Special chars: 特殊字符 🚀 \n\t\r\0 <>&"\' {}[]()';
+        const dto = { metadata: { customPrompt: specialCharPrompt } };
+
+        const result = await controller.updateThread('thread-123', dto);
+
+        expect(result).toEqual({ success: true });
+        expect(mockConversationService.updateThreadPrompt).toHaveBeenCalledWith(
+          'thread-123',
+          specialCharPrompt
+        );
+      });
+
+      it('should handle both name undefined and no metadata', async () => {
+        const dto = {};
+
+        const result = await controller.updateThread('thread-123', dto);
+
+        expect(result).toEqual({ success: true });
+        expect(mockConversationService.load).toHaveBeenCalled();
+        expect(mockConversationService.renameThread).not.toHaveBeenCalled();
+        expect(
+          mockConversationService.updateThreadPrompt
+        ).not.toHaveBeenCalled();
+      });
+
+      it('should handle circular reference in metadata (potential JSON.stringify issue)', async () => {
+        const circularObj: Record<string, unknown> = { customPrompt: 'test' };
+        circularObj.self = circularObj; // Create circular reference
+
+        const dto = { metadata: circularObj };
+
+        const result = await controller.updateThread('thread-123', dto);
+
+        expect(result).toEqual({ success: true });
+        expect(mockConversationService.updateThreadPrompt).toHaveBeenCalledWith(
+          'thread-123',
+          'test'
+        );
+      });
+
+      it('should handle load service timeout scenario', async () => {
+        (
+          mockConversationService.load as ReturnType<typeof vi.fn>
+        ).mockImplementation(
+          () => new Promise(resolve => setTimeout(resolve, 4000))
+        );
+
+        const dto = { name: 'New Name' };
+
+        // Unlike deleteThread, updateThread doesn't have timeout handling,
+        // so this test verifies it waits indefinitely
+        const promise = controller.updateThread('thread-123', dto);
+
+        // We'll use a shorter timeout for our test to verify it's still waiting
+        await expect(
+          Promise.race([
+            promise,
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Test timeout')), 100)
+            ),
+          ])
+        ).rejects.toThrow('Test timeout');
+      });
     });
   });
 
@@ -233,6 +598,228 @@ describe('ThreadsController', () => {
     });
   });
 
+  describe('getThreadMessages', () => {
+    const mockMessages = [
+      {
+        id: 'msg-1',
+        role: 'user' as const,
+        content: 'Hello, how are you?',
+        timestamp: new Date('2024-01-01T10:00:00Z'),
+      },
+      {
+        id: 'msg-2',
+        role: 'assistant' as const,
+        content:
+          'I am doing well, thank you for asking! How can I help you today?',
+        timestamp: new Date('2024-01-01T10:01:00Z'),
+        model: 'claude-3.5-sonnet',
+      },
+      {
+        id: 'msg-3',
+        role: 'user' as const,
+        content: 'Can you help me with a coding problem?',
+        timestamp: new Date('2024-01-01T10:02:00Z'),
+        images: [
+          {
+            id: 'img-1',
+            filename: 'code-screenshot.png',
+            filepath: '/uploads/img-1.png',
+            mimeType: 'image/png',
+            size: 12345,
+            thumbnail: 'thumbnail-data',
+            fullImage: 'full-image-data',
+            uploadedAt: new Date('2024-01-01T10:02:00Z'),
+          },
+        ],
+      },
+    ];
+
+    it('should return messages for an existing thread', async () => {
+      (
+        mockConversationService.getThreadMessages as ReturnType<typeof vi.fn>
+      ).mockReturnValue(mockMessages);
+
+      const result = await controller.getThreadMessages('thread-123');
+
+      expect(result).toEqual(mockMessages);
+      expect(mockConversationService.load).toHaveBeenCalled();
+      expect(mockConversationService.getThreadMessages).toHaveBeenCalledWith(
+        'thread-123'
+      );
+    });
+
+    it('should return empty array when thread has no messages', async () => {
+      (
+        mockConversationService.getThreadMessages as ReturnType<typeof vi.fn>
+      ).mockReturnValue([]);
+
+      const result = await controller.getThreadMessages('thread-456');
+
+      expect(result).toEqual([]);
+      expect(mockConversationService.load).toHaveBeenCalled();
+      expect(mockConversationService.getThreadMessages).toHaveBeenCalledWith(
+        'thread-456'
+      );
+    });
+
+    it('should handle messages with tool calls and results', async () => {
+      const messagesWithTools = [
+        {
+          id: 'msg-with-tools',
+          role: 'assistant' as const,
+          content: 'I will search for information about that topic.',
+          timestamp: new Date('2024-01-01T10:03:00Z'),
+          toolCalls: [
+            {
+              id: 'tool-1',
+              name: 'web_search',
+              parameters: { query: 'latest AI developments' },
+            },
+          ],
+          toolResults: [
+            {
+              name: 'web_search',
+              result: {
+                results: ['AI breakthrough in reasoning', 'New model release'],
+              },
+            },
+          ],
+          status: 'completed' as const,
+        },
+      ];
+
+      (
+        mockConversationService.getThreadMessages as ReturnType<typeof vi.fn>
+      ).mockReturnValue(messagesWithTools);
+
+      const result = await controller.getThreadMessages('thread-789');
+
+      expect(result).toEqual(messagesWithTools);
+      expect(result[0].toolCalls).toBeDefined();
+      expect(result[0].toolResults).toBeDefined();
+      expect(result[0].status).toBe('completed');
+    });
+
+    it('should handle messages with notes attachments', async () => {
+      const messagesWithNotes = [
+        {
+          id: 'msg-with-notes',
+          role: 'user' as const,
+          content: 'Here are my project notes',
+          timestamp: new Date('2024-01-01T10:04:00Z'),
+          notes: [
+            {
+              id: 'note-1',
+              title: 'Project Requirements',
+              content: 'The project should implement the following features...',
+              nodeLabel: 'Requirements',
+              attachedAt: new Date('2024-01-01T10:04:00Z'),
+            },
+          ],
+        },
+      ];
+
+      (
+        mockConversationService.getThreadMessages as ReturnType<typeof vi.fn>
+      ).mockReturnValue(messagesWithNotes);
+
+      const result = await controller.getThreadMessages('thread-notes');
+
+      expect(result).toEqual(messagesWithNotes);
+      expect(result[0].notes).toBeDefined();
+      expect(result[0].notes![0].title).toBe('Project Requirements');
+    });
+
+    it('should call conversation service load before getting messages', async () => {
+      const loadSpy = mockConversationService.load as ReturnType<typeof vi.fn>;
+      const getMessagesSpy =
+        mockConversationService.getThreadMessages as ReturnType<typeof vi.fn>;
+
+      await controller.getThreadMessages('thread-123');
+
+      // Verify load is called before getThreadMessages
+      expect(loadSpy).toHaveBeenCalled();
+      expect(getMessagesSpy).toHaveBeenCalled();
+
+      // Check call order by examining call times
+      const loadCallTime = loadSpy.mock.invocationCallOrder[0];
+      const getMessagesCallTime = getMessagesSpy.mock.invocationCallOrder[0];
+      expect(loadCallTime).toBeLessThan(getMessagesCallTime);
+    });
+
+    it('should handle load timeout gracefully', async () => {
+      (
+        mockConversationService.load as ReturnType<typeof vi.fn>
+      ).mockImplementation(
+        () => new Promise(resolve => setTimeout(resolve, 4000))
+      );
+
+      // The endpoint doesn't have timeout handling like deleteThread,
+      // so this test verifies it waits for the load operation
+      const promise = controller.getThreadMessages('thread-123');
+
+      // Since there's no timeout in getThreadMessages, we expect it to eventually resolve
+      // We'll use a shorter timeout for our test
+      await expect(
+        Promise.race([
+          promise,
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Test timeout')), 100)
+          ),
+        ])
+      ).rejects.toThrow('Test timeout');
+    });
+
+    it('should propagate errors from conversation service', async () => {
+      const testError = new Error('Conversation service error');
+      (
+        mockConversationService.getThreadMessages as ReturnType<typeof vi.fn>
+      ).mockImplementation(() => {
+        throw testError;
+      });
+
+      await expect(controller.getThreadMessages('thread-123')).rejects.toThrow(
+        'Conversation service error'
+      );
+    });
+
+    it('should handle different message roles correctly', async () => {
+      const multiRoleMessages = [
+        {
+          id: 'system-msg',
+          role: 'system' as const,
+          content: 'You are a helpful AI assistant.',
+          timestamp: new Date('2024-01-01T09:59:00Z'),
+        },
+        {
+          id: 'user-msg',
+          role: 'user' as const,
+          content: 'Hello!',
+          timestamp: new Date('2024-01-01T10:00:00Z'),
+        },
+        {
+          id: 'assistant-msg',
+          role: 'assistant' as const,
+          content: 'Hello! How can I help you?',
+          timestamp: new Date('2024-01-01T10:01:00Z'),
+          status: 'completed' as const,
+        },
+      ];
+
+      (
+        mockConversationService.getThreadMessages as ReturnType<typeof vi.fn>
+      ).mockReturnValue(multiRoleMessages);
+
+      const result = await controller.getThreadMessages('thread-roles');
+
+      expect(result).toEqual(multiRoleMessages);
+      expect(result).toHaveLength(3);
+      expect(result[0].role).toBe('system');
+      expect(result[1].role).toBe('user');
+      expect(result[2].role).toBe('assistant');
+    });
+  });
+
   describe('clearThread', () => {
     it('should clear thread messages successfully', async () => {
       const result = await controller.clearThread('thread-123');
@@ -252,18 +839,6 @@ describe('ThreadsController', () => {
       await expect(controller.clearThread('non-existent')).rejects.toThrow(
         NotFoundException
       );
-    });
-  });
-
-  describe('forkThread', () => {
-    it('should return stub implementation', async () => {
-      const result = await controller.forkThread('thread-123');
-
-      expect(result).toEqual({
-        id: 'thread_fork_stub',
-        originalId: 'thread-123',
-        title: 'Forked Thread',
-      });
     });
   });
 });

@@ -80,7 +80,7 @@ export class ThreadsController {
 
     return result.map(thread => ({
       id: thread.id,
-      title: thread.name,
+      name: thread.name,
       type: 'chat',
       createdAt: thread.createdAt,
       updatedAt: thread.updatedAt,
@@ -116,7 +116,7 @@ export class ThreadsController {
 
     return {
       id: thread.id,
-      title: thread.name,
+      name: thread.name,
       type: 'chat',
       metadata: {
         customPrompt: thread.customPrompt,
@@ -144,7 +144,7 @@ export class ThreadsController {
     },
   })
   async createThread(@Body() dto: CreateThreadDto) {
-    const thread = await this.conversationService.createThread(dto.title);
+    const thread = await this.conversationService.createThread(dto.name);
 
     // Update with metadata if provided
     if (dto.metadata?.customPrompt) {
@@ -156,8 +156,10 @@ export class ThreadsController {
 
     return {
       id: thread.id,
-      title: thread.name,
+      name: thread.name,
       type: dto.type || 'chat',
+      createdAt: thread.createdAt,
+      updatedAt: thread.updatedAt,
     };
   }
 
@@ -174,10 +176,10 @@ export class ThreadsController {
   ) {
     await this.conversationService.load();
 
-    if (dto.title !== undefined) {
-      await this.conversationService.renameThread(threadId, dto.title);
+    if (dto.name !== undefined) {
+      await this.conversationService.renameThread(threadId, dto.name);
     }
-    if ('customPrompt' in dto.metadata) {
+    if (dto.metadata && 'customPrompt' in dto.metadata) {
       await this.conversationService.updateThreadPrompt(
         threadId,
         dto.metadata.customPrompt as string
@@ -215,31 +217,30 @@ export class ThreadsController {
     }
   }
 
-  @Post(':threadId/fork')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Fork a thread' })
-  @ApiParam({ name: 'threadId', type: 'string', format: 'uuid' })
+  @Get(':threadId/messages')
+  @ApiOperation({ summary: 'Get messages in a thread' })
+  @ApiParam({ name: 'threadId', type: 'string' })
   @ApiResponse({
-    status: 201,
-    description: 'Thread forked successfully',
+    status: 200,
+    description: 'Messages retrieved successfully',
     schema: {
-      type: 'object',
-      properties: {
-        id: { type: 'string' },
-        originalId: { type: 'string' },
-        title: { type: 'string' },
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          role: { type: 'string' },
+          content: { type: 'string' },
+          timestamp: { type: 'string', format: 'date-time' },
+        },
       },
     },
   })
   @ApiResponse({ status: 404, description: 'Thread not found' })
-  async forkThread(@Param('threadId') threadId: string) {
-    // TODO: Implement fork functionality when available in ConversationService
-    // This functionality doesn't exist in the Express server yet
-    return {
-      id: 'thread_fork_stub',
-      originalId: threadId,
-      title: 'Forked Thread',
-    };
+  async getThreadMessages(@Param('threadId') threadId: string) {
+    await this.conversationService.load();
+    const messages = this.conversationService.getThreadMessages(threadId);
+    return messages;
   }
 
   @Post(':threadId/clear')

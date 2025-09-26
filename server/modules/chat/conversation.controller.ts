@@ -1,7 +1,6 @@
 import {
   Controller,
   Get,
-  Post,
   Param,
   BadRequestException,
   InternalServerErrorException,
@@ -50,11 +49,6 @@ export class ConversationController {
       await this.agentPoolService.setCurrentThread(threadId);
       const agent = this.agentPoolService.getCurrentAgent();
 
-      // Check if getConversation method exists
-      if (typeof agent.getConversation !== 'function') {
-        throw new Error('getConversation method not implemented');
-      }
-
       const conversation = agent.getConversation(threadId);
 
       return conversation;
@@ -66,35 +60,5 @@ export class ConversationController {
       // Always restore the previous thread
       await this.agentPoolService.setCurrentThread(previousThreadId);
     }
-  }
-
-  @Post(':threadId/clear')
-  @ApiOperation({ summary: 'Clear conversation for a thread' })
-  @ApiParam({ name: 'threadId', type: 'string' })
-  @ApiResponse({
-    status: 200,
-    description: 'Conversation cleared successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean' },
-      },
-    },
-  })
-  @ApiResponse({ status: 400, description: 'Thread ID is required' })
-  async clearConversation(@Param('threadId') threadId: string) {
-    if (!threadId) {
-      throw new BadRequestException('Thread ID is required');
-    }
-
-    // Temporarily set the thread to clear its conversation
-    const previousThreadId = this.agentPoolService.getCurrentThreadId();
-    await this.agentPoolService.setCurrentThread(threadId);
-    await this.agentPoolService.getCurrentAgent().clearConversation(threadId);
-
-    // Restore the previous thread
-    await this.agentPoolService.setCurrentThread(previousThreadId);
-
-    return { success: true };
   }
 }

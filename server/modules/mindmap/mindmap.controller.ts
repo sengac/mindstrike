@@ -15,11 +15,9 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import {
-  CreateMindmapDto,
   UpdateMindmapDto,
   IterateMindmapDto,
   GenerateMindmapDto,
-  AutoOrganizeDto,
 } from './dto/mindmap.dto';
 import { MindmapService } from './mindmap.service';
 
@@ -52,24 +50,29 @@ export class MindmapController {
   }
 
   @Post('mindmaps')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create a new mindmap' })
-  @ApiBody({ type: CreateMindmapDto })
-  @ApiResponse({
-    status: 201,
-    description: 'Mindmap created successfully',
-    schema: {
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Save all mindmaps' })
+  @ApiBody({
+    type: 'array',
+    items: {
       type: 'object',
       properties: {
         id: { type: 'string' },
         title: { type: 'string' },
         nodes: { type: 'array' },
         edges: { type: 'array' },
+        metadata: { type: 'object' },
+        createdAt: { type: 'string' },
+        updatedAt: { type: 'string' },
       },
     },
   })
-  async createMindmap(@Body() dto: CreateMindmapDto) {
-    return this.mindmapService.createMindmap(dto.title, dto.nodes, dto.edges);
+  @ApiResponse({
+    status: 200,
+    description: 'Mindmaps saved successfully',
+  })
+  async saveMindmaps(@Body() mindmaps: Array<Record<string, unknown>>) {
+    return this.mindmapService.saveMindmaps(mindmaps);
   }
 
   @Get('mindmaps/:mindmapId')
@@ -91,14 +94,45 @@ export class MindmapController {
   })
   @ApiResponse({ status: 404, description: 'Mindmap not found' })
   async getMindmap(@Param('mindmapId') mindmapId: string) {
-    // Stubbed implementation
-    return {
-      id: mindmapId,
-      title: 'Stub Mindmap',
-      nodes: [],
-      edges: [],
-      metadata: {},
-    };
+    return this.mindmapService.getMindmap(mindmapId);
+  }
+
+  @Get('mindmaps/:mindmapId/mindmap')
+  @ApiOperation({ summary: 'Get mindmap data' })
+  @ApiParam({ name: 'mindmapId', type: 'string' })
+  @ApiResponse({
+    status: 200,
+    description: 'Mindmap data retrieved successfully',
+    schema: {
+      type: 'object',
+      additionalProperties: true,
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Mindmap not found' })
+  async getMindmapData(@Param('mindmapId') mindmapId: string) {
+    return this.mindmapService.getMindmapData(mindmapId);
+  }
+
+  @Post('mindmaps/:mindmapId/mindmap')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Save mindmap data' })
+  @ApiParam({ name: 'mindmapId', type: 'string' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      additionalProperties: true,
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Mindmap data saved successfully',
+  })
+  @ApiResponse({ status: 404, description: 'Mindmap not found' })
+  async saveMindmapData(
+    @Param('mindmapId') mindmapId: string,
+    @Body() mindmapData: Record<string, unknown>
+  ) {
+    return this.mindmapService.saveMindmapData(mindmapId, mindmapData);
   }
 
   @Post('mindmaps/:mindmapId')
@@ -120,7 +154,7 @@ export class MindmapController {
     @Param('mindmapId') mindmapId: string,
     @Body() dto: UpdateMindmapDto
   ) {
-    return this.mindmapService.updateMindmap(mindmapId, dto);
+    return this.mindmapService.saveMindmap(mindmapId, dto);
   }
 
   @Post('mindmaps/:mindmapId/add-node')
@@ -174,10 +208,36 @@ export class MindmapController {
       parentNodeId?: string;
     }
   ) {
-    // Stubbed implementation
+    const mindmap = await this.mindmapService.getMindmap(mindmapId);
+    const nodeId = dto.node.id ?? `node-${Date.now()}`;
+
+    const newNode = {
+      id: nodeId,
+      type: 'concept',
+      data: {
+        ...dto.node.data,
+        label: dto.node.label,
+      },
+      position: dto.node.position ?? { x: 100, y: 100 },
+    };
+
+    mindmap.nodes.push(newNode);
+
+    if (dto.parentNodeId) {
+      const newEdge = {
+        id: `edge-${Date.now()}`,
+        source: dto.parentNodeId,
+        target: nodeId,
+        type: 'default',
+      };
+      mindmap.edges.push(newEdge);
+    }
+
+    await this.mindmapService.saveMindmap(mindmapId, mindmap);
+
     return {
       success: true,
-      nodeId: dto.node?.id || 'new-node-id',
+      nodeId: nodeId,
     };
   }
 
@@ -203,30 +263,17 @@ export class MindmapController {
     @Param('mindmapId') mindmapId: string,
     @Body() dto: IterateMindmapDto
   ) {
-    // Stubbed implementation
-    return {
-      success: true,
-      changes: {},
-      newNodes: [],
-      newEdges: [],
-    };
-  }
+    const result = await this.mindmapService.iterateMindmap(
+      mindmapId,
+      dto.prompt,
+      dto.nodeId
+    );
 
-  @Post('mindmaps/:mindmapId/auto-save')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Auto-save mindmap changes' })
-  @ApiParam({ name: 'mindmapId', type: 'string', format: 'uuid' })
-  @ApiBody({ type: UpdateMindmapDto })
-  @ApiResponse({ status: 200, description: 'Mindmap saved successfully' })
-  async autoSaveMindmap(
-    @Param('mindmapId') mindmapId: string,
-    @Body() dto: UpdateMindmapDto
-  ) {
-    // Stubbed implementation
     return {
-      success: true,
-      id: mindmapId,
-      updatedAt: new Date().toISOString(),
+      success: result.success,
+      changes: result.changes,
+      newNodes: result.changes.addedNodes,
+      newEdges: Array(result.changes.addedEdges).fill({}),
     };
   }
 
@@ -251,38 +298,16 @@ export class MindmapController {
     @Param('mindmapId') mindmapId: string,
     @Body() dto: GenerateMindmapDto
   ) {
-    // Stubbed implementation
-    return {
-      success: true,
-      generatedNodes: [],
-      generatedEdges: [],
-    };
-  }
+    const result = await this.mindmapService.generateContent(
+      mindmapId,
+      dto.prompt,
+      dto.style
+    );
 
-  @Post('mindmaps/:mindmapId/auto-organize')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Auto-organize mindmap layout' })
-  @ApiParam({ name: 'mindmapId', type: 'string', format: 'uuid' })
-  @ApiBody({ type: AutoOrganizeDto })
-  @ApiResponse({
-    status: 200,
-    description: 'Layout organized',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean' },
-        layoutChanges: { type: 'object' },
-      },
-    },
-  })
-  async autoOrganize(
-    @Param('mindmapId') mindmapId: string,
-    @Body() dto: AutoOrganizeDto
-  ) {
-    // Stubbed implementation
     return {
-      success: true,
-      layoutChanges: {},
+      success: result.success,
+      generatedNodes: result.generatedNodes,
+      generatedEdges: result.generatedEdges,
     };
   }
 }

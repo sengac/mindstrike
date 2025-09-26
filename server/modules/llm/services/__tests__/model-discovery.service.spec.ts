@@ -11,6 +11,22 @@ vi.mock('fs', () => ({
   writeFileSync: vi.fn(),
 }));
 
+// Mock fs/promises
+vi.mock('fs/promises', () => ({
+  default: {
+    mkdir: vi.fn().mockResolvedValue(undefined),
+    writeFile: vi.fn().mockResolvedValue(undefined),
+    readFile: vi.fn().mockResolvedValue(''),
+    unlink: vi.fn().mockResolvedValue(undefined),
+    access: vi.fn().mockResolvedValue(undefined),
+  },
+  mkdir: vi.fn().mockResolvedValue(undefined),
+  writeFile: vi.fn().mockResolvedValue(undefined),
+  readFile: vi.fn().mockResolvedValue(''),
+  unlink: vi.fn().mockResolvedValue(undefined),
+  access: vi.fn().mockResolvedValue(undefined),
+}));
+
 // Mock getMindstrikeDirectory
 vi.mock('../../../../../server/utils/settingsDirectory', () => ({
   getMindstrikeDirectory: () => '/test/.mindstrike',
@@ -24,6 +40,16 @@ vi.mock('../../../../../server/utils/ggufVramCalculator', () => ({
 // Mock vramCalculator
 vi.mock('../../../../../src/shared/vramCalculator', () => ({
   calculateAllVRAMEstimates: vi.fn().mockReturnValue([]),
+}));
+
+// Mock modelFetcher to prevent file system operations
+vi.mock('../../../modelFetcher', () => ({
+  modelFetcher: {
+    setHuggingFaceToken: vi.fn().mockResolvedValue(undefined),
+    searchModelsWithProgress: vi.fn(),
+    fetchPopularModels: vi.fn(),
+    getAvailableModels: vi.fn(),
+  },
 }));
 
 import * as fs from 'fs';
@@ -264,13 +290,21 @@ describe('ModelDiscoveryService', () => {
   });
 
   describe('setHuggingFaceToken', () => {
-    it('should set the HuggingFace token', () => {
+    it('should set the HuggingFace token', async () => {
       // We can't test private properties directly, but we can verify the method doesn't throw
-      expect(() => service.setHuggingFaceToken('test-token')).not.toThrow();
+      const result = await service.setHuggingFaceToken('test-token');
+      expect(result).toEqual({
+        success: true,
+        message: 'Hugging Face token saved. Rechecking gated models...',
+      });
     });
 
-    it('should allow setting token to null', () => {
-      expect(() => service.setHuggingFaceToken(null)).not.toThrow();
+    it('should allow setting token to null', async () => {
+      const result = await service.setHuggingFaceToken(null);
+      expect(result).toEqual({
+        success: true,
+        message: 'Hugging Face token saved. Rechecking gated models...',
+      });
     });
   });
 

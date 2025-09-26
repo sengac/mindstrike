@@ -7,13 +7,26 @@ import { McpManagerService } from '../../mcp/services/mcp-manager.service';
 import { SseService } from '../../events/services/sse.service';
 import { LfsService } from '../../content/services/lfs.service';
 import { getWorkspaceRoot } from '../../../shared/utils/settings-directory';
+import {
+  GlobalLlmConfigService,
+  GlobalLLMConfig,
+} from '../../shared/services/global-llm-config.service';
 
 export interface LLMConfig {
   baseURL: string;
   model: string;
   displayName?: string;
   apiKey?: string;
-  type?: string;
+  type?:
+    | 'ollama'
+    | 'vllm'
+    | 'openai-compatible'
+    | 'openai'
+    | 'anthropic'
+    | 'perplexity'
+    | 'google'
+    | 'local';
+  contextLength?: number;
   temperature?: number;
   maxTokens?: number;
 }
@@ -61,19 +74,17 @@ export class AgentPoolService {
   private readonly logger = new Logger(AgentPoolService.name);
   private readonly agents: Map<string, BaseAgentService> = new Map();
   private currentThreadId = 'default';
-  private currentLlmConfig: LLMConfig = {
-    baseURL: '',
-    model: 'gpt-4',
-    displayName: 'GPT-4',
-    type: 'openai',
-  };
+  private currentLlmConfig: GlobalLLMConfig;
   private workspaceRoot = process.cwd();
 
   constructor(
     private readonly mcpManagerService: McpManagerService,
     private readonly sseService: SseService,
-    private readonly lfsService: LfsService
+    private readonly lfsService: LfsService,
+    private readonly globalLlmConfigService: GlobalLlmConfigService
   ) {
+    // Get reference to global config (shared object like Express)
+    this.currentLlmConfig = this.globalLlmConfigService.getCurrentLlmConfig();
     this.initializeWorkspaceRoot().catch(error => {
       this.logger.error('Failed to initialize workspace root:', error);
     });
@@ -107,10 +118,10 @@ export class AgentPoolService {
         this.lfsService
       );
 
-      // Initialize the agent
+      // Initialize the agent with current config (same as Express pattern)
       const agentConfig: AgentConfig = {
         workspaceRoot: this.workspaceRoot,
-        llmConfig: this.currentLlmConfig,
+        llmConfig: this.currentLlmConfig as LLMConfig,
       };
       agent.initializeAgent(agentConfig).catch(error => {
         this.logger.error(
@@ -137,14 +148,17 @@ export class AgentPoolService {
     return Array.from(this.agents.values());
   }
 
-  async updateAllAgentsLLMConfig(
-    newLlmConfig: Partial<LLMConfig>
-  ): Promise<void> {
-    this.currentLlmConfig = { ...this.currentLlmConfig, ...newLlmConfig };
+  async updateAllAgentsLLMConfig(newLlmConfig: GlobalLLMConfig): Promise<void> {
+    // Update the current config (shared reference like Express)
+    Object.assign(this.currentLlmConfig, newLlmConfig);
+
+    // Update all existing agents with new LLM config
     for (const agent of this.agents.values()) {
-      agent.updateLLMConfig(this.currentLlmConfig);
+      agent.updateLLMConfig(newLlmConfig);
     }
-    this.logger.log('Updated LLM config for all agents');
+    this.logger.log(
+      `Updated LLM config for ${this.agents.size} agents: ${newLlmConfig.model}`
+    );
   }
 
   updateAllAgentsWorkspace(newWorkspaceRoot: string): void {
@@ -157,11 +171,9 @@ export class AgentPoolService {
     );
   }
 
-  setCurrentLlmConfig(config: Partial<LLMConfig>): void {
-    this.currentLlmConfig = { ...this.currentLlmConfig, ...config };
-    this.updateAllAgentsLLMConfig(config).catch(error => {
-      this.logger.error('Failed to update LLM config:', error);
-    });
+  setCurrentLlmConfig(config: Partial<GlobalLLMConfig>): void {
+    // Update global config instead of local copy
+    this.globalLlmConfigService.updateCurrentLlmConfig(config);
   }
 
   async syncCurrentAgentWithThread(threadId: string): Promise<void> {
@@ -189,8 +201,8 @@ export class AgentPoolService {
 
         // Update session history for the current model and thread
         await sessionService.updateSessionHistory(
-          currentAgent.llmConfig.type ?? 'openai',
-          currentAgent.llmConfig.model ?? 'gpt-4',
+          currentAgent.llmConfig.type ?? 'local',
+          currentAgent.llmConfig.model ?? 'unknown',
           threadId,
           messages
         );

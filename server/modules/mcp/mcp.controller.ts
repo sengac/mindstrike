@@ -219,15 +219,26 @@ export class McpController {
     schema: {
       type: 'object',
       properties: {
-        logs: { type: 'array', items: { type: 'string' } },
+        logs: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              timestamp: { type: 'number' },
+              serverId: { type: 'string' },
+              level: { type: 'string', enum: ['info', 'error', 'warn'] },
+              message: { type: 'string' },
+            },
+          },
+        },
       },
     },
   })
   async getLogs() {
     try {
-      // MCPManager doesn't expose getLogs directly, using diagnostics instead
-      const diagnostics = await this.mcpManager.getServerLogs();
-      return { logs: [] }; // Will be populated by diagnostics
+      const logs = await this.mcpManager.getLogs();
+      return { logs };
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
@@ -273,7 +284,7 @@ export class McpController {
   async refreshCache() {
     try {
       // MCPManager has refreshCommandCache method
-      // We'll need to expose this through the service
+      await this.mcpManager.refreshAll();
       return { success: true, message: 'Command cache refreshed' };
     } catch (error: unknown) {
       const errorMessage =
@@ -297,7 +308,14 @@ export class McpController {
   async getProcesses() {
     try {
       // MCPManager should have getServerProcessInfo method
-      return { processes: [] }; // Will be populated when available
+      const servers = await this.mcpManager.getServerConfigs();
+      const processes = servers.map(server => ({
+        id: server.id,
+        name: server.name,
+        enabled: server.enabled,
+        status: 'unknown', // Will be populated when process info is available
+      }));
+      return { processes };
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
@@ -323,9 +341,11 @@ export class McpController {
   ) {
     try {
       const stderrOnlyBool = stderrOnly === 'true';
-      // Get logs from MCPManager
-      const logs = await this.mcpManager.getServerLogs(serverId);
-      return { logs: [] }; // TODO: Process logs based on stderrOnlyBool
+      const logs = await this.mcpManager.getServerLogs(
+        serverId,
+        stderrOnlyBool
+      );
+      return { logs };
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
@@ -397,7 +417,9 @@ export class McpController {
 
       // Validate JSON
       try {
-        const parsed = JSON.parse(config);
+        const parsed: { mcpServers?: Record<string, unknown> } = JSON.parse(
+          config
+        ) as { mcpServers?: Record<string, unknown> };
         if (!parsed.mcpServers || typeof parsed.mcpServers !== 'object') {
           throw new BadRequestException(
             'Config must contain mcpServers object'

@@ -6,6 +6,7 @@ import type { ConversationService } from '../services/conversation.service';
 import type { AgentPoolService } from '../../agents/services/agent-pool.service';
 import type { SseService } from '../../events/services/sse.service';
 import type { CreateMessageDto } from '../dto/create-message.dto';
+import type { GlobalLlmConfigService } from '../../shared/services/global-llm-config.service';
 
 describe('MessageService', () => {
   let service: MessageService;
@@ -13,6 +14,7 @@ describe('MessageService', () => {
   let mockAgentPoolService: Partial<AgentPoolService>;
   let mockSseService: Partial<SseService>;
   let mockModuleRef: Partial<ModuleRef>;
+  let mockGlobalLlmConfigService: Partial<GlobalLlmConfigService>;
 
   beforeEach(() => {
     mockConversationService = {
@@ -31,6 +33,19 @@ describe('MessageService', () => {
       broadcast: vi.fn(),
     };
 
+    mockGlobalLlmConfigService = {
+      getCurrentLlmConfig: vi.fn().mockReturnValue({
+        baseURL: 'http://localhost:1234',
+        model: '',
+        displayName: undefined,
+        apiKey: undefined,
+        type: undefined,
+        contextLength: undefined,
+      }),
+      updateCurrentLlmConfig: vi.fn(),
+      refreshLLMConfig: vi.fn(),
+    };
+
     // Mock ModuleRef to return the AgentPoolService
     mockModuleRef = {
       get: vi.fn().mockReturnValue(mockAgentPoolService),
@@ -39,7 +54,8 @@ describe('MessageService', () => {
     service = new MessageService(
       mockConversationService as ConversationService,
       mockSseService as SseService,
-      mockModuleRef as ModuleRef
+      mockModuleRef as ModuleRef,
+      mockGlobalLlmConfigService as GlobalLlmConfigService
     );
   });
 
@@ -76,10 +92,27 @@ describe('MessageService', () => {
         messageId: 'test-msg-123',
       };
 
-      // Set a valid LLM config for testing
-      service.setCurrentLlmConfig({ model: 'gpt-4' });
+      // Mock valid LLM config
+      (
+        mockGlobalLlmConfigService.getCurrentLlmConfig as ReturnType<
+          typeof vi.fn
+        >
+      ).mockReturnValue({
+        baseURL: 'http://localhost:1234',
+        model: 'gpt-4',
+        displayName: 'GPT-4',
+        type: 'openai',
+      });
 
-      const result = await service.processMessage(dto);
+      // Create new service instance with updated config
+      const serviceWithConfig = new MessageService(
+        mockConversationService as ConversationService,
+        mockSseService as SseService,
+        mockModuleRef as ModuleRef,
+        mockGlobalLlmConfigService as GlobalLlmConfigService
+      );
+
+      const result = await serviceWithConfig.processMessage(dto);
 
       expect(result).toEqual({ status: 'processing' });
       expect(mockAgentPoolService.setCurrentThread).toHaveBeenCalledWith(
@@ -103,10 +136,21 @@ describe('MessageService', () => {
         threadId: 'test-thread',
       };
 
-      // Set a valid LLM config for testing
-      service.setCurrentLlmConfig({ model: 'gpt-4' });
+      // Mock valid LLM config
+      (
+        mockGlobalLlmConfigService.getCurrentLlmConfig as ReturnType<
+          typeof vi.fn
+        >
+      ).mockReturnValue({ model: 'gpt-4' });
 
-      const result = await service.processMessage(dto);
+      const serviceWithConfig = new MessageService(
+        mockConversationService as ConversationService,
+        mockSseService as SseService,
+        mockModuleRef as ModuleRef,
+        mockGlobalLlmConfigService as GlobalLlmConfigService
+      );
+
+      const result = await serviceWithConfig.processMessage(dto);
 
       expect(result).toEqual({ status: 'processing' });
       expect(mockConversationService.addMessage).toHaveBeenCalledWith(
@@ -124,10 +168,21 @@ describe('MessageService', () => {
         message: 'Hello',
       };
 
-      // Set a valid LLM config for testing
-      service.setCurrentLlmConfig({ model: 'gpt-4' });
+      // Mock valid LLM config
+      (
+        mockGlobalLlmConfigService.getCurrentLlmConfig as ReturnType<
+          typeof vi.fn
+        >
+      ).mockReturnValue({ model: 'gpt-4' });
 
-      const result = await service.processMessage(dto);
+      const serviceWithConfig = new MessageService(
+        mockConversationService as ConversationService,
+        mockSseService as SseService,
+        mockModuleRef as ModuleRef,
+        mockGlobalLlmConfigService as GlobalLlmConfigService
+      );
+
+      const result = await serviceWithConfig.processMessage(dto);
 
       expect(result).toEqual({ status: 'processing' });
       expect(mockConversationService.addMessage).toHaveBeenCalledWith(
@@ -144,10 +199,21 @@ describe('MessageService', () => {
         message: 'Hello',
       };
 
-      // Set a valid LLM config for testing
-      service.setCurrentLlmConfig({ model: 'gpt-4' });
+      // Mock valid LLM config
+      (
+        mockGlobalLlmConfigService.getCurrentLlmConfig as ReturnType<
+          typeof vi.fn
+        >
+      ).mockReturnValue({ model: 'gpt-4' });
 
-      await service.processMessage(dto);
+      const serviceWithConfig = new MessageService(
+        mockConversationService as ConversationService,
+        mockSseService as SseService,
+        mockModuleRef as ModuleRef,
+        mockGlobalLlmConfigService as GlobalLlmConfigService
+      );
+
+      await serviceWithConfig.processMessage(dto);
 
       expect(mockConversationService.addMessage).toHaveBeenCalledWith(
         'default',
@@ -166,10 +232,21 @@ describe('MessageService', () => {
         notes: [{ content: 'A note', metadata: { type: 'reminder' } }],
       };
 
-      // Set a valid LLM config for testing
-      service.setCurrentLlmConfig({ model: 'gpt-4' });
+      // Mock valid LLM config
+      (
+        mockGlobalLlmConfigService.getCurrentLlmConfig as ReturnType<
+          typeof vi.fn
+        >
+      ).mockReturnValue({ model: 'gpt-4' });
 
-      await service.processMessage(dto);
+      const serviceWithConfig = new MessageService(
+        mockConversationService as ConversationService,
+        mockSseService as SseService,
+        mockModuleRef as ModuleRef,
+        mockGlobalLlmConfigService as GlobalLlmConfigService
+      );
+
+      await serviceWithConfig.processMessage(dto);
 
       expect(mockConversationService.addMessage).toHaveBeenCalledWith(
         'default',

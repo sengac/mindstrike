@@ -9,6 +9,19 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { v4 as uuidv4 } from 'uuid';
+import { ChatAgent } from '../../agents/chatAgent';
+import { cleanContentForLLM } from '../../utils/contentFilter';
+import { GlobalLlmConfigService } from '../shared/services/global-llm-config.service';
+
+// LLM config interface
+interface CurrentLlmConfig {
+  baseURL?: string;
+  model?: string;
+  displayName?: string;
+  apiKey?: string;
+  type?: string;
+  contextLength?: number;
+}
 
 // Thread and message interfaces
 interface Message {
@@ -56,10 +69,16 @@ export class ChatService {
   private isLoaded = false;
   private savePromise: Promise<void> | null = null;
 
+  // Reference to global LLM config (shared like Express)
+  private currentLlmConfig: CurrentLlmConfig;
+
   constructor(
     private configService: ConfigService,
-    private eventEmitter: EventEmitter2
+    private eventEmitter: EventEmitter2,
+    private readonly globalLlmConfigService: GlobalLlmConfigService
   ) {
+    // Get reference to global config (shared object like Express)
+    this.currentLlmConfig = this.globalLlmConfigService.getCurrentLlmConfig();
     this.workspaceRoot =
       this.configService?.get<string>('WORKSPACE_ROOT') ?? process.cwd();
     this.chatsPath = path.join(this.workspaceRoot, 'mindstrike-chats.json');
@@ -126,25 +145,69 @@ export class ChatService {
   }
 
   /**
-   * Generate a title from messages using AI
+   * Generate a title from context using AI
    */
-  async generateTitle(
-    messages: Array<{ role: string; content: string }>
-  ): Promise<string> {
-    // For now, create a simple title based on the first user message
-    // In production, this would call an LLM service
-    const firstUserMessage = messages.find(m => m.role === 'user');
-    if (!firstUserMessage) {
-      return 'New Conversation';
+  async generateTitle(context: string): Promise<string> {
+    try {
+      if (!context) {
+        throw new BadRequestException('Context is required');
+      }
+
+      // Check if LLM model is configured
+      if (
+        !this.currentLlmConfig.model ||
+        this.currentLlmConfig.model.trim() === ''
+      ) {
+        throw new BadRequestException(
+          'No LLM model configured. Please select a model from the available options.'
+        );
+      }
+
+      // Create a prompt to generate a short title (filter out think tags from context)
+      const cleanContext = cleanContentForLLM(context);
+      const prompt = `Based on this conversation context, generate a brief, descriptive title (maximum 5 words) that captures the main topic or purpose of the discussion:
+
+${cleanContext}
+
+Respond with only the title, no other text.`;
+
+      // Create a clean agent instance with no chat history, no system prompt, and no tools
+      const titleAgent = new ChatAgent({
+        workspaceRoot: this.workspaceRoot,
+        llmConfig: {
+          baseURL: this.currentLlmConfig.baseURL!,
+          model: this.currentLlmConfig.model!,
+          displayName: this.currentLlmConfig.displayName,
+          apiKey: this.currentLlmConfig.apiKey,
+          type: this.currentLlmConfig.type as
+            | 'ollama'
+            | 'vllm'
+            | 'openai-compatible'
+            | 'openai'
+            | 'anthropic'
+            | 'perplexity'
+            | 'google'
+            | 'local',
+          temperature: 0.7,
+          maxTokens: 150,
+        },
+        customPrompt: undefined, // No custom system prompt
+        disableFunctions: true,
+        disableChatHistory: true,
+      });
+
+      // Use direct LLM call without chat history or tools
+      const response = await titleAgent.getChatModel().invoke(prompt);
+      const title = cleanContentForLLM(response.content as string).trim();
+
+      return title;
+    } catch (error) {
+      this.logger.error('Error generating title:', error);
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException('Failed to generate title');
     }
-
-    // Simple title generation - take first 50 chars of first message
-    const title = firstUserMessage.content
-      .replace(/[\n\r]/g, ' ')
-      .substring(0, 50)
-      .trim();
-
-    return title.length > 0 ? title : 'New Conversation';
   }
 
   /**

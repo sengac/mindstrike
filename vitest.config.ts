@@ -28,7 +28,6 @@ export default defineConfig({
     setupFiles: ['./tests/setupMinimal.ts'],
     include: [
       'server/**/*.{test,spec}.{js,ts}',
-      'server-nest/**/*.{test,spec}.{js,ts}',
       'tests/integration/**/*.{test,spec}.{js,ts,tsx}',
     ],
     exclude: [

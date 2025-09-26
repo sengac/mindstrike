@@ -235,7 +235,10 @@ export function ApplicationLogsView({
       )
   );
 
-  const filteredMCPLogs = logs.filter(log => {
+  // Ensure logs is an array before filtering
+  const safeLogsArray = Array.isArray(logs) ? logs : [];
+
+  const filteredMCPLogs = safeLogsArray.filter(log => {
     if (mcpServerFilter !== 'all' && log.serverId !== mcpServerFilter) {
       return false;
     }
@@ -246,8 +249,12 @@ export function ApplicationLogsView({
   });
 
   // Get unique servers and levels for filter dropdowns
-  const mcpServers = Array.from(new Set(logs.map(log => log.serverId))).sort();
-  const mcpLevels = Array.from(new Set(logs.map(log => log.level))).sort();
+  const mcpServers = Array.from(
+    new Set(safeLogsArray.map(log => log.serverId))
+  ).sort();
+  const mcpLevels = Array.from(
+    new Set(safeLogsArray.map(log => log.level))
+  ).sort();
 
   const getTypeColor = (type: string) => {
     switch (type) {

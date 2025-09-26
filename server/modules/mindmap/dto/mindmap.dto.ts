@@ -140,19 +140,3 @@ export class GenerateMindmapDto {
   @IsNumber()
   maxNodes?: number;
 }
-
-export class AutoOrganizeDto {
-  @ApiPropertyOptional({ description: 'Organization algorithm', type: String })
-  @IsOptional()
-  @IsString()
-  algorithm?: string;
-
-  @ApiPropertyOptional({
-    description: 'Organization parameters',
-    type: 'object',
-    additionalProperties: true,
-  })
-  @IsOptional()
-  @IsObject()
-  parameters?: Record<string, unknown>;
-}
