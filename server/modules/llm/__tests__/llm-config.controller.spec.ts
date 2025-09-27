@@ -146,9 +146,7 @@ describe('LlmConfigController', () => {
       (
         mockGlobalLlmConfigService.refreshLLMConfig as ReturnType<typeof vi.fn>
       ).mockResolvedValue(undefined);
-      (
-        mockModuleRef.get as ReturnType<typeof vi.fn>
-      ).mockReturnValue({
+      (mockModuleRef.get as ReturnType<typeof vi.fn>).mockReturnValue({
         updateAllAgentsLLMConfig: vi.fn().mockResolvedValue(undefined),
       });
 

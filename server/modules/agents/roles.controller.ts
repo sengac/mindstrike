@@ -69,7 +69,7 @@ export class RolesController {
 
   private async getPrompt(threadId: string) {
     try {
-      const agent = this.agentPoolService.getAgent(threadId);
+      const agent = await this.agentPoolService.getAgent(threadId);
       const currentPrompt = agent.getCurrentPrompt();
       const defaultPrompt = agent.getDefaultPrompt();
 
@@ -136,7 +136,7 @@ export class RolesController {
       }
 
       // Update the agent's prompt
-      const agent = this.agentPoolService.getAgent(threadId);
+      const agent = await this.agentPoolService.getAgent(threadId);
       await agent.updatePrompt(threadId, customPrompt);
 
       return { success: true };

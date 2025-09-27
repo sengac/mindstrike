@@ -11,6 +11,7 @@ import {
   HttpCode,
   BadRequestException,
   InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -23,6 +24,7 @@ import { LlmService } from './services/llm.service';
 import { ModelDiscoveryService } from './services/model-discovery.service';
 import { ModelDownloadService } from './services/model-download.service';
 import { LocalLlmService } from './services/local-llm.service';
+import { modelSettingsManager } from '../../utils/modelSettingsManager';
 import {
   ModelSettingsDto,
   GenerateResponseDto,
@@ -33,6 +35,7 @@ import type { Response } from 'express';
 @ApiTags('llm')
 @Controller('api/local-llm')
 export class LlmController {
+  private readonly logger = new Logger(LlmController.name);
   constructor(
     private readonly llmService: LlmService,
     private readonly discoveryService: ModelDiscoveryService,
@@ -562,7 +565,17 @@ export class LlmController {
     },
   })
   async getSettings() {
-    return this.llmService.getAllSettings();
+    try {
+      const settings = await modelSettingsManager.loadAllModelSettings();
+      return settings;
+    } catch (error) {
+      this.logger.error('Error getting all model settings:', error);
+      throw new InternalServerErrorException(
+        error instanceof Error
+          ? error.message
+          : 'Failed to get all model settings'
+      );
+    }
   }
 
   @Post('models/:modelId/generate-stream')

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MindmapAgentIterativeService } from '../mindmap-agent-iterative.service';
 import type { SseService } from '../../../events/services/sse.service';
+import { GlobalConfigService } from '../../../shared/services/global-config.service';
 import type { MindMapData } from '../../../../../src/utils/mindMapData';
 import { SSEEventType } from '../../../../../src/types';
 import * as fs from 'fs';
@@ -16,6 +17,7 @@ vi.mock('fs', () => ({
 describe('MindmapAgentIterativeService', () => {
   let service: MindmapAgentIterativeService;
   let mockSseService: Partial<SseService>;
+  let mockGlobalConfigService: Partial<GlobalConfigService>;
 
   const mockMindMapData: MindMapData = {
     nodes: [
@@ -53,7 +55,19 @@ describe('MindmapAgentIterativeService', () => {
       broadcast: vi.fn(),
     };
 
-    service = new MindmapAgentIterativeService(mockSseService as SseService);
+    mockGlobalConfigService = {
+      getWorkspaceRoot: vi.fn().mockReturnValue('/test/workspace'),
+      getMusicRoot: vi.fn().mockReturnValue('/test/music'),
+      getCurrentWorkingDirectory: vi.fn().mockReturnValue('/test/workspace'),
+      updateWorkspaceRoot: vi.fn(),
+      updateMusicRoot: vi.fn(),
+      updateCurrentWorkingDirectory: vi.fn(),
+    };
+
+    service = new MindmapAgentIterativeService(
+      mockSseService as SseService,
+      mockGlobalConfigService as GlobalConfigService
+    );
   });
 
   describe('setMindmapContext', () => {
@@ -105,7 +119,8 @@ describe('MindmapAgentIterativeService', () => {
 
     it('should throw error if mindmap context not set', async () => {
       const serviceWithoutContext = new MindmapAgentIterativeService(
-        mockSseService as SseService
+        mockSseService as SseService,
+        mockGlobalConfigService as GlobalConfigService
       );
 
       await expect(

@@ -9,6 +9,7 @@ import type { WorkspaceService } from '../workspace.service';
 import type { WorkspaceFileService } from '../services/workspace-file.service';
 import type { AgentPoolService } from '../../agents/services/agent-pool.service';
 import type { ConversationService } from '../../chat/services/conversation.service';
+import { GlobalConfigService } from '../../shared/services/global-config.service';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -29,6 +30,7 @@ describe('WorkspaceController', () => {
   let mockWorkspaceFileService: Partial<WorkspaceFileService>;
   let mockAgentPoolService: Partial<AgentPoolService>;
   let mockConversationService: Partial<ConversationService>;
+  let mockGlobalConfigService: Partial<GlobalConfigService>;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -50,11 +52,30 @@ describe('WorkspaceController', () => {
       updateWorkspaceRoot: vi.fn(),
     };
 
+    let currentWorkspaceRoot = '/test/workspace';
+    mockGlobalConfigService = {
+      getWorkspaceRoot: vi.fn().mockImplementation(() => currentWorkspaceRoot),
+      getMusicRoot: vi.fn().mockReturnValue('/test/music'),
+      getCurrentWorkingDirectory: vi
+        .fn()
+        .mockImplementation(() => currentWorkspaceRoot),
+      updateWorkspaceRoot: vi.fn().mockImplementation((newRoot: string) => {
+        currentWorkspaceRoot = newRoot;
+      }),
+      updateMusicRoot: vi.fn(),
+      updateCurrentWorkingDirectory: vi
+        .fn()
+        .mockImplementation((newDir: string) => {
+          currentWorkspaceRoot = newDir;
+        }),
+    };
+
     controller = new WorkspaceController(
       mockWorkspaceService as WorkspaceService,
       mockWorkspaceFileService as WorkspaceFileService,
       mockAgentPoolService as AgentPoolService,
-      mockConversationService as ConversationService
+      mockConversationService as ConversationService,
+      mockGlobalConfigService as GlobalConfigService
     );
   });
 
@@ -190,7 +211,10 @@ describe('WorkspaceController', () => {
     });
 
     it('should not update if workspace root is the same', async () => {
-      const currentRoot = controller['workspaceRoot'];
+      const currentRoot = '/test/workspace';
+      (
+        mockGlobalConfigService.getWorkspaceRoot as ReturnType<typeof vi.fn>
+      ).mockReturnValue(currentRoot);
       (fs.existsSync as ReturnType<typeof vi.fn>).mockReturnValue(true);
       (fs.statSync as ReturnType<typeof vi.fn>).mockReturnValue({
         isDirectory: () => true,

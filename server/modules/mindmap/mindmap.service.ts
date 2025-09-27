@@ -1,8 +1,8 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { v4 as uuidv4 } from 'uuid';
+import { GlobalConfigService } from '../shared/services/global-config.service';
 
 export interface MindMapNode {
   id: string;
@@ -59,14 +59,12 @@ interface AutoOrganizeResult {
 @Injectable()
 export class MindmapService {
   private readonly logger = new Logger(MindmapService.name);
-  private workspaceRoot: string;
-  private mindmapsPath: string;
 
-  constructor(private configService: ConfigService) {
-    this.workspaceRoot =
-      this.configService?.get<string>('WORKSPACE_ROOT') ?? process.cwd();
-    this.mindmapsPath = path.join(
-      this.workspaceRoot,
+  constructor(private readonly globalConfigService: GlobalConfigService) {}
+
+  private get mindmapsPath(): string {
+    return path.join(
+      this.globalConfigService.getWorkspaceRoot(),
       'mindstrike-mindmaps.json'
     );
   }

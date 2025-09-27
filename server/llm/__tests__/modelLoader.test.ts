@@ -22,6 +22,11 @@ vi.mock('../modelRegistry');
 vi.mock('../sessionManager');
 vi.mock('../modelSettingsService');
 vi.mock('../modelDiscovery');
+vi.mock('../../utils/modelSettingsManager', () => ({
+  modelSettingsManager: {
+    loadModelSettings: vi.fn(),
+  },
+}));
 
 describe('ModelLoader', () => {
   let modelLoader: ModelLoader;
@@ -68,7 +73,7 @@ describe('ModelLoader', () => {
     dispose: vi.fn(),
   };
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
 
     // Reset mock functions
@@ -93,9 +98,11 @@ describe('ModelLoader', () => {
       mockSession as LlamaChatSession
     );
 
-    vi.mocked(mockSettingsService.getModelSettings).mockResolvedValue(
-      mockSettings
+    // Default to no saved settings, so calculateOptimalSettings is called
+    const { modelSettingsManager } = await import(
+      '../../utils/modelSettingsManager'
     );
+    vi.mocked(modelSettingsManager.loadModelSettings).mockResolvedValue(null);
     vi.mocked(mockSettingsService.calculateOptimalSettings).mockResolvedValue(
       mockSettings
     );
@@ -114,6 +121,76 @@ describe('ModelLoader', () => {
 
       await expect(modelLoader.loadModel('non-existent')).rejects.toThrow(
         'Model non-existent not found'
+      );
+    });
+
+    it('should use saved settings when available', async () => {
+      const { modelSettingsManager } = await import(
+        '../../utils/modelSettingsManager'
+      );
+      const savedSettings = {
+        gpuLayers: 34,
+        contextSize: 8000,
+        batchSize: 1024,
+      };
+
+      vi.mocked(modelSettingsManager.loadModelSettings).mockResolvedValue(
+        savedSettings
+      );
+      vi.mocked(mockModelDiscovery.getLocalModels).mockResolvedValue([
+        mockModelInfo,
+      ]);
+      vi.mocked(mockRegistry.isModelActive).mockReturnValue(false);
+      vi.mocked(mockRegistry.getLoadingLock).mockReturnValue(undefined);
+      vi.mocked(mockRegistry.getActiveModelIds).mockReturnValue([]);
+
+      await modelLoader.loadModel('test-model-1');
+
+      expect(modelSettingsManager.loadModelSettings).toHaveBeenCalledWith(
+        'test-model-1'
+      );
+      expect(
+        mockSettingsService.calculateOptimalSettings
+      ).not.toHaveBeenCalled();
+      expect(logger.info).toHaveBeenCalledWith(
+        'Using saved settings for model test-model-1: GPU layers: 34, Context: 8000, Batch: 1024'
+      );
+      expect(mockRegistry.registerModel).toHaveBeenCalledWith(
+        'test-model-1',
+        mockModel as LlamaModel,
+        mockContext as LlamaContext,
+        mockSession as LlamaChatSession,
+        expect.objectContaining({
+          contextSize: 8000,
+          gpuLayers: 34,
+          batchSize: 1024,
+        })
+      );
+    });
+
+    it('should calculate optimal settings when no saved settings exist', async () => {
+      const { modelSettingsManager } = await import(
+        '../../utils/modelSettingsManager'
+      );
+
+      vi.mocked(modelSettingsManager.loadModelSettings).mockResolvedValue(null);
+      vi.mocked(mockModelDiscovery.getLocalModels).mockResolvedValue([
+        mockModelInfo,
+      ]);
+      vi.mocked(mockRegistry.isModelActive).mockReturnValue(false);
+      vi.mocked(mockRegistry.getLoadingLock).mockReturnValue(undefined);
+      vi.mocked(mockRegistry.getActiveModelIds).mockReturnValue([]);
+
+      await modelLoader.loadModel('test-model-1');
+
+      expect(modelSettingsManager.loadModelSettings).toHaveBeenCalledWith(
+        'test-model-1'
+      );
+      expect(mockSettingsService.calculateOptimalSettings).toHaveBeenCalledWith(
+        'test-model-1'
+      );
+      expect(logger.info).toHaveBeenCalledWith(
+        'No saved settings for model test-model-1, calculated optimal: GPU layers: 16, Context: 4096, Batch: 512'
       );
     });
 

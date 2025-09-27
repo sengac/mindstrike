@@ -26,7 +26,7 @@ describe('ConversationController', () => {
     mockAgentPoolService = {
       getCurrentThreadId: vi.fn().mockReturnValue('previous-thread'),
       setCurrentThread: vi.fn(),
-      getCurrentAgent: vi.fn().mockReturnValue(mockAgent),
+      getCurrentAgent: vi.fn().mockResolvedValue(mockAgent),
     };
 
     mockConversationService = {};

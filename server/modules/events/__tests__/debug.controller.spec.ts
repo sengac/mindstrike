@@ -68,7 +68,7 @@ describe('DebugController', () => {
 
     // Create mock AgentPoolService
     mockAgentPoolService = {
-      getCurrentAgent: vi.fn().mockReturnValue(mockBaseAgent),
+      getCurrentAgent: vi.fn().mockResolvedValue(mockBaseAgent),
     };
 
     // Create mock EventsService

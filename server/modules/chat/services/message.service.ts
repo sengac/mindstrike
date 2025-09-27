@@ -253,8 +253,8 @@ export class MessageService {
       try {
         const agentPoolService = await this.getAgentPoolService();
         const agent = isAgentMode
-          ? agentPoolService.getAgent(threadId ?? 'default') // Note: Express uses getWorkflowAgent but AgentPoolService doesn't have it
-          : agentPoolService.getCurrentAgent();
+          ? await agentPoolService.getAgent(threadId ?? 'default') // Note: Express uses getWorkflowAgent but AgentPoolService doesn't have it
+          : await agentPoolService.getCurrentAgent();
 
         // Note: This will fail because the agent doesn't have processMessage method yet
         // This is expected since agents haven't been ported yet from Express
@@ -486,8 +486,8 @@ export class MessageService {
       // Get the appropriate agent
       const agentPoolService = await this.getAgentPoolService();
       const agent = isAgentMode
-        ? agentPoolService.getAgent(threadId ?? 'default')
-        : agentPoolService.getCurrentAgent();
+        ? await agentPoolService.getAgent(threadId ?? 'default')
+        : await agentPoolService.getCurrentAgent();
 
       // Create abort controller for cancellation
       const abortController = this.cancellationManager.startTask(
@@ -685,7 +685,7 @@ export class MessageService {
 
       if (!thread) {
         // Thread doesn't exist yet, clear any existing conversation
-        const currentAgent = agentPoolService.getCurrentAgent();
+        const currentAgent = await agentPoolService.getCurrentAgent();
         // Type guard to check if agent has clearConversation method
         const hasClearConversation = (
           obj: unknown
@@ -706,7 +706,7 @@ export class MessageService {
       }
 
       // Load the thread's messages into the thread-specific agent's conversation context
-      const currentAgent = agentPoolService.getCurrentAgent();
+      const currentAgent = await agentPoolService.getCurrentAgent();
 
       // Type guard to check if agent has loadConversation method
       const hasLoadConversation = (

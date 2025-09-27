@@ -276,4 +276,12 @@ export class McpManagerService implements OnModuleInit, OnModuleDestroy {
   async addServer(config: MCPServerConfig) {
     return this.addServerConfig(config);
   }
+
+  // Get LangChain tools from MCP tools
+  getLangChainTools() {
+    if (!this.mcpManager) {
+      return [];
+    }
+    return this.mcpManager.getLangChainTools();
+  }
 }

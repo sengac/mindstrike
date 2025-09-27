@@ -5,6 +5,7 @@ import type {
 } from '../../../../src/utils/mindMapData';
 import { SSEEventType } from '../../../../src/types';
 import { SseService } from '../../events/services/sse.service';
+import { GlobalConfigService } from '../../shared/services/global-config.service';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -65,16 +66,11 @@ export class MindmapAgentIterativeService {
   private mindmapContext: MindmapContext | null = null;
   private workflowState: IterativeWorkflowState | null = null;
   private abortController: AbortController | null = null;
-  private workspaceRoot: string = process.cwd();
 
-  constructor(private readonly sseService: SseService) {}
-
-  /**
-   * Set the workspace root
-   */
-  setWorkspaceRoot(workspaceRoot: string): void {
-    this.workspaceRoot = workspaceRoot;
-  }
+  constructor(
+    private readonly sseService: SseService,
+    private readonly globalConfigService: GlobalConfigService
+  ) {}
 
   /**
    * Set the mindmap context for the agent
@@ -111,7 +107,7 @@ export class MindmapAgentIterativeService {
    */
   private async loadMindmapData(mindMapId: string): Promise<MindMapData> {
     const filePath = path.join(
-      this.workspaceRoot,
+      this.globalConfigService.getWorkspaceRoot(),
       '.mindstrike',
       'mindmaps',
       `${mindMapId}.json`
@@ -539,7 +535,7 @@ export class MindmapAgentIterativeService {
     }
 
     const filePath = path.join(
-      this.workspaceRoot,
+      this.globalConfigService.getWorkspaceRoot(),
       '.mindstrike',
       'mindmaps',
       `${this.mindmapContext.mindMapId}.json`

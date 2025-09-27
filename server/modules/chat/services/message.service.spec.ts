@@ -38,8 +38,8 @@ describe('MessageService', () => {
 
     mockAgentPoolService = {
       setCurrentThread: vi.fn().mockResolvedValue(undefined),
-      getAgent: vi.fn().mockReturnValue(null),
-      getCurrentAgent: vi.fn().mockReturnValue(null),
+      getAgent: vi.fn().mockResolvedValue(null),
+      getCurrentAgent: vi.fn().mockResolvedValue(null),
       getCurrentThreadId: vi.fn().mockReturnValue('current-thread'),
       syncCurrentAgentWithThread: vi.fn().mockResolvedValue(undefined),
     };
@@ -109,7 +109,9 @@ describe('MessageService', () => {
         }),
       };
 
-      mockAgentPoolService.getCurrentAgent = vi.fn().mockReturnValue(mockAgent);
+      mockAgentPoolService.getCurrentAgent = vi
+        .fn()
+        .mockResolvedValue(mockAgent);
 
       const result = await service.processMessage(dto);
 
@@ -207,7 +209,9 @@ describe('MessageService', () => {
         }),
       };
 
-      mockAgentPoolService.getCurrentAgent = vi.fn().mockReturnValue(mockAgent);
+      mockAgentPoolService.getCurrentAgent = vi
+        .fn()
+        .mockResolvedValue(mockAgent);
 
       const result = await serviceWithPartialConfig.processMessage(dto);
 
@@ -245,7 +249,7 @@ describe('MessageService', () => {
         }),
       };
 
-      mockAgentPoolService.getCurrentAgent.mockReturnValue(mockAgent);
+      mockAgentPoolService.getCurrentAgent.mockResolvedValue(mockAgent);
 
       const result = await service.processMessage(dto);
 
@@ -338,7 +342,7 @@ describe('MessageService', () => {
           }),
       };
 
-      mockAgentPoolService.getCurrentAgent.mockReturnValue(mockAgent);
+      mockAgentPoolService.getCurrentAgent.mockResolvedValue(mockAgent);
 
       await service.streamMessage(dto, mockRes as Response);
 
@@ -488,7 +492,9 @@ describe('MessageService', () => {
         loadConversation: vi.fn().mockResolvedValue(undefined),
         updatePrompt: vi.fn().mockResolvedValue(undefined),
       };
-      mockAgentPoolService.getCurrentAgent.mockReturnValue(mockAgent);
+      mockAgentPoolService.getCurrentAgent = vi
+        .fn()
+        .mockResolvedValue(mockAgent);
 
       const result = await service.loadThread(threadId);
 
@@ -496,6 +502,7 @@ describe('MessageService', () => {
       expect(mockAgentPoolService.setCurrentThread).toHaveBeenCalledWith(
         threadId
       );
+      expect(mockAgentPoolService.getCurrentAgent).toHaveBeenCalled();
       expect(mockAgent.loadConversation).toHaveBeenCalledWith(
         threadId,
         mockThread.messages
@@ -514,7 +521,7 @@ describe('MessageService', () => {
       const mockAgent = {
         clearConversation: vi.fn().mockResolvedValue(undefined),
       };
-      mockAgentPoolService.getCurrentAgent.mockReturnValue(mockAgent);
+      mockAgentPoolService.getCurrentAgent.mockResolvedValue(mockAgent);
 
       const result = await service.loadThread(threadId);
 

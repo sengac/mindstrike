@@ -1,4 +1,4 @@
-import type { LocalModelInfo } from '../localLlmManager';
+import type { LocalModelInfo, ModelLoadingSettings } from '../localLlmManager';
 import { sharedLlamaInstance } from '../sharedLlamaInstance';
 import { logger } from '../logger';
 import { GPU_LAYERS } from './constants';
@@ -88,13 +88,28 @@ export class ModelLoader {
         await this.unloadModel(otherModelId);
       }
 
-      // Get optimal settings
-      const existingSettings =
-        await this.settingsService.getModelSettings(modelId);
-      const settings = await this.settingsService.calculateOptimalSettings(
-        modelId,
-        existingSettings
+      // Load persisted settings first
+      const { modelSettingsManager } = await import(
+        '../utils/modelSettingsManager'
       );
+      const persistedSettings =
+        await modelSettingsManager.loadModelSettings(modelId);
+
+      let settings: ModelLoadingSettings;
+
+      if (persistedSettings) {
+        // Use saved settings
+        settings = persistedSettings;
+        logger.info(
+          `Using saved settings for model ${modelId}: GPU layers: ${settings.gpuLayers}, Context: ${settings.contextSize}, Batch: ${settings.batchSize}`
+        );
+      } else {
+        // No saved settings, calculate optimal ones
+        settings = await this.settingsService.calculateOptimalSettings(modelId);
+        logger.info(
+          `No saved settings for model ${modelId}, calculated optimal: GPU layers: ${settings.gpuLayers}, Context: ${settings.contextSize}, Batch: ${settings.batchSize}`
+        );
+      }
 
       // Load model
       const llama = await sharedLlamaInstance.getLlama();

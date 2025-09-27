@@ -1,12 +1,10 @@
 import type { Mock } from 'vitest';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { TestingModule } from '@nestjs/testing';
-import { Test } from '@nestjs/testing';
-import { ConfigService } from '@nestjs/config';
 import { NotFoundException } from '@nestjs/common';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { MindmapService } from '../mindmap.service';
+import type { GlobalConfigService } from '../../shared/services/global-config.service';
 import type { MindMap } from '../mindmap.service';
 
 // Mock fs/promises
@@ -30,6 +28,7 @@ describe('MindmapService', () => {
   let mockReadFile: Mock;
   let mockWriteFile: Mock;
   let mockPathJoin: Mock;
+  let mockGlobalConfigService: Partial<GlobalConfigService>;
 
   const mockMindmap: MindMap = {
     id: 'test-mindmap-123',
@@ -72,19 +71,20 @@ describe('MindmapService', () => {
     mockReadFile.mockResolvedValue(JSON.stringify([mockMindmap]));
     mockWriteFile.mockResolvedValue(undefined);
 
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        MindmapService,
-        {
-          provide: ConfigService,
-          useValue: {
-            get: vi.fn().mockReturnValue('/test/workspace'),
-          },
-        },
-      ],
-    }).compile();
+    // Create mock GlobalConfigService
+    mockGlobalConfigService = {
+      getWorkspaceRoot: vi.fn().mockReturnValue('/test/workspace'),
+      getMusicRoot: vi.fn().mockReturnValue('/test/music'),
+      getCurrentWorkingDirectory: vi.fn().mockReturnValue('/test/workspace'),
+      updateWorkspaceRoot: vi.fn(),
+      updateMusicRoot: vi.fn(),
+      updateCurrentWorkingDirectory: vi.fn(),
+    };
 
-    service = module.get<MindmapService>(MindmapService);
+    // Directly instantiate the service with mocked dependency
+    service = new MindmapService(
+      mockGlobalConfigService as GlobalConfigService
+    );
   });
 
   describe('saveMindmaps', () => {

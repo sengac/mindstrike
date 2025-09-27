@@ -25,8 +25,8 @@ describe('MessageService', () => {
 
     mockAgentPoolService = {
       setCurrentThread: vi.fn().mockResolvedValue(undefined),
-      getCurrentAgent: vi.fn(),
-      getAgent: vi.fn(),
+      getCurrentAgent: vi.fn().mockResolvedValue(null),
+      getAgent: vi.fn().mockResolvedValue(null),
     };
 
     mockSseService = {

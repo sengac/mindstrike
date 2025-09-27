@@ -7,15 +7,7 @@ import type { CallbackManagerForLLMRun } from '@langchain/core/callbacks/manager
 import type { ChatResult } from '@langchain/core/outputs';
 import { ChatGenerationChunk } from '@langchain/core/outputs';
 import type { DynamicStructuredTool } from '@langchain/core/tools';
-
-// Type augmentation for global namespace
-declare global {
-  namespace NodeJS {
-    interface Global {
-      localLlmService?: LocalLLMManagerInterface;
-    }
-  }
-}
+import { getLocalLLMManager } from '../../../localLlmSingleton';
 
 interface LocalLLMManagerInterface {
   loadModel: (modelName: string, threadId?: string) => Promise<void>;
@@ -75,20 +67,8 @@ export class ChatLocalLLM extends BaseChatModel {
     this.disableFunctions = fields.disableFunctions;
     this.disableChatHistory = fields.disableChatHistory;
 
-    // Get singleton instance
-    this.localLlmManager = this.getLocalLLMManager();
-  }
-
-  private getLocalLLMManager(): LocalLLMManagerInterface {
-    // In NestJS context, we need to get the service instance
-    // This will be injected when the service is properly integrated
-    // For now, we'll use a static reference that needs to be set
-    if (!global.localLlmService) {
-      throw new Error(
-        'LocalLlmService not initialized. Please ensure LocalLlmService is properly injected.'
-      );
-    }
-    return global.localLlmService;
+    // Get singleton instance directly
+    this.localLlmManager = getLocalLLMManager();
   }
 
   _llmType(): string {

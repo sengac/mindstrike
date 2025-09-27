@@ -4,11 +4,11 @@ import {
   NotFoundException,
   OnModuleInit,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { v4 as uuidv4 } from 'uuid';
 import * as crypto from 'crypto';
+import { GlobalConfigService } from '../shared/services/global-config.service';
 
 interface LFSEntry {
   id: string;
@@ -35,7 +35,6 @@ interface LFSStats {
 export class ContentService implements OnModuleInit {
   private readonly logger = new Logger(ContentService.name);
   private entries: Map<string, LFSEntry> = new Map();
-  private readonly filePath: string;
   private readonly maxSizeBytes = 1024; // 1KB threshold for LFS storage
   private stats: LFSStats = {
     totalSize: 0,
@@ -43,17 +42,19 @@ export class ContentService implements OnModuleInit {
     cacheHits: 0,
     cacheMisses: 0,
   };
-  private workspaceRoot: string;
   private isLoaded = false;
 
-  constructor(private configService: ConfigService) {
-    this.workspaceRoot =
-      this.configService?.get<string>('WORKSPACE_ROOT') ?? process.cwd();
-    this.filePath = path.join(this.workspaceRoot, 'mindstrike-lfs.json');
-  }
+  constructor(private readonly globalConfigService: GlobalConfigService) {}
 
   async onModuleInit(): Promise<void> {
     await this.loadFromFile();
+  }
+
+  private get filePath(): string {
+    return path.join(
+      this.globalConfigService.getWorkspaceRoot(),
+      'mindstrike-lfs.json'
+    );
   }
 
   /**

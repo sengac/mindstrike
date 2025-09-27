@@ -14,6 +14,7 @@ import { McpManagerService } from '../mcp/services/mcp-manager.service';
 import { LfsService } from '../content/services/lfs.service';
 import { LlmModule } from '../llm/llm.module';
 import { GlobalLlmConfigService } from '../shared/services/global-llm-config.service';
+import { GlobalConfigService } from '../shared/services/global-config.service';
 
 @Global()
 @Module({
@@ -31,6 +32,7 @@ import { GlobalLlmConfigService } from '../shared/services/global-llm-config.ser
     McpManagerService,
     LfsService,
     GlobalLlmConfigService,
+    GlobalConfigService,
   ],
   exports: [
     ConversationService,
@@ -41,6 +43,7 @@ import { GlobalLlmConfigService } from '../shared/services/global-llm-config.ser
     McpManagerService,
     LfsService,
     GlobalLlmConfigService,
+    GlobalConfigService,
   ],
 })
 export class CoreModule {}

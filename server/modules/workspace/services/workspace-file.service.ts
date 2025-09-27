@@ -4,11 +4,10 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { Stats } from 'fs';
-import { getWorkspaceRoot } from '../../../utils/settingsDirectory';
+import { GlobalConfigService } from '../../shared/services/global-config.service';
 
 export interface FileInfo {
   name: string;
@@ -29,66 +28,28 @@ export interface FileContent {
 @Injectable()
 export class WorkspaceFileService {
   private readonly logger = new Logger(WorkspaceFileService.name);
-  private workspaceRoot: string;
-  private currentWorkingDirectory: string;
-  private initialized = false;
 
-  constructor(private configService: ConfigService) {
-    // Initialize immediately with synchronous call for constructor logging
-    this.initializeSync();
-  }
-
-  private initializeSync(): void {
-    // Use fallback values initially - will be replaced with persisted values in ensureInitialized
-    // Get the project root - if we're in server directory, go up one level
-    const cwd = process.cwd();
-    const defaultRoot = cwd.endsWith('/server') ? path.dirname(cwd) : cwd;
-
-    this.workspaceRoot =
-      this.configService?.get<string>('WORKSPACE_ROOT') ?? defaultRoot;
-    this.currentWorkingDirectory = this.workspaceRoot;
-    this.logger.log(`Workspace root: ${this.workspaceRoot}`);
-  }
-
-  private async ensureInitialized(): Promise<void> {
-    if (this.initialized) {
-      return;
-    }
-
-    // Load persisted workspace root
-    const persistedWorkspaceRoot = await getWorkspaceRoot();
-
-    if (persistedWorkspaceRoot) {
-      this.workspaceRoot = persistedWorkspaceRoot;
-      this.currentWorkingDirectory = persistedWorkspaceRoot;
-      this.logger.log(`Using persisted workspace root: ${this.workspaceRoot}`);
-    }
-
-    this.initialized = true;
-  }
-
-  /**
-   * Update the workspace root directory
-   */
-  setWorkspaceRoot(newRoot: string): void {
-    this.workspaceRoot = newRoot;
-    this.currentWorkingDirectory = newRoot;
-    this.logger.log(`Updated workspace root to: ${newRoot}`);
+  constructor(private readonly globalConfigService: GlobalConfigService) {
+    // Don't initialize currentWorkingDirectory in constructor
+    // since GlobalConfigService hasn't loaded settings yet
   }
 
   /**
    * Get the current workspace root
    */
   getWorkspaceRoot(): string {
-    return this.workspaceRoot;
+    return this.globalConfigService.getWorkspaceRoot();
   }
 
   /**
    * Set the current working directory
    */
   setCurrentDirectory(directory: string): void {
-    const fullPath = path.resolve(this.workspaceRoot, directory);
-    this.currentWorkingDirectory = fullPath;
+    const fullPath = path.resolve(
+      this.globalConfigService.getWorkspaceRoot(),
+      directory
+    );
+    this.globalConfigService.updateCurrentWorkingDirectory(fullPath);
     this.logger.log(`Updated current directory to: ${fullPath}`);
   }
 
@@ -96,7 +57,7 @@ export class WorkspaceFileService {
    * Get the current working directory
    */
   getCurrentDirectory(): string {
-    return this.currentWorkingDirectory;
+    return this.globalConfigService.getCurrentWorkingDirectory();
   }
 
   /**
@@ -106,11 +67,20 @@ export class WorkspaceFileService {
     directoryPath?: string,
     recursive = false
   ): Promise<FileInfo[]> {
-    await this.ensureInitialized();
-
-    const targetDir = directoryPath
-      ? path.resolve(this.workspaceRoot, directoryPath)
-      : this.currentWorkingDirectory;
+    let targetDir: string;
+    if (directoryPath) {
+      // Handle both absolute and relative paths
+      if (path.isAbsolute(directoryPath)) {
+        targetDir = directoryPath;
+      } else {
+        targetDir = path.resolve(
+          this.globalConfigService.getWorkspaceRoot(),
+          directoryPath
+        );
+      }
+    } else {
+      targetDir = this.globalConfigService.getCurrentWorkingDirectory();
+    }
 
     try {
       const entries = await fs.readdir(targetDir, { withFileTypes: true });
@@ -118,7 +88,10 @@ export class WorkspaceFileService {
 
       for (const entry of entries) {
         const fullPath = path.join(targetDir, entry.name);
-        const relativePath = path.relative(this.workspaceRoot, fullPath);
+        const relativePath = path.relative(
+          this.globalConfigService.getWorkspaceRoot(),
+          fullPath
+        );
 
         try {
           const stats = await fs.stat(fullPath);
@@ -169,14 +142,18 @@ export class WorkspaceFileService {
    * Read file content
    */
   async readFile(filePath: string): Promise<FileContent> {
-    await this.ensureInitialized();
-
-    // Ensure workspace root is defined
-    if (!this.workspaceRoot) {
-      throw new BadRequestException('Workspace root not configured');
+    // Handle both absolute and relative paths
+    let fullPath: string;
+    if (path.isAbsolute(filePath)) {
+      // If the path is absolute, use it directly
+      fullPath = filePath;
+    } else {
+      // If the path is relative, resolve it relative to workspace root
+      fullPath = path.resolve(
+        this.globalConfigService.getWorkspaceRoot(),
+        filePath
+      );
     }
-
-    const fullPath = path.resolve(this.workspaceRoot, filePath);
 
     // Security check: ensure path is within workspace
     if (!this.isPathWithinWorkspace(fullPath)) {
@@ -205,9 +182,18 @@ export class WorkspaceFileService {
    * Save file content
    */
   async saveFile(filePath: string, content: string): Promise<FileInfo> {
-    await this.ensureInitialized();
-
-    const fullPath = path.resolve(this.workspaceRoot, filePath);
+    // Handle both absolute and relative paths
+    let fullPath: string;
+    if (path.isAbsolute(filePath)) {
+      // If the path is absolute, use it directly
+      fullPath = filePath;
+    } else {
+      // If the path is relative, resolve it relative to workspace root
+      fullPath = path.resolve(
+        this.globalConfigService.getWorkspaceRoot(),
+        filePath
+      );
+    }
 
     // Security check
     if (!this.isPathWithinWorkspace(fullPath)) {
@@ -245,9 +231,18 @@ export class WorkspaceFileService {
    * Delete a file
    */
   async deleteFile(filePath: string): Promise<void> {
-    await this.ensureInitialized();
-
-    const fullPath = path.resolve(this.workspaceRoot, filePath);
+    // Handle both absolute and relative paths
+    let fullPath: string;
+    if (path.isAbsolute(filePath)) {
+      // If the path is absolute, use it directly
+      fullPath = filePath;
+    } else {
+      // If the path is relative, resolve it relative to workspace root
+      fullPath = path.resolve(
+        this.globalConfigService.getWorkspaceRoot(),
+        filePath
+      );
+    }
 
     // Security check
     if (!this.isPathWithinWorkspace(fullPath)) {
@@ -269,9 +264,10 @@ export class WorkspaceFileService {
    * Create a directory
    */
   async createDirectory(directoryPath: string): Promise<void> {
-    await this.ensureInitialized();
-
-    const fullPath = path.resolve(this.workspaceRoot, directoryPath);
+    const fullPath = path.resolve(
+      this.globalConfigService.getWorkspaceRoot(),
+      directoryPath
+    );
 
     // Security check
     if (!this.isPathWithinWorkspace(fullPath)) {
@@ -290,9 +286,10 @@ export class WorkspaceFileService {
    * Delete a directory
    */
   async deleteDirectory(directoryPath: string): Promise<void> {
-    await this.ensureInitialized();
-
-    const fullPath = path.resolve(this.workspaceRoot, directoryPath);
+    const fullPath = path.resolve(
+      this.globalConfigService.getWorkspaceRoot(),
+      directoryPath
+    );
 
     // Security check
     if (!this.isPathWithinWorkspace(fullPath)) {
@@ -314,7 +311,10 @@ export class WorkspaceFileService {
    * Check if a path exists
    */
   async exists(filePath: string): Promise<boolean> {
-    const fullPath = path.resolve(this.workspaceRoot, filePath);
+    const fullPath = path.resolve(
+      this.globalConfigService.getWorkspaceRoot(),
+      filePath
+    );
 
     try {
       await fs.access(fullPath);
@@ -328,7 +328,10 @@ export class WorkspaceFileService {
    * Get file or directory stats
    */
   async getStats(filePath: string): Promise<Stats> {
-    const fullPath = path.resolve(this.workspaceRoot, filePath);
+    const fullPath = path.resolve(
+      this.globalConfigService.getWorkspaceRoot(),
+      filePath
+    );
 
     if (!this.isPathWithinWorkspace(fullPath)) {
       throw new BadRequestException('Access denied: Path outside workspace');
@@ -349,7 +352,9 @@ export class WorkspaceFileService {
    */
   private isPathWithinWorkspace(fullPath: string): boolean {
     const normalizedPath = path.normalize(fullPath);
-    const normalizedWorkspace = path.normalize(this.workspaceRoot);
+    const normalizedWorkspace = path.normalize(
+      this.globalConfigService.getWorkspaceRoot()
+    );
     return normalizedPath.startsWith(normalizedWorkspace);
   }
 }

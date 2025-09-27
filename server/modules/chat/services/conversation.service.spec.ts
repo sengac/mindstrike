@@ -1,8 +1,8 @@
 import type { TestingModule } from '@nestjs/testing';
 import { Test } from '@nestjs/testing';
-import { ConfigService } from '@nestjs/config';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ConversationService } from './conversation.service';
+import { GlobalConfigService } from '../../shared/services/global-config.service';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -10,20 +10,27 @@ vi.mock('fs/promises');
 
 describe('ConversationService', () => {
   let service: ConversationService;
-  let configService: Partial<ConfigService>;
+  let globalConfigService: Partial<GlobalConfigService>;
   const mockWorkspaceRoot = '/test/workspace';
 
   beforeEach(async () => {
     // Reset fs mocks first
     vi.clearAllMocks();
 
-    // Create a mock ConfigService
-    configService = {
-      get: vi.fn().mockReturnValue(mockWorkspaceRoot),
+    // Create a mock GlobalConfigService
+    globalConfigService = {
+      getWorkspaceRoot: vi.fn().mockReturnValue(mockWorkspaceRoot),
+      getMusicRoot: vi.fn().mockReturnValue('/test/music'),
+      getCurrentWorkingDirectory: vi.fn().mockReturnValue(mockWorkspaceRoot),
+      updateWorkspaceRoot: vi.fn(),
+      updateMusicRoot: vi.fn(),
+      updateCurrentWorkingDirectory: vi.fn(),
     };
 
     // Directly instantiate the service with mocked dependency
-    service = new ConversationService(configService as ConfigService);
+    service = new ConversationService(
+      globalConfigService as GlobalConfigService
+    );
   });
 
   afterEach(() => {
@@ -35,26 +42,65 @@ describe('ConversationService', () => {
       expect(service).toBeDefined();
     });
 
-    it('should use workspace root from config', () => {
-      expect(configService.get).toHaveBeenCalledWith('WORKSPACE_ROOT');
+    it('should load conversations lazily on getThreadList', async () => {
+      const mockThreads = [
+        {
+          id: '1',
+          name: 'Test Thread',
+          messages: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ];
+
+      vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(mockThreads));
+
+      const threads = await service.getThreadList();
+
+      expect(fs.readFile).toHaveBeenCalledWith(
+        path.join(mockWorkspaceRoot, 'mindstrike-chats.json'),
+        'utf-8'
+      );
+      expect(threads).toHaveLength(1);
     });
 
-    it('should fall back to process.cwd() if config is not available', async () => {
+    it('should handle load error gracefully', async () => {
+      vi.mocked(fs.readFile).mockRejectedValue(new Error('File not found'));
+
+      // Should not throw and return empty list
+      const threads = await service.getThreadList();
+      expect(threads).toHaveLength(0);
+    });
+
+    it('should use workspace root from global config', async () => {
+      // The service only calls getWorkspaceRoot when methods like load() are called
+      await service.load();
+      expect(globalConfigService.getWorkspaceRoot).toHaveBeenCalled();
+    });
+
+    it('should work with global config service', async () => {
       const module: TestingModule = await Test.createTestingModule({
         providers: [
           ConversationService,
           {
-            provide: ConfigService,
+            provide: GlobalConfigService,
             useValue: {
-              get: vi.fn().mockReturnValue(undefined),
+              getWorkspaceRoot: vi.fn().mockReturnValue('/another/test/path'),
+              getMusicRoot: vi.fn().mockReturnValue('/test/music'),
+              getCurrentWorkingDirectory: vi
+                .fn()
+                .mockReturnValue('/another/test/path'),
+              updateWorkspaceRoot: vi.fn(),
+              updateMusicRoot: vi.fn(),
+              updateCurrentWorkingDirectory: vi.fn(),
             },
           },
         ],
       }).compile();
 
-      const serviceWithoutConfig =
+      const serviceWithModule =
         module.get<ConversationService>(ConversationService);
-      expect(serviceWithoutConfig).toBeDefined();
+      expect(serviceWithModule).toBeDefined();
     });
   });
 
@@ -102,7 +148,7 @@ describe('ConversationService', () => {
       await service.load();
 
       // Should not throw and should have empty conversations
-      const threads = service.getThreadList();
+      const threads = await service.getThreadList();
       expect(threads).toEqual([]);
     });
 
@@ -114,7 +160,7 @@ describe('ConversationService', () => {
       await service.load();
 
       // Should not throw and should have empty conversations
-      const threads = service.getThreadList();
+      const threads = await service.getThreadList();
       expect(threads).toEqual([]);
     });
   });
@@ -163,6 +209,42 @@ describe('ConversationService', () => {
       // Exact call count depends on serialization logic
       expect(fs.writeFile).toHaveBeenCalled();
     });
+
+    it('should load before saving if not loaded yet', async () => {
+      // Create a fresh service instance that hasn't loaded yet
+      const freshService = new ConversationService(
+        globalConfigService as GlobalConfigService
+      );
+
+      const mockThreads = [
+        {
+          id: 'existing-thread',
+          name: 'Existing Thread',
+          messages: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ];
+
+      vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(mockThreads));
+      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+      // Call save without calling load first
+      await freshService.save();
+
+      // Should have called readFile to load existing data
+      expect(fs.readFile).toHaveBeenCalledWith(
+        path.join(mockWorkspaceRoot, 'mindstrike-chats.json'),
+        'utf-8'
+      );
+
+      // Should have called writeFile with the loaded data
+      expect(fs.writeFile).toHaveBeenCalled();
+      const writeCall = vi.mocked(fs.writeFile).mock.calls[0];
+      const savedData = JSON.parse(writeCall[1] as string);
+      expect(savedData).toHaveLength(1);
+      expect(savedData[0].id).toBe('existing-thread');
+    });
   });
 
   describe('createThread', () => {
@@ -199,7 +281,7 @@ describe('ConversationService', () => {
       const newThread = await service.createThread('New Thread');
 
       // Should have 2 threads now
-      const threads = service.getThreadList();
+      const threads = await service.getThreadList();
       expect(threads).toHaveLength(2);
 
       expect(fs.writeFile).toHaveBeenCalled();
@@ -389,7 +471,7 @@ describe('ConversationService', () => {
       await service.addMessage('nonexistent', message);
 
       // Should have created a new thread
-      const threads = service.getThreadList();
+      const threads = await service.getThreadList();
       expect(threads).toHaveLength(1);
       expect(fs.writeFile).toHaveBeenCalled();
     });

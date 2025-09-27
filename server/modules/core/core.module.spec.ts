@@ -105,8 +105,9 @@ describe('CoreModule', () => {
   });
 
   it('should provide GlobalLlmConfigService', () => {
-    const globalLlmConfigService =
-      module.get<GlobalLlmConfigService>(GlobalLlmConfigService);
+    const globalLlmConfigService = module.get<GlobalLlmConfigService>(
+      GlobalLlmConfigService
+    );
     expect(globalLlmConfigService).toBeDefined();
   });
 });

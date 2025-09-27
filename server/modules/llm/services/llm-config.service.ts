@@ -83,14 +83,13 @@ export class LlmConfigService {
   }> {
     try {
       // Import the LLM scanner and local manager
-      const { llmScanner } = await import('../../../llmScanner');
-      const { getLocalLLMManager } = await import(
-        '../../../../server/localLlmSingleton'
-      );
+      const { LLMScanner } = await import('../../../llmScanner');
+      const { getLocalLLMManager } = await import('../../../localLlmSingleton');
       const { sseManager } = await import('../../../sseManager');
       const { SSEEventType } = await import('../../../../src/types');
 
-      // Rescan services
+      // Create scanner instance and rescan services
+      const llmScanner = new LLMScanner();
       const services = await llmScanner.rescanServices();
 
       // Get existing custom services

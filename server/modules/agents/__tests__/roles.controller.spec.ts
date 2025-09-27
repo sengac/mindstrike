@@ -22,7 +22,7 @@ describe('RolesController', () => {
     };
 
     mockAgentPoolService = {
-      getAgent: vi.fn().mockReturnValue(mockAgent),
+      getAgent: vi.fn().mockResolvedValue(mockAgent),
     };
 
     controller = new RolesController(mockAgentPoolService as AgentPoolService);

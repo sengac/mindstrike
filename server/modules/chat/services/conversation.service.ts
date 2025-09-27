@@ -1,5 +1,5 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable, Logger } from '@nestjs/common';
+import { GlobalConfigService } from '../../shared/services/global-config.service';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import {
@@ -9,38 +9,25 @@ import {
 } from '../types/conversation.types';
 
 @Injectable()
-export class ConversationService implements OnModuleInit {
+export class ConversationService {
   private readonly logger = new Logger(ConversationService.name);
-  private conversationsPath: string;
   private readonly conversations: Map<string, Thread> = new Map();
   private isLoaded = false;
-  private workspaceRoot: string;
   private savePromise: Promise<void> | null = null;
 
-  constructor(private configService: ConfigService) {
-    this.workspaceRoot =
-      this.configService?.get<string>('WORKSPACE_ROOT') || process.cwd();
-    this.conversationsPath = path.join(
-      this.workspaceRoot,
+  constructor(private readonly globalConfigService: GlobalConfigService) {}
+
+  private getConversationsPath(): string {
+    return path.join(
+      this.globalConfigService.getWorkspaceRoot(),
       'mindstrike-chats.json'
     );
-  }
-
-  async onModuleInit() {
-    await this.load();
   }
 
   updateWorkspaceRoot(newWorkspaceRoot: string): void {
-    if (this.workspaceRoot === newWorkspaceRoot) {
-      return;
-    }
-
-    this.logger.log(`Updating workspace root to: ${newWorkspaceRoot}`);
-    this.workspaceRoot = newWorkspaceRoot;
-    this.conversationsPath = path.join(
-      newWorkspaceRoot,
-      'mindstrike-chats.json'
-    );
+    // GlobalConfigService now handles the workspace root centrally
+    // Just clear the cache since the path changed
+    this.logger.log(`Workspace root updated, clearing conversation cache`);
     this.isLoaded = false;
     this.conversations.clear();
   }
@@ -51,7 +38,8 @@ export class ConversationService implements OnModuleInit {
     }
 
     try {
-      const data = await fs.readFile(this.conversationsPath, 'utf-8');
+      const conversationsPath = this.getConversationsPath();
+      const data = await fs.readFile(conversationsPath, 'utf-8');
       const threads: Thread[] = JSON.parse(data) as Thread[];
 
       this.conversations.clear();
@@ -68,8 +56,16 @@ export class ConversationService implements OnModuleInit {
       });
 
       this.logger.log(`Loaded ${threads.length} conversations`);
-    } catch {
-      this.logger.warn('No existing conversations file found, starting fresh');
+    } catch (error) {
+      // File doesn't exist or is invalid - start with empty conversations
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        this.logger.log('No existing conversations file, starting fresh');
+      } else {
+        this.logger.warn(
+          'Failed to load conversations, starting fresh:',
+          error
+        );
+      }
       this.conversations.clear();
     }
 
@@ -77,6 +73,11 @@ export class ConversationService implements OnModuleInit {
   }
 
   async save(): Promise<void> {
+    // Ensure we've loaded before saving to prevent overwriting with empty data
+    if (!this.isLoaded) {
+      await this.load();
+    }
+
     if (this.savePromise) {
       await this.savePromise;
     }
@@ -88,13 +89,16 @@ export class ConversationService implements OnModuleInit {
 
   private async _performSave(): Promise<void> {
     const threads = Array.from(this.conversations.values());
-    await fs.writeFile(
-      this.conversationsPath,
-      JSON.stringify(threads, null, 2)
-    );
+    const conversationsPath = this.getConversationsPath();
+    await fs.writeFile(conversationsPath, JSON.stringify(threads, null, 2));
   }
 
-  getThreadList(): ThreadMetadata[] {
+  async getThreadList(): Promise<ThreadMetadata[]> {
+    // Ensure conversations are loaded
+    if (!this.isLoaded) {
+      await this.load();
+    }
+
     return Array.from(this.conversations.values())
       .map(thread => ({
         id: thread.id,

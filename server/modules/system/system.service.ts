@@ -1,21 +1,11 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { systemInfoManager } from '../../systemInfoManager';
 import type { SystemInformation } from '../../systemInfoManager';
-import { getWorkspaceRoot } from '../../shared/utils/settings-directory';
-import { getHomeDirectory } from '../../utils/settingsDirectory';
+import { GlobalConfigService } from '../shared/services/global-config.service';
 
 @Injectable()
-export class SystemService implements OnModuleInit {
-  private workspaceRoot: string;
-
-  async onModuleInit() {
-    // Load persisted workspace root from settings
-    const persistedWorkspaceRoot = await getWorkspaceRoot();
-    this.workspaceRoot =
-      persistedWorkspaceRoot ||
-      process.env.WORKSPACE_ROOT ||
-      getHomeDirectory();
-  }
+export class SystemService {
+  constructor(private readonly globalConfigService: GlobalConfigService) {}
 
   async getSystemInfo(): Promise<
     SystemInformation & { workspaceRoot: string }
@@ -23,7 +13,7 @@ export class SystemService implements OnModuleInit {
     const systemInfo = await systemInfoManager.getSystemInfo();
     return {
       ...systemInfo,
-      workspaceRoot: this.workspaceRoot,
+      workspaceRoot: this.globalConfigService.getWorkspaceRoot(),
     };
   }
 }

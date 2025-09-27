@@ -9,53 +9,28 @@ import {
   NotFoundException,
   InternalServerErrorException,
   Logger,
-  OnModuleInit,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { WorkspaceService } from './workspace.service';
 import { WorkspaceFileService } from './services/workspace-file.service';
 import { AgentPoolService } from '../agents/services/agent-pool.service';
 import { ConversationService } from '../chat/services/conversation.service';
+import { GlobalConfigService } from '../shared/services/global-config.service';
 import * as path from 'path';
 import { existsSync, statSync } from 'fs';
-import {
-  setWorkspaceRoot,
-  getWorkspaceRoot,
-} from '../../shared/utils/settings-directory';
-import { getHomeDirectory } from '../../utils/settingsDirectory';
 
 @ApiTags('workspace')
 @Controller('api/workspace')
-export class WorkspaceController implements OnModuleInit {
+export class WorkspaceController {
   private readonly logger = new Logger(WorkspaceController.name);
-  private currentWorkingDirectory: string = process.cwd();
-  private workspaceRoot: string = process.cwd();
 
   constructor(
     private readonly workspaceService: WorkspaceService,
     private readonly workspaceFileService: WorkspaceFileService,
     private readonly agentPoolService: AgentPoolService,
-    private readonly conversationService: ConversationService
+    private readonly conversationService: ConversationService,
+    private readonly globalConfigService: GlobalConfigService
   ) {}
-
-  async onModuleInit() {
-    // Load persisted workspace root from settings
-    const persistedWorkspaceRoot = await getWorkspaceRoot();
-
-    if (persistedWorkspaceRoot) {
-      this.workspaceRoot = persistedWorkspaceRoot;
-      this.currentWorkingDirectory = persistedWorkspaceRoot;
-      this.logger.log(
-        `Loaded workspace root from settings: ${this.workspaceRoot}`
-      );
-    } else {
-      // Use default if no persisted root
-      const defaultRoot = process.env.WORKSPACE_ROOT || getHomeDirectory();
-      this.workspaceRoot = defaultRoot;
-      this.currentWorkingDirectory = defaultRoot;
-      this.logger.log(`Using default workspace root: ${this.workspaceRoot}`);
-    }
-  }
 
   @Get('directory')
   @ApiOperation({ summary: 'Get current workspace directory' })
@@ -72,9 +47,10 @@ export class WorkspaceController implements OnModuleInit {
   })
   async getWorkspaceDirectory() {
     try {
+      const currentDir = this.globalConfigService.getCurrentWorkingDirectory();
       return {
-        currentDirectory: this.currentWorkingDirectory,
-        absolutePath: this.currentWorkingDirectory,
+        currentDirectory: currentDir,
+        absolutePath: currentDir,
       };
     } catch (error: unknown) {
       const errorMessage =
@@ -116,11 +92,12 @@ export class WorkspaceController implements OnModuleInit {
       }
 
       // Allow both absolute and relative paths
+      const currentDir = this.globalConfigService.getCurrentWorkingDirectory();
       let fullPath: string;
       if (path.isAbsolute(newPath)) {
         fullPath = newPath;
       } else {
-        fullPath = path.resolve(this.currentWorkingDirectory, newPath);
+        fullPath = path.resolve(currentDir, newPath);
       }
 
       // Check if the path exists and is a directory
@@ -133,10 +110,10 @@ export class WorkspaceController implements OnModuleInit {
         throw new BadRequestException('Path is not a directory');
       }
 
-      this.currentWorkingDirectory = fullPath;
+      this.globalConfigService.updateCurrentWorkingDirectory(fullPath);
       return {
-        currentDirectory: this.currentWorkingDirectory,
-        absolutePath: this.currentWorkingDirectory,
+        currentDirectory: fullPath,
+        absolutePath: fullPath,
       };
     } catch (error: unknown) {
       if (
@@ -167,8 +144,8 @@ export class WorkspaceController implements OnModuleInit {
   async getWorkspaceRoot() {
     try {
       return {
-        workspaceRoot: this.workspaceRoot,
-        currentDirectory: this.currentWorkingDirectory,
+        workspaceRoot: this.globalConfigService.getWorkspaceRoot(),
+        currentDirectory: this.globalConfigService.getCurrentWorkingDirectory(),
       };
     } catch (error: unknown) {
       const errorMessage =
@@ -211,11 +188,12 @@ export class WorkspaceController implements OnModuleInit {
       }
 
       // Resolve path - can be relative to current working directory or absolute
+      const currentDir = this.globalConfigService.getCurrentWorkingDirectory();
       let fullPath: string;
       if (path.isAbsolute(newPath)) {
         fullPath = newPath;
       } else {
-        fullPath = path.resolve(this.currentWorkingDirectory, newPath);
+        fullPath = path.resolve(currentDir, newPath);
       }
 
       // Check if the path exists and is a directory
@@ -229,26 +207,23 @@ export class WorkspaceController implements OnModuleInit {
       }
 
       // Only update and log if workspace root actually changed
-      if (this.workspaceRoot !== fullPath) {
-        // Update workspace root and reset current directory to the new root
-        this.workspaceRoot = fullPath;
-        this.currentWorkingDirectory = this.workspaceRoot;
+      const currentRoot = this.globalConfigService.getWorkspaceRoot();
+      if (currentRoot !== fullPath) {
+        // Update workspace root globally (also updates current directory and persists)
+        await this.globalConfigService.updateWorkspaceRoot(fullPath);
 
         // Update workspace root for all agents in the pool
-        this.agentPoolService.updateAllAgentsWorkspace(this.workspaceRoot);
+        this.agentPoolService.updateAllAgentsWorkspace(fullPath);
 
         // Update conversation manager workspace
-        this.conversationService.updateWorkspaceRoot(this.workspaceRoot);
+        this.conversationService.updateWorkspaceRoot(fullPath);
 
-        // Save workspace root to persistent storage
-        await setWorkspaceRoot(this.workspaceRoot);
-
-        this.logger.log(`Workspace root changed to: ${this.workspaceRoot}`);
+        this.logger.log(`Workspace root changed to: ${fullPath}`);
       }
 
       return {
-        workspaceRoot: this.workspaceRoot,
-        currentDirectory: this.currentWorkingDirectory,
+        workspaceRoot: this.globalConfigService.getWorkspaceRoot(),
+        currentDirectory: this.globalConfigService.getCurrentWorkingDirectory(),
         message: 'Workspace root changed successfully',
       };
     } catch (error: unknown) {

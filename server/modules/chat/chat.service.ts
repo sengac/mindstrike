@@ -4,7 +4,6 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as path from 'path';
 import * as fs from 'fs/promises';
@@ -12,6 +11,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { ChatAgent } from '../../agents/chatAgent';
 import { cleanContentForLLM } from '../../utils/contentFilter';
 import { GlobalLlmConfigService } from '../shared/services/global-llm-config.service';
+import { GlobalConfigService } from '../shared/services/global-config.service';
 
 // LLM config interface
 interface CurrentLlmConfig {
@@ -63,7 +63,6 @@ interface SendMessageResult {
 @Injectable()
 export class ChatService {
   private readonly logger = new Logger(ChatService.name);
-  private workspaceRoot: string;
   private chatsPath: string;
   private threads: Map<string, Thread> = new Map();
   private isLoaded = false;
@@ -73,15 +72,16 @@ export class ChatService {
   private currentLlmConfig: CurrentLlmConfig;
 
   constructor(
-    private configService: ConfigService,
     private eventEmitter: EventEmitter2,
-    private readonly globalLlmConfigService: GlobalLlmConfigService
+    private readonly globalLlmConfigService: GlobalLlmConfigService,
+    private readonly globalConfigService: GlobalConfigService
   ) {
     // Get reference to global config (shared object like Express)
     this.currentLlmConfig = this.globalLlmConfigService.getCurrentLlmConfig();
-    this.workspaceRoot =
-      this.configService?.get<string>('WORKSPACE_ROOT') ?? process.cwd();
-    this.chatsPath = path.join(this.workspaceRoot, 'mindstrike-chats.json');
+    this.chatsPath = path.join(
+      this.globalConfigService.getWorkspaceRoot(),
+      'mindstrike-chats.json'
+    );
     this.loadThreads();
   }
 
@@ -173,7 +173,7 @@ Respond with only the title, no other text.`;
 
       // Create a clean agent instance with no chat history, no system prompt, and no tools
       const titleAgent = new ChatAgent({
-        workspaceRoot: this.workspaceRoot,
+        workspaceRoot: this.globalConfigService.getWorkspaceRoot(),
         llmConfig: {
           baseURL: this.currentLlmConfig.baseURL!,
           model: this.currentLlmConfig.model!,

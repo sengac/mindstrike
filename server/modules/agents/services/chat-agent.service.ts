@@ -18,7 +18,15 @@ export class ChatAgentService extends BaseAgentService {
   }
 
   async initializeAgent(config: AgentConfig): Promise<void> {
-    await this.initialize(config);
+    this.logger.debug(`[NEST] ChatAgentService.initializeAgent called`);
+    this.logger.debug(`[NEST] Config:`, config);
+    try {
+      await this.initialize(config);
+      this.logger.debug(`[NEST] ChatAgentService.initialize completed`);
+    } catch (error) {
+      this.logger.error(`[NEST] ChatAgentService.initialize failed:`, error);
+      throw error;
+    }
   }
 
   getDefaultPrompt(): string {
@@ -26,6 +34,10 @@ export class ChatAgentService extends BaseAgentService {
   }
 
   createSystemPrompt(): string {
-    return this.config?.customPrompt ?? DEFAULT_CHAT_ROLE;
+    this.logger.debug(`[NEST] ChatAgentService.createSystemPrompt called`);
+    this.logger.debug(`[NEST] this.config:`, this.config);
+    const prompt = this.config?.customPrompt ?? DEFAULT_CHAT_ROLE;
+    this.logger.debug(`[NEST] Returning prompt: ${prompt}`);
+    return prompt;
   }
 }

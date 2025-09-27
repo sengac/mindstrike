@@ -116,7 +116,7 @@ export class DebugController {
       const fixPrompt = this.generateDebugFixPrompt(request);
 
       // Create a simple agent instance for debugging
-      const agent = this.agentPoolService.getCurrentAgent();
+      const agent = await this.agentPoolService.getCurrentAgent();
 
       // Send request to LLM with debugging context
       const debugThreadId = `debug-${Date.now()}`;

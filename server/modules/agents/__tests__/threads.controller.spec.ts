@@ -22,7 +22,7 @@ describe('ThreadsController', () => {
     mockAgentsService = {};
 
     mockConversationService = {
-      getThreadList: vi.fn().mockReturnValue([
+      getThreadList: vi.fn().mockResolvedValue([
         {
           id: 'thread-123',
           name: 'Test Thread',
@@ -67,7 +67,7 @@ describe('ThreadsController', () => {
     it('should handle pagination', async () => {
       (
         mockConversationService.getThreadList as ReturnType<typeof vi.fn>
-      ).mockReturnValue([
+      ).mockResolvedValue([
         {
           id: '1',
           name: 'Thread 1',

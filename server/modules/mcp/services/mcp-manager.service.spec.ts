@@ -44,6 +44,7 @@ describe('McpManagerService', () => {
     getServerLogs: vi.fn().mockResolvedValue([]),
     shutdown: vi.fn().mockResolvedValue(undefined),
     removeServerConfig: vi.fn().mockResolvedValue({ success: true }),
+    getLangChainTools: vi.fn().mockReturnValue([]),
     on: vi.fn(),
     off: vi.fn(),
     removeAllListeners: vi.fn(),
@@ -381,6 +382,39 @@ describe('McpManagerService', () => {
       await expect(service.getServerLogs()).rejects.toThrow(
         'Failed to get logs'
       );
+    });
+  });
+
+  describe('getLangChainTools', () => {
+    it('should return LangChain tools from MCPManager', () => {
+      const mockTools = [
+        { name: 'tool1', description: 'Test tool 1' },
+        { name: 'tool2', description: 'Test tool 2' },
+      ];
+      mockMcpManager.getLangChainTools.mockReturnValue(mockTools);
+
+      const result = service.getLangChainTools();
+
+      expect(mockMcpManager.getLangChainTools).toHaveBeenCalled();
+      expect(result).toEqual(mockTools);
+    });
+
+    it('should return empty array when mcpManager is not initialized', () => {
+      // Temporarily set mcpManager to null
+      Object.defineProperty(service, 'mcpManager', {
+        value: null,
+        writable: true,
+      });
+
+      const result = service.getLangChainTools();
+
+      expect(result).toEqual([]);
+
+      // Restore mcpManager
+      Object.defineProperty(service, 'mcpManager', {
+        value: mockMcpManager,
+        writable: true,
+      });
     });
   });
 });

@@ -149,13 +149,51 @@ export abstract class BaseAgentService {
     config: AgentConfig,
     agentId?: string
   ): Promise<void> {
+    this.logger.debug(`[NEST] BaseAgentService.initialize called`);
+    this.logger.debug(`[NEST] Config received:`, config);
+
     this.config = config;
     this.agentId = agentId ?? this.generateId();
+    this.logger.debug(`[NEST] Agent ID: ${this.agentId}`);
 
-    this.chatModel = this.createChatModel(config.llmConfig);
-    this.conversationManager = new ConversationManager(config.workspaceRoot);
-    this.initializeLangChainTools();
-    this.systemPrompt = this.createSystemPrompt();
+    try {
+      this.logger.debug(`[NEST] Creating chat model...`);
+      this.chatModel = this.createChatModel(config.llmConfig);
+      this.logger.debug(`[NEST] Chat model created`);
+    } catch (error) {
+      this.logger.error(`[NEST] Failed to create chat model:`, error);
+      throw error;
+    }
+
+    try {
+      this.logger.debug(
+        `[NEST] Creating conversation manager for workspace: ${config.workspaceRoot}`
+      );
+      this.conversationManager = new ConversationManager(config.workspaceRoot);
+      this.logger.debug(`[NEST] Conversation manager created`);
+    } catch (error) {
+      this.logger.error(`[NEST] Failed to create conversation manager:`, error);
+      throw error;
+    }
+
+    try {
+      this.logger.debug(`[NEST] Initializing LangChain tools...`);
+      this.initializeLangChainTools();
+      this.logger.debug(`[NEST] LangChain tools initialized`);
+    } catch (error) {
+      this.logger.error(`[NEST] Failed to initialize LangChain tools:`, error);
+      throw error;
+    }
+
+    try {
+      this.logger.debug(`[NEST] Creating system prompt...`);
+      this.logger.debug(`[NEST] this.config is:`, this.config);
+      this.systemPrompt = this.createSystemPrompt();
+      this.logger.debug(`[NEST] System prompt created: ${this.systemPrompt}`);
+    } catch (error) {
+      this.logger.error(`[NEST] Failed to create system prompt:`, error);
+      throw error;
+    }
 
     const escapedSystemPrompt = this.systemPrompt
       .replace(/{/g, '{{')
@@ -166,10 +204,12 @@ export abstract class BaseAgentService {
       ['human', '{input}'],
       ['placeholder', '{agent_scratchpad}'],
     ]);
+    this.logger.debug(`[NEST] Prompt template created`);
 
     await this.initializeAgentExecutor().catch(error => {
-      this.logger.error('Failed to initialize agent executor:', error);
+      this.logger.error('[NEST] Failed to initialize agent executor:', error);
     });
+    this.logger.debug(`[NEST] BaseAgentService.initialize completed`);
   }
 
   abstract createSystemPrompt(): string;

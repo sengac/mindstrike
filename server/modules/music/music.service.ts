@@ -4,17 +4,11 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { GlobalConfigService } from '../shared/services/global-config.service';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { existsSync, createReadStream, statSync } from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-import {
-  setMusicRoot,
-  getMusicRoot,
-  getWorkspaceRoot,
-  getHomeDirectory,
-} from '../../utils/settingsDirectory';
 
 export interface AudioFile {
   name: string;
@@ -53,59 +47,27 @@ interface DeletePlaylistResult {
 @Injectable()
 export class MusicService {
   private readonly logger = new Logger(MusicService.name);
-  private musicRoot: string | null = null;
-  private workspaceRoot: string | null = null;
-  private playlistsPath: string | null = null;
   private supportedExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.flac'];
-  private initialized = false;
 
-  constructor(private configService: ConfigService) {
-    this.logger.log('MusicService constructor called');
-    this.logger.log(`ConfigService injected: ${!!this.configService}`);
+  constructor(private readonly globalConfigService: GlobalConfigService) {
+    this.logger.log('MusicService initialized with GlobalConfigService');
   }
 
-  private async ensureInitialized(): Promise<void> {
-    if (this.initialized) {
-      return;
-    }
-
-    this.logger.log('MusicService: Initializing configuration...');
-
-    // Load persisted settings or use defaults
-    const persistedMusicRoot = await getMusicRoot();
-    const persistedWorkspaceRoot = await getWorkspaceRoot();
-
-    this.musicRoot =
-      persistedMusicRoot ??
-      this.configService?.get<string>('MUSIC_ROOT') ??
-      getHomeDirectory();
-
-    this.workspaceRoot =
-      persistedWorkspaceRoot ??
-      this.configService?.get<string>('WORKSPACE_ROOT') ??
-      getHomeDirectory();
-
-    this.playlistsPath = path.join(this.workspaceRoot, 'playlists.json');
-
-    this.logger.log(
-      `MusicService: Initialized with music root: ${this.musicRoot}`
+  private getPlaylistsPath(): string {
+    return path.join(
+      this.globalConfigService.getWorkspaceRoot(),
+      'playlists.json'
     );
-    this.logger.log(
-      `MusicService: Initialized with workspace root: ${this.workspaceRoot}`
-    );
-
-    this.initialized = true;
   }
 
   async getMusicRoot(): Promise<MusicRootInfo> {
-    await this.ensureInitialized();
-
-    const exists = existsSync(this.musicRoot!);
+    const musicRoot = this.globalConfigService.getMusicRoot();
+    const exists = existsSync(musicRoot);
     let writable = false;
 
     if (exists) {
       try {
-        await fs.access(this.musicRoot!, fs.constants.W_OK);
+        await fs.access(musicRoot, fs.constants.W_OK);
         writable = true;
       } catch {
         writable = false;
@@ -113,7 +75,7 @@ export class MusicService {
     }
 
     return {
-      root: this.musicRoot!,
+      root: musicRoot,
       exists,
       writable,
     };
@@ -122,10 +84,9 @@ export class MusicService {
   async setMusicRoot(
     newPath: string
   ): Promise<{ musicRoot: string; message: string }> {
-    await this.ensureInitialized();
-
-    // Use the loaded workspace root
-    const currentWorkingDirectory = this.workspaceRoot!;
+    // Use the global workspace root for relative path resolution
+    const currentWorkingDirectory =
+      this.globalConfigService.getCurrentWorkingDirectory();
 
     // Resolve path - can be relative to current working directory or absolute
     let fullPath: string;
@@ -145,19 +106,11 @@ export class MusicService {
       throw new BadRequestException('Path is not a directory');
     }
 
-    // Only update and log if music root actually changed
-    if (this.musicRoot !== fullPath) {
-      // Update music root
-      this.musicRoot = fullPath;
-
-      // Save music root to persistent storage
-      await setMusicRoot(this.musicRoot);
-
-      this.logger.log(`Music root changed to: ${this.musicRoot}`);
-    }
+    // Update music root globally (persists automatically)
+    await this.globalConfigService.updateMusicRoot(fullPath);
 
     return {
-      musicRoot: this.musicRoot,
+      musicRoot: this.globalConfigService.getMusicRoot(),
       message: 'Music root changed successfully',
     };
   }
@@ -166,14 +119,13 @@ export class MusicService {
     searchPath?: string,
     recursive?: boolean
   ): Promise<AudioFile[]> {
-    await this.ensureInitialized();
-
+    const musicRoot = this.globalConfigService.getMusicRoot();
     const targetPath = searchPath
-      ? path.join(this.musicRoot!, searchPath)
-      : this.musicRoot!;
+      ? path.join(musicRoot, searchPath)
+      : musicRoot;
 
     // Security check
-    if (!targetPath.startsWith(this.musicRoot!)) {
+    if (!targetPath.startsWith(musicRoot)) {
       throw new BadRequestException('Invalid path: outside music root');
     }
 
@@ -195,7 +147,7 @@ export class MusicService {
           const ext = path.extname(entry.name).toLowerCase();
           if (this.supportedExtensions.includes(ext)) {
             const stats = await fs.stat(fullPath);
-            const relativePath = path.relative(this.musicRoot!, fullPath);
+            const relativePath = path.relative(musicRoot, fullPath);
 
             audioFiles.push({
               name: entry.name,
@@ -217,12 +169,11 @@ export class MusicService {
   }
 
   async streamAudio(audioPath: string): Promise<NodeJS.ReadableStream> {
-    await this.ensureInitialized();
-
-    const fullPath = path.join(this.musicRoot!, audioPath);
+    const musicRoot = this.globalConfigService.getMusicRoot();
+    const fullPath = path.join(musicRoot, audioPath);
 
     // Security check
-    if (!fullPath.startsWith(this.musicRoot!)) {
+    if (!fullPath.startsWith(musicRoot)) {
       throw new BadRequestException('Invalid path: outside music root');
     }
 
@@ -262,10 +213,10 @@ export class MusicService {
   }
 
   async loadPlaylists(): Promise<Playlist[]> {
-    await this.ensureInitialized();
+    const playlistsPath = this.getPlaylistsPath();
 
     try {
-      const data = await fs.readFile(this.playlistsPath!, 'utf-8');
+      const data = await fs.readFile(playlistsPath, 'utf-8');
       return JSON.parse(data);
     } catch (error) {
       // File doesn't exist or is invalid
@@ -305,11 +256,11 @@ export class MusicService {
   }
 
   private async savePlaylistsToFile(playlists: Playlist[]): Promise<void> {
-    await this.ensureInitialized();
+    const playlistsPath = this.getPlaylistsPath();
 
     try {
       await fs.writeFile(
-        this.playlistsPath!,
+        playlistsPath,
         JSON.stringify(playlists, null, 2),
         'utf-8'
       );

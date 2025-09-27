@@ -47,7 +47,7 @@ export class ConversationController {
     const previousThreadId = this.agentPoolService.getCurrentThreadId();
     try {
       await this.agentPoolService.setCurrentThread(threadId);
-      const agent = this.agentPoolService.getCurrentAgent();
+      const agent = await this.agentPoolService.getCurrentAgent();
 
       const conversation = agent.getConversation(threadId);
 

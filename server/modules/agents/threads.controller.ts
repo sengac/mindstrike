@@ -67,7 +67,7 @@ export class ThreadsController {
     if (!this.conversationService) {
       return [];
     }
-    const threads = this.conversationService.getThreadList();
+    const threads = await this.conversationService.getThreadList();
 
     // Apply filtering and pagination
     let result = threads;

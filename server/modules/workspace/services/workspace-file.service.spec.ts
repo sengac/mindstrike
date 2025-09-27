@@ -1,7 +1,6 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import type { ConfigService } from '@nestjs/config';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { WorkspaceFileService } from './workspace-file.service';
+import type { GlobalConfigService } from '../../shared/services/global-config.service';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -9,17 +8,24 @@ vi.mock('fs/promises');
 
 describe('WorkspaceFileService', () => {
   let service: WorkspaceFileService;
-  let configService: Partial<ConfigService>;
+  let globalConfigService: Partial<GlobalConfigService>;
   const mockWorkspaceRoot = '/test/workspace';
 
   beforeEach(async () => {
-    // Create mock ConfigService
-    configService = {
-      get: vi.fn().mockReturnValue(mockWorkspaceRoot),
+    // Create mock GlobalConfigService
+    globalConfigService = {
+      getWorkspaceRoot: vi.fn().mockReturnValue(mockWorkspaceRoot),
+      getMusicRoot: vi.fn().mockReturnValue('/test/music'),
+      getCurrentWorkingDirectory: vi.fn().mockReturnValue(mockWorkspaceRoot),
+      updateWorkspaceRoot: vi.fn(),
+      updateMusicRoot: vi.fn(),
+      updateCurrentWorkingDirectory: vi.fn(),
     };
 
     // Directly instantiate the service
-    service = new WorkspaceFileService(configService as ConfigService);
+    service = new WorkspaceFileService(
+      globalConfigService as GlobalConfigService
+    );
 
     vi.clearAllMocks();
   });
@@ -29,18 +35,13 @@ describe('WorkspaceFileService', () => {
       expect(service).toBeDefined();
     });
 
-    it('should use workspace root from config', () => {
-      // Service constructor calls get('WORKSPACE_ROOT')
-      // Create a new service instance to test the constructor
-      const newConfigService = {
-        get: vi.fn().mockReturnValue('/new/workspace'),
-      };
-      const newService = new WorkspaceFileService(
-        newConfigService as ConfigService
-      );
+    it('should use workspace root from global config when listing files', async () => {
+      // Service now gets workspace root dynamically when needed
+      (fs.readdir as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 
-      expect(newConfigService.get).toHaveBeenCalledWith('WORKSPACE_ROOT');
-      expect(newService).toBeDefined();
+      await service.listFiles();
+
+      expect(globalConfigService.getCurrentWorkingDirectory).toHaveBeenCalled();
     });
   });
 
