@@ -85,6 +85,7 @@ export interface ConversationMessage {
   model?: string; // LLM model used for assistant messages
   images?: ImageAttachment[]; // Image attachments for user messages
   notes?: NotesAttachment[]; // Notes attachments for user messages
+  citations?: string[]; // URL citations for assistant messages (Perplexity)
 }
 
 export interface ImageAttachment {

@@ -8,16 +8,11 @@ import {
   IsNumber,
   IsBoolean,
 } from 'class-validator';
-
-export interface MessageImage {
-  data: string;
-  mimeType: string;
-}
-
-export interface MessageNote {
-  content: string;
-  metadata?: Record<string, unknown>;
-}
+import { Type } from 'class-transformer';
+import type {
+  ImageAttachment,
+  NotesAttachment,
+} from '../types/conversation.types';
 
 export class CreateMessageDto {
   @ApiPropertyOptional({ description: 'The message content', type: String })
@@ -47,14 +42,21 @@ export class CreateMessageDto {
     items: {
       type: 'object',
       properties: {
-        data: { type: 'string', description: 'Base64 encoded image data' },
+        id: { type: 'string' },
+        filename: { type: 'string' },
+        filepath: { type: 'string' },
         mimeType: { type: 'string', example: 'image/png' },
+        size: { type: 'number' },
+        thumbnail: { type: 'string', description: 'Base64 encoded thumbnail' },
+        fullImage: { type: 'string', description: 'Base64 encoded full image' },
+        uploadedAt: { type: 'string', format: 'date-time' },
       },
     },
   })
   @IsOptional()
   @IsArray()
-  images?: MessageImage[];
+  @Type(() => Object) // Add explicit type transformation
+  images?: ImageAttachment[];
 
   @ApiPropertyOptional({
     description: 'Array of notes attached to the message',
@@ -62,14 +64,18 @@ export class CreateMessageDto {
     items: {
       type: 'object',
       properties: {
+        id: { type: 'string' },
+        title: { type: 'string' },
         content: { type: 'string' },
-        metadata: { type: 'object' },
+        nodeLabel: { type: 'string', required: false },
+        attachedAt: { type: 'string', format: 'date-time' },
       },
     },
   })
   @IsOptional()
   @IsArray()
-  notes?: MessageNote[];
+  @Type(() => Object) // Add explicit type transformation
+  notes?: NotesAttachment[];
 
   @ApiPropertyOptional({
     description: 'Whether to use agent mode processing',

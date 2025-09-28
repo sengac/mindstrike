@@ -9,6 +9,7 @@ export interface ConversationMessage {
   model?: string;
   images?: ImageAttachment[];
   notes?: NotesAttachment[];
+  citations?: string[];
 }
 
 export interface ImageAttachment {

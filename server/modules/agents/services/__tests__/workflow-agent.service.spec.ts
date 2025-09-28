@@ -2,12 +2,16 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { WorkflowAgentService } from '../workflow-agent.service';
 import type { SseService } from '../../../events/services/sse.service';
 import type { LfsService } from '../../../content/services/lfs.service';
+import type { McpManagerService } from '../../../mcp/services/mcp-manager.service';
+import type { ConversationService } from '../../../chat/services/conversation.service';
 import { SSEEventType } from '../../../../../src/types';
 
 describe('WorkflowAgentService', () => {
   let service: WorkflowAgentService;
   let mockSseService: Partial<SseService>;
   let mockLfsService: Partial<LfsService>;
+  let mockMcpManagerService: Partial<McpManagerService>;
+  let mockConversationService: Partial<ConversationService>;
 
   beforeEach(() => {
     mockSseService = {
@@ -21,11 +25,33 @@ describe('WorkflowAgentService', () => {
       getStats: vi.fn(),
     };
 
+    mockMcpManagerService = {
+      getAvailableTools: vi.fn().mockReturnValue([]),
+      executeToolCall: vi.fn().mockResolvedValue({ result: 'mocked' }),
+    };
+
+    mockConversationService = {
+      load: vi.fn().mockResolvedValue(undefined),
+      getThread: vi.fn().mockReturnValue(null),
+      getThreadMessages: vi.fn().mockReturnValue([]),
+      createThread: vi.fn().mockResolvedValue({
+        id: 'test-thread',
+        name: 'Test Thread',
+        messages: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+      addMessage: vi.fn().mockResolvedValue(undefined),
+      updateMessage: vi.fn().mockResolvedValue(undefined),
+    };
+
     service = new WorkflowAgentService(
       mockSseService as SseService,
       mockLfsService as LfsService,
       { workspaceRoot: '/test' },
-      'test-agent-id'
+      'test-agent-id',
+      mockMcpManagerService as McpManagerService,
+      mockConversationService as ConversationService
     );
   });
 

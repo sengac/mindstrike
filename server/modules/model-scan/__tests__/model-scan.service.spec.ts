@@ -64,7 +64,11 @@ describe('ModelScanService', () => {
 
   describe('startSearch', () => {
     it('should start a search and return searchId', async () => {
-      const searchParams = { query: 'llama', searchType: 'text' };
+      const searchParams = {
+        query: 'llama',
+        searchType: 'text',
+        filters: {},
+      };
       const mockResults = [{ name: 'model1' }, { name: 'model2' }];
 
       vi.mocked(modelFetcher.searchModelsWithProgress).mockResolvedValue(
@@ -80,8 +84,46 @@ describe('ModelScanService', () => {
       );
     });
 
+    it('should use searchType when provided', async () => {
+      const searchParams = {
+        query: 'llama',
+        searchType: 'name',
+        filters: {},
+      };
+      const mockResults = [{ name: 'model1' }, { name: 'model2' }];
+
+      // Track if mock was called with correct parameters
+      let capturedType: string | undefined;
+
+      vi.mocked(modelFetcher.searchModelsWithProgress).mockImplementation(
+        async (query, type, callback, signal) => {
+          capturedType = type;
+          // Simulate some progress updates
+          if (callback) {
+            callback({ type: 'started', message: 'Starting' });
+          }
+          return mockResults;
+        }
+      );
+
+      const searchId = await service.startSearch(searchParams);
+
+      expect(searchId).toBeDefined();
+
+      // Wait for the async search to actually execute
+      await new Promise(resolve => setTimeout(resolve, 600));
+
+      // Verify the searchType was passed correctly
+      expect(capturedType).toBe('name');
+      expect(modelFetcher.searchModelsWithProgress).toHaveBeenCalled();
+    });
+
     it('should broadcast search progress', async () => {
-      const searchParams = { query: 'test', searchType: 'text' };
+      const searchParams = {
+        query: 'test',
+        searchType: 'text',
+        filters: {},
+      };
       const mockResults = [{ name: 'model1' }];
       let progressCallback:
         | ((progress: Record<string, unknown>) => void)

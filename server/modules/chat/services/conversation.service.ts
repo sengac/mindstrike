@@ -195,7 +195,19 @@ export class ConversationService {
 
     thread ??= await this.createThread();
 
-    thread.messages.push(message);
+    // Check if message with this ID already exists and update it instead
+    const existingIndex = thread.messages.findIndex(m => m.id === message.id);
+    if (existingIndex !== -1) {
+      // Update existing message instead of adding duplicate
+      thread.messages[existingIndex] = {
+        ...thread.messages[existingIndex],
+        ...message,
+      };
+    } else {
+      // Add new message
+      thread.messages.push(message);
+    }
+
     thread.updatedAt = new Date();
     await this.save();
   }

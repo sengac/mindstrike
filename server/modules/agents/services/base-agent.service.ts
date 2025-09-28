@@ -9,7 +9,7 @@ import {
 import { ChatOllama } from '@langchain/ollama';
 import { ChatOpenAI } from '@langchain/openai';
 import { ChatAnthropic } from '@langchain/anthropic';
-import { ChatPerplexity } from '@langchain/community/chat_models/perplexity';
+import { ChatPerplexityExtended } from './chat-perplexity-extended';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import type { DynamicStructuredTool } from '@langchain/core/tools';
 import { AgentExecutor, createToolCallingAgent } from 'langchain/agents';
@@ -19,7 +19,7 @@ import { cleanContentForLLM } from '../../../shared/utils/content-filter';
 import { LLMConfigManager } from '../../../shared/utils/llm-config-manager';
 import { McpManagerService } from '../../mcp/services/mcp-manager.service';
 import { SseService } from '../../events/services/sse.service';
-import { ConversationManager } from '../../../shared/utils/conversation-manager';
+import { ConversationService } from '../../chat/services/conversation.service';
 import { LfsService } from '../../content/services/lfs.service';
 
 export interface AgentConfig {
@@ -90,6 +90,7 @@ export interface ConversationMessage {
   model?: string;
   images?: ImageAttachment[];
   notes?: NotesAttachment[];
+  citations?: string[];
 }
 
 @Injectable()
@@ -99,7 +100,7 @@ export abstract class BaseAgentService {
   protected systemPrompt: string;
   protected config: AgentConfig;
   protected agentId: string;
-  protected conversationManager: ConversationManager;
+  protected conversationManager: ConversationService;
   protected langChainTools: DynamicStructuredTool[] = [];
   protected agentExecutor?: AgentExecutor;
   protected promptTemplate: ChatPromptTemplate;
@@ -108,8 +109,11 @@ export abstract class BaseAgentService {
   constructor(
     protected readonly mcpManagerService: McpManagerService,
     protected readonly sseService: SseService,
-    protected readonly lfsService: LfsService
-  ) {}
+    protected readonly lfsService: LfsService,
+    protected readonly conversationService: ConversationService
+  ) {
+    this.conversationManager = conversationService;
+  }
 
   get llmConfig(): AgentConfig['llmConfig'] {
     return this.config.llmConfig;
@@ -165,16 +169,10 @@ export abstract class BaseAgentService {
       throw error;
     }
 
-    try {
-      this.logger.debug(
-        `[NEST] Creating conversation manager for workspace: ${config.workspaceRoot}`
-      );
-      this.conversationManager = new ConversationManager(config.workspaceRoot);
-      this.logger.debug(`[NEST] Conversation manager created`);
-    } catch (error) {
-      this.logger.error(`[NEST] Failed to create conversation manager:`, error);
-      throw error;
-    }
+    // ConversationService is now injected via constructor, no need to create it
+    this.logger.debug(`[NEST] Using injected ConversationService`);
+    // Ensure it's loaded
+    await this.conversationManager.load();
 
     try {
       this.logger.debug(`[NEST] Initializing LangChain tools...`);
@@ -251,7 +249,7 @@ export abstract class BaseAgentService {
         });
 
       case 'perplexity':
-        return new ChatPerplexity({
+        return new ChatPerplexityExtended({
           apiKey: llmConfig.apiKey,
           model: llmConfig.model,
           ...baseConfig,
@@ -442,6 +440,12 @@ export abstract class BaseAgentService {
 
               for (const image of msg.images) {
                 let imageData = image.fullImage ?? image.thumbnail;
+                if (!imageData) {
+                  this.logger.warn(
+                    'Image missing both fullImage and thumbnail data'
+                  );
+                  continue;
+                }
                 let mediaType = image.mimeType ?? 'image/jpeg';
 
                 if (imageData.startsWith('data:')) {
@@ -483,7 +487,59 @@ export abstract class BaseAgentService {
 
               return new HumanMessage({ content: contentArray });
             } else if (isPerplexity) {
-              return new HumanMessage(content);
+              // Perplexity requires a specific format for images with our extended class
+              const contentArray: Array<{
+                type: 'text' | 'image_url';
+                text?: string;
+                image_url?: { url: string };
+              }> = [];
+
+              // Add text content if present
+              let textContent = content ?? '';
+              if (msg.notes && msg.notes.length > 0) {
+                const notesText = this.formatAttachedNotes(msg.notes);
+                textContent += notesText;
+              }
+
+              if (textContent?.trim()) {
+                contentArray.push({
+                  type: 'text',
+                  text: textContent,
+                });
+              }
+
+              // Add images for Perplexity
+              for (const image of msg.images) {
+                let imageUrl = image.fullImage ?? image.thumbnail;
+                if (!imageUrl) {
+                  this.logger.warn(
+                    'Image missing both fullImage and thumbnail data'
+                  );
+                  continue;
+                }
+
+                // Ensure the image has a proper data URL format
+                if (!imageUrl.startsWith('data:')) {
+                  const mimeType = image.mimeType ?? 'image/jpeg';
+                  imageUrl = `data:${mimeType};base64,${imageUrl}`;
+                }
+
+                contentArray.push({
+                  type: 'image_url',
+                  image_url: {
+                    url: imageUrl,
+                  },
+                });
+              }
+
+              // If no content array items, just return plain text message
+              if (contentArray.length === 0) {
+                return new HumanMessage('');
+              }
+
+              // For Perplexity, wrap the content array in an object
+              // This ensures HumanMessage sets it as the content property
+              return new HumanMessage({ content: contentArray });
             } else if (isGoogle) {
               const contentArray: Array<{
                 type: 'text' | 'image_url';
@@ -530,6 +586,12 @@ export abstract class BaseAgentService {
 
               for (const image of msg.images) {
                 let imageUrl = image.fullImage ?? image.thumbnail;
+                if (!imageUrl) {
+                  this.logger.warn(
+                    'Image missing both fullImage and thumbnail data'
+                  );
+                  continue;
+                }
 
                 if (!imageUrl.startsWith('data:')) {
                   const mimeType = image.mimeType ?? 'image/jpeg';
@@ -559,6 +621,12 @@ export abstract class BaseAgentService {
 
               for (const image of msg.images) {
                 let imageUrl = image.fullImage ?? image.thumbnail;
+                if (!imageUrl) {
+                  this.logger.warn(
+                    'Image missing both fullImage and thumbnail data'
+                  );
+                  continue;
+                }
 
                 if (!imageUrl.startsWith('data:')) {
                   imageUrl = `data:${image.mimeType ?? 'image/jpeg'};base64,${imageUrl}`;
@@ -642,58 +710,133 @@ export abstract class BaseAgentService {
   }
 
   private reorderMessagesForPerplexity(messages: BaseMessage[]): BaseMessage[] {
+    // Separate system messages from conversation messages
     const systemMessages = messages.filter(msg => msg instanceof SystemMessage);
     const conversationMessages = messages.filter(
       msg => !(msg instanceof SystemMessage)
     );
 
     if (conversationMessages.length === 0) {
-      return systemMessages;
+      // No conversation messages, just return system + a user message
+      return [...systemMessages, new HumanMessage('Please respond.')];
     }
 
-    const userMessages = conversationMessages.filter(
-      msg => msg instanceof HumanMessage
-    );
-    const assistantMessages = conversationMessages.filter(
-      msg => msg instanceof AIMessage
-    );
+    // First, merge consecutive messages of the same role
+    const mergedMessages: BaseMessage[] = [];
+    let currentMessage: BaseMessage | null = null;
 
-    if (userMessages.length === 0) {
-      return messages;
+    for (const msg of conversationMessages) {
+      if (!currentMessage) {
+        currentMessage = msg;
+      } else if (
+        (currentMessage instanceof HumanMessage &&
+          msg instanceof HumanMessage) ||
+        (currentMessage instanceof AIMessage && msg instanceof AIMessage)
+      ) {
+        // Merge consecutive messages of the same role
+        const combinedContent = this.combineMessageContent(
+          currentMessage.content,
+          msg.content
+        );
+        if (currentMessage instanceof HumanMessage) {
+          currentMessage = new HumanMessage(combinedContent);
+        } else {
+          currentMessage = new AIMessage(combinedContent);
+        }
+      } else {
+        // Different role, push the current message and start a new one
+        mergedMessages.push(currentMessage);
+        currentMessage = msg;
+      }
     }
 
-    const result = [...systemMessages];
-    result.push(userMessages[0]);
+    // Don't forget the last message
+    if (currentMessage) {
+      mergedMessages.push(currentMessage);
+    }
 
-    let userIndex = 1;
-    let assistantIndex = 0;
+    // Now build the final result ensuring proper alternation
+    const result: BaseMessage[] = [...systemMessages];
 
-    while (
-      userIndex < userMessages.length ||
-      assistantIndex < assistantMessages.length
+    // Ensure we start with a user message
+    let processedMessages = [...mergedMessages];
+
+    // If first message is not a user message, prepend a user message
+    if (
+      processedMessages.length > 0 &&
+      !(processedMessages[0] instanceof HumanMessage)
     ) {
-      if (assistantIndex < assistantMessages.length) {
-        result.push(assistantMessages[assistantIndex]);
-        assistantIndex++;
-      }
+      // Find the first user message
+      const firstUserIndex = processedMessages.findIndex(
+        msg => msg instanceof HumanMessage
+      );
 
-      if (userIndex < userMessages.length) {
-        result.push(userMessages[userIndex]);
-        userIndex++;
+      if (firstUserIndex === -1) {
+        // No user messages at all - add one at the beginning
+        processedMessages.unshift(
+          new HumanMessage('Please continue with the conversation.')
+        );
+      } else if (firstUserIndex > 0) {
+        // There are assistant messages before the first user message
+        // Merge them into the first user message as context
+        const assistantPrefix = processedMessages.slice(0, firstUserIndex);
+        const firstUser = processedMessages[firstUserIndex];
+        const remaining = processedMessages.slice(firstUserIndex + 1);
+
+        const contextContent = assistantPrefix
+          .map(msg => `[Previous assistant response: ${msg.content}]`)
+          .join('\n\n');
+
+        const combinedContent = contextContent + '\n\n' + firstUser.content;
+        processedMessages = [new HumanMessage(combinedContent), ...remaining];
       }
     }
 
+    // Now ensure strict alternation and that we end with a user message
+    let expectingUser = true;
+
+    for (const msg of processedMessages) {
+      const isUser = msg instanceof HumanMessage;
+
+      if (expectingUser && isUser) {
+        result.push(msg);
+        expectingUser = false;
+      } else if (!expectingUser && !isUser) {
+        result.push(msg);
+        expectingUser = true;
+      } else if (expectingUser && !isUser) {
+        // Expected user but got assistant - insert a continuation message
+        result.push(new HumanMessage('Continue.'));
+        result.push(msg);
+        expectingUser = true;
+      } else if (!expectingUser && isUser) {
+        // Expected assistant but got user - skip the alternation
+        result.push(msg);
+        expectingUser = false;
+      }
+    }
+
+    // CRITICAL: Ensure the last message is always a user message
     const lastMessage = result[result.length - 1];
     if (!(lastMessage instanceof HumanMessage)) {
-      if (
-        result.length > 1 &&
-        result[result.length - 2] instanceof HumanMessage
-      ) {
-        result.pop();
-      }
+      // If the last message is not a user message, add one
+      result.push(new HumanMessage('Please provide your response.'));
     }
 
     return result;
+  }
+
+  private combineMessageContent(
+    content1: string | Record<string, unknown> | unknown[],
+    content2: string | Record<string, unknown> | unknown[]
+  ): string {
+    // Convert both contents to strings and combine
+    const str1 =
+      typeof content1 === 'string' ? content1 : JSON.stringify(content1);
+    const str2 =
+      typeof content2 === 'string' ? content2 : JSON.stringify(content2);
+
+    return str1 + '\n\n' + str2;
   }
 
   async processMessage(
@@ -820,6 +963,7 @@ export abstract class BaseAgentService {
       let fullContent = '';
       let tokenCount = 0;
       let lastTokenUpdate = startTime;
+      let citations: string[] | undefined = undefined;
       let accumulatedMessage:
         | {
             tool_calls?: Array<{
@@ -859,6 +1003,11 @@ export abstract class BaseAgentService {
             streamId: this.streamId,
           });
           break;
+        }
+
+        // Extract citations from chunk if present (for Perplexity models)
+        if (chunk.additional_kwargs?.citations) {
+          citations = chunk.additional_kwargs.citations as string[];
         }
 
         if (!accumulatedMessage) {
@@ -932,6 +1081,7 @@ export abstract class BaseAgentService {
         fullContent += chunkContent;
         await this.conversationManager.updateMessage(threadId, assistantMsgId, {
           content: fullContent,
+          ...(citations && { citations }),
         });
 
         tokenCount += Math.max(1, Math.floor(chunkContent.length / 4));
@@ -1051,6 +1201,7 @@ export abstract class BaseAgentService {
         content: fullContent,
         toolCalls,
         status: toolCalls && toolCalls.length > 0 ? 'processing' : 'completed',
+        ...(citations && { citations }),
       });
 
       if (toolCalls && toolCalls.length > 0) {
@@ -1204,7 +1355,11 @@ export abstract class BaseAgentService {
       this.sseService.broadcast('unified-events', {
         type: 'update',
         entityType: 'message',
-        entity: { id: assistantMsgId, status: 'completed' },
+        entity: {
+          id: assistantMsgId,
+          status: 'completed',
+          ...(citations && { citations }),
+        },
         threadId,
         streamId: this.streamId,
       });

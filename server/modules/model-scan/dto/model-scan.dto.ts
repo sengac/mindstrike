@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsOptional, IsNotEmpty } from 'class-validator';
+import { IsString, IsOptional, IsNotEmpty, IsObject } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class ModelSearchDto {
   @ApiProperty({ description: 'Search query string' })
@@ -7,10 +8,21 @@ export class ModelSearchDto {
   @IsNotEmpty()
   query: string;
 
-  @ApiProperty({ description: 'Type of search to perform' })
+  @ApiProperty({
+    description: 'Type of search to perform',
+    default: 'all',
+  })
+  @Transform(({ value }) => value || 'all')
   @IsString()
-  @IsNotEmpty()
   searchType: string;
+
+  @ApiPropertyOptional({
+    description: 'Additional search filters',
+    type: 'object',
+  })
+  @IsObject()
+  @IsOptional()
+  filters?: Record<string, unknown>;
 }
 
 export class StartScanDto {

@@ -142,6 +142,7 @@ describe('ModelScanService - Comprehensive Coverage', () => {
       const searchId = await service.startSearch({
         query: 'test',
         searchType: 'text',
+        filters: {},
       });
 
       // Wait for async error handling - search takes time to fail
@@ -189,6 +190,7 @@ describe('ModelScanService - Comprehensive Coverage', () => {
       const searchId = await service.startSearch({
         query: 'test',
         searchType: 'text',
+        filters: {},
       });
 
       // Wait for search to start
@@ -246,6 +248,7 @@ describe('ModelScanService - Comprehensive Coverage', () => {
       const searchId = await service.startSearch({
         query: 'test',
         searchType: 'text',
+        filters: {},
       });
 
       // Wait for search to complete
@@ -287,6 +290,7 @@ describe('ModelScanService - Comprehensive Coverage', () => {
       const searchId = await service.startSearch({
         query: 'nonexistent',
         searchType: 'text',
+        filters: {},
       });
 
       // Wait for search to complete
@@ -716,6 +720,7 @@ describe('ModelScanService - Comprehensive Coverage', () => {
       const searchId = await service.startSearch({
         query: 'test',
         searchType: 'text',
+        filters: {},
       });
 
       // Wait for search to complete

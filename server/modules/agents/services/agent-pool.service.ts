@@ -6,6 +6,7 @@ import { BaseAgentService } from './base-agent.service';
 import { McpManagerService } from '../../mcp/services/mcp-manager.service';
 import { SseService } from '../../events/services/sse.service';
 import { LfsService } from '../../content/services/lfs.service';
+import { ConversationService } from '../../chat/services/conversation.service';
 import {
   GlobalLlmConfigService,
   GlobalLLMConfig,
@@ -80,6 +81,7 @@ export class AgentPoolService {
     private readonly mcpManagerService: McpManagerService,
     private readonly sseService: SseService,
     private readonly lfsService: LfsService,
+    private readonly conversationService: ConversationService,
     private readonly globalLlmConfigService: GlobalLlmConfigService,
     private readonly globalConfigService: GlobalConfigService
   ) {
@@ -113,7 +115,8 @@ export class AgentPoolService {
       const agent = new ChatAgentService(
         this.mcpManagerService,
         this.sseService,
-        this.lfsService
+        this.lfsService,
+        this.conversationService
       );
       this.logger.debug(`[NEST] ChatAgentService instance created`);
 

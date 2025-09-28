@@ -93,6 +93,7 @@ export interface ConversationMessage {
   model?: string;
   images?: ImageAttachment[];
   notes?: NotesAttachment[];
+  citations?: string[];
 }
 
 export abstract class BaseAgent {
@@ -428,6 +429,12 @@ export abstract class BaseAgent {
               // Add images - use full-size image for better LLM analysis
               for (const image of msg.images) {
                 let imageData = image.fullImage ?? image.thumbnail;
+                if (!imageData) {
+                  logger.warn(
+                    'Image missing both fullImage and thumbnail data'
+                  );
+                  continue;
+                }
                 let mediaType = image.mimeType ?? 'image/jpeg';
 
                 // Extract base64 data if it's a data URL
@@ -527,6 +534,12 @@ export abstract class BaseAgent {
               // Add images - use proper data URL format for LangChain
               for (const image of msg.images) {
                 let imageUrl = image.fullImage ?? image.thumbnail;
+                if (!imageUrl) {
+                  logger.warn(
+                    'Image missing both fullImage and thumbnail data'
+                  );
+                  continue;
+                }
 
                 // Ensure it's a proper data URL
                 if (!imageUrl.startsWith('data:')) {
@@ -560,6 +573,12 @@ export abstract class BaseAgent {
               // Add images - use full-size image for better LLM analysis
               for (const image of msg.images) {
                 let imageUrl = image.fullImage ?? image.thumbnail;
+                if (!imageUrl) {
+                  logger.warn(
+                    'Image missing both fullImage and thumbnail data'
+                  );
+                  continue;
+                }
 
                 // Ensure it's a proper data URL
                 if (!imageUrl.startsWith('data:')) {

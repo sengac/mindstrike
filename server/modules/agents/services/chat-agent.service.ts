@@ -4,6 +4,7 @@ import { BaseAgentService } from './base-agent.service';
 import { McpManagerService } from '../../mcp/services/mcp-manager.service';
 import { SseService } from '../../events/services/sse.service';
 import { LfsService } from '../../content/services/lfs.service';
+import { ConversationService } from '../../chat/services/conversation.service';
 
 const DEFAULT_CHAT_ROLE = `You are a helpful assistant.`;
 
@@ -12,9 +13,10 @@ export class ChatAgentService extends BaseAgentService {
   constructor(
     protected readonly mcpManagerService: McpManagerService,
     protected readonly sseService: SseService,
-    protected readonly lfsService: LfsService
+    protected readonly lfsService: LfsService,
+    protected readonly conversationService: ConversationService
   ) {
-    super(mcpManagerService, sseService, lfsService);
+    super(mcpManagerService, sseService, lfsService, conversationService);
   }
 
   async initializeAgent(config: AgentConfig): Promise<void> {

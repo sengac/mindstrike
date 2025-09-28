@@ -827,10 +827,10 @@ export class ModelFetcher {
   private async fetchModelsBySearch(
     query: string
   ): Promise<DynamicModelInfo[]> {
-    // Use HuggingFace search API with query - using trending sort
-    const url = `https://huggingface.co/api/models?search=${encodeURIComponent(query)}&filter=gguf&sort=trending&direction=-1&limit=100`;
+    // Use HuggingFace search API with query - using downloads sort
+    const url = `https://huggingface.co/api/models?search=${encodeURIComponent(query)}&filter=gguf&sort=downloads&direction=-1&limit=100`;
 
-    logger.info(`Fetching trending models for query: ${query}`);
+    logger.info(`Fetching models for query: ${query}`);
 
     this.progressCallback?.({
       type: 'fetching-models',

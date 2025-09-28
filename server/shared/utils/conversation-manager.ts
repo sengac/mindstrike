@@ -31,6 +31,7 @@ export interface ConversationMessage {
     nodeLabel?: string;
     attachedAt: Date;
   }>;
+  citations?: string[];
 }
 
 export interface Thread {

@@ -84,6 +84,15 @@ export class LlmService implements OnModuleInit, OnModuleDestroy {
   async onModuleInit() {
     await this.ensureDirectories();
     await this.loadSettings();
+
+    // Initialize model fetcher to load HuggingFace token
+    try {
+      const { modelFetcher } = await import('../../../modelFetcher');
+      await modelFetcher.initialize();
+      this.logger.log('Model fetcher initialized');
+    } catch (error) {
+      this.logger.warn('Failed to initialize model fetcher:', error);
+    }
   }
 
   async onModuleDestroy() {

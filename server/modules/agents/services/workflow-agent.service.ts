@@ -11,6 +11,8 @@ import { HumanMessage, AIMessage } from '@langchain/core/messages';
 import { StateGraph, Annotation, START, END } from '@langchain/langgraph';
 import { SseService } from '../../events/services/sse.service';
 import { LfsService } from '../../content/services/lfs.service';
+import { ConversationService } from '../../chat/services/conversation.service';
+import { McpManagerService } from '../../mcp/services/mcp-manager.service';
 import { SSEEventType } from '../../../../src/types';
 
 // Define the workflow state using LangGraph Annotations
@@ -71,15 +73,17 @@ export class WorkflowAgentService extends BaseAgentService {
   constructor(
     protected readonly sseService: SseService,
     protected readonly lfsService: LfsService,
-    config?: AgentConfig,
-    agentId?: string
+    config: AgentConfig,
+    agentId: string,
+    protected readonly mcpManagerService: McpManagerService,
+    protected readonly conversationService: ConversationService
   ) {
-    super(
-      config || { workspaceRoot: process.cwd() },
-      agentId,
-      sseService,
-      lfsService
-    );
+    super(mcpManagerService, sseService, lfsService, conversationService);
+
+    // Initialize with the config after super() call
+    this.config = config;
+    this.agentId = agentId;
+
     this.workflowGraph = this.createWorkflowGraph();
   }
 

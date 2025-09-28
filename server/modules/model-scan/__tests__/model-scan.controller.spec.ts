@@ -58,7 +58,28 @@ describe('ModelScanController', () => {
 
   describe('searchModels', () => {
     it('should start a model search successfully', async () => {
-      const searchParams = { query: 'llama', searchType: 'text' };
+      const searchParams = {
+        query: 'llama',
+        searchType: 'text',
+        filters: {},
+      };
+      const result = await controller.searchModels(searchParams);
+
+      expect(result).toEqual({
+        searchId: 'test-search-id',
+        message: 'Model search started',
+      });
+      expect(mockModelScanService.startSearch).toHaveBeenCalledWith(
+        searchParams
+      );
+    });
+
+    it('should start a model search with filters', async () => {
+      const searchParams = {
+        query: 'llama',
+        searchType: 'all',
+        filters: { sortBy: 'popularity' },
+      };
       const result = await controller.searchModels(searchParams);
 
       expect(result).toEqual({
@@ -71,7 +92,11 @@ describe('ModelScanController', () => {
     });
 
     it('should throw InternalServerErrorException on search failure', async () => {
-      const searchParams = { query: 'test', searchType: 'text' };
+      const searchParams = {
+        query: 'test',
+        searchType: 'text',
+        filters: {},
+      };
       (
         mockModelScanService.startSearch as ReturnType<typeof vi.fn>
       ).mockRejectedValueOnce(new Error('Search failed'));

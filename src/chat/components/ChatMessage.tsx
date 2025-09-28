@@ -31,6 +31,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { MermaidModal } from '../../components/MermaidModal';
 import { renderMermaidDiagramsDelayed } from '../../utils/mermaidRenderer';
+import { CitationRenderer } from './CitationRenderer';
 import { logger } from '../../utils/logger';
 
 // Common language mappings for syntax highlighting
@@ -358,7 +359,21 @@ function ChatMessageComponent({
     );
   };
 
-  const processLatexInContent = (content: string): React.ReactNode => {
+  const processLatexInContent = (
+    content: string,
+    citations?: string[]
+  ): React.ReactNode => {
+    // Check if content has citations - process them first if present
+    if (citations && citations.length > 0) {
+      return (
+        <CitationRenderer
+          content={content}
+          citations={citations}
+          className="inline"
+        />
+      );
+    }
+
     // Check if content has LaTeX expressions
     const hasBlockLatex = /\$\$([^$]+)\$\$/.test(content);
     const hasInlineLatex = /\$([^$\n]+)\$/.test(content);
@@ -439,7 +454,7 @@ function ChatMessageComponent({
     return <LatexProcessor html={sanitizedHtml} />;
   };
 
-  const renderContent = (content: string) => {
+  const renderContent = (content: string, citations?: string[]) => {
     if (showMarkdown) {
       // Check for code blocks and think blocks
       const allBlocks: Array<{
@@ -494,7 +509,7 @@ function ChatMessageComponent({
                     fontSize: `var(--dynamic-font-size, ${fontSize}px)`,
                   }}
                 >
-                  {processLatexInContent(beforeContent)}
+                  {processLatexInContent(beforeContent, citations)}
                 </div>
               );
             }
@@ -525,7 +540,7 @@ function ChatMessageComponent({
                 className={`prose prose-invert prose-sm max-w-full overflow-hidden markdown-content ${isUser ? 'prose-p:my-0 prose-headings:my-0 prose-ul:my-0 prose-ol:my-0' : ''}`}
                 style={{ fontSize: `var(--dynamic-font-size, ${fontSize}px)` }}
               >
-                {processLatexInContent(afterContent)}
+                {processLatexInContent(afterContent, citations)}
               </div>
             );
           }
@@ -538,7 +553,7 @@ function ChatMessageComponent({
             className={`prose prose-invert prose-sm max-w-full overflow-hidden markdown-content ${isUser ? 'prose-p:my-0 prose-headings:my-0 prose-ul:my-0 prose-ol:my-0' : ''}`}
             style={{ fontSize: `var(--dynamic-font-size, ${fontSize}px)` }}
           >
-            {processLatexInContent(content)}
+            {processLatexInContent(content, citations)}
           </div>
         );
       }
@@ -819,7 +834,7 @@ function ChatMessageComponent({
                         </div>
                       </div>
                     )}
-                    {renderContent(message.content)}
+                    {renderContent(message.content, message.citations)}
                   </>
                 )}
               </>

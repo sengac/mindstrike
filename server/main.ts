@@ -6,9 +6,10 @@ import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { logger } from './logger';
 import { ErrorInterceptor } from './common/interceptors/error.interceptor';
+import { json, urlencoded } from 'express';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: {
       log: (message: string) => logger.info(message),
       error: (message: string, trace?: string) =>
@@ -17,7 +18,12 @@ async function bootstrap() {
       debug: (message: string) => logger.debug(message),
       verbose: (message: string) => logger.verbose(message),
     },
+    bodyParser: false, // Disable built-in body parser
   });
+
+  // Configure body parser with 100MB limit
+  app.use(json({ limit: '100mb' }));
+  app.use(urlencoded({ extended: true, limit: '100mb' }));
 
   // Enable CORS
   app.enableCors({

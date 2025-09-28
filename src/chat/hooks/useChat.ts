@@ -160,6 +160,7 @@ export function useChat({ threadId, isAgentMode = false }: UseChatProps = {}) {
             toolResults: messageData.toolResults as
               | Array<{ name: string; result: unknown }>
               | undefined,
+            citations: messageData.citations as string[] | undefined,
           };
 
           // Check if message already exists
@@ -206,6 +207,7 @@ export function useChat({ threadId, isAgentMode = false }: UseChatProps = {}) {
           toolResults: messageData.toolResults as
             | Array<{ name: string; result: unknown }>
             | undefined,
+          citations: messageData.citations as string[] | undefined,
         };
 
         if (!currentThreadId) {

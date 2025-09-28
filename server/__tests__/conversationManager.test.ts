@@ -364,6 +364,44 @@ describe('ConversationManager', () => {
       expect(mockFs.writeFile).toHaveBeenCalledTimes(2); // Create thread + add message
     });
 
+    it('should update existing message when adding message with duplicate ID', async () => {
+      // First add a message with partial content (simulating streaming)
+      const partialMessage: ConversationMessage = {
+        id: 'msg1',
+        role: 'assistant',
+        content: '**',
+        timestamp: new Date(),
+        status: 'processing',
+      };
+
+      await conversationManager.addMessage(thread.id, partialMessage);
+
+      let updatedThread = conversationManager.getThread(thread.id);
+      expect(updatedThread?.messages).toHaveLength(1);
+      expect(updatedThread?.messages[0].content).toBe('**');
+      expect(updatedThread?.messages[0].status).toBe('processing');
+
+      // Now add the same message ID with complete content
+      const completeMessage: ConversationMessage = {
+        id: 'msg1',
+        role: 'assistant',
+        content:
+          '**React** is a JavaScript library for building user interfaces.',
+        timestamp: new Date(),
+        status: 'completed',
+      };
+
+      await conversationManager.addMessage(thread.id, completeMessage);
+
+      updatedThread = conversationManager.getThread(thread.id);
+      expect(updatedThread?.messages).toHaveLength(1); // Should still be 1, not 2
+      expect(updatedThread?.messages[0].content).toBe(
+        '**React** is a JavaScript library for building user interfaces.'
+      );
+      expect(updatedThread?.messages[0].status).toBe('completed');
+      expect(mockFs.writeFile).toHaveBeenCalledTimes(3); // Create thread + 2 saves
+    });
+
     it('should create thread automatically when adding message to non-existent thread', async () => {
       const message: ConversationMessage = {
         id: 'msg1',
