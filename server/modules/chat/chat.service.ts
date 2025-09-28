@@ -211,24 +211,73 @@ Respond with only the title, no other text.`;
   }
 
   /**
-   * Generate a prompt based on context
+   * Generate a prompt based on personality description
    */
-  async generatePrompt(context: string, type?: string): Promise<string> {
-    // For now, return a formatted version of the context
-    // In production, this would call an LLM service to generate an appropriate prompt
-    if (!context) {
-      throw new BadRequestException('Context is required');
+  async generatePrompt(personality: string): Promise<string> {
+    if (!personality) {
+      throw new BadRequestException('Prompt description is required');
     }
 
-    const promptType = type || 'general';
-    const prompts: Record<string, string> = {
-      general: `You are a helpful assistant. ${context}`,
-      coding: `You are an expert programmer. ${context}`,
-      creative: `You are a creative writer. ${context}`,
-      academic: `You are an academic researcher. ${context}`,
-    };
+    // Check if LLM model is configured
+    if (
+      !this.currentLlmConfig.model ||
+      this.currentLlmConfig.model.trim() === ''
+    ) {
+      throw new BadRequestException(
+        'No LLM model configured. Please select a model from the available options.'
+      );
+    }
 
-    return prompts[promptType] || prompts.general;
+    // Create a prompt to generate a role definition based on the prompt description
+    const systemPrompt = `Create a role definition for an AI assistant based on the user's description. Use their exact words and phrasing as much as possible while making it a proper role definition.
+
+User's Description: "${personality}"
+
+Transform this into a role definition that:
+- Preserves the user's specific words, terminology, and meaning
+- Incorporates their exact phrasing wherever possible
+- Starts with "You are..." format
+- Maintains the user's intended tone and characteristics
+- Only adds minimal connecting words if needed for grammar
+
+Example transformation:
+User says: "friendly, enthusiastic coding mentor who explains things clearly"
+Result: "You are a friendly, enthusiastic coding mentor who explains things clearly and helps users learn through clear guidance."
+
+Generate only the role definition using the user's words as the foundation.`;
+
+    // Create a temporary thread for role generation
+    const roleThreadId = `role-${Date.now()}`;
+
+    // Create a ChatAgent with current config to process the request
+    const agent = new ChatAgent({
+      workspaceRoot: this.globalConfigService.getWorkspaceRoot(),
+      llmConfig: {
+        model: this.currentLlmConfig.model || '',
+        baseURL: this.currentLlmConfig.baseURL || 'http://localhost:11434',
+        apiKey: this.currentLlmConfig.apiKey,
+        displayName: this.currentLlmConfig.displayName,
+        type: this.currentLlmConfig.type as
+          | 'ollama'
+          | 'vllm'
+          | 'openai-compatible'
+          | 'openai'
+          | 'anthropic'
+          | 'perplexity'
+          | 'google'
+          | 'local'
+          | undefined,
+        contextLength: this.currentLlmConfig.contextLength,
+      },
+    });
+
+    const response = await agent.processMessage(roleThreadId, systemPrompt, {
+      includePriorConversation: false,
+    });
+
+    const generatedPrompt = cleanContentForLLM(response.content).trim();
+
+    return generatedPrompt;
   }
 
   /**

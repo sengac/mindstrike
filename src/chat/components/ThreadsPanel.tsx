@@ -9,6 +9,7 @@ interface ThreadsPanelProps {
   onThreadCreate: () => void;
   onThreadRename: (threadId: string, newName: string) => void;
   onThreadDelete: (threadId: string) => void;
+  onPromptEdit?: (threadId: string) => void;
 }
 
 export function ThreadsPanel({
@@ -18,6 +19,7 @@ export function ThreadsPanel({
   onThreadCreate,
   onThreadRename,
   onThreadDelete,
+  onPromptEdit,
 }: ThreadsPanelProps) {
   return (
     <ListPanel
@@ -38,9 +40,16 @@ export function ThreadsPanel({
       testId="chat-slider"
       renderItemContent={thread =>
         thread.customPrompt ? (
-          <div title="Custom prompt applied">
+          <button
+            title="Custom prompt applied - Click to edit"
+            onClick={e => {
+              e.stopPropagation();
+              onPromptEdit?.(thread.id);
+            }}
+            className="p-1 hover:bg-gray-700 rounded transition-colors"
+          >
             <Terminal size={14} className="text-purple-400 flex-shrink-0" />
-          </div>
+          </button>
         ) : null
       }
     />

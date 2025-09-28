@@ -178,21 +178,25 @@ export class GenerateResponseDto {
 }
 
 export class DownloadModelDto {
-  @ApiProperty({ description: 'Model name' })
+  @ApiPropertyOptional({ description: 'Model URL' })
+  @IsOptional()
   @IsString()
-  name: string;
+  modelUrl?: string;
 
-  @ApiProperty({ description: 'Download URL' })
+  @ApiPropertyOptional({ description: 'Model name' })
+  @IsOptional()
   @IsString()
-  url: string;
+  modelName?: string;
 
-  @ApiProperty({ description: 'Filename' })
+  @ApiPropertyOptional({ description: 'Filename' })
+  @IsOptional()
   @IsString()
-  filename: string;
+  filename?: string;
 
-  @ApiProperty({ description: 'File size in bytes' })
+  @ApiPropertyOptional({ description: 'File size in bytes' })
+  @IsOptional()
   @IsNumber()
-  size: number;
+  size?: number;
 
   @ApiPropertyOptional({ description: 'Model description' })
   @IsOptional()
@@ -203,6 +207,16 @@ export class DownloadModelDto {
   @IsOptional()
   @IsNumber()
   contextLength?: number;
+
+  @ApiPropertyOptional({ description: 'Trained context length' })
+  @IsOptional()
+  @IsNumber()
+  trainedContextLength?: number;
+
+  @ApiPropertyOptional({ description: 'Max context length' })
+  @IsOptional()
+  @IsNumber()
+  maxContextLength?: number;
 
   @ApiPropertyOptional({ description: 'Parameter count' })
   @IsOptional()

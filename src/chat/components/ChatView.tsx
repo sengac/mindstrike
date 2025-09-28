@@ -18,6 +18,7 @@ interface ChatViewProps {
   onNavigateToWorkspaces: () => void;
   onCustomizePrompts: () => void;
   onToggleAgentMode: () => void;
+  onPromptEdit?: (threadId: string) => void;
 }
 
 export const ChatView = forwardRef<ChatPanelRef, ChatViewProps>(
@@ -34,6 +35,7 @@ export const ChatView = forwardRef<ChatPanelRef, ChatViewProps>(
       onNavigateToWorkspaces,
       onCustomizePrompts,
       onToggleAgentMode,
+      onPromptEdit,
     },
     ref
   ) => {
@@ -51,6 +53,7 @@ export const ChatView = forwardRef<ChatPanelRef, ChatViewProps>(
             onThreadCreate={onThreadCreate}
             onThreadRename={onThreadRename}
             onThreadDelete={onThreadDelete}
+            onPromptEdit={onPromptEdit}
           />
           <ChatPanel
             ref={ref}

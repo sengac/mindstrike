@@ -3,7 +3,6 @@ import {
   IsString,
   IsUUID,
   IsOptional,
-  IsObject,
   IsArray,
   IsNumber,
   IsBoolean,
@@ -114,23 +113,12 @@ export class GenerateTitleDto {
 }
 
 export class GeneratePromptDto {
-  @ApiProperty({ description: 'Context for prompt generation', type: String })
-  @IsString()
-  context: string;
-
-  @ApiPropertyOptional({ description: 'Prompt type', type: String })
-  @IsOptional()
-  @IsString()
-  type?: string;
-
-  @ApiPropertyOptional({
-    description: 'Additional parameters',
-    type: 'object',
-    additionalProperties: true,
+  @ApiProperty({
+    description: 'Personality description for prompt generation',
+    type: String,
   })
-  @IsOptional()
-  @IsObject()
-  parameters?: Record<string, unknown>;
+  @IsString()
+  personality: string;
 }
 
 export class CancelMessageDto {

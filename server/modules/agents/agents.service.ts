@@ -32,6 +32,7 @@ export class AgentsService {
   private agents: Map<string, AgentConfig> = new Map();
   private roles: Map<string, AgentRole> = new Map();
   private threadAgents: Map<string, string> = new Map(); // threadId -> agentId mapping
+  private threadPrompts: Map<string, string> = new Map(); // threadId -> customPrompt mapping
   private defaultRole: AgentRole;
 
   constructor(
@@ -202,6 +203,27 @@ export class AgentsService {
 
     const success = await this.conversationService.deleteThread(threadId);
     return { success };
+  }
+
+  /**
+   * Set thread custom prompt
+   */
+  setThreadPrompt(threadId: string, customPrompt: string): void {
+    this.threadPrompts.set(threadId, customPrompt);
+  }
+
+  /**
+   * Delete thread custom prompt
+   */
+  deleteThreadPrompt(threadId: string): void {
+    this.threadPrompts.delete(threadId);
+  }
+
+  /**
+   * Get thread custom prompt
+   */
+  getThreadPrompt(threadId: string): string | undefined {
+    return this.threadPrompts.get(threadId);
   }
 
   /**

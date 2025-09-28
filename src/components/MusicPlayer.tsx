@@ -123,6 +123,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
     deletePlaylist,
     updatePlaylist,
     addTrackToPlaylist,
+    addTracksToPlaylist,
     removeTrackFromPlaylist,
     reorderPlaylistTracks,
     setCurrentPlaylist,
@@ -663,15 +664,13 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
   const handleDrop = async (e: React.DragEvent, playlistId: string) => {
     e.preventDefault();
     if (draggedTrack) {
-      // Handle multiple tracks
+      // Handle multiple tracks with batch operation
       if (Array.isArray(draggedTrack)) {
-        for (const track of draggedTrack) {
-          addTrackToPlaylist(playlistId, track);
-        }
+        addTracksToPlaylist(playlistId, draggedTrack);
       } else {
         addTrackToPlaylist(playlistId, draggedTrack);
       }
-      await loadPlaylistsFromFile();
+      // Don't reload from file - the store already updated and saved
     }
     setDropTargetPlaylistId(null);
     setDraggedTrack(null);
@@ -699,10 +698,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
     }
   };
 
-  const handleReorderDrop = async (
-    e: React.DragEvent,
-    _originalIndex: number
-  ) => {
+  const handleReorderDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     if (
       isDraggingForReorder &&

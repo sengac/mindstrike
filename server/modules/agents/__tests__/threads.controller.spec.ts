@@ -59,6 +59,54 @@ describe('ThreadsController', () => {
           createdAt: '2024-01-01T00:00:00Z',
           updatedAt: '2024-01-01T00:00:00Z',
           messageCount: 5,
+          customPrompt: undefined,
+        },
+      ]);
+      expect(mockConversationService.getThreadList).toHaveBeenCalled();
+    });
+
+    it('should include customPrompt field when present', async () => {
+      (
+        mockConversationService.getThreadList as ReturnType<typeof vi.fn>
+      ).mockResolvedValue([
+        {
+          id: 'thread-123',
+          name: 'Test Thread',
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+          messageCount: 5,
+          customPrompt: 'You are a helpful assistant',
+        },
+        {
+          id: 'thread-456',
+          name: 'Another Thread',
+          createdAt: '2024-01-02T00:00:00Z',
+          updatedAt: '2024-01-02T00:00:00Z',
+          messageCount: 3,
+          customPrompt: undefined,
+        },
+      ]);
+
+      const result = await controller.getAllThreads();
+
+      expect(result).toEqual([
+        {
+          id: 'thread-123',
+          name: 'Test Thread',
+          type: 'chat',
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+          messageCount: 5,
+          customPrompt: 'You are a helpful assistant',
+        },
+        {
+          id: 'thread-456',
+          name: 'Another Thread',
+          type: 'chat',
+          createdAt: '2024-01-02T00:00:00Z',
+          updatedAt: '2024-01-02T00:00:00Z',
+          messageCount: 3,
+          customPrompt: undefined,
         },
       ]);
       expect(mockConversationService.getThreadList).toHaveBeenCalled();
@@ -164,8 +212,13 @@ describe('ThreadsController', () => {
   });
 
   describe('updateThread', () => {
+    beforeEach(() => {
+      mockAgentsService.setThreadPrompt = vi.fn();
+      mockAgentsService.deleteThreadPrompt = vi.fn();
+    });
+
     it('should update thread title', async () => {
-      const dto = { name: 'Updated Title', metadata: {} };
+      const dto = { name: 'Updated Title' };
 
       const result = await controller.updateThread('thread-123', dto);
 
@@ -177,8 +230,8 @@ describe('ThreadsController', () => {
       );
     });
 
-    it('should update custom prompt', async () => {
-      const dto = { metadata: { customPrompt: 'New prompt' } };
+    it('should update custom prompt and store in AgentsService', async () => {
+      const dto = { customPrompt: 'New prompt' };
 
       const result = await controller.updateThread('thread-123', dto);
 
@@ -187,18 +240,47 @@ describe('ThreadsController', () => {
         'thread-123',
         'New prompt'
       );
+      expect(mockAgentsService.setThreadPrompt).toHaveBeenCalledWith(
+        'thread-123',
+        'New prompt'
+      );
+    });
+
+    it('should delete custom prompt when set to null', async () => {
+      const dto = { customPrompt: null };
+
+      const result = await controller.updateThread('thread-123', dto);
+
+      expect(result).toEqual({ success: true });
+      expect(mockConversationService.updateThreadPrompt).toHaveBeenCalledWith(
+        'thread-123',
+        undefined
+      );
+      expect(mockAgentsService.deleteThreadPrompt).toHaveBeenCalledWith(
+        'thread-123'
+      );
     });
 
     it('should handle both title and prompt updates', async () => {
       const dto = {
         name: 'New Title',
-        metadata: { customPrompt: 'New prompt' },
+        customPrompt: 'New prompt',
       };
 
       await controller.updateThread('thread-123', dto);
 
-      expect(mockConversationService.renameThread).toHaveBeenCalled();
-      expect(mockConversationService.updateThreadPrompt).toHaveBeenCalled();
+      expect(mockConversationService.renameThread).toHaveBeenCalledWith(
+        'thread-123',
+        'New Title'
+      );
+      expect(mockConversationService.updateThreadPrompt).toHaveBeenCalledWith(
+        'thread-123',
+        'New prompt'
+      );
+      expect(mockAgentsService.setThreadPrompt).toHaveBeenCalledWith(
+        'thread-123',
+        'New prompt'
+      );
     });
 
     // New comprehensive test cases for edge cases and error scenarios
@@ -238,13 +320,10 @@ describe('ThreadsController', () => {
         ).not.toHaveBeenCalled();
       });
 
-      it('should update thread with name and metadata containing customPrompt', async () => {
+      it('should update thread with name and customPrompt directly', async () => {
         const dto = {
           name: 'Updated Name',
-          metadata: {
-            customPrompt: 'Updated custom prompt',
-            otherData: 'some value',
-          },
+          customPrompt: 'Updated custom prompt',
         };
 
         const result = await controller.updateThread('thread-123', dto);
@@ -256,6 +335,10 @@ describe('ThreadsController', () => {
           'Updated Name'
         );
         expect(mockConversationService.updateThreadPrompt).toHaveBeenCalledWith(
+          'thread-123',
+          'Updated custom prompt'
+        );
+        expect(mockAgentsService.setThreadPrompt).toHaveBeenCalledWith(
           'thread-123',
           'Updated custom prompt'
         );
@@ -286,20 +369,8 @@ describe('ThreadsController', () => {
         ).not.toHaveBeenCalled();
       });
 
-      it('should handle null customPrompt in metadata', async () => {
-        const dto = { metadata: { customPrompt: null } };
-
-        const result = await controller.updateThread('thread-123', dto);
-
-        expect(result).toEqual({ success: true });
-        expect(mockConversationService.updateThreadPrompt).toHaveBeenCalledWith(
-          'thread-123',
-          null
-        );
-      });
-
-      it('should handle undefined customPrompt in metadata (field exists but undefined)', async () => {
-        const dto = { metadata: { customPrompt: undefined } };
+      it('should handle null customPrompt directly', async () => {
+        const dto = { customPrompt: null };
 
         const result = await controller.updateThread('thread-123', dto);
 
@@ -308,42 +379,65 @@ describe('ThreadsController', () => {
           'thread-123',
           undefined
         );
+        expect(mockAgentsService.deleteThreadPrompt).toHaveBeenCalledWith(
+          'thread-123'
+        );
       });
 
-      it('should handle number as customPrompt (type coercion edge case)', async () => {
-        const dto = { metadata: { customPrompt: 12345 } };
+      it('should handle undefined customPrompt (field not present)', async () => {
+        const dto = { name: 'Test' }; // customPrompt field is not present
+
+        const result = await controller.updateThread('thread-123', dto);
+
+        expect(result).toEqual({ success: true });
+        // When customPrompt is not in the DTO, it should not be updated
+        expect(
+          mockConversationService.updateThreadPrompt
+        ).not.toHaveBeenCalled();
+      });
+
+      it('should handle empty string customPrompt', async () => {
+        const dto = { customPrompt: '' };
 
         const result = await controller.updateThread('thread-123', dto);
 
         expect(result).toEqual({ success: true });
         expect(mockConversationService.updateThreadPrompt).toHaveBeenCalledWith(
           'thread-123',
-          12345
+          ''
+        );
+        // Empty string is falsy, so it deletes the prompt instead of setting it
+        expect(mockAgentsService.deleteThreadPrompt).toHaveBeenCalledWith(
+          'thread-123'
         );
       });
 
-      it('should handle boolean as customPrompt (type coercion edge case)', async () => {
-        const dto = { metadata: { customPrompt: false } };
+      it('should handle whitespace-only customPrompt', async () => {
+        const dto = { customPrompt: '   ' };
 
         const result = await controller.updateThread('thread-123', dto);
 
         expect(result).toEqual({ success: true });
         expect(mockConversationService.updateThreadPrompt).toHaveBeenCalledWith(
           'thread-123',
-          false
+          '   '
+        );
+        expect(mockAgentsService.setThreadPrompt).toHaveBeenCalledWith(
+          'thread-123',
+          '   '
         );
       });
 
-      it('should handle object as customPrompt (potential serialization issue)', async () => {
-        const dto = { metadata: { customPrompt: { nested: 'object' } } };
+      it('should handle metadata without customPrompt field', async () => {
+        const dto = { metadata: { otherField: 'value' } };
 
         const result = await controller.updateThread('thread-123', dto);
 
         expect(result).toEqual({ success: true });
-        expect(mockConversationService.updateThreadPrompt).toHaveBeenCalledWith(
-          'thread-123',
-          { nested: 'object' }
-        );
+        // Should not call updateThreadPrompt when customPrompt is not in DTO
+        expect(
+          mockConversationService.updateThreadPrompt
+        ).not.toHaveBeenCalled();
       });
 
       // Error scenario tests
@@ -390,7 +484,7 @@ describe('ThreadsController', () => {
           mockConversationService.updateThreadPrompt as ReturnType<typeof vi.fn>
         ).mockRejectedValue(testError);
 
-        const dto = { metadata: { customPrompt: 'New prompt' } };
+        const dto = { customPrompt: 'New prompt' };
 
         await expect(
           controller.updateThread('thread-123', dto)
@@ -472,12 +566,16 @@ describe('ThreadsController', () => {
         const veryLongPrompt = 'This is a very long custom prompt. '.repeat(
           1000
         ); // ~35k characters
-        const dto = { metadata: { customPrompt: veryLongPrompt } };
+        const dto = { customPrompt: veryLongPrompt };
 
         const result = await controller.updateThread('thread-123', dto);
 
         expect(result).toEqual({ success: true });
         expect(mockConversationService.updateThreadPrompt).toHaveBeenCalledWith(
+          'thread-123',
+          veryLongPrompt
+        );
+        expect(mockAgentsService.setThreadPrompt).toHaveBeenCalledWith(
           'thread-123',
           veryLongPrompt
         );
@@ -499,12 +597,16 @@ describe('ThreadsController', () => {
       it('should handle special characters in customPrompt', async () => {
         const specialCharPrompt =
           'Special chars: 特殊字符 🚀 \n\t\r\0 <>&"\' {}[]()';
-        const dto = { metadata: { customPrompt: specialCharPrompt } };
+        const dto = { customPrompt: specialCharPrompt };
 
         const result = await controller.updateThread('thread-123', dto);
 
         expect(result).toEqual({ success: true });
         expect(mockConversationService.updateThreadPrompt).toHaveBeenCalledWith(
+          'thread-123',
+          specialCharPrompt
+        );
+        expect(mockAgentsService.setThreadPrompt).toHaveBeenCalledWith(
           'thread-123',
           specialCharPrompt
         );
@@ -523,18 +625,22 @@ describe('ThreadsController', () => {
         ).not.toHaveBeenCalled();
       });
 
-      it('should handle circular reference in metadata (potential JSON.stringify issue)', async () => {
-        const circularObj: Record<string, unknown> = { customPrompt: 'test' };
-        circularObj.self = circularObj; // Create circular reference
-
-        const dto = { metadata: circularObj };
+      it('should handle both customPrompt and metadata fields', async () => {
+        const dto = {
+          customPrompt: 'test prompt',
+          metadata: { someOtherField: 'value' },
+        };
 
         const result = await controller.updateThread('thread-123', dto);
 
         expect(result).toEqual({ success: true });
         expect(mockConversationService.updateThreadPrompt).toHaveBeenCalledWith(
           'thread-123',
-          'test'
+          'test prompt'
+        );
+        expect(mockAgentsService.setThreadPrompt).toHaveBeenCalledWith(
+          'thread-123',
+          'test prompt'
         );
       });
 

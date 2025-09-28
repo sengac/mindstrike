@@ -48,7 +48,7 @@ export class UtilityController {
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
   async generatePrompt(@Body() dto: GeneratePromptDto) {
-    const prompt = await this.chatService.generatePrompt(dto.context, dto.type);
+    const prompt = await this.chatService.generatePrompt(dto.personality);
     return {
       prompt,
       metadata: {},

@@ -24,7 +24,7 @@ export class ConversationService {
     );
   }
 
-  updateWorkspaceRoot(newWorkspaceRoot: string): void {
+  updateWorkspaceRoot(): void {
     // GlobalConfigService now handles the workspace root centrally
     // Just clear the cache since the path changed
     this.logger.log(`Workspace root updated, clearing conversation cache`);

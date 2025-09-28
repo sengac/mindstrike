@@ -56,6 +56,7 @@ interface PlaylistState {
   deletePlaylist: (id: string) => void;
   updatePlaylist: (id: string, updates: Partial<Playlist>) => void;
   addTrackToPlaylist: (playlistId: string, track: AudioFile) => void;
+  addTracksToPlaylist: (playlistId: string, tracks: AudioFile[]) => void;
   removeTrackFromPlaylist: (playlistId: string, trackId: number) => void;
   setCurrentPlaylist: (playlist: Playlist | null) => void;
   reorderPlaylistTracks: (
@@ -138,6 +139,43 @@ export const usePlaylistStore = create<PlaylistState>()((set, get) => ({
       ),
     }));
 
+    get().savePlaylistsToFile();
+  },
+
+  addTracksToPlaylist: (playlistId, tracks) => {
+    const playlist = get().playlists.find(p => p.id === playlistId);
+    if (!playlist) {
+      return;
+    }
+
+    // Filter out tracks that are already in the playlist
+    const existingTrackIds = new Set(
+      playlist.trackRefs.map(ref => ref.trackId)
+    );
+    const newTrackRefs = tracks
+      .filter(track => !existingTrackIds.has(track.id))
+      .map(track => ({
+        trackId: track.id,
+        path: track.path,
+      }));
+
+    if (newTrackRefs.length === 0) {
+      return;
+    }
+
+    set(state => ({
+      playlists: state.playlists.map(p =>
+        p.id === playlistId
+          ? {
+              ...p,
+              trackRefs: [...p.trackRefs, ...newTrackRefs],
+              updatedAt: new Date(),
+            }
+          : p
+      ),
+    }));
+
+    // Only save once after all tracks are added
     get().savePlaylistsToFile();
   },
 

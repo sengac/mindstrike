@@ -85,6 +85,7 @@ export class ThreadsController {
       createdAt: thread.createdAt,
       updatedAt: thread.updatedAt,
       messageCount: thread.messageCount,
+      customPrompt: thread.customPrompt,
     }));
   }
 
@@ -157,7 +158,7 @@ export class ThreadsController {
     return {
       id: thread.id,
       name: thread.name,
-      type: dto.type || 'chat',
+      type: dto.type ?? 'chat',
       createdAt: thread.createdAt,
       updatedAt: thread.updatedAt,
     };
@@ -179,11 +180,20 @@ export class ThreadsController {
     if (dto.name !== undefined) {
       await this.conversationService.renameThread(threadId, dto.name);
     }
-    if (dto.metadata && 'customPrompt' in dto.metadata) {
+
+    // Handle customPrompt exactly like Express implementation
+    if ('customPrompt' in dto) {
       await this.conversationService.updateThreadPrompt(
         threadId,
-        dto.metadata.customPrompt as string
+        dto.customPrompt ?? undefined
       );
+
+      // Store in threadPrompts map like Express does
+      if (dto.customPrompt && dto.customPrompt !== null) {
+        this.agentsService.setThreadPrompt(threadId, dto.customPrompt);
+      } else {
+        this.agentsService.deleteThreadPrompt(threadId);
+      }
     }
 
     return { success: true };

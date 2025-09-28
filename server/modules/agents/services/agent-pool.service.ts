@@ -125,11 +125,19 @@ export class AgentPoolService {
       this.logger.debug(`[NEST] Workspace root: ${workspaceRoot}`);
       this.logger.debug(`[NEST] Current LLM config:`, this.currentLlmConfig);
 
+      // Get custom prompt for this thread from conversation service
+      const thread = await this.conversationService.getThread(threadId);
+      const customPrompt = thread?.customPrompt;
+
       const agentConfig: AgentConfig = {
         workspaceRoot: workspaceRoot,
         llmConfig: this.currentLlmConfig as LLMConfig,
+        customPrompt: customPrompt,
       };
-      this.logger.debug(`[NEST] Agent config prepared:`, agentConfig);
+      this.logger.debug(
+        `[NEST] Agent config prepared with customPrompt:`,
+        agentConfig
+      );
 
       try {
         // Properly await initialization before adding to pool

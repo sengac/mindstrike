@@ -14,68 +14,143 @@ export class ModelDownloadService {
   ) {}
 
   async downloadModel(dto: DownloadModelDto) {
-    const { name, url, filename, size } = dto;
-    const downloadId = `${name}-${Date.now()}`;
-
-    // Stub implementation
-    this.logger.log(`Starting download of ${filename} from ${url}`);
-
-    // Broadcast download started
-    this.sseService.broadcast('model-download', {
-      type: 'started',
-      downloadId,
-      name,
+    // Match Express implementation field names
+    const {
+      modelUrl,
+      modelName,
       filename,
       size,
-    });
+      description,
+      contextLength,
+      trainedContextLength,
+      maxContextLength,
+      parameterCount,
+      quantization,
+      isMultiPart,
+      totalParts,
+      allPartFiles,
+      totalSize,
+    } = dto;
 
-    // Simulate download progress
-    setTimeout(() => {
-      this.sseService.broadcast('model-download', {
-        type: 'progress',
-        downloadId,
-        progress: 50,
-        downloadedBytes: size / 2,
-        totalBytes: size,
-      });
-    }, 100);
+    // Validate required fields like Express does
+    if (!modelUrl || !filename) {
+      throw new Error('Model URL and filename are required');
+    }
 
-    setTimeout(() => {
-      this.sseService.broadcast('model-download', {
-        type: 'completed',
-        downloadId,
-        path: `/models/${filename}`,
+    // Create model info matching Express structure
+    // Express uses contextLength directly, ignoring trainedContextLength and maxContextLength
+    const modelInfo = {
+      name: modelName ?? filename,
+      url: modelUrl,
+      filename,
+      size: size ?? 0,
+      description: description ?? '',
+      contextLength: contextLength ?? trainedContextLength ?? maxContextLength,
+      parameterCount,
+      quantization,
+      isMultiPart,
+      totalParts,
+      allPartFiles,
+      totalSize,
+    };
+
+    const downloadId = `${modelInfo.name}-${Date.now()}`;
+
+    // Use the llmManager like Express does
+    const { getLocalLLMManager } = await import('../../../localLlmSingleton');
+    const llmManager = getLocalLLMManager();
+
+    // Start download with progress callback
+    llmManager
+      .downloadModel(modelInfo, (progress, speed) => {
+        // Broadcast progress via SSE like Express
+        this.sseService.broadcast('unified-events', {
+          type: 'download-progress',
+          data: {
+            filename,
+            progress,
+            speed,
+            isDownloading: true,
+          },
+        });
+      })
+      .then(() => {
+        // Download completed
+        this.sseService.broadcast('unified-events', {
+          type: 'download-progress',
+          data: {
+            filename,
+            progress: 100,
+            speed: '0 B/s',
+            isDownloading: false,
+            completed: true,
+          },
+        });
+
+        // Broadcast models updated after delay
+        setTimeout(() => {
+          this.sseService.broadcast('unified-events', {
+            type: 'models-updated',
+            timestamp: Date.now(),
+          });
+        }, 2000);
+      })
+      .catch(error => {
+        // Download failed or cancelled
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown error';
+        const isCancelled = errorMessage === 'Download cancelled';
+
+        this.sseService.broadcast('unified-events', {
+          type: 'download-progress',
+          data: {
+            filename,
+            progress: 0,
+            speed: '0 B/s',
+            isDownloading: false,
+            error: isCancelled ? 'cancelled' : errorMessage,
+          },
+        });
       });
-    }, 200);
 
     return {
       success: true,
-      message: 'Model download started (stub)',
-      path: `/models/${filename}`,
+      message: 'Model download started',
+      downloadId,
+      name: modelInfo.name,
+      filename,
     };
   }
 
-  async cancelDownload(downloadId: string) {
-    const controller = this.activeDownloads.get(downloadId);
-    if (controller) {
-      controller.abort();
-      this.activeDownloads.delete(downloadId);
+  async cancelDownload(filename: string) {
+    // Use llmManager to cancel download like Express does
+    const { getLocalLLMManager } = await import('../../../localLlmSingleton');
+    const llmManager = getLocalLLMManager();
 
-      // Broadcast download cancelled
-      this.sseService.broadcast('model-download', {
-        type: 'cancelled',
-        downloadId,
+    const cancelled = await llmManager.cancelDownload(filename);
+    if (cancelled) {
+      // Broadcast download cancelled via unified events
+      this.sseService.broadcast('unified-events', {
+        type: 'download-progress',
+        data: {
+          filename,
+          progress: 0,
+          speed: '0 B/s',
+          isDownloading: false,
+          error: 'cancelled',
+        },
       });
 
       return {
         success: true,
         message: 'Download cancelled',
+        filename,
       };
     }
 
     return {
       success: false,
-      message: 'Download not found',
+      message: 'Download not found or not in progress',
     };
   }
 

@@ -34,6 +34,7 @@ function App() {
   const [showConnectionDialog, setShowConnectionDialog] = useState(false);
   const [isMusicPlayerOpen, setIsMusicPlayerOpen] = useState(false);
   const [showPromptsModal, setShowPromptsModal] = useState(false);
+  const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
 
   const { isConnected } = useConnectionMonitor();
 
@@ -250,6 +251,10 @@ function App() {
                 toggleAgentMode(activeThread.id);
               }
             }}
+            onPromptEdit={(threadId: string) => {
+              setEditingThreadId(threadId);
+              setShowPromptsModal(true);
+            }}
           />
         )}
 
@@ -336,15 +341,24 @@ function App() {
       {showPromptsModal && (
         <PromptsModal
           isOpen={showPromptsModal}
-          onClose={() => setShowPromptsModal(false)}
+          onClose={() => {
+            setShowPromptsModal(false);
+            setEditingThreadId(null);
+          }}
           currentPrompt={
-            (activeThread?.customPrompt || defaultCustomPrompt) ??
-            'You are a helpful AI assistant.'
+            editingThreadId
+              ? (threads.find(t => t.id === editingThreadId)?.customPrompt ??
+                defaultCustomPrompt)
+              : (activeThread?.customPrompt ??
+                defaultCustomPrompt ??
+                'You are a helpful AI assistant.')
           }
           defaultPrompt="You are a helpful AI assistant."
           onPromptChange={async (customPrompt?: string) => {
-            const currentThreadId = threadsActiveThreadId ?? 'default';
-            await updateThreadPrompt(currentThreadId, customPrompt);
+            const threadId =
+              editingThreadId ?? threadsActiveThreadId ?? 'default';
+            await updateThreadPrompt(threadId, customPrompt);
+            setEditingThreadId(null);
           }}
         />
       )}

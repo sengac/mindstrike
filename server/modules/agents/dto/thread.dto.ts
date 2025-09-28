@@ -1,11 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsString,
-  IsUUID,
-  IsOptional,
-  IsObject,
-  IsEnum,
-} from 'class-validator';
+import { IsString, IsOptional, IsObject, IsEnum } from 'class-validator';
 
 export enum ThreadType {
   CHAT = 'chat',
@@ -43,6 +37,14 @@ export class UpdateThreadDto {
   @IsOptional()
   @IsString()
   name?: string;
+
+  @ApiPropertyOptional({
+    description: 'Custom prompt for the thread',
+    type: String,
+    nullable: true,
+  })
+  @IsOptional()
+  customPrompt?: string | null;
 
   @ApiPropertyOptional({
     description: 'Updated metadata',
