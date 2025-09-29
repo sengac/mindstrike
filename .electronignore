@@ -1,0 +1,7 @@
+node_modules/@esbuild/linux-*
+node_modules/@esbuild/darwin-*
+node_modules/@rollup/rollup-linux-*
+node_modules/@rollup/rollup-darwin-*
+node_modules/@node-llama-cpp/linux-*
+node_modules/@node-llama-cpp/darwin-*
+node_modules/@node-llama-cpp/mac-*

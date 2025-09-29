@@ -244,7 +244,7 @@ export class AudioController {
     }
   }
 
-  @Get('audio/*')
+  @Get('audio/*path')
   @ApiOperation({ summary: 'Stream audio file' })
   @ApiParam({ name: 'path', type: 'string', description: 'Audio file path' })
   @ApiResponse({

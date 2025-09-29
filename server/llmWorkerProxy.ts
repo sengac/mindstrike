@@ -97,8 +97,21 @@ export class LLMWorkerProxy extends EventEmitter {
 
         workerPath = wrapperPath;
       } else {
-        // In production, use the compiled worker
-        workerPath = join(__dirname, 'llmWorker.js');
+        // In production, the worker is built to the dist directory
+        // Check if we're running from dist/server.js
+        const distWorkerPath = join(dirname(__dirname), 'dist', 'llmWorker.js');
+        const localWorkerPath = join(__dirname, 'llmWorker.js');
+
+        // Try dist path first (when running from dist/server.js)
+        if (existsSync(distWorkerPath)) {
+          workerPath = distWorkerPath;
+        } else if (existsSync(localWorkerPath)) {
+          // Fallback to local path (when running directly)
+          workerPath = localWorkerPath;
+        } else {
+          // Last resort - assume we're in dist already
+          workerPath = join(dirname(__filename), 'llmWorker.js');
+        }
       }
 
       if (!existsSync(workerPath)) {

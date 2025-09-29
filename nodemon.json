@@ -1,0 +1,22 @@
+{
+  "watch": ["server"],
+  "ext": "ts,js,json",
+  "ignore": [
+    "server/**/*.test.ts",
+    "server/**/*.spec.ts",
+    "server/__tests__/**",
+    "server/test-nest/**",
+    "dist/**",
+    "node_modules/**",
+    "*.log"
+  ],
+  "execMap": {
+    "ts": "node --loader @swc-node/register/esm"
+  },
+  "env": {
+    "NODE_ENV": "development",
+    "SWC_NODE_PROJECT": "./server/tsconfig.json"
+  },
+  "legacyWatch": true,
+  "delay": "1000"
+}

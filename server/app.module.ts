@@ -2,8 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ServeStaticModule } from '@nestjs/serve-static';
-import { join, dirname } from 'path';
-import { existsSync } from 'fs';
+import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { CoreModule } from './modules/core/core.module';
 import { ChatModule } from './modules/chat/chat.module';
@@ -36,12 +35,34 @@ import { SystemModule } from './modules/system/system.module';
     ...(() => {
       const __filename = fileURLToPath(import.meta.url);
       const __dirname = dirname(__filename);
-      const clientPath = join(__dirname, '..', 'client');
-      return process.env.NODE_ENV === 'production' && existsSync(clientPath)
+
+      // Everything is in the same directory - dist/
+      // server.js and frontend files are all together
+      let staticPath = __dirname;
+
+      // If we're in ASAR, files need to be unpacked
+      if (__dirname.includes('app.asar')) {
+        staticPath = __dirname.replace('app.asar', 'app.asar.unpacked');
+      }
+
+      console.log('Serving static files from:', staticPath);
+
+      // Serve static files in production OR when running in Electron
+      const shouldServeStatic =
+        process.env.NODE_ENV === 'production' ||
+        (process.versions && process.versions.electron);
+
+      return shouldServeStatic
         ? [
             ServeStaticModule.forRoot({
-              rootPath: clientPath,
-              exclude: ['/api/*', '/audio/*', '/sse', '/events'],
+              rootPath: staticPath,
+              exclude: [
+                '/api/*path',
+                '/audio/*path',
+                '/sse/*path',
+                '/events/*path',
+              ],
+              serveRoot: '/',
             }),
           ]
         : [];

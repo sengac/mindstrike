@@ -4,7 +4,14 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   build: {
-    outDir: 'dist/client',
+    outDir: 'dist',
+    rollupOptions: {
+      output: {
+        entryFileNames: 'frontend.js',
+        chunkFileNames: '[name]-[hash].js',
+        assetFileNames: '[name]-[hash][extname]',
+      },
+    },
   },
   server: {
     proxy: {

@@ -183,22 +183,17 @@ async function startServer() {
   try {
     console.log('Starting embedded server...');
 
-    // Import the bundled server
-    const serverPath = path.join(__dirname, '../dist/server/index.js');
-    const serverModule = await import(pathToFileURL(serverPath).href);
-    const app = serverModule.default || serverModule;
+    // Import and run the bundled NestJS server
+    const serverPath = path.join(__dirname, '../dist/server.js');
+    console.log('Loading NestJS server from:', serverPath);
 
-    if (!app || typeof app.listen !== 'function') {
-      throw new Error('Server module did not export a valid Express app');
-    }
+    // NestJS server bootstraps itself when imported
+    await import(pathToFileURL(serverPath).href);
 
-    console.log('Starting full MindStrike server with all API routes');
-    serverApp = app.listen(3001, () => {
-      console.log(
-        'MindStrike server running on port 3001 with full functionality'
-      );
-      global.mindstrikeServerStarting = false;
-    });
+    // NestJS server starts on port 3001 automatically
+    serverApp = true; // Mark as started
+    console.log('NestJS server started on port 3001 with full functionality');
+    global.mindstrikeServerStarting = false;
 
     return serverApp;
   } catch (error) {
@@ -210,7 +205,9 @@ async function startServer() {
 
 function stopServer() {
   if (serverApp) {
-    serverApp.close();
+    // NestJS server doesn't expose a close method directly
+    // The process will terminate when Electron exits
+    console.log('Marking NestJS server for shutdown');
     serverApp = null;
   }
 }

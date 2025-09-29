@@ -46,7 +46,7 @@ export class WorkspaceFileController {
     return files.map(file => (file.isDirectory ? `${file.name}/` : file.name));
   }
 
-  @Get('file/*')
+  @Get('file/*path')
   @ApiOperation({ summary: 'Get file content' })
   @ApiResponse({
     status: 200,
