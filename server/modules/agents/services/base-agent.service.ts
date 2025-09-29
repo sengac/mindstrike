@@ -964,6 +964,7 @@ export abstract class BaseAgentService {
       let tokenCount = 0;
       let lastTokenUpdate = startTime;
       let citations: string[] | undefined = undefined;
+      const tokenRateSamples: number[] = []; // Track all token rate samples
       let accumulatedMessage:
         | {
             tool_calls?: Array<{
@@ -1087,8 +1088,16 @@ export abstract class BaseAgentService {
         tokenCount += Math.max(1, Math.floor(chunkContent.length / 4));
 
         const now = Date.now();
+        const elapsed = (now - startTime) / 1000;
+
+        // Calculate current rate and store sample
+        if (elapsed > 0.1 && tokenCount > 0) {
+          const currentTokensPerSecond = tokenCount / elapsed;
+          tokenRateSamples.push(currentTokensPerSecond);
+        }
+
+        // Broadcast updates every second
         if (now - lastTokenUpdate > 1000) {
-          const elapsed = (now - startTime) / 1000;
           if (elapsed > 0.5 && tokenCount > 0) {
             const tokensPerSecond = tokenCount / elapsed;
             this.sseService.broadcast('unified-events', {
@@ -1188,13 +1197,29 @@ export abstract class BaseAgentService {
       }
 
       const duration = Date.now() - startTime;
-      const tokensPerSecond = duration > 0 ? tokenCount / (duration / 1000) : 0;
+      const finalTokensPerSecond =
+        duration > 0 ? tokenCount / (duration / 1000) : 0;
+
+      // Calculate median tokens per second
+      let medianTokensPerSecond = finalTokensPerSecond;
+      if (tokenRateSamples.length > 0) {
+        // Sort samples to find median
+        const sortedSamples = [...tokenRateSamples].sort((a, b) => a - b);
+        const mid = Math.floor(sortedSamples.length / 2);
+        medianTokensPerSecond =
+          sortedSamples.length % 2 === 0
+            ? (sortedSamples[mid - 1] + sortedSamples[mid]) / 2
+            : sortedSamples[mid];
+      }
+
       this.logger.debug(`LLM Response: ${this.config.llmConfig.model}`, {
         content: fullContent,
         toolCalls: toolCalls,
         duration: `${duration}ms`,
         tokens: tokenCount,
-        tokensPerSecond: tokensPerSecond.toFixed(2),
+        averageTokensPerSecond: finalTokensPerSecond.toFixed(2),
+        medianTokensPerSecond: medianTokensPerSecond.toFixed(2),
+        samples: tokenRateSamples.length,
       });
 
       await this.conversationManager.updateMessage(threadId, assistantMsgId, {
@@ -1202,6 +1227,8 @@ export abstract class BaseAgentService {
         toolCalls,
         status: toolCalls && toolCalls.length > 0 ? 'processing' : 'completed',
         ...(citations && { citations }),
+        medianTokensPerSecond,
+        totalTokens: tokenCount,
       });
 
       if (toolCalls && toolCalls.length > 0) {
@@ -1352,12 +1379,30 @@ export abstract class BaseAgentService {
         throw new Error('Message not found');
       }
 
+      // Recalculate final median if we had follow-up processing
+      let finalMedianTokensPerSecond = medianTokensPerSecond;
+      if (tokenRateSamples.length > 0) {
+        const finalDuration = Date.now() - startTime;
+        const finalRate =
+          finalDuration > 0 ? tokenCount / (finalDuration / 1000) : 0;
+        tokenRateSamples.push(finalRate);
+
+        const sortedFinalSamples = [...tokenRateSamples].sort((a, b) => a - b);
+        const mid = Math.floor(sortedFinalSamples.length / 2);
+        finalMedianTokensPerSecond =
+          sortedFinalSamples.length % 2 === 0
+            ? (sortedFinalSamples[mid - 1] + sortedFinalSamples[mid]) / 2
+            : sortedFinalSamples[mid];
+      }
+
       this.sseService.broadcast('unified-events', {
         type: 'update',
         entityType: 'message',
         entity: {
           id: assistantMsgId,
           status: 'completed',
+          medianTokensPerSecond: finalMedianTokensPerSecond,
+          totalTokens: tokenCount,
           ...(citations && { citations }),
         },
         threadId,

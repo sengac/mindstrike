@@ -539,13 +539,16 @@ export class MessageService {
           toolCalls: response.toolCalls,
           toolResults: response.toolResults,
           timestamp: response.timestamp,
+          medianTokensPerSecond: response.medianTokensPerSecond,
+          totalTokens: response.totalTokens,
         }
       );
 
-      // Send final completion event
+      // Send final completion event with median token rate
       this.sseService.broadcast('unified-events', {
         type: SSEEventType.COMPLETED,
         message: response,
+        medianTokensPerSecond: response.medianTokensPerSecond,
       });
 
       // Close the response stream to signal completion to the client

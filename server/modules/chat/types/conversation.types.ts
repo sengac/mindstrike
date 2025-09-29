@@ -10,6 +10,9 @@ export interface ConversationMessage {
   images?: ImageAttachment[];
   notes?: NotesAttachment[];
   citations?: string[];
+  // Required for assistant messages with status 'completed'
+  medianTokensPerSecond?: number;
+  totalTokens?: number;
 }
 
 export interface ImageAttachment {

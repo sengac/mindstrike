@@ -161,6 +161,10 @@ export function useChat({ threadId, isAgentMode = false }: UseChatProps = {}) {
               | Array<{ name: string; result: unknown }>
               | undefined,
             citations: messageData.citations as string[] | undefined,
+            medianTokensPerSecond: messageData.medianTokensPerSecond as
+              | number
+              | undefined,
+            totalTokens: messageData.totalTokens as number | undefined,
           };
 
           // Check if message already exists
@@ -194,7 +198,7 @@ export function useChat({ threadId, isAgentMode = false }: UseChatProps = {}) {
           return;
         }
 
-        // Final message completion
+        // Final message completion with token metrics
         const messageData = data.message;
         const completedMessage = {
           id: messageData.id,
@@ -208,6 +212,10 @@ export function useChat({ threadId, isAgentMode = false }: UseChatProps = {}) {
             | Array<{ name: string; result: unknown }>
             | undefined,
           citations: messageData.citations as string[] | undefined,
+          medianTokensPerSecond: messageData.medianTokensPerSecond as
+            | number
+            | undefined,
+          totalTokens: messageData.totalTokens as number | undefined,
         };
 
         if (!currentThreadId) {

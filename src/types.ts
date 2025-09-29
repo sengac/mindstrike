@@ -86,6 +86,9 @@ export interface ConversationMessage {
   images?: ImageAttachment[]; // Image attachments for user messages
   notes?: NotesAttachment[]; // Notes attachments for user messages
   citations?: string[]; // URL citations for assistant messages (Perplexity)
+  // Required for assistant messages with status 'completed'
+  medianTokensPerSecond?: number; // Median token generation rate
+  totalTokens?: number; // Total tokens generated for this message
 }
 
 export interface ImageAttachment {

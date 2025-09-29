@@ -933,7 +933,15 @@ function ChatMessageComponent({
                 })()}
               </span>
               {!isUser && message.model && (
-                <span className="ml-2 text-gray-400">via {message.model}</span>
+                <span className="ml-2 text-gray-400">
+                  via {message.model}
+                  {message.medianTokensPerSecond && (
+                    <> • {message.medianTokensPerSecond.toFixed(1)} tok/s</>
+                  )}
+                  {message.totalTokens && (
+                    <> • {message.totalTokens.toLocaleString()} tokens</>
+                  )}
+                </span>
               )}
             </div>
             {!isUser && onCopyToNotes && (
