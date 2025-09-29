@@ -278,6 +278,10 @@ export class ModelResponseGenerator {
       let resolveToken: ((value: string | null) => void) | null = null;
       let streamEnded = false;
 
+      // Accumulate all tokens for proper detokenization
+      const allTokens: Token[] = [];
+      let previousText = '';
+
       const pushToken = (token: string | null) => {
         if (token === null) {
           streamEnded = true;
@@ -316,9 +320,19 @@ export class ModelResponseGenerator {
           seed: options.seed,
           functions,
           onToken: tokens => {
-            // Convert tokens to string using proper detokenization
-            const tokenString = session.model.detokenize(tokens);
-            pushToken(tokenString);
+            // Accumulate tokens for proper detokenization
+            allTokens.push(...tokens);
+
+            // Detokenize the full sequence to preserve word boundaries
+            const fullText = session.model.detokenize(allTokens);
+
+            // Extract only the new portion
+            const newText = fullText.slice(previousText.length);
+            previousText = fullText;
+
+            if (newText) {
+              pushToken(newText);
+            }
             tokenCount++;
           },
         })

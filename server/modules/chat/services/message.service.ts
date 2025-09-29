@@ -1,14 +1,19 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { ModuleRef } from '@nestjs/core';
 import { ConversationService } from './conversation.service';
 import { SseService } from '../../events/services/sse.service';
 import type { AgentPoolService } from '../../agents/services/agent-pool.service';
-import {
-  CreateMessageDto,
-  MessageImage,
-  MessageNote,
-} from '../dto/create-message.dto';
+import { CreateMessageDto } from '../dto/create-message.dto';
+import type {
+  ImageAttachment,
+  NotesAttachment,
+} from '../types/conversation.types';
 import { SSEEventType, ConversationMessage, Thread } from '../../../types';
 import { GlobalLlmConfigService } from '../../shared/services/global-llm-config.service';
 
@@ -38,8 +43,8 @@ export interface MessageWithTools {
   model?: string;
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
-  images?: MessageImage[];
-  notes?: MessageNote[];
+  images?: ImageAttachment[];
+  notes?: NotesAttachment[];
 }
 
 export interface CurrentLlmConfig {
@@ -56,8 +61,8 @@ export interface AgentWithProcessMessage {
     threadId: string,
     message: string,
     options: {
-      images?: MessageImage[];
-      notes?: MessageNote[];
+      images?: ImageAttachment[];
+      notes?: NotesAttachment[];
       onUpdate: (message: MessageWithTools) => Promise<void>;
       userMessageId?: string;
       signal: AbortSignal;
@@ -614,9 +619,7 @@ export class MessageService {
 
       return { success: true };
     } else {
-      throw new BadRequestException(
-        'No active processing found for this thread'
-      );
+      throw new NotFoundException('No active processing found for this thread');
     }
   }
 

@@ -1,5 +1,24 @@
 import { beforeEach, afterEach, vi } from 'vitest';
-import { resolve } from 'path';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// Mock monaco-editor globally for all tests
+vi.mock('monaco-editor', () => ({
+  editor: {
+    create: vi.fn(),
+    defineTheme: vi.fn(),
+    setTheme: vi.fn(),
+    createModel: vi.fn(),
+    setModelLanguage: vi.fn(),
+  },
+  languages: {
+    register: vi.fn(),
+    setMonarchTokensProvider: vi.fn(),
+    registerCompletionItemProvider: vi.fn(),
+  },
+}));
 
 // Global mocks for server-side modules
 if (process.env.NODE_ENV === 'test') {

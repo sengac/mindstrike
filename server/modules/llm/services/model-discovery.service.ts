@@ -43,6 +43,7 @@ export interface DynamicModelInfo extends Record<string, unknown> {
   modelArchitecture?: ModelArchitecture;
   hasVramData?: boolean;
   vramError?: string;
+  isFetchingVram?: boolean;
   // Multi-part model fields
   isMultiPart?: boolean;
   totalParts?: number;
@@ -219,6 +220,36 @@ export class ModelDiscoveryService {
   }
 
   /**
+   * Fetch VRAM data for specific models
+   */
+  async fetchVRAMDataForModels(models: DynamicModelInfo[]): Promise<void> {
+    const modelsNeedingVram = models.filter(
+      m => !m.hasVramData && !m.vramError && !m.isFetchingVram && m.url
+    );
+
+    if (modelsNeedingVram.length === 0) {
+      return;
+    }
+
+    this.logger.log(
+      `Queueing VRAM fetch for ${modelsNeedingVram.length} models`
+    );
+
+    // Mark models as fetching
+    for (const model of modelsNeedingVram) {
+      model.isFetchingVram = true;
+    }
+
+    // Add models to queue
+    this.vramFetchQueue.push(...modelsNeedingVram);
+
+    // Process queue asynchronously (fire and forget)
+    this.processVramFetchQueue().catch(error => {
+      this.logger.error('Error processing VRAM fetch queue:', error);
+    });
+  }
+
+  /**
    * Retry VRAM fetching for models
    */
   async retryVramFetch(): Promise<void> {
@@ -260,12 +291,14 @@ export class ModelDiscoveryService {
           batch.map(async model => {
             try {
               await this.fetchVramDataForModel(model);
+              model.isFetchingVram = false;
             } catch (error) {
               this.logger.warn(
                 `Failed to fetch VRAM data for ${model.name}:`,
                 error
               );
               model.vramError = 'Failed to fetch VRAM data';
+              model.isFetchingVram = false;
             }
           })
         );
@@ -294,32 +327,42 @@ export class ModelDiscoveryService {
       const fetchPromise = loadMetadataFromUrl(model.url);
       const metadata = await Promise.race([fetchPromise, timeout]);
 
-      if (metadata) {
-        const archInfo: ModelArchitectureInfo = {
-          hiddenDim: metadata.hidden_dim ?? 0,
-          numLayers: metadata.num_hidden_layers ?? 0,
-          numHeads: metadata.num_attention_heads ?? 0,
-          headDim: metadata.head_dim ?? 0,
-          intermediateSize: metadata.intermediate_size ?? 0,
-          vocabSize: metadata.vocab_size ?? 0,
-          contextLength: metadata.max_position_embeddings ?? 2048,
-          quantization: model.quantization ?? 'Q4_K_M',
+      if (metadata && metadata.n_layers && metadata.embedding_dim) {
+        // Prepare architecture info for shared VRAM calculator
+        const architectureInfo: ModelArchitectureInfo = {
+          layers: metadata.n_layers,
+          kvHeads: metadata.n_kv_heads,
+          embeddingDim: metadata.embedding_dim,
+          contextLength: metadata.context_length,
+          feedForwardDim: metadata.feed_forward_dim,
+          modelSizeMB: metadata.model_size_mb,
         };
 
-        const vramEstimates = calculateAllVRAMEstimates(archInfo);
+        // Calculate VRAM estimates using shared calculator
+        const vramEstimates = calculateAllVRAMEstimates(architectureInfo);
 
-        model.vramEstimates = vramEstimates;
-        model.hasVramData = true;
-        model.modelArchitecture = {
-          layers: metadata.num_hidden_layers,
-          kvHeads: metadata.num_key_value_heads,
-          embeddingDim: metadata.hidden_dim,
-          contextLength: metadata.max_position_embeddings,
-          feedForwardDim: metadata.intermediate_size,
-          modelSizeMB: model.size / (1024 * 1024),
-        };
+        if (vramEstimates.length > 0) {
+          model.vramEstimates = vramEstimates;
+          model.hasVramData = true;
+          model.modelArchitecture = {
+            layers: metadata.n_layers,
+            kvHeads: metadata.n_kv_heads,
+            embeddingDim: metadata.embedding_dim,
+            contextLength: metadata.context_length,
+            feedForwardDim: metadata.feed_forward_dim,
+            modelSizeMB: metadata.model_size_mb,
+          };
 
-        this.logger.debug(`Successfully fetched VRAM data for ${model.name}`);
+          this.logger.debug(`Successfully fetched VRAM data for ${model.name}`);
+        } else {
+          this.logger.debug(`No VRAM estimates generated for ${model.name}`);
+          model.vramError = 'Could not calculate VRAM estimates';
+        }
+      } else {
+        this.logger.debug(
+          `Incomplete metadata for ${model.name}, skipping VRAM calculation`
+        );
+        model.vramError = 'Incomplete metadata';
       }
     } catch (error) {
       this.logger.warn(`Failed to fetch VRAM data for ${model.name}:`, error);

@@ -122,17 +122,13 @@ export class GeneratePromptDto {
 }
 
 export class CancelMessageDto {
-  @ApiProperty({ description: 'Thread ID to cancel message in', type: String })
-  @IsUUID()
-  threadId: string;
+  @ApiProperty({ description: 'Message ID to cancel', type: String })
+  @IsString()
+  messageId: string;
 
-  @ApiPropertyOptional({
-    description: 'Specific message ID to cancel',
-    type: String,
-  })
-  @IsOptional()
-  @IsUUID()
-  messageId?: string;
+  @ApiProperty({ description: 'Thread ID to cancel message in', type: String })
+  @IsString()
+  threadId: string;
 }
 
 export class LoadThreadDto {

@@ -205,18 +205,29 @@ describe('ModelResponseGenerator', () => {
   });
 
   describe('generateStreamResponse', () => {
-    it('should generate a streaming response', async () => {
+    it('should generate a streaming response with proper token accumulation', async () => {
       const tokens = ['Hello', ' ', 'world', '!'];
       const fullResponse = tokens.join('');
+
+      // Mock detokenize to simulate proper accumulation
+      const mockDetokenize = vi.fn();
+      const actualCalls: any[] = [];
+      mockDetokenize.mockImplementation((tokenArray: unknown[]) => {
+        // Store what we actually receive
+        actualCalls.push([...tokenArray]);
+        // Return the accumulated text so far
+        return tokenArray.map(t => String(t)).join('');
+      });
+      (mockSession as any).model.detokenize = mockDetokenize;
 
       vi.mocked(mockSession.prompt).mockImplementation(
         async (message, options) => {
           // Simulate streaming by calling onToken
-          for (const token of tokens) {
-            if (options?.onToken) {
-              // onToken expects Token[] not string
-              options.onToken([token as any]);
-            }
+          if (options?.onToken) {
+            // Call onToken for each token separately
+            tokens.forEach(token => {
+              options.onToken([token] as any);
+            });
           }
           return fullResponse;
         }
@@ -242,6 +253,17 @@ describe('ModelResponseGenerator', () => {
         receivedTokens.push(value);
       }
 
+      // Verify detokenize was called with accumulated tokens
+      expect(mockDetokenize).toHaveBeenCalled();
+      // Should be called with progressively accumulated tokens
+      expect(mockDetokenize).toHaveBeenCalledTimes(4);
+
+      // The implementation accumulates tokens, so each call should have more tokens
+      expect(actualCalls[0]).toEqual(['Hello']);
+      expect(actualCalls[1]).toEqual(['Hello', ' ']);
+      expect(actualCalls[2]).toEqual(['Hello', ' ', 'world']);
+      expect(actualCalls[3]).toEqual(['Hello', ' ', 'world', '!']);
+
       expect(receivedTokens).toEqual(tokens);
       expect(result).toEqual({
         content: fullResponse,
@@ -249,20 +271,27 @@ describe('ModelResponseGenerator', () => {
       });
     });
 
-    it('should use model.detokenize for token decoding', async () => {
+    it('should use model.detokenize with accumulated tokens', async () => {
       const tokenObjects = [{ id: 123 }, { id: 456 }]; // Simulate Token objects
-      const decodedText = 'Hello world';
+      const decodedTexts = ['Hello', 'Hello world'];
+      let callCount = 0;
+      const actualCalls: any[] = [];
 
-      // Mock detokenize to verify it's called correctly
-      const mockDetokenize = vi.fn().mockReturnValue(decodedText);
+      // Mock detokenize to verify it's called correctly with accumulation
+      const mockDetokenize = vi.fn().mockImplementation((tokens: unknown[]) => {
+        actualCalls.push([...tokens]);
+        return decodedTexts[Math.min(callCount++, decodedTexts.length - 1)];
+      });
       (mockSession as any).model.detokenize = mockDetokenize;
 
       vi.mocked(mockSession.prompt).mockImplementation(
         async (message, options) => {
+          // Simulate two separate token calls
           if (options?.onToken) {
-            options.onToken(tokenObjects as any);
+            options.onToken([tokenObjects[0]] as any);
+            options.onToken([tokenObjects[1]] as any);
           }
-          return decodedText;
+          return decodedTexts[decodedTexts.length - 1];
         }
       );
 
@@ -276,9 +305,14 @@ describe('ModelResponseGenerator', () => {
         receivedTokens.push(token);
       }
 
-      // Verify detokenize was called with the token objects
-      expect(mockDetokenize).toHaveBeenCalledWith(tokenObjects);
-      expect(receivedTokens).toEqual([decodedText]);
+      // Verify detokenize was called with accumulated tokens
+      expect(mockDetokenize).toHaveBeenCalledTimes(2);
+      // First call gets first token, second call gets both tokens accumulated
+      expect(actualCalls[0]).toEqual([tokenObjects[0]]);
+      expect(actualCalls[1]).toEqual([tokenObjects[0], tokenObjects[1]]);
+
+      // Should receive the incremental text differences
+      expect(receivedTokens).toEqual(['Hello', ' world']);
     });
 
     it('should handle abort during streaming', async () => {
@@ -416,6 +450,118 @@ describe('ModelResponseGenerator', () => {
 
       expect((generator as any).mcpTools).toEqual([]);
       expect((generator as any).mcpToolsPromise).toBeNull();
+    });
+  });
+
+  describe('Gemma tokenization fix', () => {
+    it('should properly handle word boundaries for models with SentencePiece tokenization', async () => {
+      // Simulate Gemma model with metadata
+      (mockSession as any).model.metadata = {
+        general: {
+          name: 'gemma-2b-it',
+        },
+      };
+
+      // Simulate tokens that would produce text without spaces when detokenized individually
+      const tokens = ['The', 'speed', 'of', 'sound'];
+
+      // Mock detokenize to simulate the real issue:
+      // Individual detokenization loses spaces, but full sequence preserves them
+      const actualCalls: any[] = [];
+      const mockDetokenize = vi
+        .fn()
+        .mockImplementation((tokenArray: unknown[]) => {
+          actualCalls.push([...tokenArray]);
+          // Simulate proper word boundary handling with full context
+          const text = tokenArray.map(t => String(t)).join(' ');
+          return text;
+        });
+      (mockSession as any).model.detokenize = mockDetokenize;
+
+      vi.mocked(mockSession.prompt).mockImplementation(
+        async (message, options) => {
+          // Simulate streaming tokens one by one
+          if (options?.onToken) {
+            tokens.forEach(token => {
+              options.onToken([token as any]);
+            });
+          }
+          return 'The speed of sound';
+        }
+      );
+
+      const generator = new ModelResponseGenerator();
+      const stream = generator.generateStreamResponse(
+        mockSession,
+        'what is the speed of sound?',
+        {
+          disableFunctions: true,
+        }
+      );
+
+      const receivedText: string[] = [];
+      for await (const text of stream) {
+        receivedText.push(text);
+      }
+
+      // Should accumulate tokens and detokenize with full context
+      expect(mockDetokenize).toHaveBeenCalledTimes(4);
+      expect(actualCalls[0]).toEqual(['The']);
+      expect(actualCalls[1]).toEqual(['The', 'speed']);
+      expect(actualCalls[2]).toEqual(['The', 'speed', 'of']);
+      expect(actualCalls[3]).toEqual(['The', 'speed', 'of', 'sound']);
+
+      // The received text should preserve spaces properly
+      const fullText = receivedText.join('');
+      expect(fullText).toBe('The speed of sound');
+      expect(fullText).toContain(' '); // Ensure spaces are present
+    });
+
+    it('should extract only new text when detokenizing accumulated tokens', async () => {
+      // Test that we only yield the new portion of text
+      const tokens = ['Hello', 'world'];
+
+      // Mock detokenize to return accumulated text
+      const actualCalls: any[] = [];
+      const mockDetokenize = vi.fn();
+      mockDetokenize.mockImplementation(tokens => {
+        actualCalls.push([...tokens]);
+        // Return based on call count
+        if (actualCalls.length === 1) {
+          return 'Hello';
+        }
+        return 'Hello world';
+      });
+
+      (mockSession as any).model.detokenize = mockDetokenize;
+
+      vi.mocked(mockSession.prompt).mockImplementation(
+        async (message, options) => {
+          if (options?.onToken) {
+            options.onToken([tokens[0]] as any);
+            options.onToken([tokens[1]] as any);
+          }
+          return 'Hello world';
+        }
+      );
+
+      const generator = new ModelResponseGenerator();
+      const stream = generator.generateStreamResponse(mockSession, 'Test', {
+        disableFunctions: true,
+      });
+
+      const receivedTokens: string[] = [];
+      for await (const token of stream) {
+        receivedTokens.push(token);
+      }
+
+      // Should receive only the incremental portions
+      expect(receivedTokens).toEqual(['Hello', ' world']);
+
+      // Verify proper accumulation
+      expect(mockDetokenize).toHaveBeenCalledTimes(2);
+      expect(actualCalls[0]).toEqual(['Hello']);
+      expect(actualCalls[1]).toEqual(['Hello', 'world']);
     });
   });
 

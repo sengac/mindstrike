@@ -122,7 +122,10 @@ export class LlmController {
 
   @Post('check-model-updates')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Check for model updates' })
+  @ApiOperation({
+    summary:
+      'Check for model updates and trigger VRAM fetch for visible models',
+  })
   @ApiBody({
     schema: {
       type: 'object',
@@ -139,16 +142,48 @@ export class LlmController {
       required: ['modelIds'],
     },
   })
-  @ApiResponse({ status: 200, description: 'Model update status' })
+  @ApiResponse({ status: 200, description: 'Updated model data' })
   async checkModelUpdates(
     @Body() body: { modelIds: string[]; visibleModelIds?: string[] }
   ) {
     if (!Array.isArray(body.modelIds)) {
       throw new BadRequestException('modelIds must be an array');
     }
-    // Transform modelIds to the format expected by checkModelUpdates
-    const models = body.modelIds.map(id => ({ modelId: id }));
-    return this.discoveryService.checkModelUpdates(models);
+
+    // If visible model IDs are provided, queue them for VRAM fetching
+    if (
+      Array.isArray(body.visibleModelIds) &&
+      body.visibleModelIds.length > 0
+    ) {
+      const visibleModels = await this.discoveryService.getModelsById(
+        body.visibleModelIds
+      );
+      const modelsNeedingVram = visibleModels.filter(
+        m => !m.hasVramData && !m.vramError && !m.isFetchingVram && m.url
+      );
+
+      if (modelsNeedingVram.length > 0) {
+        this.logger.log(
+          `Queueing VRAM fetch for ${modelsNeedingVram.length} visible models`
+        );
+        // Fire and forget - we don't wait for VRAM fetching to complete
+        this.discoveryService
+          .fetchVRAMDataForModels(modelsNeedingVram)
+          .catch(error => {
+            this.logger.error('Error queuing VRAM fetch:', error);
+          });
+      }
+    }
+
+    // Return all requested models (with updated data if available)
+    const updatedModels = await this.discoveryService.getModelsById(
+      body.modelIds
+    );
+
+    return {
+      success: true,
+      models: updatedModels,
+    };
   }
 
   @Post('retry-vram-fetch')

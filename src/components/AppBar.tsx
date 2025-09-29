@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import React from 'react';
 import type { LucideProps } from 'lucide-react';
-import { Cpu } from 'lucide-react';
+import { Cpu, Minus, Plus } from 'lucide-react';
 import { WindowControls } from './WindowControls';
 import { SystemInfo } from './SystemInfo';
 import { useAppStore } from '../store/useAppStore';
@@ -30,7 +30,14 @@ export const AppBar: React.FC<AppBarProps> = ({
   actions,
   className = '',
 }) => {
-  const { setShowLocalModelDialog, activeView } = useAppStore();
+  const {
+    setShowLocalModelDialog,
+    activeView,
+    fontSize,
+    increaseFontSize,
+    decreaseFontSize,
+  } = useAppStore();
+
   return (
     <div
       className={`flex-shrink-0 px-6 border-b border-gray-700 flex items-center ${className}`}
@@ -42,8 +49,9 @@ export const AppBar: React.FC<AppBarProps> = ({
           <Icon size={24} className={iconColor} />
           <h1 className="text-xl font-semibold text-white">{title}</h1>
         </div>
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-2">
           <SystemInfo />
+
           {activeView !== 'settings' && (
             <button
               onClick={() => setShowLocalModelDialog(true)}
@@ -53,6 +61,32 @@ export const AppBar: React.FC<AppBarProps> = ({
               <Cpu size={16} />
             </button>
           )}
+
+          {/* Font Size Controls - only show for chat, mindmaps, and workspace views */}
+          {(activeView === 'chat' ||
+            activeView === 'mindmaps' ||
+            activeView === 'workspace') && (
+            <div className="flex items-center bg-gray-800 rounded px-1 ml-2">
+              <button
+                onClick={decreaseFontSize}
+                className="p-1.5 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
+                title="Decrease font size"
+              >
+                <Minus size={14} />
+              </button>
+              <span className="text-xs text-gray-300 px-2 min-w-[40px] text-center">
+                {fontSize}px
+              </span>
+              <button
+                onClick={increaseFontSize}
+                className="p-1.5 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
+                title="Increase font size"
+              >
+                <Plus size={14} />
+              </button>
+            </div>
+          )}
+
           {actions}
           <WindowControls />
         </div>

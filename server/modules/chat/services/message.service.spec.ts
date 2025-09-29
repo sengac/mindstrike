@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { Response } from 'express';
 import type { ModuleRef } from '@nestjs/core';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -413,11 +413,11 @@ describe('MessageService', () => {
       });
     });
 
-    it('should throw BadRequestException when no active task', async () => {
+    it('should throw NotFoundException when no active task', async () => {
       const dto = { messageId: 'msg-123', threadId: 'test-thread' };
 
       await expect(service.cancelMessage(dto)).rejects.toThrow(
-        new BadRequestException('No active processing found for this thread')
+        new NotFoundException('No active processing found for this thread')
       );
     });
   });

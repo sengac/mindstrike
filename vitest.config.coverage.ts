@@ -27,6 +27,14 @@ export default defineConfig({
         fileURLToPath(new URL('.', import.meta.url)),
         'src/__mocks__/monaco-editor.ts'
       ),
+      '@modelcontextprotocol/server-filesystem': resolve(
+        fileURLToPath(new URL('.', import.meta.url)),
+        'tests/__mocks__/mcp.ts'
+      ),
+      '@modelcontextprotocol/server-github': resolve(
+        fileURLToPath(new URL('.', import.meta.url)),
+        'tests/__mocks__/mcp.ts'
+      ),
     },
   },
   test: {

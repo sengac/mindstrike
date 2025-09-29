@@ -283,7 +283,16 @@ function App() {
           />
         )}
         {activeView === 'workspace' && (
-          <WorkspaceView onDirectoryChange={loadThreads} />
+          <WorkspaceView
+            onDirectoryChange={() => {
+              loadThreads().catch(error => {
+                logger.error('Failed to load threads:', error);
+              });
+              loadMindMaps().catch(error => {
+                logger.error('Failed to load mindmaps:', error);
+              });
+            }}
+          />
         )}
         {activeView === 'agents' && <AgentsView />}
         {activeView === 'settings' && <SettingsView />}

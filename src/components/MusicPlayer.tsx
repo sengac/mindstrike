@@ -159,13 +159,13 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
           // Playlist not found, fallback to "All Tracks"
           setViewingPlaylist(false);
           setCurrentPlaylist(null);
-          setAudioFiles(allTracks);
+          setAudioFiles([...allTracks]); // Use a copy to maintain sort order
         }
       } else {
         // Playing from "All Tracks" or no track playing, show "All Tracks"
         setViewingPlaylist(false);
         setCurrentPlaylist(null);
-        setAudioFiles(allTracks);
+        setAudioFiles([...allTracks]); // Use a copy to maintain sort order
       }
       setHasRestoredPlaylist(true); // Mark as restored
     }
@@ -229,11 +229,52 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
         metadata: file.metadata,
         coverArtUrl: file.coverArtUrl ?? undefined,
       }));
-      setAllTracksLocal(audioFiles); // Store the full track list locally
-      setAllTracks(audioFiles); // Store in playlist store
+
+      // Sort tracks by: Artist > Album (by year) > Track Number
+      const sortedAudioFiles = [...audioFiles].sort((a, b) => {
+        // First, sort by artist (handle undefined/null)
+        const artistA = a.artist || 'Unknown Artist';
+        const artistB = b.artist || 'Unknown Artist';
+        const artistCompare = artistA.localeCompare(artistB);
+        if (artistCompare !== 0) return artistCompare;
+
+        // Within same artist, sort by album year (older albums first)
+        const yearA = a.year || 9999; // Unknown years go last
+        const yearB = b.year || 9999;
+        const yearCompare = yearA - yearB;
+        if (yearCompare !== 0) return yearCompare;
+
+        // Within same year, sort by album name
+        const albumA = a.album || 'Unknown Album';
+        const albumB = b.album || 'Unknown Album';
+        const albumCompare = albumA.localeCompare(albumB);
+        if (albumCompare !== 0) return albumCompare;
+
+        // Within same album, sort by track number
+        const trackNoA =
+          (
+            a.metadata?.common?.track as
+              | { no?: number; of?: number }
+              | undefined
+          )?.no || 999;
+        const trackNoB =
+          (
+            b.metadata?.common?.track as
+              | { no?: number; of?: number }
+              | undefined
+          )?.no || 999;
+        const trackCompare = trackNoA - trackNoB;
+        if (trackCompare !== 0) return trackCompare;
+
+        // Final fallback: sort by title
+        return a.title.localeCompare(b.title);
+      });
+
+      setAllTracksLocal(sortedAudioFiles); // Store the sorted track list locally
+      setAllTracks(sortedAudioFiles); // Store in playlist store
       // Set audioFiles immediately to show tracks if not in a playlist
       if (!isPlayingFromPlaylist) {
-        setAudioFiles(audioFiles);
+        setAudioFiles(sortedAudioFiles);
       }
     } catch (error) {
       logger.error('Error fetching audio files:', error);
@@ -793,7 +834,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
   const handleBackToAllTracks = () => {
     setViewingPlaylist(false);
     setCurrentPlaylist(null);
-    setAudioFiles(allTracks); // Use stored full track list instead of refetching
+    setAudioFiles([...allTracks]); // Use a copy to maintain sort order
     setSelectedTracks(new Set()); // Clear selection when changing views
     setLastClickedIndex(null);
     // Clear playlist context so future tracks play from "All Tracks"

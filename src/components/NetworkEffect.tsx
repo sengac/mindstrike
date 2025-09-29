@@ -45,8 +45,6 @@ export function NetworkEffect({
     frequency: Uint8Array;
     waveform: Uint8Array;
   } | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  console.debug('NetworkEffect audio connected:', isConnected);
 
   // Beat detection state
   const beatDetectionRef = useRef({
@@ -76,7 +74,6 @@ export function NetworkEffect({
   // Connect to audio analyzer when howl is available
   useEffect(() => {
     if (!howl || !isPlaying) {
-      setIsConnected(false);
       setAudioData(null);
       audioDataRef.current = null;
       // Reset beat detection
@@ -120,7 +117,6 @@ export function NetworkEffect({
 
     // Try to connect to the audio element
     audioAnalyzer.connectToAudio(audioElement).then(success => {
-      setIsConnected(success);
       if (!success) {
         logger.warn('NetworkEffect: Failed to connect to audio analyzer');
       }
@@ -128,7 +124,6 @@ export function NetworkEffect({
 
     return () => {
       unsubscribe();
-      setIsConnected(false);
       setAudioData(null);
       audioDataRef.current = null;
     };
