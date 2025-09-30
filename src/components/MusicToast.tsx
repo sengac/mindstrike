@@ -10,7 +10,7 @@ export const MusicToast: React.FC<MusicToastProps> = ({ title, artist }) => {
   return (
     <div className="flex items-center space-x-3 min-w-0">
       {/* Music Thumbnail/Icon */}
-      <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-blue-500/30 to-purple-500/30 rounded border border-blue-500/40 flex items-center justify-center">
+      <div className="shrink-0 w-12 h-12 bg-linear-to-br from-blue-500/30 to-purple-500/30 rounded border border-blue-500/40 flex items-center justify-center">
         <Music size={20} className="text-blue-400" />
       </div>
 

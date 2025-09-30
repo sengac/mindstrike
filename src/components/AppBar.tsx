@@ -40,7 +40,7 @@ export const AppBar: React.FC<AppBarProps> = ({
 
   return (
     <div
-      className={`flex-shrink-0 px-6 border-b border-gray-700 flex items-center ${className}`}
+      className={`shrink-0 px-6 border-b border-gray-700 flex items-center ${className}`}
       style={{ height: 'var(--header-height)' }}
       data-test-id="custom-draggable-region"
     >

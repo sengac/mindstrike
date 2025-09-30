@@ -1001,7 +1001,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
                     className="flex items-center space-x-2 flex-1 min-w-0 cursor-pointer"
                     onClick={() => handleViewPlaylist(playlist)}
                   >
-                    <Music size={12} className="text-gray-400 flex-shrink-0" />
+                    <Music size={12} className="text-gray-400 shrink-0" />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm text-gray-300 truncate">
                         {playlist.name}
@@ -1077,7 +1077,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
                   : 'hover:bg-gray-700 text-gray-300'
               }`}
             >
-              <Music size={14} className="flex-shrink-0" />
+              <Music size={14} className="shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium">All Tracks</div>
                 <div className="text-xs opacity-70">
@@ -1180,7 +1180,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
                     onDrop={e => handleDrop(e, playlist.id)}
                     data-playlist-drop-zone
                   >
-                    <List size={14} className="flex-shrink-0" />
+                    <List size={14} className="shrink-0" />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">
                         {playlist.name}
@@ -1235,7 +1235,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
           <div className="flex">
             {/* Cover art */}
             {currentTrackCoverArt && (
-              <div className="w-24 h-24 flex-shrink-0">
+              <div className="w-24 h-24 shrink-0">
                 <img
                   src={currentTrackCoverArt}
                   alt="Album cover"
@@ -1270,18 +1270,18 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
             onContextMenu={e => e.preventDefault()}
           >
             <div
-              className="h-full bg-gradient-to-r from-blue-500 via-cyan-400 to-blue-600 relative overflow-hidden"
+              className="h-full bg-linear-to-r from-blue-500 via-cyan-400 to-blue-600 relative overflow-hidden"
               style={{
                 width: `${progressPercentage}%`,
               }}
             >
               <div
-                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent"
+                className="absolute inset-0 bg-linear-to-r from-transparent via-white/40 to-transparent"
                 style={{
                   animation: 'liquid-shimmer 2s ease-in-out infinite',
                 }}
               />
-              <div className="absolute inset-0 bg-gradient-to-b from-white/20 via-transparent to-black/20" />
+              <div className="absolute inset-0 bg-linear-to-b from-white/20 via-transparent to-black/20" />
             </div>
           </div>
 
@@ -1399,7 +1399,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
                                   <CachedAlbumArt
                                     imageUrl={track.coverArtUrl}
                                     alt="Cover"
-                                    className="w-4 h-4 rounded mr-2 flex-shrink-0"
+                                    className="w-4 h-4 rounded mr-2 shrink-0"
                                     fallbackIcon={false}
                                   />
                                   <span className="text-xs font-mono text-gray-400 truncate">
@@ -1422,7 +1422,7 @@ export function MusicPlayer({ isOpen, onClose }: MusicPlayerProps) {
                                   {currentTrack &&
                                     track.id === currentTrack.id &&
                                     isPlaying && (
-                                      <span className="text-xs font-mono text-gray-400 ml-2 flex-shrink-0">
+                                      <span className="text-xs font-mono text-gray-400 ml-2 shrink-0">
                                         ♪
                                       </span>
                                     )}

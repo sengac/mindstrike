@@ -6,7 +6,22 @@ import React, {
   forwardRef,
   useCallback,
 } from 'react';
-import { Send, Loader2, Github, Youtube, X, Square } from 'lucide-react';
+import {
+  Send,
+  Loader2,
+  Github,
+  Youtube,
+  X,
+  Square,
+  ArrowDown,
+} from 'lucide-react';
+import {
+  List as VirtualizedList,
+  AutoSizer,
+  CellMeasurer,
+  CellMeasurerCache,
+} from 'react-virtualized';
+import 'react-virtualized/styles.css';
 import ChatOptionsPopup from './ChatOptionsPopup';
 import AttachmentsPopup from './AttachmentsPopup';
 import ModelSelectionPopup from './ModelSelectionPopup';
@@ -71,6 +86,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
   ) => {
     const [input, setInput] = useState('');
     const [showClearConfirm, setShowClearConfirm] = useState(false);
+    const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
     const [attachedImages, setAttachedImages] = useState<ImageAttachment[]>([]);
     const [attachedNotes, setAttachedNotes] = useState<NotesAttachment[]>([]);
@@ -107,10 +123,18 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
 
     // logger.info('[ChatPanel] ThreadId:', threadId, 'Messages:', messages?.length, 'isLoading:', isLoading);
 
-    const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const listRef = useRef<VirtualizedList | null>(null);
+
+    // Create cache for dynamic row heights
+    const cacheRef = useRef(
+      new CellMeasurerCache({
+        fixedWidth: true,
+        defaultHeight: 100,
+      })
+    );
 
     useImperativeHandle(ref, () => ({
       clearConversation,
@@ -120,7 +144,9 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
     }));
 
     const scrollToBottom = () => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      if (listRef.current && messages.length > 0) {
+        listRef.current.scrollToRow(messages.length - 1);
+      }
     };
 
     const scrollToBottomIfNotRecentLoad = () => {
@@ -223,6 +249,29 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
         setChatLoadTime(Date.now()); // Reset timer when switching threads
       }
     }, [threadId]);
+
+    // Check scroll position after measurements complete
+    useEffect(() => {
+      if (messages.length > 0 && listRef.current) {
+        // After any message change, check if we need to show the button
+        const checkScrollPosition = () => {
+          if (listRef.current) {
+            const grid = listRef.current.Grid;
+            if (grid) {
+              const { scrollTop, scrollHeight, clientHeight } = grid.state;
+              const distanceFromBottom =
+                scrollHeight - scrollTop - clientHeight;
+              const isAtBottom = distanceFromBottom < 50;
+              setShowScrollToBottom(!isAtBottom);
+            }
+          }
+        };
+
+        // Check after a brief delay to let measurements complete
+        const timer = setTimeout(checkScrollPosition, 100);
+        return () => clearTimeout(timer);
+      }
+    }, [messages, threadId]);
 
     // Auto-focus input when loading finishes (response completes)
     useEffect(() => {
@@ -421,6 +470,223 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
       adjustTextareaHeight();
     }, [input]);
 
+    // Clear cache when messages change
+    useEffect(() => {
+      cacheRef.current.clearAll();
+      listRef.current?.forceUpdateGrid();
+    }, [messages]);
+
+    // Row renderer with CellMeasurer for dynamic heights
+    const rowRenderer = useCallback(
+      ({
+        index,
+        key,
+        parent,
+        style,
+      }: {
+        index: number;
+        key: string;
+        parent: React.Component;
+        style: React.CSSProperties;
+      }) => {
+        // Handle loading indicator at the end
+        if (
+          index === messages.length &&
+          isLoading &&
+          !isLoadingThread &&
+          !messages.some(
+            msg => msg.role === 'assistant' && msg.status === 'processing'
+          )
+        ) {
+          return (
+            <CellMeasurer
+              key={key}
+              cache={cacheRef.current}
+              parent={parent}
+              columnIndex={0}
+              rowIndex={index}
+            >
+              <div style={style} className="relative z-10 px-4">
+                {isAgentActive ? (
+                  (() => {
+                    const workflowToShow =
+                      currentWorkflow ||
+                      workflows
+                        .filter(
+                          w =>
+                            w.completedAt &&
+                            Date.now() - w.completedAt.getTime() < 10000
+                        )
+                        .sort(
+                          (a, b) =>
+                            (b.completedAt?.getTime() ?? 0) -
+                            (a.completedAt?.getTime() ?? 0)
+                        )[0];
+
+                    return workflowToShow ? (
+                      <WorkflowProgress
+                        workflowId={workflowToShow.id}
+                        className="mb-4"
+                      />
+                    ) : (
+                      <div className="p-4 bg-gray-800 rounded-lg border border-gray-700 mb-4">
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
+                          <span className="text-gray-300">
+                            Finalizing response...
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <TypingIndicator className="mb-4" />
+                )}
+              </div>
+            </CellMeasurer>
+          );
+        }
+
+        // Handle welcome message
+        if (messages.length === 0 && index === 0) {
+          return (
+            <CellMeasurer
+              key={key}
+              cache={cacheRef.current}
+              parent={parent}
+              columnIndex={0}
+              rowIndex={index}
+            >
+              <div style={style}>
+                <div className="text-center text-gray-500 mt-2 relative z-10 px-4">
+                  <div className="mb-4">
+                    <div className="flex justify-center mt-24 mb-4">
+                      <MindStrikeIcon size={148} />
+                    </div>
+                    <h3 className="text-lg font-medium mb-2">
+                      Welcome to{' '}
+                      <a
+                        href="https://mindstrike.ai"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-500 hover:text-blue-600 underline"
+                      >
+                        MindStrike
+                      </a>
+                      &trade;
+                    </h3>
+                    <div className="flex items-center justify-center gap-3 pb-4">
+                      <p className="text-xs font-mono text-gray-400">
+                        Workspace Root:{' '}
+                        {workspaceRoot ?? 'No workspace selected'}
+                      </p>
+                      {onNavigateToWorkspaces && (
+                        <button
+                          onClick={onNavigateToWorkspaces}
+                          className="text-xs text-blue-400 hover:text-blue-300 transition-colors underline"
+                        >
+                          Change
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex justify-center space-x-4 mb-4">
+                      <a
+                        href="https://mindstrike.ai/link/github"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-gray-400 hover:text-white transition-colors"
+                        title="MindStrike GitHub Repository"
+                      >
+                        <Github size={24} />
+                      </a>
+                      <a
+                        href="https://mindstrike.ai/link/youtube"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-gray-400 hover:text-red-500 transition-colors"
+                        title="MindStrike YouTube Channel"
+                      >
+                        <Youtube size={24} />
+                      </a>
+                      <a
+                        href="https://mindstrike.ai/link/discord"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-gray-400 hover:text-indigo-500 transition-colors"
+                        title="MindStrike Discord Server"
+                      >
+                        <DiscordIcon size={24} />
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CellMeasurer>
+          );
+        }
+
+        const message = messages[index];
+        if (!message) {
+          return null;
+        }
+
+        return (
+          <CellMeasurer
+            key={key}
+            cache={cacheRef.current}
+            parent={parent}
+            columnIndex={0}
+            rowIndex={index}
+          >
+            <div
+              style={{ ...style, paddingBottom: '16px' }}
+              className="relative z-10 px-4"
+            >
+              <ChatMessage
+                key={message.id}
+                message={message}
+                fontSize={fontSize}
+                onDelete={onDeleteMessage ? handleDeleteMessage : undefined}
+                onRegenerate={
+                  message.role === 'assistant'
+                    ? handleRegenerateMessage
+                    : undefined
+                }
+                onEdit={message.role === 'user' ? handleEditMessage : undefined}
+                onCancelToolCalls={
+                  message.status === 'processing' &&
+                  message.toolCalls &&
+                  message.toolCalls.length > 0
+                    ? handleCancelToolCalls
+                    : undefined
+                }
+                onCopyToNotes={
+                  message.role === 'assistant' ? onCopyToNotes : undefined
+                }
+              />
+            </div>
+          </CellMeasurer>
+        );
+      },
+      [
+        messages,
+        fontSize,
+        workspaceRoot,
+        onNavigateToWorkspaces,
+        onDeleteMessage,
+        handleDeleteMessage,
+        handleRegenerateMessage,
+        handleEditMessage,
+        handleCancelToolCalls,
+        onCopyToNotes,
+        isLoading,
+        isLoadingThread,
+        isAgentActive,
+        currentWorkflow,
+        workflows,
+      ]
+    );
+
     return (
       <div className="flex flex-col h-full flex-1">
         <div
@@ -429,7 +695,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
         >
           {/* Music Visualization Background */}
           {!inMindMapContext && (
-            <MusicVisualization className="fixed inset-0 w-full h-full pointer-events-none z-0" />
+            <MusicVisualization className="absolute inset-0 w-full h-full pointer-events-none z-0" />
           )}
 
           {/* Floating Validation Status Notification */}
@@ -445,156 +711,100 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
             </div>
           </div>
 
-          {/* Messages */}
+          {/* Messages with Virtualized List */}
           <div
             ref={messagesContainerRef}
-            className="flex-1 overflow-y-auto p-4 space-y-4 relative"
+            className="flex-1 relative"
             style={
               { '--dynamic-font-size': `${fontSize}px` } as React.CSSProperties
             }
           >
-            {messages.length === 0 && (
-              <div className="text-center text-gray-500 mt-2 relative z-10">
-                <div className="mb-4">
-                  <div className="flex justify-center mt-24 mb-4">
-                    <MindStrikeIcon size={148} />
-                  </div>
-                  <h3 className="text-lg font-medium mb-2">
-                    Welcome to{' '}
-                    <a
-                      href="https://mindstrike.ai"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-500 hover:text-blue-600 underline"
-                    >
-                      MindStrike
-                    </a>
-                    &trade;
-                  </h3>
-                  <div className="flex items-center justify-center gap-3 pb-4">
-                    <p className="text-xs font-mono text-gray-400">
-                      Workspace Root: {workspaceRoot ?? 'No workspace selected'}
-                    </p>
-                    {onNavigateToWorkspaces && (
-                      <button
-                        onClick={onNavigateToWorkspaces}
-                        className="text-xs text-blue-400 hover:text-blue-300 transition-colors underline"
-                      >
-                        Change
-                      </button>
-                    )}
-                  </div>
-                  <div className="flex justify-center space-x-4 mb-4">
-                    <a
-                      href="https://mindstrike.ai/link/github"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-gray-400 hover:text-white transition-colors"
-                      title="MindStrike GitHub Repository"
-                    >
-                      <Github size={24} />
-                    </a>
-                    <a
-                      href="https://mindstrike.ai/link/youtube"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-gray-400 hover:text-red-500 transition-colors"
-                      title="MindStrike YouTube Channel"
-                    >
-                      <Youtube size={24} />
-                    </a>
-                    <a
-                      href="https://mindstrike.ai/link/discord"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-gray-400 hover:text-indigo-500 transition-colors"
-                      title="MindStrike Discord Server"
-                    >
-                      <DiscordIcon size={24} />
-                    </a>
-                  </div>
-                </div>
-              </div>
-            )}
+            <AutoSizer>
+              {({ height, width }) => {
+                // Calculate row count including loading indicator
+                let rowCount = messages.length || 1; // Show welcome message if no messages
 
-            {messages.map(message => (
-              <div
-                key={`message-wrapper-${message.id}`}
-                className="relative z-10"
+                // Add row for loading indicator
+                if (
+                  isLoading &&
+                  !isLoadingThread &&
+                  !messages.some(
+                    msg =>
+                      msg.role === 'assistant' && msg.status === 'processing'
+                  )
+                ) {
+                  rowCount += 1;
+                }
+
+                return (
+                  <VirtualizedList
+                    ref={listRef}
+                    height={height}
+                    width={width}
+                    rowCount={rowCount}
+                    deferredMeasurementCache={cacheRef.current}
+                    rowHeight={cacheRef.current.rowHeight}
+                    rowRenderer={rowRenderer}
+                    overscanRowCount={3}
+                    style={{ outline: 'none' }}
+                    className="focus:outline-none"
+                    onScroll={({ scrollTop, scrollHeight, clientHeight }) => {
+                      // Show button if not at bottom (with larger threshold for smoother behavior)
+                      const distanceFromBottom =
+                        scrollHeight - scrollTop - clientHeight;
+                      const isAtBottom = distanceFromBottom < 100;
+
+                      // Only update state if it actually changes
+                      setShowScrollToBottom(prev => {
+                        if (prev !== !isAtBottom) {
+                          return !isAtBottom;
+                        }
+                        return prev;
+                      });
+                    }}
+                    onRowsRendered={({ stopIndex }) => {
+                      // Check if we're showing the last row
+                      if (stopIndex === rowCount - 1 && listRef.current) {
+                        // We're rendering the last row, check if we're scrolled to it
+                        const grid = (
+                          listRef.current as VirtualizedList & {
+                            Grid?: {
+                              state?: {
+                                scrollTop?: number;
+                                scrollHeight?: number;
+                                clientHeight?: number;
+                              };
+                            };
+                          }
+                        ).Grid;
+                        if (grid?.state) {
+                          const {
+                            scrollTop = 0,
+                            scrollHeight = 0,
+                            clientHeight = 0,
+                          } = grid.state;
+                          const distanceFromBottom =
+                            scrollHeight - scrollTop - clientHeight;
+                          const isAtBottom = distanceFromBottom < 50;
+                          setShowScrollToBottom(!isAtBottom);
+                        }
+                      }
+                    }}
+                  />
+                );
+              }}
+            </AutoSizer>
+
+            {/* Floating scroll to bottom button */}
+            {showScrollToBottom && (
+              <button
+                onClick={scrollToBottom}
+                className="absolute bottom-4 right-4 p-3 bg-blue-600 hover:bg-blue-700 rounded-full shadow-lg transition-all duration-300 ease-in-out transform hover:scale-110 z-20"
+                aria-label="Scroll to bottom"
               >
-                <ChatMessage
-                  key={message.id}
-                  message={message}
-                  fontSize={fontSize}
-                  onDelete={onDeleteMessage ? handleDeleteMessage : undefined}
-                  onRegenerate={
-                    message.role === 'assistant'
-                      ? handleRegenerateMessage
-                      : undefined
-                  }
-                  onEdit={
-                    message.role === 'user' ? handleEditMessage : undefined
-                  }
-                  onCancelToolCalls={
-                    message.status === 'processing' &&
-                    message.toolCalls &&
-                    message.toolCalls.length > 0
-                      ? handleCancelToolCalls
-                      : undefined
-                  }
-                  onCopyToNotes={
-                    message.role === 'assistant' ? onCopyToNotes : undefined
-                  }
-                />
-              </div>
-            ))}
-
-            {isLoading &&
-              !isLoadingThread &&
-              !messages.some(
-                msg => msg.role === 'assistant' && msg.status === 'processing'
-              ) && (
-                <div className="relative z-10">
-                  {isAgentActive ? (
-                    (() => {
-                      // Show current workflow or most recent completed workflow (within last 10 seconds)
-                      const workflowToShow =
-                        currentWorkflow ||
-                        workflows
-                          .filter(
-                            w =>
-                              w.completedAt &&
-                              Date.now() - w.completedAt.getTime() < 10000
-                          )
-                          .sort(
-                            (a, b) =>
-                              (b.completedAt?.getTime() ?? 0) -
-                              (a.completedAt?.getTime() ?? 0)
-                          )[0];
-
-                      return workflowToShow ? (
-                        <WorkflowProgress
-                          workflowId={workflowToShow.id}
-                          className="mb-4"
-                        />
-                      ) : (
-                        <div className="p-4 bg-gray-800 rounded-lg border border-gray-700 mb-4">
-                          <div className="flex items-center gap-2">
-                            <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
-                            <span className="text-gray-300">
-                              Finalizing response...
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })()
-                  ) : (
-                    <TypingIndicator className="mb-4" />
-                  )}
-                </div>
-              )}
-
-            <div ref={messagesEndRef} className="relative z-10" />
+                <ArrowDown size={20} className="text-white" />
+              </button>
+            )}
           </div>
 
           {/* Clear Confirmation Modal */}
@@ -736,7 +946,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
                 <button
                   type="button"
                   onClick={cancelStreaming}
-                  className="flex-shrink-0 mr-2 p-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+                  className="shrink-0 mr-2 p-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
                   title="Cancel streaming"
                 >
                   <Square size={16} className="text-white" />
@@ -749,7 +959,7 @@ export const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(
                     attachedImages.length === 0 &&
                     attachedNotes.length === 0
                   }
-                  className="flex-shrink-0 mr-2 p-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg transition-colors"
+                  className="shrink-0 mr-2 p-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg transition-colors"
                 >
                   <Send size={16} className="text-white" />
                 </button>

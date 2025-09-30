@@ -115,7 +115,7 @@ export function FloatingTooltip({
   return createPortal(
     <div
       ref={tooltipRef}
-      className="fixed z-[99999] pointer-events-none"
+      className="fixed z-99999 pointer-events-none"
       style={{
         top: `${position.top}px`,
         left: `${position.left}px`,

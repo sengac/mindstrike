@@ -96,7 +96,7 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({
       <div className="flex gap-6">
         {/* Cover Art */}
         {showCoverArt && metadata.coverArt?.length && (
-          <div className="flex-shrink-0 w-32 h-32 rounded-lg flex items-center justify-center bg-gray-100 shadow-md">
+          <div className="shrink-0 w-32 h-32 rounded-lg flex items-center justify-center bg-gray-100 shadow-md">
             {coverArtLoading ? (
               <Music className="w-16 h-16 text-gray-400 animate-pulse" />
             ) : cachedCoverArt ? (

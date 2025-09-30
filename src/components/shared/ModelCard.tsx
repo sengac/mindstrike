@@ -526,7 +526,7 @@ export function ModelCard({
         </div>
         {(model.trainedContextLength ?? model.maxContextLength) && (
           <div className="flex items-center gap-2">
-            <div className="text-gray-400 min-w-[7rem] flex items-center gap-1 whitespace-nowrap">
+            <div className="text-gray-400 min-w-28 flex items-center gap-1 whitespace-nowrap">
               <span>Training context:</span>
               <div className="relative inline-flex">
                 <Info
@@ -677,10 +677,7 @@ export function ModelCard({
       {downloadProgress?.errorType && (
         <div className="mt-3 p-3 bg-red-900/20 border border-red-600/30 rounded-lg">
           <div className="flex items-start gap-3">
-            <AlertTriangle
-              size={16}
-              className="text-red-400 mt-0.5 flex-shrink-0"
-            />
+            <AlertTriangle size={16} className="text-red-400 mt-0.5 shrink-0" />
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-sm font-medium text-red-200">
@@ -756,10 +753,7 @@ export function ModelCard({
       {loadError && !isLoading && (
         <div className="mt-3 p-3 bg-red-900/20 border border-red-600/30 rounded-lg">
           <div className="flex items-start gap-3">
-            <AlertTriangle
-              size={16}
-              className="text-red-400 mt-0.5 flex-shrink-0"
-            />
+            <AlertTriangle size={16} className="text-red-400 mt-0.5 shrink-0" />
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-sm font-medium text-red-200">

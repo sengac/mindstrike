@@ -112,7 +112,7 @@ describe('FloatingTooltip', () => {
       const tooltip = document.body.querySelector(
         '[data-testid="floating-tooltip"]'
       ) as HTMLElement;
-      expect(tooltip?.className).toContain('z-[99999]');
+      expect(tooltip?.className).toContain('z-99999');
     });
   });
 

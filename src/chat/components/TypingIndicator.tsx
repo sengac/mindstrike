@@ -11,8 +11,8 @@ export const TypingIndicator: React.FC<TypingIndicatorProps> = ({
   return (
     <div className={`flex space-x-3 justify-start ${className}`}>
       {/* Assistant avatar - matching ChatMessage styling */}
-      <div className="flex-shrink-0">
-        <div className="w-8 h-8 border-2 border-purple-400 bg-gradient-to-br from-purple-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
+      <div className="shrink-0">
+        <div className="w-8 h-8 border-2 border-purple-400 bg-linear-to-br from-purple-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
           <Bot size={16} className="text-white drop-shadow-sm" />
         </div>
       </div>

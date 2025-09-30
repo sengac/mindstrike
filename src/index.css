@@ -1,9 +1,36 @@
 /* Import markdown styles */
 @import './styles/markdown.css';
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@theme {
+  --font-family-sans: var(--font-family-base);
+  --font-family-serif: var(--font-family-heading);
+  --font-family-mono: var(--font-family-code);
+
+  /* Discord/VS Code inspired dark theme colors */
+  --color-dark-bg: #1e1e1e;
+  --color-dark-panel: #252526;
+  --color-dark-surface: #2d2d30;
+  --color-dark-border: #3e3e42;
+  --color-dark-hover: #37373d;
+  --color-dark-text-primary: #cccccc;
+  --color-dark-text-secondary: #969696;
+  --color-dark-text-muted: #6a6a6a;
+
+  /* Override default grays with true neutral grays */
+  --color-gray-50: #fafafa;
+  --color-gray-100: #f5f5f5;
+  --color-gray-200: #e5e5e5;
+  --color-gray-300: #d4d4d4;
+  --color-gray-400: #a3a3a3;
+  --color-gray-500: #737373;
+  --color-gray-600: #525252;
+  --color-gray-700: #404040;
+  --color-gray-800: #262626;
+  --color-gray-900: #171717;
+  --color-gray-950: #0a0a0a;
+}
 
 :root {
   /* Font scheme variables - will be updated by JS */

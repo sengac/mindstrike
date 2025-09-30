@@ -133,14 +133,14 @@ export function MermaidModal({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] bg-black bg-opacity-75 backdrop-blur-sm flex items-center justify-center">
+    <div className="fixed inset-0 z-9999 bg-black bg-opacity-75 backdrop-blur-sm flex items-center justify-center">
       {/* Backdrop */}
       <div className="absolute inset-0" onClick={handleClose} />
 
       {/* Modal */}
       <div
         className={`
-        relative bg-gray-900 w-[100vw] h-[100vh] flex flex-col
+        relative bg-gray-900 w-screen h-screen flex flex-col
         transition-all duration-200 ease-out
         ${isVisible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}
       `}

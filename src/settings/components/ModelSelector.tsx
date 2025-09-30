@@ -101,12 +101,12 @@ export function ModelSelector({ className = '' }: ModelSelectorProps) {
         title={defaultModel?.displayName || displayText}
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <Cpu size={14} className="text-gray-400 flex-shrink-0" />
+          <Cpu size={14} className="text-gray-400 shrink-0" />
           <span className="truncate text-left">
             {truncateText(displayText)}
           </span>
         </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           <div
             onClick={handleRescan}
             className="p-0.5 hover:bg-gray-600 rounded transition-colors cursor-pointer"

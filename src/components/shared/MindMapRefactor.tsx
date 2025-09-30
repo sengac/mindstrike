@@ -95,7 +95,7 @@ export function MindMapRefactor({
 
   return (
     <div className="flex flex-col h-full p-4 space-y-4">
-      <div className="flex-shrink-0">
+      <div className="shrink-0">
         <h3 className="text-lg font-medium text-white mb-4">
           Refactor MindMap
         </h3>

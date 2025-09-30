@@ -216,7 +216,7 @@ export function ListPanel<T extends ListItem>({
       >
         {/* Child Component Header with Close Button - optional */}
         {showChildComponentHeader && (
-          <div className="flex-shrink-0 p-3 border-b border-gray-600 flex items-center justify-between">
+          <div className="shrink-0 p-3 border-b border-gray-600 flex items-center justify-between">
             <h3 className="text-white text-sm font-medium">
               {childComponentTitle ?? 'Details'}
             </h3>

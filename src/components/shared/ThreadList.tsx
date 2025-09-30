@@ -113,7 +113,7 @@ export function ThreadList({
                           <div title="Custom prompt applied">
                             <Terminal
                               size={14}
-                              className="text-purple-400 flex-shrink-0"
+                              className="text-purple-400 shrink-0"
                             />
                           </div>
                         )}

@@ -53,7 +53,7 @@ export function Sidebar({
             key={item.id}
             onClick={() => onPanelChange(item.id)}
             className={clsx(
-              'w-full h-12 flex items-center justify-center hover:bg-dark-hover transition-colors',
+              'w-full h-12 flex items-center justify-center hover:bg-dark-hover transition-colors cursor-pointer',
               'border-r-2 border-transparent',
               activePanel === item.id && 'bg-dark-hover border-blue-500'
             )}
@@ -78,7 +78,7 @@ export function Sidebar({
         <button
           onClick={() => onPanelChange('application-logs')}
           className={clsx(
-            'w-full h-12 flex items-center justify-center hover:bg-dark-hover transition-colors',
+            'w-full h-12 flex items-center justify-center hover:bg-dark-hover transition-colors cursor-pointer',
             'border-r-2 border-transparent',
             activePanel === 'application-logs' &&
               'bg-dark-hover border-blue-500'
@@ -97,7 +97,7 @@ export function Sidebar({
         <button
           onClick={() => onPanelChange('settings')}
           className={clsx(
-            'w-full h-12 flex items-center justify-center hover:bg-dark-hover transition-colors',
+            'w-full h-12 flex items-center justify-center hover:bg-dark-hover transition-colors cursor-pointer',
             'border-r-2 border-transparent',
             activePanel === 'settings' && 'bg-dark-hover border-blue-500'
           )}

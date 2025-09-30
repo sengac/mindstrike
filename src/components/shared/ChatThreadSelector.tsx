@@ -16,7 +16,7 @@ export function ChatThreadSelector({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex-shrink-0 p-3 border-b border-gray-600">
+      <div className="shrink-0 p-3 border-b border-gray-600">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-white text-sm font-medium flex items-center gap-2">
@@ -72,7 +72,7 @@ export function ChatThreadSelector({
                         <div title="Custom prompt applied">
                           <Terminal
                             size={14}
-                            className="text-purple-400 flex-shrink-0"
+                            className="text-purple-400 shrink-0"
                           />
                         </div>
                       )}

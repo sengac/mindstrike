@@ -579,8 +579,8 @@ function ChatMessageComponent({
         className={`flex space-x-3 ${isUser ? 'justify-end' : 'justify-start'}`}
       >
         {!isUser && (
-          <div className="flex-shrink-0">
-            <div className="w-8 h-8 border-2 border-purple-400 bg-gradient-to-br from-purple-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
+          <div className="shrink-0">
+            <div className="w-8 h-8 border-2 border-purple-400 bg-linear-to-br from-purple-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
               <Bot size={16} className="text-white drop-shadow-sm" />
             </div>
           </div>
@@ -813,7 +813,7 @@ function ChatMessageComponent({
                               <div className="flex items-start gap-2">
                                 <StickyNote
                                   size={16}
-                                  className="text-blue-400 mt-0.5 flex-shrink-0"
+                                  className="text-blue-400 mt-0.5 shrink-0"
                                 />
                                 <div className="flex-1 min-w-0">
                                   <div className="text-sm font-medium text-blue-400 mb-1">
@@ -958,8 +958,8 @@ function ChatMessageComponent({
         </div>
 
         {isUser && (
-          <div className="flex-shrink-0">
-            <div className="w-8 h-8 mr-3 border-2 border-emerald-400 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center shadow-lg">
+          <div className="shrink-0">
+            <div className="w-8 h-8 mr-3 border-2 border-emerald-400 bg-linear-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center shadow-lg">
               <User size={16} className="text-white drop-shadow-sm" />
             </div>
           </div>

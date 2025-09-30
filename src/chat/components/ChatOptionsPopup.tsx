@@ -92,7 +92,7 @@ const ChatOptionsPopup: React.FC<ChatOptionsPopupProps> = ({
                 onClick={handleCustomizePrompts}
                 className="w-full flex items-center gap-3 p-3 bg-dark-hover hover:bg-gray-700 rounded-lg transition-colors text-left group relative"
               >
-                <div className="flex-shrink-0 text-purple-400 group-hover:text-purple-300">
+                <div className="shrink-0 text-purple-400 group-hover:text-purple-300">
                   <Terminal size={16} />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -117,7 +117,7 @@ const ChatOptionsPopup: React.FC<ChatOptionsPopupProps> = ({
                 }`}
               >
                 <div
-                  className={`flex-shrink-0 transition-all duration-300 ${
+                  className={`shrink-0 transition-all duration-300 ${
                     isAgentActive
                       ? 'text-blue-300 group-hover:text-blue-200'
                       : 'text-blue-400 group-hover:text-blue-300'
@@ -158,7 +158,7 @@ const ChatOptionsPopup: React.FC<ChatOptionsPopupProps> = ({
                 disabled={messagesLength === 0}
                 className="w-full flex items-center gap-3 p-3 bg-dark-hover hover:bg-gray-700 disabled:bg-gray-800 disabled:cursor-not-allowed rounded-lg transition-colors text-left group"
               >
-                <div className="flex-shrink-0 text-red-400 group-hover:text-red-300 group-disabled:text-gray-500">
+                <div className="shrink-0 text-red-400 group-hover:text-red-300 group-disabled:text-gray-500">
                   <Trash2 size={16} />
                 </div>
                 <div className="flex-1 min-w-0">

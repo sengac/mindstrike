@@ -193,7 +193,7 @@ const ModelSelectionPopup: React.FC<ModelSelectionPopupProps> = ({
                       >
                         <div className="flex items-center gap-3">
                           <div
-                            className={`flex-shrink-0 ${
+                            className={`shrink-0 ${
                               model.isDefault
                                 ? 'text-blue-300'
                                 : 'text-gray-400 group-hover:text-gray-200'

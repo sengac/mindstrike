@@ -237,7 +237,7 @@ export const ChatContentViewer = forwardRef<
         />
 
         {/* Header with Tabs */}
-        <div className="flex-shrink-0 border-b border-gray-700">
+        <div className="shrink-0 border-b border-gray-700">
           <div
             className="flex items-center justify-between"
             data-testid="chat-content-viewer-header"

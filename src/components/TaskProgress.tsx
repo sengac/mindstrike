@@ -167,7 +167,7 @@ export const TaskProgress: React.FC<TaskProgressProps> = ({
             }`}
           >
             {/* Status Icon */}
-            <span className="text-lg flex-shrink-0">
+            <span className="text-lg shrink-0">
               {getStatusIcon(task.status)}
             </span>
 
@@ -194,7 +194,7 @@ export const TaskProgress: React.FC<TaskProgressProps> = ({
             </div>
 
             {/* Task Number */}
-            <div className="flex-shrink-0 text-xs text-gray-500 dark:text-gray-400 font-mono">
+            <div className="shrink-0 text-xs text-gray-500 dark:text-gray-400 font-mono">
               {index + 1}
             </div>
           </div>

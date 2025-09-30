@@ -379,16 +379,13 @@ export function WorkspaceView({ onDirectoryChange }: WorkspaceViewProps) {
                         <>
                           <Folder
                             size={16}
-                            className="text-blue-400 flex-shrink-0"
+                            className="text-blue-400 shrink-0"
                           />
                           <span className="truncate">{file.slice(0, -1)}</span>
                         </>
                       ) : (
                         <>
-                          <File
-                            size={16}
-                            className="text-gray-400 flex-shrink-0"
-                          />
+                          <File size={16} className="text-gray-400 shrink-0" />
                           <span className="truncate">{file}</span>
                         </>
                       )}
@@ -453,7 +450,7 @@ export function WorkspaceView({ onDirectoryChange }: WorkspaceViewProps) {
           <MusicVisualization className="absolute inset-0 w-full h-full pointer-events-none z-0" />
           {selectedFile ? (
             <>
-              <div className="flex-shrink-0 border-b border-gray-700 p-4 flex items-center justify-between">
+              <div className="shrink-0 border-b border-gray-700 p-4 flex items-center justify-between">
                 <h3 className="font-medium truncate">{selectedFile}</h3>
                 <div className="flex items-center space-x-2">
                   {/* Only show edit controls for non-markdown files */}
@@ -570,7 +567,7 @@ export function WorkspaceView({ onDirectoryChange }: WorkspaceViewProps) {
             <div className="relative z-10 flex-1 flex items-center justify-center text-gray-500">
               <div className="text-center p-6 bg-blue-900/20 border border-blue-600/30 rounded-lg max-w-[80%]">
                 <div className="flex items-center justify-center gap-2 mb-4">
-                  <InfoIcon size={20} className="text-blue-400 flex-shrink-0" />
+                  <InfoIcon size={20} className="text-blue-400 shrink-0" />
                   <h3 className="text-blue-300 text-lg font-semibold">
                     Workspace Navigation
                   </h3>

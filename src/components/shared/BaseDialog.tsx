@@ -37,10 +37,10 @@ export function BaseDialog({
   return createPortal(
     <div
       className={`
-        fixed inset-0 z-[9999] 
-        ${fullScreen ? '' : 'bg-black flex items-center justify-center'}
+        fixed inset-0 z-9999 
+        ${fullScreen ? '' : 'bg-black/50 flex items-center justify-center'}
         ${fullScreen ? '' : 'transition-opacity duration-250 ease-out'}
-        ${fullScreen ? '' : isVisible ? 'bg-opacity-50' : 'bg-opacity-0'}
+        ${fullScreen ? '' : isVisible ? 'opacity-100' : 'opacity-0'}
         ${overlayClassName}
       `}
       onClick={fullScreen ? undefined : handleOverlayClick}

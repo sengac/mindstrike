@@ -48,7 +48,7 @@ export function ThreadsPanel({
             }}
             className="p-1 hover:bg-gray-700 rounded transition-colors"
           >
-            <Terminal size={14} className="text-purple-400 flex-shrink-0" />
+            <Terminal size={14} className="text-purple-400 shrink-0" />
           </button>
         ) : null
       }

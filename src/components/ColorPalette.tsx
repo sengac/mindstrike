@@ -63,7 +63,7 @@ export function ColorPalette({
       </button>
 
       {isOpen && (
-        <div className="absolute top-full mt-1 right-0 bg-gray-800 border border-gray-600 rounded-lg shadow-lg p-3 min-w-[200px] z-[9999]">
+        <div className="absolute top-full mt-1 right-0 bg-gray-800 border border-gray-600 rounded-lg shadow-lg p-3 min-w-[200px] z-9999">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-medium text-gray-300">Node Colors</h3>
             <button

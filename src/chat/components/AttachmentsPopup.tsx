@@ -84,7 +84,7 @@ const AttachmentsPopup: React.FC<AttachmentsPopupProps> = ({
                   disabled={isLoading || isLocalModel}
                   className="w-full flex items-center gap-3 p-3 bg-dark-hover hover:bg-gray-700 disabled:bg-gray-800 disabled:cursor-not-allowed rounded-lg transition-colors text-left group"
                 >
-                  <div className="flex-shrink-0 text-blue-400 group-hover:text-blue-300 group-disabled:text-gray-500">
+                  <div className="shrink-0 text-blue-400 group-hover:text-blue-300 group-disabled:text-gray-500">
                     <ImageIcon size={16} />
                   </div>
                   <div className="flex-1 min-w-0">
