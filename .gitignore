@@ -3,6 +3,9 @@ mindstrike-lfs.json
 mindstrike-chats.json
 mindstrike-mindmaps.json
 
+# Lock files
+package-lock.json
+
 # Dependencies
 node_modules/
 .pnpm-store/
