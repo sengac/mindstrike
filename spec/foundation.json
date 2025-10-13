@@ -1,0 +1,690 @@
+{
+  "project": {
+    "name": "MindStrike",
+    "description": "An agentic AI knowledge assistant platform combining multi-threaded conversational AI, interactive mind mapping, workspace management, and real-time agent workflows in a unified desktop and web application.",
+    "repository": "https://github.com/sengac/mindstrike",
+    "license": "MIT",
+    "importantNote": "MindStrike uses strict TypeScript, ESLint enforcement, and comprehensive testing. All code must pass `npm run lint` before committing."
+  },
+  "whatWeAreBuilding": {
+    "projectOverview": "MindStrike is a comprehensive AI knowledge assistant platform that unifies multiple AI capabilities: multi-threaded conversational AI with custom system prompts, interactive mind mapping with AI-powered generation, workspace file management, background agent workflows with real-time progress tracking, local and cloud LLM support, extensible MCP tool integration, and an integrated music player. Available as both an Electron desktop application and standalone web app.",
+    "technicalRequirements": {
+      "coreTechnologies": [
+        {
+          "category": "Frontend Framework",
+          "name": "React 18",
+          "description": "TypeScript-based React frontend with functional components and hooks"
+        },
+        {
+          "category": "Backend Framework",
+          "name": "NestJS",
+          "description": "Modular backend with Express, organized by domain modules"
+        },
+        {
+          "category": "Build Tooling",
+          "name": "Vite",
+          "description": "Fast build tool with HMR for frontend and backend"
+        },
+        {
+          "category": "Desktop Platform",
+          "name": "Electron",
+          "description": "Cross-platform desktop packaging (DMG, NSIS, AppImage)"
+        },
+        {
+          "category": "Server Runtime",
+          "name": "Node.js",
+          "description": "TypeScript-based server runtime with ES modules"
+        },
+        {
+          "category": "AI Orchestration",
+          "name": "LangChain",
+          "description": "LLM orchestration with support for multiple providers"
+        },
+        {
+          "category": "Tool Integration",
+          "name": "Model Context Protocol (MCP)",
+          "description": "Extensible tool integration protocol for external services"
+        }
+      ],
+      "architecture": {
+        "pattern": "Modular monolith with NestJS modules. Backend organized by domain (chat, mindmap, workspace, llm, mcp, agents, music, tasks, events). Frontend uses React components with Zustand state management. Real-time communication via Server-Sent Events (SSE).",
+        "fileStructure": "server/modules/{domain}/{domain}.module.ts - NestJS modules\nsrc/{domain}/components/ - React components\nsrc/{domain}/hooks/ - Custom React hooks\nsrc/store/ - Zustand state stores\nsrc/utils/ - Shared utilities",
+        "deploymentTarget": "Cross-platform desktop (Electron) and web application. Packaged as DMG (macOS), NSIS installer (Windows), and AppImage (Linux).",
+        "integrationModel": [
+          "REST API endpoints (NestJS controllers)",
+          "Server-Sent Events (SSE) for real-time updates",
+          "Model Context Protocol (MCP) servers for external tools",
+          "LangChain for LLM orchestration",
+          "File-based persistence for threads/mindmaps"
+        ]
+      },
+      "developmentAndOperations": {
+        "developmentTools": "TypeScript 5.7, ESLint 9 (strict), Vitest for testing, Prettier for formatting, SWC for fast builds",
+        "testingStrategy": "Unit tests (Vitest + React Testing Library), Integration tests with fixtures, E2E tests (Playwright), Test files adjacent to source in __tests__ directories",
+        "logging": "Winston for server-side logging, console.log only allowed in server/tests/scripts/config/logger utility",
+        "validation": "Class-validator for DTOs, TypeScript strict mode, ESLint with @typescript-eslint rules",
+        "formatting": "Prettier for TS/JS/CSS, custom Gherkin formatter (fspec) for .feature files"
+      },
+      "keyLibraries": [
+        {
+          "category": "State Management",
+          "libraries": [
+            {
+              "name": "zustand",
+              "description": "Global state with persist middleware"
+            },
+            {
+              "name": "immer",
+              "description": "Immutable state updates for undo/redo"
+            }
+          ]
+        },
+        {
+          "category": "UI Components",
+          "libraries": [
+            {
+              "name": "reactflow",
+              "description": "Mind map visualization with custom nodes"
+            },
+            {
+              "name": "monaco-editor",
+              "description": "Code editing with syntax highlighting"
+            },
+            {
+              "name": "lucide-react",
+              "description": "Icon library"
+            },
+            {
+              "name": "react-hot-toast",
+              "description": "Toast notifications"
+            }
+          ]
+        },
+        {
+          "category": "Styling",
+          "libraries": [
+            {
+              "name": "tailwindcss",
+              "description": "Utility-first CSS framework"
+            },
+            {
+              "name": "@tailwindcss/typography",
+              "description": "Rich text styling"
+            }
+          ]
+        },
+        {
+          "category": "AI & LLM",
+          "libraries": [
+            {
+              "name": "langchain",
+              "description": "AI orchestration framework"
+            },
+            {
+              "name": "@langchain/anthropic",
+              "description": "Claude integration"
+            },
+            {
+              "name": "@langchain/openai",
+              "description": "OpenAI integration"
+            },
+            {
+              "name": "@langchain/ollama",
+              "description": "Local LLM integration"
+            },
+            {
+              "name": "@langchain/google-genai",
+              "description": "Google AI integration"
+            },
+            {
+              "name": "node-llama-cpp",
+              "description": "Local GGUF model support"
+            }
+          ]
+        },
+        {
+          "category": "Tool Integration",
+          "libraries": [
+            {
+              "name": "@modelcontextprotocol/sdk",
+              "description": "MCP client and server SDK"
+            },
+            {
+              "name": "@modelcontextprotocol/server-filesystem",
+              "description": "File system MCP server"
+            },
+            {
+              "name": "@modelcontextprotocol/server-github",
+              "description": "GitHub MCP server"
+            }
+          ]
+        },
+        {
+          "category": "Backend",
+          "libraries": [
+            {
+              "name": "@nestjs/core",
+              "description": "NestJS framework core"
+            },
+            {
+              "name": "@nestjs/platform-express",
+              "description": "Express integration"
+            },
+            {
+              "name": "@nestjs/swagger",
+              "description": "OpenAPI documentation"
+            },
+            {
+              "name": "@nestjs/event-emitter",
+              "description": "Event-driven architecture"
+            },
+            {
+              "name": "class-validator",
+              "description": "DTO validation"
+            },
+            {
+              "name": "class-transformer",
+              "description": "DTO transformation"
+            }
+          ]
+        },
+        {
+          "category": "Real-time Communication",
+          "libraries": [
+            {
+              "name": "eventemitter2",
+              "description": "Event emitter for SSE"
+            },
+            {
+              "name": "ws",
+              "description": "WebSocket server"
+            }
+          ]
+        },
+        {
+          "category": "Content Rendering",
+          "libraries": [
+            {
+              "name": "marked",
+              "description": "Markdown parsing"
+            },
+            {
+              "name": "react-syntax-highlighter",
+              "description": "Code syntax highlighting"
+            },
+            {
+              "name": "react-katex",
+              "description": "LaTeX math rendering"
+            },
+            {
+              "name": "mermaid",
+              "description": "Diagram rendering"
+            },
+            {
+              "name": "dompurify",
+              "description": "HTML sanitization"
+            }
+          ]
+        },
+        {
+          "category": "Development",
+          "libraries": [
+            {
+              "name": "vitest",
+              "description": "Test runner"
+            },
+            {
+              "name": "@testing-library/react",
+              "description": "React component testing"
+            },
+            {
+              "name": "@playwright/test",
+              "description": "E2E testing"
+            },
+            {
+              "name": "winston",
+              "description": "Server logging"
+            },
+            {
+              "name": "tsx",
+              "description": "TypeScript execution"
+            }
+          ]
+        }
+      ]
+    },
+    "nonFunctionalRequirements": [
+      {
+        "category": "Code Quality",
+        "requirements": [
+          "TypeScript strict mode compliance - no `any` types",
+          "ESLint rules must pass before commit",
+          "Interface over type for object definitions",
+          "Explicit type imports (import type)",
+          "Const over let/var where possible",
+          "Strict equality (=== not ==)",
+          "Curly braces required for all control statements"
+        ]
+      },
+      {
+        "category": "Async Operations",
+        "requirements": [
+          "All async operations must handle errors with try/catch",
+          "All promises must be properly handled or explicitly ignored",
+          "No floating promises - await or void all async calls"
+        ]
+      },
+      {
+        "category": "React Patterns",
+        "requirements": [
+          "React hooks must follow rules (no conditional calls)",
+          "All dependencies must be included in useEffect",
+          "Functional components only - no class components",
+          "Components should be focused and small (< 200 lines)"
+        ]
+      },
+      {
+        "category": "Logging",
+        "requirements": [
+          "Console statements forbidden in frontend (except logger utility)",
+          "Winston for server-side logging",
+          "Console allowed only in: server files, test files, scripts, config files"
+        ]
+      },
+      {
+        "category": "Testing",
+        "requirements": [
+          "Unit tests for all business logic",
+          "Integration tests with fixtures",
+          "E2E tests for critical user flows",
+          "Test files adjacent to source in __tests__ directories"
+        ]
+      }
+    ]
+  },
+  "whyWeAreBuildingIt": {
+    "problemDefinition": {
+      "primary": {
+        "title": "Fragmented AI Tools and Context Loss",
+        "description": "Current AI tools suffer from context fragmentation, limited visualization, cloud dependency, tool silos, and session amnesia.",
+        "points": [
+          "Conversations are isolated, preventing cross-referencing and knowledge synthesis",
+          "Text-only interfaces don't leverage spatial thinking and visual organization",
+          "Privacy concerns and latency issues with cloud-only solutions",
+          "Integrating external tools and data sources is complex and inconsistent",
+          "AI assistants lose context between sessions and across different interaction modes"
+        ]
+      },
+      "secondary": [
+        "Running local language models requires technical expertise in GGUF formats, VRAM calculation, and model configuration",
+        "Linear chat interfaces don't support hierarchical knowledge structuring or visual thinking",
+        "Adding custom tools to AI assistants requires understanding multiple APIs and integration patterns"
+      ]
+    },
+    "painPoints": {
+      "currentState": "Users must switch between multiple applications (chat interface, mind mapping tool, file manager, model downloader) to accomplish AI-assisted knowledge work.",
+      "specific": [
+        {
+          "title": "Context Loss During App Switching",
+          "impact": "High - disrupts workflow and mental model",
+          "frequency": "Constant - every time user switches between tools",
+          "cost": "5-10 minutes per context switch, multiple times per session"
+        },
+        {
+          "title": "Manual VRAM Calculations",
+          "impact": "Medium - technical barrier for local models",
+          "frequency": "Every time user downloads a new model",
+          "cost": "15-30 minutes research and trial-and-error"
+        },
+        {
+          "title": "No Persistent Workspace",
+          "impact": "High - lose all context between sessions",
+          "frequency": "Every time user closes and reopens app",
+          "cost": "Entire session context lost, requires reconstruction"
+        },
+        {
+          "title": "Limited Tool Extension",
+          "impact": "Medium - cannot customize AI capabilities",
+          "frequency": "When specific tool integration needed",
+          "cost": "Hours to days of custom development"
+        },
+        {
+          "title": "Conversation Organization",
+          "impact": "Medium - difficult to find previous insights",
+          "frequency": "Daily - searching through history",
+          "cost": "5-15 minutes per search"
+        },
+        {
+          "title": "Lack of Spatial Knowledge Organization",
+          "impact": "High - cannot visualize relationships",
+          "frequency": "When working on complex topics",
+          "cost": "Mental overhead, reduced insight quality"
+        }
+      ]
+    },
+    "stakeholderImpact": [
+      {
+        "stakeholder": "Knowledge Workers",
+        "description": "Unified workspace for AI-assisted research, writing, and brainstorming with persistent context",
+        "currentPain": "Switching between multiple apps, losing context, manual file management",
+        "benefit": "Single integrated workspace with persistent context and visual knowledge organization"
+      },
+      {
+        "stakeholder": "Privacy-Conscious Users",
+        "description": "Local LLM support enables working with sensitive data offline without cloud transmission",
+        "currentPain": "Forced to use cloud services, privacy concerns, data exposure risk",
+        "benefit": "Complete local operation with GGUF models, no data leaves device"
+      },
+      {
+        "stakeholder": "Developers",
+        "description": "MCP integration allows extending the platform with custom tools and data sources",
+        "currentPain": "Complex API integration, vendor-specific protocols, maintenance overhead",
+        "benefit": "Standardized MCP protocol, easy tool integration, reusable components"
+      },
+      {
+        "stakeholder": "Researchers",
+        "description": "Mind mapping + chat enables both structured and unstructured knowledge exploration",
+        "currentPain": "Linear chat only, cannot visualize relationships, difficult to organize insights",
+        "benefit": "Visual knowledge graphs, AI-powered mind map generation, spatial organization"
+      }
+    ],
+    "theoreticalSolutions": [
+      {
+        "title": "Unified Context Architecture",
+        "selected": true,
+        "description": "Threads, mind maps, and workspace files share a common knowledge base with persistent context",
+        "pros": [
+          "Eliminates context loss between modes",
+          "Single source of truth for all knowledge",
+          "Persistent across sessions"
+        ],
+        "cons": [
+          "Complex state synchronization",
+          "File-based persistence limitations"
+        ],
+        "feasibility": "High - implemented with Zustand + file persistence"
+      },
+      {
+        "title": "Visual Knowledge Graphs",
+        "selected": true,
+        "description": "Mind maps complement conversational AI with spatial organization using ReactFlow",
+        "pros": [
+          "Leverages spatial thinking",
+          "AI-powered generation",
+          "Interactive exploration"
+        ],
+        "cons": [
+          "Learning curve for users",
+          "Performance with large graphs"
+        ],
+        "feasibility": "High - implemented with ReactFlow"
+      },
+      {
+        "title": "Local LLM Support",
+        "selected": true,
+        "description": "Support GGUF models with automatic VRAM calculation and model management",
+        "pros": [
+          "Complete privacy",
+          "Offline operation",
+          "No API costs"
+        ],
+        "cons": [
+          "Hardware requirements",
+          "Initial setup complexity",
+          "Slower than cloud"
+        ],
+        "feasibility": "Medium - requires node-llama-cpp integration"
+      },
+      {
+        "title": "MCP Protocol Integration",
+        "selected": true,
+        "description": "Standardized tool integration protocol enables seamless extension",
+        "pros": [
+          "Vendor-neutral protocol",
+          "Easy tool addition",
+          "Reusable components"
+        ],
+        "cons": [
+          "New protocol adoption",
+          "Limited ecosystem (growing)"
+        ],
+        "feasibility": "High - MCP SDK available"
+      },
+      {
+        "title": "Real-time Agent Workflows",
+        "selected": true,
+        "description": "Background agents with SSE progress tracking for long-running tasks",
+        "pros": [
+          "Non-blocking operations",
+          "Real-time feedback",
+          "Task management"
+        ],
+        "cons": [
+          "SSE complexity",
+          "Connection management"
+        ],
+        "feasibility": "High - implemented with EventEmitter"
+      },
+      {
+        "title": "Database-Backed Persistence",
+        "selected": false,
+        "description": "Use SQLite or PostgreSQL for data storage instead of file-based",
+        "pros": [
+          "Better query performance",
+          "ACID transactions",
+          "Scalability"
+        ],
+        "cons": [
+          "Added complexity",
+          "Migration overhead",
+          "File portability lost"
+        ],
+        "feasibility": "High - but deferred for simplicity"
+      }
+    ],
+    "developmentMethodology": {
+      "name": "Reverse ACDD (Acceptance Criteria Driven Development)",
+      "description": "For this existing codebase, we use Reverse ACDD to discover user stories and acceptance criteria from implemented features, then document them using fspec's Gherkin specifications.",
+      "steps": [
+        "1. Analyze codebase to identify user-facing interactions (API endpoints, UI components, commands)",
+        "2. Group interactions into epics (business domains like Chat, MindMap, Workspace)",
+        "3. Create work units for each user story",
+        "4. Generate Gherkin feature files with inferred acceptance criteria",
+        "5. Create skeleton test files (structure only, not implemented)",
+        "6. Document with user story maps in foundation.json"
+      ],
+      "ensures": [
+        "All existing features are documented as Gherkin scenarios",
+        "Test coverage gaps are identified",
+        "Future development follows forward ACDD (Example Mapping → Feature → Test → Implement)",
+        "Specifications stay aligned with implementation"
+      ]
+    },
+    "successCriteria": [
+      {
+        "title": "Documentation Completeness",
+        "criteria": [
+          "All API endpoints have corresponding feature files",
+          "All epics have at least one work unit",
+          "foundation.json contains complete architecture documentation",
+          "FOUNDATION.md generated from foundation.json"
+        ]
+      },
+      {
+        "title": "Testing Coverage",
+        "criteria": [
+          "Skeleton tests exist for all features",
+          "All scenarios have corresponding test structure",
+          "Test files follow naming conventions",
+          "Unit tests for business logic"
+        ]
+      },
+      {
+        "title": "Specification Quality",
+        "criteria": [
+          "All feature files pass `fspec validate`",
+          "All tags registered in spec/tags.json",
+          "User story maps visualize workflows",
+          "Architecture notes document decisions"
+        ]
+      },
+      {
+        "title": "Code Quality",
+        "criteria": [
+          "All code passes ESLint checks",
+          "TypeScript strict mode compliance",
+          "No `any` types in codebase",
+          "All tests pass"
+        ]
+      }
+    ],
+    "constraintsAndAssumptions": {
+      "constraints": [
+        {
+          "category": "Technical",
+          "items": [
+            "Must maintain backward compatibility with existing API contracts",
+            "ESLint rules must pass (no exceptions)",
+            "TypeScript strict mode required",
+            "No breaking changes to Zustand store interfaces"
+          ]
+        },
+        {
+          "category": "Data",
+          "items": [
+            "File-based persistence for threads/mindmaps (no database yet)",
+            "File system access required (not sandboxed environments)",
+            "Local storage for frontend state"
+          ]
+        },
+        {
+          "category": "Platform",
+          "items": [
+            "Electron compatibility required for desktop features",
+            "Cross-platform support (macOS, Windows, Linux)",
+            "Modern browser support (ES2020+)"
+          ]
+        }
+      ],
+      "assumptions": [
+        {
+          "category": "User Environment",
+          "items": [
+            "Users have modern browsers supporting ES2020+",
+            "Desktop users have sufficient VRAM for local models they choose",
+            "Network connectivity for cloud LLM providers (when used)"
+          ]
+        },
+        {
+          "category": "User Knowledge",
+          "items": [
+            "Users understand basic AI concepts (prompts, context, tokens)",
+            "Users can configure MCP servers (with guidance)",
+            "Basic understanding of file system navigation"
+          ]
+        },
+        {
+          "category": "External Services",
+          "items": [
+            "MCP servers are properly configured and accessible",
+            "LLM providers maintain API compatibility",
+            "External tools follow MCP protocol specification"
+          ]
+        }
+      ]
+    }
+  },
+  "architectureDiagrams": [
+    {
+      "title": "High-Level Architecture",
+      "mermaidCode": "graph TB\n  Client[\"React Frontend<br/>(Vite + TypeScript)\"]\n  Server[\"NestJS Backend<br/>(Express + TypeScript)\"]\n  SSE[\"SSE Events<br/>(Real-time Updates)\"]\n  MCP[\"MCP Servers<br/>(Tool Integration)\"]\n  LLM[\"LangChain<br/>(AI Orchestration)\"]\n  Storage[\"File Storage<br/>(Threads/MindMaps)\"]\n  \n  Client -->|HTTP API| Server\n  Client -->|EventSource| SSE\n  Server -->|Emit Events| SSE\n  Server -->|IPC/Stdio| MCP\n  Server -->|Invoke| LLM\n  Server -->|Read/Write| Storage\n  LLM -->|API Calls| CloudLLM[\"Cloud LLMs<br/>(Anthropic/OpenAI)\"]\n  LLM -->|Local| LocalLLM[\"Local LLMs<br/>(Ollama/GGUF)\"]\n  \n  style Client fill:#e1f5ff\n  style Server fill:#fff3e0\n  style SSE fill:#f3e5f5\n  style MCP fill:#e8f5e9\n  style LLM fill:#fce4ec\n  style Storage fill:#f1f8e9"
+    },
+    {
+      "title": "Frontend State Architecture",
+      "mermaidCode": "graph TB\n  Components[\"React Components\"]\n  AppStore[\"useAppStore<br/>(Global Settings)\"]\n  ThreadsStore[\"useThreadsStore<br/>(Active Threads)\"]\n  ChatStore[\"useChatThreadStore<br/>(Per-Thread Messages)\"]\n  MindMapStore[\"useMindMapStore<br/>(Mind Maps)\"]\n  ModelsStore[\"useModelsStore<br/>(LLM Configs)\"]\n  TaskStore[\"useTaskStore<br/>(Background Tasks)\"]\n  \n  Components -->|Read/Write| AppStore\n  Components -->|Read/Write| ThreadsStore\n  Components -->|Read/Write| ChatStore\n  Components -->|Read/Write| MindMapStore\n  Components -->|Read/Write| ModelsStore\n  Components -->|Read/Write| TaskStore\n  \n  AppStore -->|Persist| LocalStorage[\"Local Storage\"]\n  ThreadsStore -->|Persist| LocalStorage\n  \n  style Components fill:#e1f5ff\n  style AppStore fill:#fff3e0\n  style ThreadsStore fill:#f3e5f5\n  style ChatStore fill:#e8f5e9\n  style MindMapStore fill:#fce4ec\n  style ModelsStore fill:#f1f8e9\n  style TaskStore fill:#ede7f6\n  style LocalStorage fill:#ffebee"
+    },
+    {
+      "title": "NestJS Module Organization",
+      "mermaidCode": "graph TB\n  Main[\"Main Module\"]\n  Chat[\"Chat Module<br/>(Threads/Messages)\"]\n  MindMap[\"MindMap Module<br/>(Graph Management)\"]\n  Workspace[\"Workspace Module<br/>(File Management)\"]\n  LLM[\"LLM Module<br/>(Model Management)\"]\n  MCP[\"MCP Module<br/>(Tool Integration)\"]\n  Agents[\"Agents Module<br/>(Workflows)\"]\n  Music[\"Music Module<br/>(Player)\"]\n  Tasks[\"Tasks Module<br/>(Background Jobs)\"]\n  Events[\"Events Module<br/>(SSE)\"]\n  \n  Main --> Chat\n  Main --> MindMap\n  Main --> Workspace\n  Main --> LLM\n  Main --> MCP\n  Main --> Agents\n  Main --> Music\n  Main --> Tasks\n  Main --> Events\n  \n  Chat --> LLM\n  Chat --> Events\n  MindMap --> LLM\n  MindMap --> Events\n  Agents --> LLM\n  Agents --> MCP\n  Agents --> Tasks\n  Agents --> Events\n  \n  style Main fill:#e1f5ff\n  style Chat fill:#fff3e0\n  style MindMap fill:#f3e5f5\n  style Workspace fill:#e8f5e9\n  style LLM fill:#fce4ec\n  style MCP fill:#f1f8e9\n  style Agents fill:#ede7f6\n  style Music fill:#ffebee\n  style Tasks fill:#e0f2f1\n  style Events fill:#fce4ec"
+    },
+    {
+      "title": "SSE Event Flow",
+      "mermaidCode": "graph LR\n  Client[\"React Client\"]\n  EventSource[\"EventSource<br/>(Connection)\"]\n  SSEController[\"SSE Controller<br/>(NestJS)\"]\n  EventEmitter[\"EventEmitter2<br/>(Topics)\"]\n  Modules[\"Domain Modules<br/>(Chat/MindMap/Agents)\"]\n  \n  Client -->|\"GET /events\"| EventSource\n  EventSource -->|Open| SSEController\n  SSEController -->|Subscribe| EventEmitter\n  Modules -->|Emit| EventEmitter\n  EventEmitter -->|Notify| SSEController\n  SSEController -->|Send| EventSource\n  EventSource -->|Receive| Client\n  \n  style Client fill:#e1f5ff\n  style EventSource fill:#fff3e0\n  style SSEController fill:#f3e5f5\n  style EventEmitter fill:#e8f5e9\n  style Modules fill:#fce4ec"
+    },
+    {
+      "title": "Chat Message Flow",
+      "mermaidCode": "sequenceDiagram\n  participant User\n  participant React\n  participant API\n  participant LangChain\n  participant LLM\n  participant SSE\n  \n  User->>React: Type message\n  React->>API: POST /chat/threads/:id/messages\n  API->>LangChain: Invoke with context\n  LangChain->>LLM: Stream request\n  LLM-->>LangChain: Stream tokens\n  LangChain-->>API: Forward tokens\n  API->>SSE: Emit message chunk\n  SSE-->>React: Send chunk\n  React-->>User: Display token\n  LLM-->>LangChain: Complete\n  LangChain-->>API: Final message\n  API->>SSE: Emit complete\n  SSE-->>React: Message done\n  React-->>User: Show complete message"
+    }
+  ],
+  "coreCommands": {
+    "categories": []
+  },
+  "featureInventory": {
+    "phases": [],
+    "tagUsageSummary": {
+      "phaseDistribution": [],
+      "componentDistribution": [],
+      "featureGroupDistribution": [],
+      "priorityDistribution": [],
+      "testingCoverage": []
+    }
+  },
+  "notes": {
+    "developmentStatus": [
+      {
+        "phase": "Current Implementation",
+        "title": "Core Features Implemented",
+        "status": "COMPLETE",
+        "items": [
+          "Multi-threaded conversational AI with system prompts",
+          "Interactive mind mapping with ReactFlow",
+          "Workspace file management",
+          "LLM model management (cloud and local)",
+          "MCP tool integration (filesystem, github)",
+          "Real-time SSE communication",
+          "Background task tracking",
+          "Integrated music player"
+        ]
+      },
+      {
+        "phase": "Reverse ACDD Process",
+        "title": "Documentation and Testing",
+        "status": "IN_PROGRESS",
+        "items": [
+          "Discovering specifications from existing implementation",
+          "Creating Gherkin feature files for all user-facing features",
+          "Generating skeleton test files (structure only)",
+          "Establishing epics and work units",
+          "Creating user story maps"
+        ]
+      },
+      {
+        "phase": "Code Quality",
+        "title": "Standards Enforcement",
+        "status": "COMPLETE",
+        "items": [
+          "ESLint 9 with strict TypeScript rules",
+          "TypeScript 5.7 strict mode enabled",
+          "No `any` types policy enforced",
+          "Vitest test infrastructure configured",
+          "React Testing Library for component tests",
+          "Playwright for E2E tests"
+        ]
+      },
+      {
+        "phase": "Next Steps",
+        "title": "Planned Improvements",
+        "status": "PLANNED",
+        "items": [
+          "Complete feature file generation for all endpoints",
+          "Implement skeleton tests for all scenarios",
+          "Add integration tests for critical flows",
+          "Document all API endpoints with OpenAPI",
+          "Create comprehensive user story maps",
+          "Improve error handling coverage",
+          "Add performance monitoring"
+        ]
+      }
+    ]
+  }
+}
