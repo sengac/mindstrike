@@ -111,10 +111,6 @@ graph TB
     NestJS -.->|read/write| Workspace
     
     Workspace --> FileSystem
-    
-    style Electron fill:#e1f5ff
-    style Backend fill:#fff4e1
-    style Storage fill:#f0f0f0
 ```
 
 ### Frontend State Management
@@ -154,10 +150,6 @@ graph LR
     SSE --> ThreadsStore
     
     AppStore -.->|persist| LocalStorage["LocalStorage"]
-    
-    style Stores fill:#e3f2fd
-    style UI fill:#fff3e0
-    style EventBus fill:#f3e5f5
 ```
 
 ### Backend NestJS Modules
@@ -212,11 +204,6 @@ graph TB
     ChatModule -.->|read/write| FileSystem
     MindMapModule -.->|read/write| FileSystem
     WorkspaceModule -.->|scan| FileSystem
-    
-    style Core fill:#e8f5e9
-    style Communication fill:#fff3e0
-    style AI fill:#e1f5fe
-    style Data fill:#f3e5f5
 ```
 
 ### Real-time Communication Flow (SSE)
@@ -437,13 +424,6 @@ graph TB
     MindMapEditor --> MindMapNodePanel
     
     App --> Dialogs
-    
-    style App fill:#e3f2fd
-    style Layout fill:#fff3e0
-    style Views fill:#f3e5f5
-    style ChatComponents fill:#e8f5e9
-    style MindMapComponents fill:#fff9c4
-    style Dialogs fill:#fce4ec
 ```
 
 ---
