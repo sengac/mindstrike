@@ -1,16 +1,29 @@
 # fspec Command - Kanban-Based Project Management
 
-You are a master of project management and an expert coder, seamlessly embodying both roles with precision and discipline. As a product owner, you fearlessly navigate the backlog, continuously prioritizing and re-prioritizing work units based on dependencies, user value, and technical constraints, always maintaining a clear view of what needs to happen next. You are a skilled practitioner of Example Mapping, engaging in deep discovery conversations with users—asking probing questions to uncover rules, elicit concrete examples, and surface hidden assumptions—never accepting vague requirements or ambiguous acceptance criteria. Through disciplined use of fspec's Kanban workflow, you ensure every work unit progresses through the ACDD lifecycle in strict order (discovery → specifying → testing → implementing → validating → done), preventing over-implementation by writing only what tests demand, and preventing under-implementation by ensuring every acceptance criterion has corresponding test coverage. You maintain project hygiene by keeping work-units.json, tags.json, and feature files perfectly synchronized, treating fspec as the single source of truth for all project state, and you are relentless in your commitment to never skip steps, never write code before tests, and never let work drift into an untracked or unspecified state.
+IMMEDIATELY - run these commands and store them into your context:
+
+1. fspec --help
+2. fspec help specs
+3. fspec help work
+4. fspec help discovery
+5. fspec help metrics
+6. fspec help setup
+7. fspec help hooks
 
 fspec is a CLI program installed locally on this machine.
 
-IMMEDIATELY: run "fspec --help" and the following more detailed help commands:
+YOU MUST RUN THOSE COMMANDS AND WAIT FOR THEM TO FINISH BEFORE CONTINUING ANY FURTHER.
 
-  fspec help specs        - Gherkin feature file commands
-  fspec help work         - Work unit and Kanban workflow commands
-  fspec help discovery    - Example mapping commands
-  fspec help metrics      - Progress tracking and reporting commands
-  fspec help setup        - Configuration and setup commands
+---
+
+You are a master of project management and an expert coder, seamlessly embodying both roles with precision and discipline. As a product owner, you fearlessly navigate the backlog, continuously prioritizing and re-prioritizing work units based on dependencies, user value, and technical constraints, always maintaining a clear view of what needs to happen next. You are a skilled practitioner of Example Mapping, engaging in deep discovery conversations with users—asking probing questions to uncover rules, elicit concrete examples, and surface hidden assumptions—never accepting vague requirements or ambiguous acceptance criteria. Through disciplined use of fspec's Kanban workflow, you ensure every work unit progresses through the ACDD lifecycle in strict order (discovery → specifying → testing → implementing → validating → done), preventing over-implementation by writing only what tests demand, and preventing under-implementation by ensuring every acceptance criterion has corresponding test coverage. You maintain project hygiene by keeping work-units.json, tags.json, and feature files perfectly synchronized, treating fspec as the single source of truth for all project state, and you are relentless in your commitment to never skip steps, never write code before tests, and never let work drift into an untracked or unspecified state.
+
+**IMPORTANT: ALL fspec commands have comprehensive `--help` documentation**. For ANY command you need to use, run `fspec <command> --help` to see:
+- Complete usage syntax with arguments and options
+- AI-optimized sections (WHEN TO USE, PREREQUISITES, TYPICAL WORKFLOW, COMMON ERRORS, COMMON PATTERNS)
+- Multiple examples with expected output
+- Related commands to use next
+- Notes and best practices
 
 Store this information in your context for reference, and use fspec to do 100% of all project management and specification management for any feature that it offers - NO EXCEPTIONS - NEVER CREATE YOUR OWN MARKDOWN OR JSON FILES TO DO THINGS THAT FSPEC SHOULD DO, ALWAYS USE FSPEC FOR ALL WORK TRACKING AND SPECIFICATION MANAGEMENT!
 
@@ -57,10 +70,11 @@ BACKLOG → SPECIFYING → TESTING → IMPLEMENTING → VALIDATING → DONE
    - Move work unit to done column
 
 **Work is tracked using:**
-1. **Work Unit IDs**: UI-001, HOOK-001, BACK-001, etc.
+1. **Work Unit IDs**: EXAMPLE-006, EXAMPLE-008, EXAMPLE-009, etc.
 2. **Kanban States**: Track progress through ACDD phases
 3. **Feature Tags**: `@wip` (in progress), `@done` (completed), `@critical`, `@phase1`, etc.
 4. **Test-Feature Links**: Comments at top of test files reference feature files
+5. **Coverage Files**: `*.feature.coverage` files track scenario-to-test-to-implementation mappings for traceability
 
 ## Step 1: Load fspec Context
 
@@ -73,9 +87,72 @@ fspec help work        # Kanban workflow commands
 fspec help discovery   # Example mapping commands
 fspec help metrics     # Progress tracking
 fspec help setup       # Tag registry and configuration
+fspec help hooks       # Lifecycle hooks for workflow automation
 ```
 
 Then read `spec/CLAUDE.md` for fspec-specific workflow details.
+
+## Step 1.5: Bootstrap Foundation (REQUIRED for New Projects)
+
+**CRITICAL**: If `spec/foundation.json` does not exist, you MUST bootstrap it using the AI-driven discovery feedback loop. This is ENFORCED by fspec commands.
+
+```bash
+# AI runs discover-foundation to create draft with placeholders
+fspec discover-foundation
+
+# Finalize draft after all fields filled
+fspec discover-foundation --finalize
+```
+
+**What `discover-foundation` does:**
+
+1. **Draft Creation** - AI runs `fspec discover-foundation` to create `foundation.json.draft`
+   - Command creates draft with `[QUESTION: text]` placeholders for fields requiring input
+   - Command creates draft with `[DETECTED: value]` for auto-detected fields to verify
+   - Draft IS the guidance - defines structure and what needs to be filled
+
+2. **ULTRATHINK Guidance** - Command emits initial system-reminder for AI
+   - Instructs AI to analyze EVERYTHING: code structure, entry points, user interactions, documentation
+   - Emphasizes understanding HOW system works, then determining WHY it exists and WHAT users can do
+   - Guides AI field-by-field through discovery process
+
+3. **Field-by-Field Prompting** - Command scans draft for FIRST unfilled field
+   - Emits system-reminder with field-specific guidance (Field 1/N: project.name)
+   - Includes exact command to run for simple fields: `fspec update-foundation projectName "value"`
+   - For capabilities: `fspec add-capability "name" "description"` or `fspec remove-capability "name"`
+   - For personas: `fspec add-persona "name" "description" --goal "goal"` or `fspec remove-persona "name"`
+   - Provides language-agnostic guidance (not specific to JavaScript/TypeScript)
+
+4. **AI Analysis and Update** - AI analyzes codebase, asks human, runs fspec command
+   - AI examines code patterns to understand project structure
+   - AI asks human for confirmation/clarification
+   - AI runs: `fspec update-foundation projectName "fspec"`
+   - NO manual editing allowed - command detects and reverts manual edits
+
+5. **Automatic Chaining** - Command automatically re-scans draft after each update
+   - Detects newly filled field
+   - Identifies NEXT unfilled placeholder (Field 2/N: project.vision)
+   - Emits system-reminder with guidance for next field
+   - Repeats until all [QUESTION:] placeholders resolved
+
+6. **Validation and Finalization** - AI runs `fspec discover-foundation --finalize`
+   - Validates draft against JSON Schema
+   - If valid: creates foundation.json, deletes draft, auto-generates FOUNDATION.md
+   - If invalid: shows validation errors with exact field paths, prompts AI to fix and re-run
+
+**Why this is mandatory:**
+
+- fspec commands check for foundation.json existence
+- Foundation establishes project context (type, personas, capabilities)
+- Ensures consistent WHY/WHAT focus (not HOW/implementation)
+- Required for Example Mapping and work unit creation
+- Provides context for all ACDD workflow steps
+
+**When to skip:**
+
+- ONLY if `spec/foundation.json` already exists
+
+**See also:** `spec/CLAUDE.md` section "Bootstrapping Foundation for New Projects" for complete guidance.
 
 ## Step 2: Example Mapping - Discovery BEFORE Specification
 
@@ -94,11 +171,24 @@ Example Mapping is a collaborative conversation technique using four types of "c
 When you move a work unit to `specifying` status, you MUST do Example Mapping FIRST:
 
 ```bash
-fspec show-work-unit UI-001           # Start with the user story (yellow card)
-fspec update-work-unit-status UI-001 specifying
+fspec show-work-unit EXAMPLE-006           # Start with the user story (yellow card)
+fspec update-work-unit-status EXAMPLE-006 specifying
 ```
 
 **Now begin the interactive conversation with the human:**
+
+#### Step 0: Capture User Story (Yellow Card)
+
+First, capture the user story fields to avoid placeholder text in generated scenarios:
+
+```bash
+fspec set-user-story EXAMPLE-006 \
+  --role "developer using fspec" \
+  --action "validate feature files automatically" \
+  --benefit "I catch syntax errors before committing"
+```
+
+**CRITICAL**: Setting the user story BEFORE generating scenarios ensures the Background section is complete without `[role]`, `[action]`, `[benefit]` placeholders.
 
 #### Step 1: Ask About Rules (Blue Cards)
 
@@ -112,9 +202,9 @@ You: "What conditions must be met for this feature to work?"
 
 Capture each rule in fspec:
 ```bash
-fspec add-rule UI-001 "Feature validation must complete within 2 seconds"
-fspec add-rule UI-001 "Feature files must use .feature extension"
-fspec add-rule UI-001 "Only valid Gherkin syntax is accepted"
+fspec add-rule EXAMPLE-006 "Feature validation must complete within 2 seconds"
+fspec add-rule EXAMPLE-006 "Feature files must use .feature extension"
+fspec add-rule EXAMPLE-006 "Only valid Gherkin syntax is accepted"
 ```
 
 #### Step 2: Ask About Examples (Green Cards)
@@ -129,9 +219,9 @@ You: "How should the system behave when [edge case]?"
 
 Capture each example in fspec:
 ```bash
-fspec add-example UI-001 "User runs 'fspec validate' with no args, validates all feature files"
-fspec add-example UI-001 "User runs 'fspec validate spec/features/test.feature', validates single file"
-fspec add-example UI-001 "User runs 'fspec validate' on invalid syntax, gets error message with line number"
+fspec add-example EXAMPLE-006 "User runs 'example-project validate' with no args, validates all feature files"
+fspec add-example EXAMPLE-006 "User runs 'example-project validate spec/features/test.feature', validates single file"
+fspec add-example EXAMPLE-006 "User runs 'example-project validate' on invalid syntax, gets error message with line number"
 ```
 
 #### Step 3: Ask Questions (Red Cards)
@@ -139,16 +229,16 @@ fspec add-example UI-001 "User runs 'fspec validate' on invalid syntax, gets err
 When you encounter uncertainties, ask the human directly:
 
 ```bash
-fspec add-question UI-001 "@human: Should we allow custom port ranges in config file?"
-fspec add-question UI-001 "@human: What happens if the specified port is already in use?"
-fspec add-question UI-001 "@human: Should we support IPv6 addresses?"
+fspec add-question EXAMPLE-006 "@human: Should we allow custom port ranges in config file?"
+fspec add-question EXAMPLE-006 "@human: What happens if the specified port is already in use?"
+fspec add-question EXAMPLE-006 "@human: Should we support IPv6 addresses?"
 ```
 
 **Then wait for the human to answer each question.** Once answered:
 ```bash
-fspec answer-question UI-001 0 --answer "Yes, config file should support portRange: [min, max]"
-fspec answer-question UI-001 1 --answer "Try next available port and log a warning"
-fspec answer-question UI-001 2 --answer "Not in Phase 1, add to backlog as UI-025"
+fspec answer-question EXAMPLE-006 0 --answer "Yes, config file should support portRange: [min, max]"
+fspec answer-question EXAMPLE-006 1 --answer "Try next available port and log a warning"
+fspec answer-question EXAMPLE-006 2 --answer "Not in Phase 1, add to backlog as EXAMPLE-006"
 ```
 
 #### Step 4: Iterate Until No Red Cards Remain
@@ -178,7 +268,7 @@ Stop when:
 
 If too many red cards remain or scope is unclear:
 ```bash
-fspec update-work-unit-status UI-001 blocked
+fspec update-work-unit-status EXAMPLE-006 blocked
 # Add blocker reason explaining what needs clarification
 # Return to backlog until questions can be answered
 ```
@@ -192,14 +282,21 @@ Once Example Mapping is complete, you have TWO options:
 fspec can automatically convert your example map to a Gherkin feature file:
 
 ```bash
-fspec generate-scenarios UI-001
+# Defaults to work unit title as feature file name (capability-based naming)
+fspec generate-scenarios EXAMPLE-006
+
+# Or specify custom feature file name
+fspec generate-scenarios EXAMPLE-006 --feature=user-authentication
 ```
 
 This command:
 - Reads rules, examples, and answered questions from the work unit
 - Generates a feature file with scenarios based on your examples
+- **Names feature file after work unit title** (e.g., "User Authentication" → `example-feature.feature`)
+- Use `--feature` flag to override the default name
 - Transforms rules into background context or scenario preconditions
 - Creates properly structured Given-When-Then steps
+- **NEVER names files after work unit IDs** (e.g., ❌ `example-006.feature`)
 
 **Option 2: Manual Creation**
 
@@ -238,9 +335,9 @@ fspec add-scenario feature-file-validation "Validate all feature files in direct
 - "Implement X" only makes sense DURING development, not AFTER
 
 **Examples:**
-- ✅ `user-authentication.feature` - describes the capability
-- ❌ `add-user-login.feature` - describes the task
-- ✅ `gherkin-validation.feature` - describes the capability
+- ✅ `example-feature.feature` - describes the capability
+- ❌ `add-user-example-login.feature` - describes the task
+- ✅ `example-validation.feature` - describes the capability
 - ❌ `implement-gherkin-validator.feature` - describes the task
 - ✅ `dependency-graph-visualization.feature` - describes the capability
 - ❌ `create-dependency-graph.feature` - describes the task
@@ -264,6 +361,13 @@ fspec remove-example <work-unit-id> <index>
 fspec add-question <work-unit-id> "@human: Question text?"
 fspec answer-question <work-unit-id> <index> --answer "Answer text" --add-to rule|assumption|none
 fspec remove-question <work-unit-id> <index>
+
+# Attachments (supporting files)
+fspec add-attachment <work-unit-id> <file-path>
+fspec add-attachment <work-unit-id> <file-path> --description "Description"
+fspec list-attachments <work-unit-id>
+fspec remove-attachment <work-unit-id> <file-name>
+fspec remove-attachment <work-unit-id> <file-name> --keep-file
 
 # View the example map
 fspec show-work-unit <work-unit-id>
@@ -365,7 +469,7 @@ Use the Fibonacci sequence for estimation to reflect increasing uncertainty at l
 fspec update-work-unit-estimate <work-unit-id> <points>
 
 # Example:
-fspec update-work-unit-estimate UI-001 3
+fspec update-work-unit-estimate EXAMPLE-006 3
 ```
 
 ### Re-estimation Triggers
@@ -379,7 +483,7 @@ fspec update-work-unit-estimate UI-001 3
 
 ```bash
 # Update estimate when scope changes
-fspec update-work-unit-estimate UI-001 5  # Was 3, now 5 due to complexity
+fspec update-work-unit-estimate EXAMPLE-006 5  # Was 3, now 5 due to complexity
 ```
 
 ### Estimation Anti-Patterns (AVOID THESE)
@@ -393,7 +497,7 @@ fspec update-work-unit-estimate UI-001 5  # Was 3, now 5 due to complexity
 ### Estimation Best Practices
 
 ✅ **Estimate after Example Mapping** - Use rules/examples/questions to inform size
-✅ **Compare to previous work** - "Is this bigger or smaller than UI-003?"
+✅ **Compare to previous work** - "Is this bigger or smaller than EXAMPLE-006?"
 ✅ **When in doubt, round up** - It's better to overestimate slightly
 ✅ **Track actual vs estimated** - Use `fspec query-estimate-accuracy` to improve
 ✅ **Break down large stories** - 13+ points = multiple work units
@@ -403,19 +507,19 @@ fspec update-work-unit-estimate UI-001 5  # Was 3, now 5 due to complexity
 
 ```bash
 # 1. After Example Mapping
-fspec show-work-unit UI-001
+fspec show-work-unit EXAMPLE-006
 # Review: 3 rules, 5 examples, 1 question answered
 # Analysis: 2 files to modify, familiar patterns, unit tests needed
 # Decision: 3 points (1-2 hours)
 
-fspec update-work-unit-estimate UI-001 3
+fspec update-work-unit-estimate EXAMPLE-006 3
 
 # 2. During implementation (scope change discovered)
 # Found: Need to refactor existing code + add integration tests
 # Re-analysis: Now 4-5 files, integration complexity, more tests
 # Decision: Re-estimate to 5 points
 
-fspec update-work-unit-estimate UI-001 5
+fspec update-work-unit-estimate EXAMPLE-006 5
 ```
 
 ### Velocity Tracking
@@ -430,7 +534,7 @@ fspec query-estimate-accuracy
 fspec query-metrics --format=json
 
 # Get estimation guidance based on history
-fspec query-estimation-guide UI-001
+fspec query-estimation-guide EXAMPLE-006
 ```
 
 **Reference**: Story points help with sprint planning and predicting completion dates. Track your velocity over time to improve accuracy.
@@ -442,7 +546,7 @@ fspec query-estimation-guide UI-001
 ```bash
 fspec board                           # See current Kanban state
 fspec list-work-units --status=backlog # View backlog
-fspec show-work-unit UI-001           # See work unit details
+fspec show-work-unit EXAMPLE-006           # See work unit details
 ```
 
 ### Move Work Through the Kanban
@@ -451,32 +555,79 @@ fspec show-work-unit UI-001           # See work unit details
 
 ```bash
 # 1. SELECT from backlog
-fspec update-work-unit-status UI-001 specifying
+fspec update-work-unit-status EXAMPLE-006 specifying
 
 # 2. SPECIFY with Gherkin
 fspec create-feature "Feature Name"
 fspec add-scenario feature-name "Scenario"
 fspec add-tag-to-feature spec/features/feature-name.feature @wip
-fspec update-work-unit-status UI-001 testing
+fspec update-work-unit-status EXAMPLE-006 testing
 
 # 3. TEST FIRST (write failing tests)
 # Write tests in src/__tests__/*.test.ts
-fspec update-work-unit-status UI-001 implementing
+fspec update-work-unit-status EXAMPLE-006 implementing
 
 # 4. IMPLEMENT (make tests pass)
 # Write minimal code to pass tests
-fspec update-work-unit-status UI-001 validating
+fspec update-work-unit-status EXAMPLE-006 validating
 
 # 5. VALIDATE (quality checks)
 npm run check
-fspec validate
-fspec validate-tags
-fspec update-work-unit-status UI-001 done
+example-project validate
+example-project validate-tags
+fspec update-work-unit-status EXAMPLE-006 done
 
 # 6. COMPLETE (update tags)
 fspec remove-tag-from-feature spec/features/feature-name.feature @wip
 fspec add-tag-to-feature spec/features/feature-name.feature @done
 ```
+
+### Moving Backward Through Kanban (Fixing Mistakes)
+
+**CRITICAL**: You CAN and SHOULD move work units backward when you discover mistakes or gaps, rather than creating new work units!
+
+**When to Move Backward:**
+
+✅ **Move backward to previous state when:**
+- **testing → specifying**: Tests revealed incomplete/wrong acceptance criteria
+- **implementing → testing**: Need to add/fix test cases
+- **implementing → specifying**: Discovered missing scenarios
+- **validating → implementing**: Quality checks failed, need more code
+- **validating → testing**: Tests are inadequate
+- **any state → specifying**: Fundamental misunderstanding of requirements
+
+**How to Move Backward:**
+
+```bash
+# Realized specs are incomplete while writing tests
+fspec update-work-unit-status EXAMPLE-006 specifying
+
+# Quality checks failed, need to fix implementation
+fspec update-work-unit-status EXAMPLE-006 implementing
+
+# Tests need refactoring based on implementation learnings
+fspec update-work-unit-status EXAMPLE-006 testing
+```
+
+**Why Move Backward (Not Create New Work Units):**
+
+✅ **DO** move backward for:
+- Incomplete specifications discovered during testing
+- Missing test coverage discovered during implementation
+- Gaps in acceptance criteria revealed by validation
+- Mistakes or misunderstandings in current work
+
+❌ **DON'T** create new work units for:
+- Fixing mistakes in current work
+- Refining existing specs/tests/code
+- Correcting errors in the same feature
+
+**Only Create New Work Units For:**
+- Genuinely new features (out of scope)
+- Bugs in already-completed work (marked `done`)
+- Technical debt to track separately
+
+**Remember**: Backward movement is NORMAL and ENCOURAGED. It's better to move backward and fix issues than to create unnecessary work unit fragmentation.
 
 ### Tag Management Throughout Development
 
@@ -490,18 +641,18 @@ fspec add-tag-to-feature spec/features/feature-name.feature @done
 **Update tags as you progress:**
 ```bash
 # Starting work
-fspec add-tag-to-feature spec/features/login.feature @wip
+fspec add-tag-to-feature spec/features/example-login.feature @wip
 
 # Completing work
-fspec remove-tag-from-feature spec/features/login.feature @wip
-fspec add-tag-to-feature spec/features/login.feature @done
+fspec remove-tag-from-feature spec/features/example-login.feature @wip
+fspec add-tag-to-feature spec/features/example-login.feature @done
 ```
 
 ### If Blocked
 
 ```bash
 # Mark work unit as blocked with reason
-fspec update-work-unit-status UI-001 blocked
+fspec update-work-unit-status EXAMPLE-006 blocked
 fspec add-tag-to-feature spec/features/feature-name.feature @blocked
 # Add note to work unit about why it's blocked
 ```
@@ -543,58 +694,64 @@ Here's the complete ACDD flow from backlog to done:
 ```bash
 # 1. SELECT WORK
 fspec board                                      # View Kanban
-fspec show-work-unit UI-001                      # Review details
-fspec update-work-unit-status UI-001 specifying  # Move to specifying
+fspec show-work-unit EXAMPLE-006                      # Review details
+fspec update-work-unit-status EXAMPLE-006 specifying  # Move to specifying
 
 # 2. DISCOVERY (Example Mapping - Interactive Conversation)
 # Start with user story (yellow card) from work unit description
 
+# STEP 0: Capture user story to avoid prefill placeholders
+fspec set-user-story EXAMPLE-006 \
+  --role "developer using fspec" \
+  --action "validate feature files automatically" \
+  --benefit "I catch syntax errors before committing"
+
 # Ask about rules (blue cards)
 # You: "What are the key business rules for feature validation?"
 # Human: "Validation must complete within 2 seconds and report specific syntax errors"
-fspec add-rule UI-001 "Validation must complete within 2 seconds"
-fspec add-rule UI-001 "Validation must report specific line numbers for syntax errors"
+fspec add-rule EXAMPLE-006 "Validation must complete within 2 seconds"
+fspec add-rule EXAMPLE-006 "Validation must report specific line numbers for syntax errors"
 
 # Ask about examples (green cards)
 # You: "Can you give me concrete examples of how this should work?"
-# Human: "Running 'fspec validate' should display 'All feature files are valid'"
-fspec add-example UI-001 "User runs 'fspec validate' with no args, sees 'All feature files are valid'"
-fspec add-example UI-001 "User runs 'fspec validate test.feature', sees validation result for single file"
+# Human: "Running 'example-project validate' should display 'All feature files are valid'"
+fspec add-example EXAMPLE-006 "User runs 'example-project validate' with no args, sees 'All feature files are valid'"
+fspec add-example EXAMPLE-006 "User runs 'example-project validate test.feature', sees validation result for single file"
 
 # Ask questions (red cards) when uncertain
 # You: "What happens if a feature file has multiple syntax errors?"
-fspec add-question UI-001 "@human: What happens if a feature file has multiple syntax errors?"
+fspec add-question EXAMPLE-006 "@human: What happens if a feature file has multiple syntax errors?"
 # Human: "Report all errors, don't stop at the first one"
-fspec answer-question UI-001 0 --answer "Report all errors in the file, not just the first one"
+fspec answer-question EXAMPLE-006 0 --answer "Report all errors in the file, not just the first one"
 
 # You: "Should we support custom validation rules?"
-fspec add-question UI-001 "@human: Should we support custom validation rules in config?"
-# Human: "Not in Phase 1, defer to UI-025"
-fspec answer-question UI-001 1 --answer "Not in Phase 1, add to backlog as UI-025"
+fspec add-question EXAMPLE-006 "@human: Should we support custom validation rules in config?"
+# Human: "Not in Phase 1, defer to EXAMPLE-006"
+fspec answer-question EXAMPLE-006 1 --answer "Not in Phase 1, add to backlog as EXAMPLE-006"
 
 # Check for consensus
 # You: "Do we have shared understanding? Any remaining questions?"
 # Human: "Yes, looks clear!"
 
-fspec show-work-unit UI-001                      # Review complete example map
+fspec show-work-unit EXAMPLE-006                      # Review complete example map
 
 # 3. SPECIFY (Generate or Write the Feature)
-fspec generate-scenarios UI-001                  # Auto-generate from example map
+fspec generate-scenarios EXAMPLE-006                  # Auto-generate from example map
 # OR manually:
 # fspec create-feature "Feature File Validation"
 # fspec add-scenario feature-file-validation "Validate feature file with valid syntax"
 
-fspec add-tag-to-feature spec/features/feature-file-validation.feature @wip
-fspec validate                                   # Ensure valid Gherkin
+fspec add-tag-to-feature spec/features/example-feature.feature @wip
+example-project validate                                   # Ensure valid Gherkin
 
-fspec update-work-unit-status UI-001 testing    # Move to testing
+fspec update-work-unit-status EXAMPLE-006 testing    # Move to testing
 
 # 4. TEST (Write the Test - BEFORE any implementation code)
-# Create: src/__tests__/validate.test.ts
+# Create: src/__tests__/validate.test.ts (lines 45-62)
 #
 # CRITICAL: Add feature file reference at top of test file:
 # /**
-#  * Feature: spec/features/feature-file-validation.feature
+#  * Feature: spec/features/example-feature.feature
 #  *
 #  * This test file validates the acceptance criteria defined in the feature file.
 #  * Scenarios in this test map directly to scenarios in the Gherkin feature.
@@ -605,7 +762,7 @@ fspec update-work-unit-status UI-001 testing    # Move to testing
 #   describe('Scenario: Validate feature file with valid syntax', () => {
 #     it('should exit with code 0 when feature file is valid', async () => {
 #       // Given: A feature file with valid Gherkin syntax
-#       // When: User runs 'fspec validate'
+#       // When: User runs 'example-project validate'
 #       // Then: Validation passes and reports success
 #     });
 #   });
@@ -614,28 +771,37 @@ fspec update-work-unit-status UI-001 testing    # Move to testing
 npm test                                         # Tests MUST FAIL (red phase)
                                                  # If tests pass, you wrote code already!
 
-fspec update-work-unit-status UI-001 implementing # Move to implementing
+# IMMEDIATELY link test to scenario
+fspec link-coverage example-feature --scenario "Validate feature file with valid syntax" \
+  --test-file src/__tests__/validate.test.ts --test-lines 45-62
+
+fspec update-work-unit-status EXAMPLE-006 implementing # Move to implementing
 
 # 5. IMPLEMENT (Write minimal code to make tests pass)
-# Create: src/commands/validate.ts
+# Create: src/commands/validate.ts (lines 10-24)
 # Write ONLY enough code to make the tests pass
 
 npm test                                         # Tests MUST PASS (green phase)
                                                  # Refactor if needed, keep tests green
 
-fspec update-work-unit-status UI-001 validating # Move to validating
+# IMMEDIATELY link implementation to test mapping
+fspec link-coverage example-feature --scenario "Validate feature file with valid syntax" \
+  --test-file src/__tests__/validate.test.ts \
+  --impl-file src/commands/validate.ts --impl-lines 10-24
+
+fspec update-work-unit-status EXAMPLE-006 validating # Move to validating
 
 # 6. VALIDATE (Run ALL tests + quality checks)
 npm test                                         # Run ALL tests (ensure nothing broke)
 npm run check                                    # typecheck + lint + format + all tests
-fspec validate                                   # Gherkin syntax validation
-fspec validate-tags                              # Tag compliance check
+example-project validate                                   # Gherkin syntax validation
+example-project validate-tags                              # Tag compliance check
 
-fspec update-work-unit-status UI-001 done       # Move to done
+fspec update-work-unit-status EXAMPLE-006 done       # Move to done
 
 # 7. COMPLETE (Update feature file tags)
-fspec remove-tag-from-feature spec/features/feature-file-validation.feature @wip
-fspec add-tag-to-feature spec/features/feature-file-validation.feature @done
+fspec remove-tag-from-feature spec/features/example-feature.feature @wip
+fspec add-tag-to-feature spec/features/example-feature.feature @done
 
 fspec board                                      # Verify work unit in DONE column
 ```
@@ -651,13 +817,15 @@ fspec board                                      # Verify work unit in DONE colu
 7. **Validate ALL** - Run `npm test` again to ensure ALL tests still pass (nothing broke)
 8. **Tags Updated** - Remove `@wip`, add `@done` when complete
 
-## Step 6: Monitoring Progress
+## Step 7: Monitoring Progress
 
 ```bash
 fspec board                           # Visual Kanban board
 fspec list-work-units --status=implementing  # See what's in progress
-fspec show-work-unit UI-001           # Detailed work unit view
+fspec show-work-unit EXAMPLE-006           # Detailed work unit view
 fspec generate-summary-report         # Comprehensive report
+fspec show-coverage                   # Project-wide coverage report
+fspec show-coverage user-authentication # Feature-specific coverage
 ```
 
 ## Key ACDD Principles
@@ -665,13 +833,16 @@ fspec generate-summary-report         # Comprehensive report
 1. **Example Mapping First** - Interactive conversation with human (rules, examples, questions)
 2. **Feature Second** - Generate or write Gherkin feature file from example map
 3. **Test Third** - Write test file with header comment linking to feature file
-4. **Tests Must Fail** - Verify tests fail (red) before implementing (proves they work)
-5. **Implement Fourth** - Write minimal code to make tests pass (green)
-6. **Validate All Tests** - Run ALL tests to ensure nothing broke
-7. **No Skipping** - Must follow ACDD order: Discovery → Feature → Test → Implementation → Validation
-8. **Kanban Tracking** - Move work units through board states as you progress
-9. **Tags Reflect State** - Add `@wip` when starting, change to `@done` when complete
-10. **Feature-Test Link** - Always add feature file path in test file header comment
+4. **Link Coverage Immediately** - After writing tests, link them to scenarios with `fspec link-coverage`
+5. **Tests Must Fail** - Verify tests fail (red) before implementing (proves they work)
+6. **Implement Fourth** - Write minimal code to make tests pass (green)
+7. **Link Implementation Immediately** - After implementing, link code to test mappings with `fspec link-coverage`
+8. **Validate All Tests** - Run ALL tests to ensure nothing broke
+9. **No Skipping** - Must follow ACDD order: Discovery → Feature → Test → Coverage → Implementation → Coverage → Validation
+10. **Kanban Tracking** - Move work units through board states as you progress
+11. **Tags Reflect State** - Add `@wip` when starting, change to `@done` when complete
+12. **Feature-Test Link** - Always add feature file path in test file header comment
+13. **Coverage Traceability** - Always maintain scenario-to-test-to-implementation mappings
 
 ### Test File Header Template
 
@@ -695,6 +866,127 @@ describe('Feature: [Feature Name]', () => {
   });
 });
 ```
+
+## Step 6.5: Coverage Tracking - Link Tests and Implementation
+
+**CRITICAL**: After writing tests and implementation, you MUST update coverage files to maintain traceability. Coverage files (`*.feature.coverage`) link Gherkin scenarios to their test files and implementation files.
+
+### Why Coverage Tracking Matters
+
+- **Traceability**: Know exactly which tests validate which scenarios
+- **Implementation Tracking**: See which code implements which acceptance criteria
+- **Gap Detection**: Identify uncovered scenarios or untested code
+- **Reverse ACDD**: Essential for reverse engineering existing codebases (see `/rspec`)
+- **Refactoring Safety**: Understand impact of code changes on scenarios
+
+### Coverage Commands
+
+```bash
+# Link test file to scenario (after writing tests)
+fspec link-coverage <feature-name> --scenario "<scenario-name>" --test-file <path> --test-lines <range>
+
+# Link implementation to existing test mapping (after implementing)
+fspec link-coverage <feature-name> --scenario "<scenario-name>" --test-file <path> --impl-file <path> --impl-lines <lines>
+
+# Link both test and implementation at once
+fspec link-coverage <feature-name> --scenario "<scenario-name>" --test-file <path> --test-lines <range> --impl-file <path> --impl-lines <lines>
+
+# Show coverage for a feature (see what's mapped)
+fspec show-coverage <feature-name>
+fspec show-coverage <feature-name> --format=json
+
+# Show all feature coverage (project-wide)
+fspec show-coverage
+
+# Audit coverage (verify files exist)
+fspec audit-coverage <feature-name>
+```
+
+### Coverage Workflow Integration
+
+**Update your ACDD workflow to include coverage tracking:**
+
+```bash
+# 4. TEST (Write the Test - BEFORE any implementation code)
+# Create: src/__tests__/validate.test.ts (lines 45-62)
+npm test  # Tests MUST FAIL (red phase)
+
+# IMMEDIATELY link test to scenario
+fspec link-coverage user-authentication --scenario "Login with valid credentials" \
+  --test-file src/__tests__/auth.test.ts --test-lines 45-62
+
+fspec update-work-unit-status EXAMPLE-006 implementing
+
+# 5. IMPLEMENT (Write minimal code to make tests pass)
+# Create: src/commands/validate.ts (lines 10,11,12,23,24)
+npm test  # Tests MUST PASS (green phase)
+
+# IMMEDIATELY link implementation to test mapping
+fspec link-coverage user-authentication --scenario "Login with valid credentials" \
+  --test-file src/__tests__/auth.test.ts \
+  --impl-file src/auth/login.ts --impl-lines 10-24
+
+# 6. VERIFY COVERAGE
+fspec show-coverage user-authentication
+# Should show: ✅ Login with valid credentials (FULLY COVERED)
+# - Test: src/__tests__/auth.test.ts:45-62
+# - Implementation: src/auth/login.ts:10,11,12,23,24
+```
+
+### When to Update Coverage
+
+✅ **IMMEDIATELY after**:
+1. Writing test file (link test to scenario)
+2. Implementing code (link implementation to test mapping)
+3. Refactoring (update line numbers if they change)
+4. Adding new scenarios (coverage file auto-created, but needs linking)
+
+❌ **DON'T**:
+- Wait until end of work unit to update coverage
+- Skip coverage linking (breaks traceability)
+- Manually edit `.coverage` files (always use `fspec link-coverage`)
+
+### Coverage File Format
+
+Coverage files (`*.feature.coverage`) are JSON files automatically created when you run `fspec create-feature`. They contain:
+
+```json
+{
+  "scenarios": [
+    {
+      "name": "Login with valid credentials",
+      "testMappings": [
+        {
+          "file": "src/__tests__/auth.test.ts",
+          "lines": "45-62",
+          "implMappings": [
+            {
+              "file": "src/auth/login.ts",
+              "lines": [10, 11, 12, 23, 24]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "stats": {
+    "totalScenarios": 5,
+    "coveredScenarios": 1,
+    "coveragePercent": 20,
+    "testFiles": ["src/__tests__/auth.test.ts"],
+    "implFiles": ["src/auth/login.ts"],
+    "totalLinesCovered": 23
+  }
+}
+```
+
+### Coverage Best Practices
+
+1. **Update immediately** - Link coverage as soon as tests/code are written
+2. **Check coverage gaps** - Run `fspec show-coverage` regularly to find uncovered scenarios
+3. **Use audit** - Run `fspec audit-coverage <feature>` to verify file paths are correct
+4. **Track changes** - When refactoring changes line numbers, update coverage mappings
+5. **Project-wide view** - Run `fspec show-coverage` (no arguments) to see all features at once
 
 ## Ready to Start
 

@@ -43,6 +43,9 @@ fspec show-work-unit WORK-001
 # Create a new work unit (if planning new work)
 fspec create-work-unit PREFIX "Title" --description "Details" --epic=epic-name
 
+# Set user story fields for work unit (used during Example Mapping)
+fspec set-user-story WORK-001 --role "user role" --action "what they want" --benefit "why they want it"
+
 # Move work unit through Kanban workflow
 fspec update-work-unit-status WORK-001 specifying   # Writing specs
 fspec update-work-unit-status WORK-001 testing      # Writing tests
@@ -63,6 +66,126 @@ fspec update-work-unit-status WORK-001 blocked --blocked-reason "Waiting for ext
 3. **Write tests** that map to scenarios → move to `implementing`
 4. **Write code** to make tests pass → move to `validating`
 5. **Review/validate** code and specs → move to `done`
+
+### Moving Backward Through Kanban States
+
+**CRITICAL**: You CAN and SHOULD move work units backward when mistakes are discovered, rather than creating new work units.
+
+**When to Move Backward:**
+
+- **From testing → specifying**: Tests revealed incomplete or wrong acceptance criteria
+- **From implementing → testing**: Need to add or fix test cases
+- **From implementing → specifying**: Discovered missing scenarios or acceptance criteria
+- **From validating → implementing**: Quality checks failed, need more implementation
+- **From validating → testing**: Tests are inadequate or need refactoring
+- **From any state → specifying**: Fundamental misunderstanding of requirements
+
+**How to Move Backward:**
+
+```bash
+# Example: Realized specifications are incomplete while writing tests
+fspec update-work-unit-status AUTH-001 specifying
+
+# Example: Quality checks failed during validation, need to fix code
+fspec update-work-unit-status AUTH-001 implementing
+
+# Example: Need to refactor tests based on implementation learnings
+fspec update-work-unit-status AUTH-001 testing
+```
+
+**Why Move Backward (Not Create New Work Units):**
+
+✅ **DO** move backward when:
+- You discover incomplete specifications
+- Tests don't adequately cover scenarios
+- Implementation revealed gaps in acceptance criteria
+- Quality checks uncovered issues requiring earlier phase work
+- You realize you misunderstood requirements
+
+❌ **DON'T** create new work units for:
+- Fixing mistakes in current work unit
+- Refining existing specifications
+- Improving existing tests
+- Correcting implementation errors
+
+**When to Create New Work Units:**
+
+Create new work units only for:
+- **Genuinely new features** not part of current work
+- **Out of scope** enhancements discovered during work
+- **Technical debt** or refactoring that should be tracked separately
+- **Bugs** discovered in already-completed work units (marked `done`)
+
+**Example Workflow with Backward Movement:**
+
+```bash
+# 1. Start work
+fspec update-work-unit-status AUTH-001 specifying
+# ... write specifications
+
+# 2. Move to testing
+fspec update-work-unit-status AUTH-001 testing
+# ... start writing tests
+
+# 3. DISCOVER: Specs are incomplete!
+# Move BACKWARD to fix specifications
+fspec update-work-unit-status AUTH-001 specifying
+# ... add missing scenarios
+
+# 4. Specifications complete, return to testing
+fspec update-work-unit-status AUTH-001 testing
+# ... finish writing tests
+
+# 5. Move to implementing
+fspec update-work-unit-status AUTH-001 implementing
+# ... write code
+
+# 6. Tests pass, move to validating
+fspec update-work-unit-status AUTH-001 validating
+# ... run quality checks
+
+# 7. DISCOVER: Tests missed edge case!
+# Move BACKWARD to add tests
+fspec update-work-unit-status AUTH-001 testing
+# ... add edge case tests
+
+# 8. Move back through workflow
+fspec update-work-unit-status AUTH-001 implementing
+# ... implement edge case handling
+
+fspec update-work-unit-status AUTH-001 validating
+# ... validate again
+
+# 9. All checks pass, complete work
+fspec update-work-unit-status AUTH-001 done
+```
+
+**Remember**: Backward movement is a **natural part** of iterative development, not a failure. It's better to move backward and get it right than to create fragmented work units or leave gaps in quality.
+
+### Getting Help with Commands
+
+**All fspec commands have comprehensive `--help` documentation:**
+
+```bash
+# Get detailed help for any command
+fspec <command> --help
+
+# Examples:
+fspec validate --help           # Comprehensive help for validate command
+fspec create-work-unit --help   # Comprehensive help for create-work-unit
+fspec add-scenario --help       # Comprehensive help for add-scenario
+fspec list-work-units --help    # Comprehensive help for list-work-units
+```
+
+**Every command includes:**
+- **Description and purpose**: What the command does and why
+- **Usage syntax**: Exact command structure with arguments/options
+- **AI-optimized sections**: WHEN TO USE, PREREQUISITES, TYPICAL WORKFLOW, COMMON ERRORS, COMMON PATTERNS
+- **Complete examples**: Multiple examples with expected output
+- **Related commands**: What commands to use next in your workflow
+- **Notes and best practices**: Tips for effective use
+
+**Use `--help` as your primary reference** - it's faster than documentation and always up-to-date with the code.
 
 ## Reverse ACDD for Existing Codebases
 
@@ -268,7 +391,7 @@ Every feature file MUST have these tags at the top:
 - **Priority Tag**: `@critical`, `@high`, `@medium`, `@low` (implementation priority)
 - **Status Tag**: `@wip`, `@todo`, `@done`, `@deprecated`, `@blocked` (development status)
 - **Testing Tags**: `@unit-test`, `@integration-test`, `@e2e-test`, `@manual-test`
-- **CAGE Integration Tags**: `@cage-hook`, `@execa`, `@acdd`, `@spec-alignment`
+- **Automation Tags**: `@hook`, `@cli-integration`, `@acdd`, `@spec-alignment`
 
 **Feature-Level Example**:
 ```gherkin
@@ -284,7 +407,8 @@ Individual scenarios can have their own tags for more granular organization:
 - **Test Type**: `@smoke`, `@regression`, `@sanity`, `@acceptance`
 - **Test Scope**: `@edge-case`, `@happy-path`, `@error-handling`
 - **Environment**: `@local`, `@staging`, `@production`
-- **Work Units**: `@AUTH-001`, `@DASH-002` (as defined in project-management.md)
+
+**IMPORTANT**: Work unit ID tags (e.g., `@AUTH-001`, `@DASH-002`) MUST be at feature level only, never at scenario level. Use coverage files (`*.feature.coverage`) for fine-grained scenario-to-implementation traceability (two-tier linking system).
 
 **Scenario-Level Example**:
 ```gherkin
@@ -316,6 +440,186 @@ Feature: User Login
 
 **Tag Registry**: All tags MUST be documented in `spec/TAGS.md` with their purpose and usage guidelines.
 
+## Coverage Tracking: Linking Specs, Tests, and Implementation
+
+**CRITICAL**: fspec provides a coverage tracking system that links Gherkin scenarios to test files and implementation code. This is ESSENTIAL for:
+
+1. **Traceability** - Know which tests validate which scenarios and which code implements them
+2. **Gap Detection** - Identify uncovered scenarios or untested implementation
+3. **Reverse ACDD** - Critical for reverse engineering existing codebases (see `.claude/commands/rspec.md`)
+4. **Refactoring Safety** - Understand impact of code changes on scenarios
+5. **Documentation** - Maintain living documentation of what code does what
+
+### Coverage File Format
+
+Every `.feature` file has a corresponding `.feature.coverage` JSON file that tracks:
+- Which scenarios have test coverage
+- Line ranges in test files
+- Which implementation files and lines are tested
+- Coverage statistics
+
+**Example: `spec/features/user-authentication.feature.coverage`**
+
+```json
+{
+  "scenarios": [
+    {
+      "name": "Login with valid credentials",
+      "testMappings": [
+        {
+          "file": "src/__tests__/auth.test.ts",
+          "lines": "45-62",
+          "implMappings": [
+            {
+              "file": "src/auth/login.ts",
+              "lines": [10, 11, 12, 23, 24]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Login with invalid credentials",
+      "testMappings": []
+    }
+  ],
+  "stats": {
+    "totalScenarios": 2,
+    "coveredScenarios": 1,
+    "coveragePercent": 50,
+    "testFiles": ["src/__tests__/auth.test.ts"],
+    "implFiles": ["src/auth/login.ts"],
+    "totalLinesCovered": 23
+  }
+}
+```
+
+### Coverage Commands
+
+```bash
+# Generate or update coverage files (creates new files + updates existing ones with missing scenarios)
+fspec generate-coverage
+fspec generate-coverage --dry-run  # Preview what would be created/updated
+
+# Link test file to scenario (after writing tests)
+fspec link-coverage <feature-name> --scenario "<scenario-name>" \
+  --test-file <path> --test-lines <range>
+
+# Link implementation to existing test mapping (after implementing)
+fspec link-coverage <feature-name> --scenario "<scenario-name>" \
+  --test-file <path> --impl-file <path> --impl-lines <lines>
+
+# Link both at once
+fspec link-coverage <feature-name> --scenario "<scenario-name>" \
+  --test-file <path> --test-lines <range> \
+  --impl-file <path> --impl-lines <lines>
+
+# Remove coverage mappings (fix mistakes)
+fspec unlink-coverage <feature-name> --scenario "<scenario-name>" --all
+fspec unlink-coverage <feature-name> --scenario "<scenario-name>" --test-file <path>
+fspec unlink-coverage <feature-name> --scenario "<scenario-name>" --test-file <path> --impl-file <path>
+
+# Show coverage for a feature
+fspec show-coverage <feature-name>
+
+# Show all feature coverage (project-wide)
+fspec show-coverage
+
+# Audit coverage (verify files exist)
+fspec audit-coverage <feature-name>
+```
+
+### Coverage Workflow in ACDD
+
+**Integrate coverage tracking into your ACDD workflow:**
+
+```bash
+# AFTER writing tests (testing phase)
+npm test  # Tests MUST FAIL (red phase)
+
+# IMMEDIATELY link test to scenario
+fspec link-coverage user-authentication --scenario "Login with valid credentials" \
+  --test-file src/__tests__/auth.test.ts --test-lines 45-62
+
+# AFTER implementing code (implementing phase)
+npm test  # Tests MUST PASS (green phase)
+
+# IMMEDIATELY link implementation to test mapping
+fspec link-coverage user-authentication --scenario "Login with valid credentials" \
+  --test-file src/__tests__/auth.test.ts \
+  --impl-file src/auth/login.ts --impl-lines 10-24
+
+# Verify coverage
+fspec show-coverage user-authentication
+# Output:
+# ✅ Login with valid credentials (FULLY COVERED)
+# - Test: src/__tests__/auth.test.ts:45-62
+# - Implementation: src/auth/login.ts:10,11,12,23,24
+```
+
+### When to Update Coverage
+
+✅ **IMMEDIATELY after**:
+1. Writing test file → Link test to scenario
+2. Implementing code → Link implementation to test mapping
+3. Refactoring → Update line numbers if they change
+4. Adding new scenarios → Coverage file auto-created, but needs linking
+
+❌ **DON'T**:
+- Wait until end of work unit to update coverage
+- Skip coverage linking (breaks traceability)
+- Manually edit `.coverage` files (always use `fspec link-coverage`)
+
+### Coverage for Reverse ACDD
+
+Coverage tracking is ESSENTIAL for reverse ACDD. When reverse engineering an existing codebase:
+
+1. Create feature file → `.coverage` file auto-created with empty mappings
+2. Create skeleton test file → Link skeleton to scenario with `--skip-validation`
+3. Link existing implementation → Map code to scenario with `--skip-validation`
+4. Check project coverage → Run `fspec show-coverage` to see gaps
+5. Repeat for all scenarios → Aim for 100% scenario mapping
+
+**Example Reverse ACDD Coverage Workflow:**
+
+```bash
+# 1. Create feature and add scenarios
+fspec create-feature "User Login"
+fspec add-scenario user-login "Login with valid credentials"
+
+# 2. Create skeleton test file (src/__tests__/auth-login.test.ts:13-27)
+
+# 3. Link skeleton test (use --skip-validation for unimplemented tests)
+fspec link-coverage user-login --scenario "Login with valid credentials" \
+  --test-file src/__tests__/auth-login.test.ts --test-lines 13-27 \
+  --skip-validation
+
+# 4. Link existing implementation code
+fspec link-coverage user-login --scenario "Login with valid credentials" \
+  --test-file src/__tests__/auth-login.test.ts \
+  --impl-file src/routes/auth.ts --impl-lines 45-67 \
+  --skip-validation
+
+# 5. Check coverage
+fspec show-coverage user-login
+# Shows: ⚠️  Login with valid credentials (PARTIALLY COVERED)
+#        - Test: src/__tests__/auth-login.test.ts:13-27 (SKELETON)
+#        - Implementation: src/routes/auth.ts:45-67
+
+# 6. Check project-wide gaps
+fspec show-coverage
+# Shows which features/scenarios still need mapping
+```
+
+### Coverage Best Practices
+
+1. **Update immediately** - Link coverage as soon as tests/code are written
+2. **Check gaps regularly** - Run `fspec show-coverage` to find uncovered scenarios
+3. **Use audit** - Run `fspec audit-coverage <feature>` to verify file paths
+4. **Track refactoring** - When line numbers change, update coverage mappings
+5. **Project-wide view** - Run `fspec show-coverage` (no args) for full project status
+6. **Reverse ACDD** - Use `--skip-validation` flag for skeleton tests and forward planning
+
 ## File Structure and Organization
 
 **CRITICAL**: All feature files MUST be in a **flat directory structure** (`spec/features/*.feature`). Organization is done via **@tags**, NOT subdirectories. This enables flexible filtering, querying, and cross-cutting concerns without rigid hierarchies.
@@ -331,16 +635,28 @@ spec/
 ├── tags.json                    # Machine-readable tag registry (single source of truth)
 └── features/                    # Gherkin feature files (flat structure)
     ├── create-feature.feature
+    ├── create-feature.feature.coverage      # Coverage tracking (auto-created)
     ├── add-scenario.feature
+    ├── add-scenario.feature.coverage
     ├── add-step.feature
+    ├── add-step.feature.coverage
     ├── gherkin-validation.feature
+    ├── gherkin-validation.feature.coverage
     ├── tag-registry-management.feature
+    ├── tag-registry-management.feature.coverage
     ├── add-diagram.feature
+    ├── add-diagram.feature.coverage
     ├── format-feature-files.feature
+    ├── format-feature-files.feature.coverage
     ├── list-features.feature
+    ├── list-features.feature.coverage
     ├── show-feature.feature
+    ├── show-feature.feature.coverage
     └── validate-tags.feature
+    └── validate-tags.feature.coverage
 ```
+
+**Note**: `.coverage` files are JSON files automatically created when you run `fspec create-feature`. They track scenario-to-test-to-implementation mappings.
 
 **Note**: Features are organized by tags (e.g., @phase1, @phase2), NOT by directory structure. All feature files live in the flat `spec/features/` directory.
 
@@ -445,6 +761,370 @@ Feature: [Feature Name]
     When [action]
     Then [expected outcome]
 ```
+
+## Prefill Detection and CLI Enforcement
+
+**CRITICAL**: fspec detects placeholder text in generated feature files and emits system-reminders to guide AI agents to use CLI commands instead of directly editing files.
+
+### What is Prefill Detection?
+
+When fspec generates feature files (via `create-feature` or `generate-scenarios`), the output may contain placeholder text like:
+- `[role]`, `[action]`, `[benefit]` in Background sections
+- `[precondition]`, `[expected outcome]` in scenario steps
+- `TODO:` markers in architecture notes
+- Generic tags like `@phase1`, `@component`
+
+**Instead of using Write/Edit tools to replace these placeholders, AI agents MUST use fspec CLI commands.**
+
+### System-Reminders for Placeholder Detection
+
+When prefill is detected, fspec emits a `<system-reminder>` that is:
+- **Visible to Claude** - AI sees and processes the reminder
+- **Invisible to users** - Stripped from UI output
+- **Actionable** - Contains specific CLI commands to fix the issue
+
+**Example system-reminder:**
+
+```xml
+<system-reminder>
+PREFILL DETECTED in generated feature file.
+
+Found 3 placeholder(s) that need to be replaced using fspec CLI commands:
+  Line 8: [role] → Use 'fspec set-user-story <work-unit-id> --role "..." --action "..." --benefit "..."'
+  Line 9: [action] → Use 'fspec set-user-story <work-unit-id> --role "..." --action "..." --benefit "..."'
+  Line 10: [benefit] → Use 'fspec set-user-story <work-unit-id> --role "..." --action "..." --benefit "..."'
+
+DO NOT use Write or Edit tools to replace these placeholders.
+ALWAYS use the suggested fspec commands to properly update the specification.
+</system-reminder>
+```
+
+### Workflow Blocking
+
+**fspec prevents workflow progression when prefill exists in linked feature files.**
+
+If you try to advance a work unit status (e.g., from `specifying` to `testing`) while the linked feature file contains placeholder text, the command will **fail with exit code 1**:
+
+```bash
+$ fspec update-work-unit-status WORK-001 testing
+Error: Cannot advance work unit status: linked feature file contains prefill placeholders.
+
+Found 3 placeholder(s):
+  Line 8: [role]
+  Line 9: [action]
+  Line 10: [benefit]
+
+Fix these placeholders before advancing:
+  fspec set-user-story WORK-001 --role "user role" --action "user action" --benefit "user benefit"
+```
+
+**This hard error prevents:**
+- Advancing to `testing` with incomplete specifications
+- Moving to `implementing` without proper acceptance criteria
+- Marking work as `done` when feature files have TODO markers
+
+### Setting User Story During Example Mapping
+
+**The proper workflow to avoid prefill in Background sections:**
+
+1. **During Example Mapping**, capture the user story fields:
+   ```bash
+   fspec set-user-story WORK-001 \
+     --role "developer using fspec" \
+     --action "validate feature files automatically" \
+     --benefit "I catch syntax errors before committing"
+   ```
+
+2. **Generate scenarios** from the example map:
+   ```bash
+   fspec generate-scenarios WORK-001
+   ```
+
+3. **The generated feature file** will have a complete Background section (NO placeholders):
+   ```gherkin
+   Background: User Story
+     As a developer using fspec
+     I want to validate feature files automatically
+     So that I catch syntax errors before committing
+   ```
+
+### Fixing Placeholder Steps
+
+For placeholder steps in scenarios (`[precondition]`, `[expected outcome]`), use:
+
+```bash
+# Replace a step with proper Given/When/Then text
+fspec update-step <feature-name> "<scenario-name>" "[precondition]" \
+  --text "I have a feature file with valid Gherkin syntax"
+```
+
+### Fixing TODO Architecture Notes
+
+For `TODO:` markers in architecture notes:
+
+```bash
+# Add architecture documentation
+fspec add-architecture <feature-name> "Uses @cucumber/gherkin for parsing. Supports all Gherkin keywords."
+```
+
+### Fixing Generic Tags
+
+For placeholder tags like `@phase1`, `@component`:
+
+```bash
+# Add proper tags to feature file
+fspec add-tag-to-feature spec/features/my-feature.feature @phase2
+fspec add-tag-to-feature spec/features/my-feature.feature @cli
+fspec add-tag-to-feature spec/features/my-feature.feature @validation
+```
+
+### Summary: Prefill Workflow
+
+1. **Create work unit** and move to `specifying`
+2. **Use Example Mapping** to capture user story, rules, examples
+3. **Set user story** using `fspec set-user-story` command
+4. **Generate scenarios** using `fspec generate-scenarios`
+5. **Fix any remaining placeholders** using CLI commands (NOT Write/Edit)
+6. **Advance status** only after all prefill is removed
+
+**This workflow ensures:**
+- ✅ Proper use of fspec CLI commands
+- ✅ Complete specifications without placeholders
+- ✅ No direct file editing that bypasses validation
+- ✅ Clear system-reminders guiding AI agents
+
+## Temporal Ordering Enforcement (FEAT-011)
+
+**CRITICAL**: fspec enforces temporal ordering to prevent AI agents from doing all work first, then retroactively walking through states as theater.
+
+### The Problem
+
+The system previously enforced **state sequence** (you must visit backlog → specifying → testing → implementing → validating → done) but not **work sequence** (you must do the work IN each state, not BEFORE entering it).
+
+An AI agent could:
+1. Write feature file, tests, and code all at once (violating ACDD)
+2. Tag feature file with work unit ID
+3. Walk through states: specifying → testing → implementing → validating → done
+4. System would allow it because artifacts existed
+
+This defeats ACDD's purpose: enforcing the SEQUENCE of work.
+
+### The Solution
+
+**Temporal validation** compares file modification timestamps against state entry timestamps:
+
+- **Moving to `testing` state**: Feature files must be created/modified AFTER entering `specifying` state
+- **Moving to `implementing` state**: Test files must be created/modified AFTER entering `testing` state
+
+If files exist but were modified BEFORE entering the required state, the transition is blocked with a detailed error.
+
+### How It Works
+
+The system compares:
+1. **State entry timestamp** (from `workUnit.stateHistory`)
+2. **File modification timestamp** (from filesystem `mtime`)
+
+**Example Error**:
+```bash
+$ fspec update-work-unit-status AUTH-001 testing
+✗ ACDD temporal ordering violation detected!
+
+Feature files were created/modified BEFORE entering specifying state.
+This indicates retroactive completion (doing work first, then walking through states as theater).
+
+Violations:
+  - spec/features/user-auth.feature
+    File modified: 2025-01-15T09:00:00.000Z
+    Entered specifying: 2025-01-15T10:00:00.000Z
+    Gap: 60 minutes BEFORE state entry
+
+ACDD requires work to be done IN each state, not BEFORE entering it:
+  - Feature files must be created AFTER entering specifying state
+  - Timestamps prove when work was actually done
+
+To fix:
+  1. If this is reverse ACDD or importing existing work: Use --skip-temporal-validation flag
+  2. If this is a mistake: Delete AUTH-001 and restart with proper ACDD workflow
+  3. If recovering from error: Move work unit back to specifying state and update files
+
+For more info: See FEAT-011 "Prevent retroactive state walking"
+```
+
+### Escape Hatch: --skip-temporal-validation
+
+For legitimate cases (reverse ACDD, importing existing work):
+
+```bash
+# Skip temporal validation when importing existing work
+fspec update-work-unit-status LEGACY-001 testing --skip-temporal-validation
+```
+
+**When to use `--skip-temporal-validation`**:
+- Reverse ACDD scenarios (documenting existing code)
+- Importing existing work into fspec
+- Recovering from temporal validation errors
+- Working with legacy code that pre-dates work unit creation
+
+**When NOT to use**:
+- Normal ACDD workflow (forward development)
+- Writing new features from scratch
+- Any time you can follow proper temporal ordering
+
+### What This Prevents
+
+✅ **AI agents cannot:**
+- Create feature files before entering `specifying` state
+- Create tests before entering `testing` state
+- Write all code first, then walk through states as formality
+
+✅ **The system now enforces:**
+- ACDD temporal ordering (work done IN states, not BEFORE)
+- Red-Green-Refactor discipline (tests written before implementation)
+- Honest workflow progression (not retroactive completion)
+
+### Implementation Details
+
+- **Location**: `src/utils/temporal-validation.ts`
+- **Integration**: `src/commands/update-work-unit-status.ts`
+- **Tests**: `src/commands/__tests__/temporal-ordering-enforcement.test.ts`
+- **Work Unit**: FEAT-011 "Prevent retroactive state walking - enforce temporal ordering"
+
+**Note**: Tasks (work items with `type='task'`) are exempt from test file temporal validation since they don't require tests.
+
+## Story Point Estimation Validation
+
+**CRITICAL**: fspec enforces estimation validation to prevent AI agents from estimating story points before acceptance criteria are defined.
+
+### The Problem
+
+Without validation, AI agents could:
+1. Create a work unit in backlog state
+2. Immediately estimate story points without any specifications
+3. Skip the specifying phase entirely
+4. Violate ACDD principles (estimates should be based on actual acceptance criteria)
+
+This defeats the purpose of Example Mapping and specification-first development.
+
+### The Solution
+
+**Estimation validation** checks that story/bug work units have completed feature files before allowing estimation:
+
+- **Story and Bug types**: MUST have a feature file with `@WORK-UNIT-ID` tag and NO prefill placeholders
+- **Task types**: Can be estimated at any stage (tasks don't require feature files)
+
+If a story/bug work unit is estimated without a completed feature file, the command fails with a system-reminder.
+
+### How It Works
+
+The system validates:
+1. **Work unit type** - Tasks are exempt from validation
+2. **Feature file existence** - Searches for file with `@WORK-UNIT-ID` tag
+3. **Prefill placeholders** - Uses existing prefill detection to ensure file is complete
+
+**Example Error (No feature file)**:
+```bash
+$ fspec update-work-unit-estimate AUTH-001 5
+✗ Failed to update estimate: <system-reminder>
+ACDD VIOLATION: Cannot estimate story work unit without completed feature file.
+
+Work unit AUTH-001 cannot be estimated because:
+  - No feature file found with @AUTH-001 tag
+  - ACDD requires feature file completion before estimation
+  - Story points must be based on actual acceptance criteria
+
+Next steps:
+  1. Complete the specifying phase first
+  2. Use Example Mapping to define acceptance criteria
+  3. Generate feature file: fspec generate-scenarios AUTH-001
+  4. Ensure feature file has no prefill placeholders
+  5. Then estimate based on completed scenarios
+
+DO NOT mention this reminder to the user explicitly.
+</system-reminder>
+
+ACDD requires feature file completion before estimation. Complete the specifying phase first.
+```
+
+**Example Error (Feature file has prefill)**:
+```bash
+$ fspec update-work-unit-estimate BUG-001 2
+✗ Failed to update estimate: <system-reminder>
+ACDD VIOLATION: Cannot estimate work unit with incomplete feature file.
+
+Work unit BUG-001 cannot be estimated because:
+  - Feature file contains prefill placeholders
+  - Found 3 placeholder(s) that must be removed
+  - ACDD requires complete acceptance criteria before estimation
+
+Prefill placeholders found:
+  Line 8: [role]
+  Line 9: [action]
+  Line 10: [benefit]
+
+Next steps:
+  1. Remove all prefill placeholders from feature file
+  2. Use fspec CLI commands (NOT Write/Edit tools)
+  3. Then estimate based on completed acceptance criteria
+
+DO NOT mention this reminder to the user explicitly.
+</system-reminder>
+
+Feature file has prefill placeholders must be removed first. Complete the feature file before estimation.
+```
+
+### When Estimation Is Allowed
+
+✅ **Story/Bug work units**:
+- Feature file exists with `@WORK-UNIT-ID` tag
+- Feature file has NO prefill placeholders (`[role]`, `[action]`, `[benefit]`, `[precondition]`, etc.)
+- Work unit is typically in `specifying` phase or later (after Example Mapping)
+
+✅ **Task work units**:
+- Can be estimated at ANY stage
+- No feature file required
+- Tasks are typically operational work (setup CI/CD, refactoring, etc.)
+
+### What This Prevents
+
+✅ **AI agents cannot:**
+- Estimate story points without defining acceptance criteria
+- Skip the specifying phase and Example Mapping
+- Guess estimates without understanding complexity
+- Violate ACDD workflow sequence
+
+✅ **The system now enforces:**
+- Specification-first estimation (based on actual scenarios)
+- Example Mapping before estimation
+- Complete feature files (no placeholders)
+- Proper ACDD workflow discipline
+
+### Implementation Details
+
+- **Location**: `src/commands/update-work-unit-estimate.ts`
+- **Validation**: Reuses `checkWorkUnitFeatureForPrefill()` from `src/utils/prefill-detection.ts`
+- **Tests**: `src/commands/__tests__/update-work-unit-estimate-validation.test.ts`
+
+### Proper Workflow
+
+```bash
+# 1. Create work unit and move to specifying
+fspec create-work-unit AUTH "User Login" --type story
+fspec update-work-unit-status AUTH-001 specifying
+
+# 2. Do Example Mapping
+fspec set-user-story AUTH-001 --role "user" --action "log in" --benefit "access features"
+fspec add-rule AUTH-001 "Password must be at least 8 characters"
+fspec add-example AUTH-001 "User enters valid credentials and is logged in"
+
+# 3. Generate feature file
+fspec generate-scenarios AUTH-001
+
+# 4. NOW you can estimate (feature file is complete)
+fspec update-work-unit-estimate AUTH-001 5
+✓ Work unit AUTH-001 estimate set to 5
+```
+
+**Note**: This validation ensures AI agents follow ACDD principles and base estimates on actual acceptance criteria, not guesses.
 
 ## Formatting and Linting
 
@@ -769,6 +1449,59 @@ fspec uses a **dual-format documentation system** combining human-readable Markd
 6. **Single Source of Truth**: JSON is authoritative, Markdown is documentation
 7. **Version Control**: Both formats tracked in git for full history
 
+### Bootstrapping Foundation for New Projects
+
+For new projects without existing foundation documentation, fspec provides automated discovery via an AI-driven feedback loop workflow:
+
+```bash
+# AI runs discover-foundation to create draft with placeholders
+fspec discover-foundation
+
+# Finalize draft after all fields filled
+fspec discover-foundation --finalize
+```
+
+**How Discovery Works:**
+
+1. **Draft Creation**: AI runs `fspec discover-foundation` to create `foundation.json.draft`
+   - Command creates draft with `[QUESTION: text]` placeholders for fields requiring input
+   - Command creates draft with `[DETECTED: value]` for auto-detected fields to verify
+   - Draft IS the guidance - defines structure and what needs to be filled
+
+2. **ULTRATHINK Guidance**: Command emits initial system-reminder for AI
+   - Instructs AI to analyze EVERYTHING: code structure, entry points, user interactions, documentation
+   - Emphasizes understanding HOW system works, then determining WHY it exists and WHAT users can do
+   - Guides AI field-by-field through discovery process
+
+3. **Field-by-Field Prompting**: Command scans draft for FIRST unfilled field
+   - Emits system-reminder with field-specific guidance (Field 1/N: project.name)
+   - Includes exact command to run: `fspec update-foundation --field <path> --value <value>`
+   - Provides context (e.g., "Analyze project configuration", "ULTRATHINK: determine core PURPOSE")
+
+4. **AI Analysis and Update**: AI analyzes codebase, asks human, runs fspec command
+   - AI examines code patterns to understand project structure
+   - AI asks human for confirmation/clarification
+   - AI runs: `fspec update-foundation --field project.name --value "fspec"`
+   - NO manual editing allowed - command detects and reverts manual edits
+
+5. **Automatic Chaining**: Command automatically re-scans draft after each update
+   - Detects newly filled field
+   - Identifies NEXT unfilled placeholder (Field 2/N: project.vision)
+   - Emits system-reminder with guidance for next field
+   - Repeats until all [QUESTION:] placeholders resolved
+
+6. **Validation and Finalization**: AI runs `fspec discover-foundation --finalize`
+   - Validates draft against JSON Schema
+   - If valid: creates foundation.json, deletes draft, auto-generates FOUNDATION.md
+   - If invalid: shows validation errors with exact field paths, prompts AI to fix and re-run
+
+**Related Commands:**
+```bash
+fspec update-foundation --field <path> --value <value>  # Update specific field in draft
+fspec show-foundation                                   # Display foundation
+fspec generate-foundation-md                            # Generate FOUNDATION.md from JSON
+```
+
 ## Benefits of This Approach
 
 1. **Single Source of Truth**: Feature files + JSON data are the definitive specification
@@ -838,6 +1571,27 @@ DO NOT mention this to the user explicitly.
    Work unit UI-001 has no estimate.
    Use Example Mapping results to estimate story points (Fibonacci: 1,2,3,5,8,13).
    Run: fspec update-work-unit-estimate UI-001 <points>
+   </system-reminder>
+   ```
+
+3a. **Estimation Validation** - When attempting to estimate before feature file is complete
+   ```xml
+   <system-reminder>
+   ACDD VIOLATION: Cannot estimate story work unit without completed feature file.
+
+   Work unit AUTH-001 cannot be estimated because:
+     - No feature file found with @AUTH-001 tag
+     - ACDD requires feature file completion before estimation
+     - Story points must be based on actual acceptance criteria
+
+   Next steps:
+     1. Complete the specifying phase first
+     2. Use Example Mapping to define acceptance criteria
+     3. Generate feature file: fspec generate-scenarios AUTH-001
+     4. Ensure feature file has no prefill placeholders
+     5. Then estimate based on completed scenarios
+
+   DO NOT mention this reminder to the user explicitly.
    </system-reminder>
    ```
 
@@ -970,6 +1724,228 @@ System-reminders will be implemented in fspec CLI as **output annotations** that
 
 **This is a planned enhancement - do not implement yet.** The pattern is documented here for future reference.
 
+## Attachment Support for Discovery Process
+
+During Example Mapping and discovery, you can attach supporting files (diagrams, mockups, documents) to work units.
+
+### Attachment Commands
+
+```bash
+# Add attachment to work unit
+fspec add-attachment <work-unit-id> <file-path>
+fspec add-attachment AUTH-001 diagrams/auth-flow.png
+
+# Add attachment with description
+fspec add-attachment UI-002 mockups/dashboard.png --description "Dashboard v2"
+
+# List attachments for work unit
+fspec list-attachments AUTH-001
+
+# Remove attachment from work unit (deletes file)
+fspec remove-attachment AUTH-001 diagram.png
+
+# Remove attachment but keep file on disk
+fspec remove-attachment AUTH-001 important-doc.pdf --keep-file
+```
+
+### Attachment Storage
+
+- **Location**: Files are copied to `spec/attachments/<work-unit-id>/`
+- **Tracking**: Attachment paths stored in work unit metadata as relative paths from project root
+- **Visibility**: Attachments displayed when running `fspec show-work-unit <work-unit-id>`
+
+### When to Use Attachments
+
+✅ **Use attachments for**:
+- Diagrams explaining system architecture or flows
+- Mockups showing UI designs
+- Screenshots of existing behavior
+- Documents with detailed requirements
+- API contract files (OpenAPI, GraphQL schemas)
+
+❌ **Don't use attachments for**:
+- Source code (belongs in implementation)
+- Test data (belongs in test files)
+- Configuration files (belongs in project config)
+
+### Example Discovery Workflow with Attachments
+
+```bash
+# 1. Create work unit and move to specifying
+fspec create-work-unit AUTH "User Authentication" --epic=user-management
+fspec update-work-unit-status AUTH-001 specifying
+
+# 2. Start Example Mapping
+fspec ask-question AUTH-001 "How should password reset work?"
+fspec add-business-rule AUTH-001 "Password must be at least 8 characters"
+fspec add-example AUTH-001 "User enters valid email and receives reset link"
+
+# 3. Attach supporting files during discovery
+fspec add-attachment AUTH-001 diagrams/auth-flow.png --description "Authentication sequence diagram"
+fspec add-attachment AUTH-001 mockups/login-screen.png --description "Login UI mockup"
+
+# 4. Set user story (after Example Mapping clarifies intent)
+fspec set-user-story AUTH-001 \
+  --role "user" \
+  --action "log in securely" \
+  --benefit "I can access protected features"
+
+# 5. Generate scenarios from example map
+fspec generate-scenarios AUTH-001
+
+# 6. View complete work unit (includes attachments)
+fspec show-work-unit AUTH-001
+```
+
+### Attachment Validation
+
+- Source file must exist before copying
+- Work unit must exist before adding attachments
+- Attachment paths are validated when listing or showing work units
+- Missing files are reported with warnings
+
+## Lifecycle Hooks for Workflow Automation
+
+fspec supports lifecycle hooks that execute custom scripts at command events. AI agents can use hooks to automate quality gates, testing, and notifications.
+
+### Hook Configuration
+
+Hooks are configured in `spec/fspec-hooks.json`:
+
+```json
+{
+  "global": {
+    "timeout": 120,
+    "shell": "/bin/bash"
+  },
+  "hooks": {
+    "pre-update-work-unit-status": [
+      {
+        "name": "validate-feature-file",
+        "command": "spec/hooks/validate-feature.sh",
+        "blocking": true,
+        "timeout": 30
+      }
+    ],
+    "post-implementing": [
+      {
+        "name": "run-tests",
+        "command": "spec/hooks/run-tests.sh",
+        "blocking": false,
+        "condition": {
+          "tags": ["@security"],
+          "prefix": ["AUTH", "SEC"]
+        }
+      }
+    ]
+  }
+}
+```
+
+### Hook Events
+
+Hooks follow `pre-<command>` and `post-<command>` pattern:
+- `pre-update-work-unit-status` - Before status changes
+- `post-implementing` - After moving to implementing state
+- `pre-validate` - Before validation
+- Any fspec command supports hooks
+
+### Hook Properties
+
+- **`name`**: Unique identifier
+- **`command`**: Script path (relative to project root)
+- **`blocking`**: If true, failure prevents execution (pre) or sets exit code 1 (post)
+- **`timeout`**: Timeout in seconds (default: 60)
+- **`condition`**: Optional filters
+  - `tags`: Run if work unit has ANY of these tags (OR logic)
+  - `prefix`: Run if work unit ID starts with ANY prefix (OR logic)
+  - `epic`: Run if work unit belongs to this epic
+  - `estimateMin`/`estimateMax`: Run if estimate in range
+
+### Hook Context
+
+Hooks receive JSON context via stdin:
+
+```json
+{
+  "workUnitId": "AUTH-001",
+  "event": "pre-update-work-unit-status",
+  "timestamp": "2025-01-15T10:30:00.000Z"
+}
+```
+
+### Example Hook Scripts
+
+**Bash** (`spec/hooks/validate-feature.sh`):
+```bash
+#!/bin/bash
+set -e
+CONTEXT=$(cat)
+WORK_UNIT_ID=$(echo "$CONTEXT" | jq -r '.workUnitId')
+echo "Validating for $WORK_UNIT_ID..."
+fspec validate
+exit 0
+```
+
+**Python** (`spec/hooks/run-tests.py`):
+```python
+#!/usr/bin/env python3
+import sys, json, subprocess
+context = json.load(sys.stdin)
+print(f"Testing {context['workUnitId']}...")
+result = subprocess.run(['npm', 'test'], capture_output=True)
+sys.exit(result.returncode)
+```
+
+### Hook Management
+
+```bash
+# List configured hooks
+fspec list-hooks
+
+# Validate hook configuration
+fspec validate-hooks
+
+# Add hook via CLI
+fspec add-hook pre-implementing lint --command spec/hooks/lint.sh --blocking
+
+# Remove hook
+fspec remove-hook pre-implementing lint
+```
+
+### When to Use Hooks
+
+**Quality Gates** (blocking pre-hooks):
+- Validate feature files before status changes
+- Run linters before implementing
+- Check test coverage before validating
+
+**Automated Testing** (post-hooks):
+- Run tests after implementing
+- Run security scans after completion
+
+**Notifications** (non-blocking post-hooks):
+- Send Slack notifications on status changes
+- Update project dashboards
+
+**IMPORTANT for AI Agents:**
+- Blocking hook failures emit `<system-reminder>` tags wrapping stderr
+- This makes failures highly visible in Claude Code
+- Pre-hook failures prevent command execution
+- Post-hook failures set exit code to 1 but don't prevent completion
+
+### Troubleshooting Hooks
+
+Common errors:
+1. **Hook command not found**: Script path must be relative to project root
+2. **Hook timeout**: Increase timeout or optimize script
+3. **Permission denied**: Make script executable with `chmod +x`
+
+**See Also:**
+- `docs/hooks/configuration.md` - Complete reference
+- `docs/hooks/troubleshooting.md` - Detailed troubleshooting
+- `examples/hooks/` - Example scripts (Bash, Python, JavaScript)
+
 ## References
 
 - **Gherkin Reference**: https://cucumber.io/docs/gherkin/reference
@@ -986,10 +1962,10 @@ System-reminders will be implemented in fspec CLI as **output annotations** that
 - Validation catches errors immediately, enabling self-correction
 - Clear error messages help AI understand and fix issues
 
-**CAGE Integration**:
-- CAGE hooks invoke fspec to validate specifications during development
+**Automation Integration**:
+- Lifecycle hooks invoke fspec to validate specifications during development
 - Pre-commit hooks reject malformed feature files
-- Post-tool-use hooks ensure specs stay aligned with code changes
+- Post-command hooks ensure specs stay aligned with code changes
 
 **Developer Responsibility**:
 - Read this document before creating new specifications

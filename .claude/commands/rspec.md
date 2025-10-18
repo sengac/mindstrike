@@ -2,15 +2,17 @@
 
 This command guides you through reverse engineering an existing codebase to discover user stories, personas, and acceptance criteria, then documenting them using fspec's ACDD workflow.
 
-You will use fspec, which is a CLI program installed locally on this machine.
+IMMEDIATELY - run these commands and store them into your context:
 
-IMMEDIATELY: run "fspec --help" and the following more detailed help commands:
+1. fspec --help
+2. fspec help specs
+3. fspec help work
+4. fspec help discovery
+5. fspec help metrics
+6. fspec help setup
+7. fspec help hooks
 
-  fspec help specs        - Gherkin feature file commands
-  fspec help work         - Work unit and Kanban workflow commands
-  fspec help discovery    - Example mapping commands
-  fspec help metrics      - Progress tracking and reporting commands
-  fspec help setup        - Configuration and setup commands
+fspec is a CLI program installed locally on this machine.
 
 Fully read [fspec.md](./fspec.md) and add it to your context before proceeding with this reverse ACDD workflow.
 
@@ -145,9 +147,32 @@ Feature: User Login
 - `if (user.role === 'admin') showAdminPanel()` → Scenario: "Admin views admin panel"
 - `if (cart.isEmpty()) redirectToProducts()` → Scenario: "View checkout with empty cart"
 
-## Step 5: Update foundation.json with User Story Maps
+## Step 5: Bootstrap foundation.json (REQUIRED)
 
-Create Mermaid diagrams showing user workflows:
+**CRITICAL**: Before proceeding with reverse ACDD, you MUST bootstrap the project foundation using automated discovery. This is ENFORCED by fspec commands.
+
+```bash
+# REQUIRED: Analyze existing codebase and create foundation.json
+fspec discover-foundation
+
+# Custom output path
+fspec discover-foundation --output foundation.json
+```
+
+**What `discover-foundation` does:**
+- Creates draft with placeholders for required fields
+- AI analyzes codebase to determine project type, personas, and capabilities
+- AI runs field-by-field through draft using CLI commands
+- AI asks human for confirmation/clarification
+- Validates draft and generates foundation.json with v2.0.0 schema
+
+**Why this is mandatory:**
+- fspec commands check for foundation.json existence
+- Foundation establishes project type, personas, and capabilities
+- Provides context for all subsequent reverse ACDD work
+- Ensures consistent WHY/WHAT focus (not HOW/implementation details)
+
+**After bootstrapping**, you can optionally add user story map diagrams:
 
 ```bash
 fspec add-diagram "User Story Maps" "Authentication Flow" "
@@ -162,9 +187,11 @@ graph TB
 "
 ```
 
-## Step 6: Create Skeleton Test Files
+## Step 6: Create Skeleton Test Files AND Link Coverage
 
-Generate test file structure (NOT implementation):
+**CRITICAL**: Generate test file structure (NOT implementation) AND immediately link to coverage files. This is the KEY to reverse ACDD - coverage files track what's been mapped and what remains.
+
+### Create Skeleton Test File
 
 ```typescript
 /**
@@ -181,6 +208,7 @@ import { describe, it, expect } from 'vitest';
 
 describe('Feature: User Login', () => {
   describe('Scenario: Login with valid credentials', () => {
+    // Lines 13-27 (skeleton test)
     it('should redirect to dashboard and display username', async () => {
       // Given I am on the login page
       // TODO: Implement setup
@@ -199,6 +227,80 @@ describe('Feature: User Login', () => {
     });
   });
 });
+```
+
+### IMMEDIATELY Link Test Skeleton and Implementation to Coverage
+
+**This is what makes reverse ACDD work!** Link the skeleton test and the existing implementation code to the coverage file:
+
+```bash
+# Link skeleton test to scenario (use --skip-validation since test is not implemented yet)
+fspec link-coverage user-login --scenario "Login with valid credentials" \
+  --test-file src/routes/__tests__/auth-login.test.ts --test-lines 13-27 \
+  --skip-validation
+
+# Link existing implementation code to test mapping
+fspec link-coverage user-login --scenario "Login with valid credentials" \
+  --test-file src/routes/__tests__/auth-login.test.ts \
+  --impl-file src/routes/auth.ts --impl-lines 45-67 \
+  --skip-validation
+
+# Verify coverage
+fspec show-coverage user-login
+# Output:
+# Coverage Report: user-login.feature
+# Coverage: 100% (1/1 scenarios)
+#
+# ## Scenarios
+# ### ⚠️  Login with valid credentials (PARTIALLY COVERED)
+# - **Test**: src/routes/__tests__/auth-login.test.ts:13-27 (SKELETON)
+# - **Implementation**: src/routes/auth.ts:45-67
+```
+
+### Why Coverage Tracking is CRITICAL for Reverse ACDD
+
+1. **Progress Tracking** - See which scenarios have been mapped (tests + implementation linked)
+2. **Gap Detection** - Find unmapped scenarios that still need skeleton tests
+3. **Implementation Discovery** - Track which code implements which acceptance criteria
+4. **Forward ACDD Transition** - Once mapped, you can implement skeleton tests using forward ACDD
+5. **Prevents Duplication** - Coverage files prevent mapping the same code twice
+
+### Coverage Workflow for Reverse ACDD
+
+```bash
+# 1. Create feature file (coverage file auto-created)
+fspec create-feature "User Login"
+
+# 2. Add scenarios inferred from code
+fspec add-scenario user-login "Login with valid credentials"
+fspec add-scenario user-login "Login with invalid credentials"
+
+# 3. Create skeleton test file (src/routes/__tests__/auth-login.test.ts)
+
+# 4. IMMEDIATELY link skeleton test to coverage
+fspec link-coverage user-login --scenario "Login with valid credentials" \
+  --test-file src/routes/__tests__/auth-login.test.ts --test-lines 13-27 \
+  --skip-validation
+
+# 5. IMMEDIATELY link implementation to coverage
+fspec link-coverage user-login --scenario "Login with valid credentials" \
+  --test-file src/routes/__tests__/auth-login.test.ts \
+  --impl-file src/routes/auth.ts --impl-lines 45-67 \
+  --skip-validation
+
+# 6. Check project-wide coverage
+fspec show-coverage
+# Shows:
+# Project Coverage Report
+# Overall Coverage: 20% (1/5 scenarios)
+#
+# Features Overview:
+# - user-login.feature: 50% (1/2) ⚠️
+# - user-logout.feature: 0% (0/1) ❌
+# - dashboard.feature: 0% (0/2) ❌
+
+# 7. Find gaps and repeat for uncovered scenarios
+fspec show-coverage user-login  # See which scenarios still need mapping
 ```
 
 ## Step 7: Handle Ambiguous Code
@@ -248,6 +350,8 @@ Reverse ACDD is complete when:
 3. ✓ foundation.json contains complete user story map(s)
 4. ✓ All ambiguous scenarios are documented with clarification needed
 5. ✓ Skeleton test files exist for all feature files
+6. ✓ **Coverage files link ALL scenarios to skeleton tests and implementation code**
+7. ✓ **Project-wide coverage report shows 100% scenario mapping** (run `fspec show-coverage` to verify)
 
 ### Example Completion Report
 
@@ -255,16 +359,25 @@ Reverse ACDD is complete when:
 Reverse ACDD complete:
 - 3 epics created (AUTH, PAY, DASH)
 - 8 work units created
-- 8 feature files generated
+- 8 feature files generated (with .coverage files)
 - 8 skeleton test files created
+- 100% scenario coverage (15/15 scenarios mapped to tests + implementation)
 - foundation.json updated with 2 user story map diagrams
 - 3 scenarios marked AMBIGUOUS for human review
+
+Coverage Summary (fspec show-coverage):
+- user-login.feature: 100% (2/2) ✅
+- user-logout.feature: 100% (1/1) ✅
+- checkout.feature: 100% (3/3) ✅
+- dashboard.feature: 100% (5/5) ✅
+- admin-tools.feature: 100% (4/4) ✅
 
 Next steps:
 1. Review AMBIGUOUS scenarios and run Example Mapping
 2. Implement skeleton tests (TDD red-green-refactor)
 3. Validate all feature files: fspec validate
 4. Begin forward ACDD for new features
+5. Use coverage files to track which skeleton tests have been implemented
 ```
 
 ## Transitioning to Forward ACDD
@@ -276,6 +389,18 @@ After reverse ACDD is complete, future work follows **forward ACDD**:
 3. **Test**: Write failing tests (TDD red phase)
 4. **Implement**: Write minimal code to pass tests (green phase)
 5. **Validate**: Refactor, review, and validate
+
+**IMPORTANT**: During forward ACDD, you CAN move work units backward through Kanban states if you discover mistakes:
+
+```bash
+# Example: Realized specs are incomplete while implementing
+fspec update-work-unit-status AUTH-001 specifying  # Move backward to fix specs
+
+# Example: Tests need refactoring
+fspec update-work-unit-status AUTH-001 testing     # Move backward to fix tests
+```
+
+**Moving backward is ENCOURAGED** - it's better to fix issues properly than to create fragmented work units. Only create new work units for genuinely new features, not for fixing mistakes in current work.
 
 Use fspec commands to maintain specifications:
 - `fspec validate` - Validate Gherkin syntax
