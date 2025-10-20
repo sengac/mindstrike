@@ -1,0 +1,124 @@
+{
+  "categories": [
+    {
+      "name": "Phase Tags",
+      "description": "Phase identification tags",
+      "required": true,
+      "tags": [
+        {
+          "name": "@phase1",
+          "description": "Phase 1 features"
+        }
+      ]
+    },
+    {
+      "name": "Component Tags",
+      "description": "Architectural component tags",
+      "required": true,
+      "tags": [
+        {
+          "name": "@cli",
+          "description": "Command-line interface component"
+        }
+      ]
+    },
+    {
+      "name": "Feature Group Tags",
+      "description": "Functional area tags",
+      "required": true,
+      "tags": [
+        {
+          "name": "@agent-integration",
+          "description": "AI agent integration and automation features"
+        }
+      ]
+    },
+    {
+      "name": "Technical Tags",
+      "description": "Technical concern tags",
+      "required": false,
+      "tags": [
+        {
+          "name": "@http-api",
+          "description": "HTTP REST API communication"
+        },
+        {
+          "name": "@sse",
+          "description": "Server-Sent Events streaming functionality"
+        }
+      ]
+    },
+    {
+      "name": "Platform Tags",
+      "description": "Platform-specific tags",
+      "required": false,
+      "tags": []
+    },
+    {
+      "name": "Priority Tags",
+      "description": "Implementation priority tags",
+      "required": false,
+      "tags": []
+    },
+    {
+      "name": "Status Tags",
+      "description": "Development status tags",
+      "required": false,
+      "tags": []
+    },
+    {
+      "name": "Testing Tags",
+      "description": "Test-related tags",
+      "required": false,
+      "tags": []
+    },
+    {
+      "name": "Automation Tags",
+      "description": "Automation integration tags",
+      "required": false,
+      "tags": []
+    }
+  ],
+  "combinationExamples": [],
+  "usageGuidelines": {
+    "requiredCombinations": {
+      "title": "",
+      "requirements": [],
+      "minimumExample": ""
+    },
+    "recommendedCombinations": {
+      "title": "",
+      "includes": [],
+      "recommendedExample": ""
+    },
+    "orderingConvention": {
+      "title": "",
+      "order": [],
+      "example": ""
+    }
+  },
+  "addingNewTags": {
+    "process": [],
+    "namingConventions": [],
+    "antiPatterns": {
+      "dont": [],
+      "do": []
+    }
+  },
+  "queries": {
+    "title": "",
+    "examples": []
+  },
+  "statistics": {
+    "lastUpdated": "2025-10-20T02:25:43.408Z",
+    "phaseStats": [],
+    "componentStats": [],
+    "featureGroupStats": [],
+    "updateCommand": "fspec tag-stats"
+  },
+  "validation": {
+    "rules": [],
+    "commands": []
+  },
+  "references": []
+}

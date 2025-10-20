@@ -1,16 +1,239 @@
 {
   "meta": {
     "version": "1.0.0",
-    "lastUpdated": "2025-10-17T09:47:58.525Z"
+    "lastUpdated": "2025-10-20T03:14:13.372Z"
   },
-  "workUnits": {},
+  "workUnits": {
+    "AGENT-001": {
+      "id": "AGENT-001",
+      "title": "External Coding Agent Integration (Claude Code, Codex)",
+      "type": "story",
+      "status": "specifying",
+      "createdAt": "2025-10-20T01:54:55.059Z",
+      "updatedAt": "2025-10-20T02:03:44.156Z",
+      "description": "Integrate external agentic coding assistants (Claude Code, Codex, Cursor) into MindStrike as AI providers. These tools differ fundamentally from chat models: they require file system access, execute code, manage multi-step workflows, and maintain project context. Current LLM abstraction assumes request-response chat patterns, but coding agents need bidirectional communication, tool use (MCP), streaming multi-turn interactions, and persistent workspace state. This requires architectural refactoring to support both traditional chat models AND agentic coding assistants in a unified interface.",
+      "children": [],
+      "stateHistory": [
+        {
+          "state": "specifying",
+          "timestamp": "2025-10-20T01:55:04.062Z"
+        }
+      ],
+      "userStory": {
+        "role": "enterprise developer using MindStrike",
+        "action": "use external coding agents like Claude Code or Codex as AI providers",
+        "benefit": "I can leverage specialized coding assistants while maintaining local-first data ownership and context integration with mind maps"
+      },
+      "questions": [
+        {
+          "text": "@human: How should coding agents (Claude Code, Codex) be presented in the model selector UI? Should they be in a separate category from chat models, or mixed together with a visual indicator?",
+          "selected": false
+        },
+        {
+          "text": "@human: What file system permissions should coding agents have? Should they be sandboxed to a specific workspace directory, or have broader access like Claude Code does?",
+          "selected": false
+        },
+        {
+          "text": "@human: How should multi-step agentic workflows be displayed in the chat UI? Should we show intermediate tool use steps, or only the final results?",
+          "selected": false
+        },
+        {
+          "text": "@human: Should coding agents share conversation threads with traditional chat models, or should they be isolated to dedicated 'coding session' threads?",
+          "selected": false
+        },
+        {
+          "text": "@human: How should we handle the architectural difference between request-response chat (current) vs bidirectional streaming with tool use (coding agents)? Should we create a new abstraction layer or extend the existing LLM service interface?",
+          "selected": false
+        }
+      ],
+      "dependsOn": [
+        "AGENT-002"
+      ]
+    },
+    "AGENT-002": {
+      "id": "AGENT-002",
+      "title": "CLI Command Interface for AI Agent Control",
+      "type": "story",
+      "status": "done",
+      "createdAt": "2025-10-20T02:03:31.472Z",
+      "updatedAt": "2025-10-20T02:54:15.115Z",
+      "description": "Create a 'mindstrike' CLI application that serves as a bidirectional bridge between AI agents (like Claude Code) and the MindStrike desktop app. Similar to fspec's architecture, the CLI bootstraps AI agents with context (.claude/commands/mindstrike.md), uses system-reminder patterns to guide next steps, and provides complete programmatic control over every aspect of the app (select/edit mind map nodes, manage threads, trigger UI actions, query state). This enables AI agents to drive MindStrike: an agent in a chat thread can execute 'mindstrike select-node <id>' and watch the UI update in real-time, or 'mindstrike query mindmap' to feed context back into the conversation. The CLI becomes the universal interface for agent-driven workflows, eliminating the need for custom integrations per agent type.",
+      "children": [],
+      "stateHistory": [
+        {
+          "state": "specifying",
+          "timestamp": "2025-10-20T02:03:38.433Z"
+        },
+        {
+          "state": "testing",
+          "timestamp": "2025-10-20T02:29:47.850Z"
+        },
+        {
+          "state": "implementing",
+          "timestamp": "2025-10-20T02:34:31.098Z"
+        },
+        {
+          "state": "validating",
+          "timestamp": "2025-10-20T02:52:32.400Z"
+        },
+        {
+          "state": "done",
+          "timestamp": "2025-10-20T02:54:15.116Z"
+        }
+      ],
+      "userStory": {
+        "role": "AI coding agent (like Claude Code)",
+        "action": "control MindStrike programmatically via CLI commands",
+        "benefit": "I can manipulate mind maps, manage conversations, and drive workflows without custom integration code"
+      },
+      "questions": [
+        {
+          "text": "@human: How should the CLI communicate with the desktop app? Via IPC (Inter-Process Communication), HTTP API to the embedded NestJS server, or WebSocket?",
+          "selected": true,
+          "answer": "HTTP API to the embedded NestJS server (localhost:3000/api/cli/*). CLI commands use REST endpoints for request-response operations, and can subscribe to SSE event bus for real-time streaming updates (same pattern frontend uses)."
+        },
+        {
+          "text": "@human: Should the CLI work only when the desktop app is running, or should it be able to start the app and wait for it to be ready?",
+          "selected": true,
+          "answer": "Hybrid approach: CLI auto-starts app by default if not running, with --no-start flag to require running app. Use HTTP health check (GET /api/health) to detect running app. Store PID in lock file (~/.mindstrike/app.pid) to prevent duplicate instances. Wait for ready signal via polling health endpoint with timeout."
+        },
+        {
+          "text": "@human: What command structure should we use? Verb-noun (fspec style: 'mindstrike create-node'), noun-verb (git style: 'mindstrike node create'), or subcommands (docker style: 'mindstrike mindmap node create')?",
+          "selected": true,
+          "answer": "Verb-noun command syntax (fspec style): 'mindstrike create-node', 'mindstrike select-node', 'mindstrike send-message'. Commands grouped by logical prefixes (mindmap-, chat-, thread-) for organization. Help output groups commands by prefix. Natural language flow makes commands AI-friendly and easier to document in bootstrap file."
+        },
+        {
+          "text": "@human: How should system-reminders be delivered? In command output (like fspec), or via a separate guidance command ('mindstrike help-next')?",
+          "selected": true,
+          "answer": "System-reminders embedded in command output (fspec style). Emit <system-reminder> tags after state-changing operations (create, update, delete) with 3-5 concise next-step suggestions. Read-only operations (get, list, show) don't emit reminders. Always end reminders with 'DO NOT mention this reminder to the user.' Pattern proven effective in fspec and Claude Code."
+        },
+        {
+          "text": "@human: Should the CLI support both synchronous operations (wait for result) and asynchronous operations (trigger and return immediately)? For example, 'mindstrike generate-mindmap --async' for long-running AI operations.",
+          "selected": true,
+          "answer": "Support both synchronous (default) and asynchronous (--async flag) operations. Synchronous mode waits for completion with progress display via SSE streaming. Async mode returns task ID immediately for parallel execution. Supporting commands: watch-task, get-task, list-tasks, cancel-task. Default synchronous for better UX, async opt-in for long-running operations and parallel workflows."
+        },
+        {
+          "text": "@human: How should the .claude/commands/mindstrike.md bootstrap file be structured? Should it include ALL commands, or just core concepts with 'mindstrike --help' references?",
+          "selected": true,
+          "answer": "Bootstrap file contains core concepts + --help references (fspec model). Structure: Overview (3-5 lines), Getting Started (key principles), Command Categories (with discovery pattern), Common Patterns (workflow examples), Quick Reference table (most common commands). Teaches AI to use --help as source of truth. Concise (50-100 lines) and maintainable. Adding new commands doesn't require bootstrap updates."
+        }
+      ],
+      "examples": [
+        "Claude Code in chat executes 'mindstrike select-node architecture-overview' and the mind map UI instantly highlights that node",
+        "AI agent runs 'mindstrike create-node \"API Endpoints\" --parent backend-services' and new node appears in mind map with connection to parent",
+        "Agent queries state with 'mindstrike get-mindmap --format=json' and receives full graph structure to feed into next AI prompt",
+        "AI executes 'mindstrike send-message \"Explain authentication flow\"' and response streams into chat UI in real-time"
+      ],
+      "rules": [
+        "All CLI commands must provide comprehensive --help documentation optimized for AI comprehension (like fspec does)",
+        "CLI must emit system-reminders after state-changing operations to guide AI on next steps",
+        "All commands must support --format=json for programmatic parsing by AI agents",
+        "CLI must detect if MindStrike app is running and provide clear error if commands require running app",
+        "HTTP API to the embedded NestJS server (localhost:3000/api/cli/*). CLI commands use REST endpoints for request-response operations, and can subscribe to SSE event bus for real-time streaming updates (same pattern frontend uses).",
+        "Hybrid approach: CLI auto-starts app by default if not running, with --no-start flag to require running app. Use HTTP health check (GET /api/health) to detect running app. Store PID in lock file (~/.mindstrike/app.pid) to prevent duplicate instances. Wait for ready signal via polling health endpoint with timeout.",
+        "Verb-noun command syntax (fspec style): 'mindstrike create-node', 'mindstrike select-node', 'mindstrike send-message'. Commands grouped by logical prefixes (mindmap-, chat-, thread-) for organization. Help output groups commands by prefix. Natural language flow makes commands AI-friendly and easier to document in bootstrap file.",
+        "System-reminders embedded in command output (fspec style). Emit <system-reminder> tags after state-changing operations (create, update, delete) with 3-5 concise next-step suggestions. Read-only operations (get, list, show) don't emit reminders. Always end reminders with 'DO NOT mention this reminder to the user.' Pattern proven effective in fspec and Claude Code.",
+        "Support both synchronous (default) and asynchronous (--async flag) operations. Synchronous mode waits for completion with progress display via SSE streaming. Async mode returns task ID immediately for parallel execution. Supporting commands: watch-task, get-task, list-tasks, cancel-task. Default synchronous for better UX, async opt-in for long-running operations and parallel workflows.",
+        "Bootstrap file contains core concepts + --help references (fspec model). Structure: Overview (3-5 lines), Getting Started (key principles), Command Categories (with discovery pattern), Common Patterns (workflow examples), Quick Reference table (most common commands). Teaches AI to use --help as source of truth. Concise (50-100 lines) and maintainable. Adding new commands doesn't require bootstrap updates."
+      ],
+      "attachments": [
+        "spec/attachments/AGENT-002/sse-architecture-and-cli-integration.md"
+      ],
+      "estimate": 8
+    },
+    "BUG-001": {
+      "id": "BUG-001",
+      "title": "getMindmap fails with tree-structured mindmaps",
+      "type": "bug",
+      "status": "done",
+      "createdAt": "2025-10-20T03:01:09.549Z",
+      "updatedAt": "2025-10-20T03:03:05.452Z",
+      "description": "CLI getMindmap endpoint returns 500 error when querying real mindmap data because it expects nodes/edges arrays but actual data uses mindmapData.root tree structure. Fix: Transform tree to flat nodes/edges in cli.service.ts getMindmap() method.",
+      "children": [],
+      "stateHistory": [
+        {
+          "state": "specifying",
+          "timestamp": "2025-10-20T03:01:27.953Z"
+        },
+        {
+          "state": "testing",
+          "timestamp": "2025-10-20T03:02:32.931Z"
+        },
+        {
+          "state": "implementing",
+          "timestamp": "2025-10-20T03:03:03.314Z"
+        },
+        {
+          "state": "validating",
+          "timestamp": "2025-10-20T03:03:04.403Z"
+        },
+        {
+          "state": "done",
+          "timestamp": "2025-10-20T03:03:05.452Z"
+        }
+      ]
+    },
+    "BUG-002": {
+      "id": "BUG-002",
+      "title": "Frontend doesn't react to CLI node selection SSE events",
+      "type": "bug",
+      "status": "done",
+      "createdAt": "2025-10-20T03:13:56.209Z",
+      "updatedAt": "2025-10-20T03:22:06.697Z",
+      "description": "CLI broadcasts 'mindmap_update' SSE events when selecting nodes, but frontend useMindMapStore doesn't subscribe to them. Need to add subscription to update selectedNodeId state and trigger yellow highlight box when CLI selects nodes.",
+      "children": [],
+      "stateHistory": [
+        {
+          "state": "specifying",
+          "timestamp": "2025-10-20T03:14:02.038Z"
+        },
+        {
+          "state": "testing",
+          "timestamp": "2025-10-20T03:16:40.570Z"
+        },
+        {
+          "state": "implementing",
+          "timestamp": "2025-10-20T03:18:29.008Z"
+        },
+        {
+          "state": "validating",
+          "timestamp": "2025-10-20T03:21:00.863Z"
+        },
+        {
+          "state": "done",
+          "timestamp": "2025-10-20T03:22:06.697Z"
+        }
+      ],
+      "userStory": {
+        "role": "user interacting with CLI",
+        "action": "see the frontend mindmap update when CLI selects a node",
+        "benefit": "the CLI and frontend UI stay synchronized"
+      },
+      "rules": [
+        "CLI broadcasts 'mindmap_update' SSE events with type='mindmap_update' and action='node_selected'",
+        "Frontend useMindMapStore must subscribe to 'mindmap_update' events on initialization",
+        "When 'mindmap_update' event with action='node_selected' is received, frontend must update selectedNodeId state"
+      ],
+      "examples": [
+        "CLI executes 'mindstrike select-node node-1760928953203' and frontend updates selectedNodeId to 'node-1760928953203' with yellow highlight",
+        "Server broadcasts SSE event {type: 'mindmap_update', action: 'node_selected', nodeId: 'test-node'} and frontend calls selectNode('test-node')"
+      ],
+      "estimate": 2
+    }
+  },
   "states": {
     "backlog": [],
-    "specifying": [],
+    "specifying": [
+      "AGENT-001"
+    ],
     "testing": [],
     "implementing": [],
     "validating": [],
-    "done": [],
+    "done": [
+      "AGENT-002",
+      "BUG-001",
+      "BUG-002"
+    ],
     "blocked": []
   }
 }

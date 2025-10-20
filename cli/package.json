@@ -1,0 +1,41 @@
+{
+  "name": "@mindstrike/cli",
+  "version": "0.1.0",
+  "description": "MindStrike CLI for AI agent control",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "mindstrike": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src/**/*.ts",
+    "format": "prettier --write src/**/*.ts"
+  },
+  "keywords": [
+    "cli",
+    "ai-agent",
+    "mindstrike",
+    "sse",
+    "http-api"
+  ],
+  "author": "MindStrike Team",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^12.0.0",
+    "eventsource": "^2.0.2",
+    "node-fetch": "^3.3.2",
+    "cli-table3": "^0.6.3",
+    "ora": "^8.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.16",
+    "@types/eventsource": "^1.1.15",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.2",
+    "eslint": "^8.56.0",
+    "prettier": "^3.2.4"
+  }
+}

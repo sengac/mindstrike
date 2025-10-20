@@ -1,0 +1,54 @@
+{
+  "scenarios": [
+    {
+      "name": "Select mind map node and update UI",
+      "testMappings": [
+        {
+          "file": "cli/src/__tests__/cli-commands.test.ts",
+          "lines": "26-72",
+          "implMappings": []
+        }
+      ]
+    },
+    {
+      "name": "Create child node with parent relationship",
+      "testMappings": [
+        {
+          "file": "cli/src/__tests__/cli-commands.test.ts",
+          "lines": "75-152",
+          "implMappings": []
+        }
+      ]
+    },
+    {
+      "name": "Query mind map state as JSON for AI context",
+      "testMappings": [
+        {
+          "file": "cli/src/__tests__/cli-commands.test.ts",
+          "lines": "155-226",
+          "implMappings": []
+        }
+      ]
+    },
+    {
+      "name": "Send message and stream response in real-time",
+      "testMappings": [
+        {
+          "file": "cli/src/__tests__/cli-commands.test.ts",
+          "lines": "229-303",
+          "implMappings": []
+        }
+      ]
+    }
+  ],
+  "stats": {
+    "totalScenarios": 4,
+    "coveredScenarios": 4,
+    "coveragePercent": 100,
+    "testFiles": [
+      "cli/src/__tests__/cli-commands.test.ts"
+    ],
+    "implFiles": [],
+    "totalLinesCovered": 272
+  }
+}

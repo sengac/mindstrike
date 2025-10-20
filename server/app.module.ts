@@ -18,6 +18,7 @@ import { ContentModule } from './modules/content/content.module';
 import { UtilityModule } from './modules/utils/utility.module';
 import { ModelScanModule } from './modules/model-scan/model-scan.module';
 import { SystemModule } from './modules/system/system.module';
+import { CliModule } from './modules/cli/cli.module';
 
 @Module({
   imports: [
@@ -84,6 +85,7 @@ import { SystemModule } from './modules/system/system.module';
     UtilityModule,
     ModelScanModule,
     SystemModule,
+    CliModule,
   ],
   controllers: [],
   providers: [],

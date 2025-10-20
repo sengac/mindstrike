@@ -1605,3 +1605,41 @@ export const useMindMapActions = () => {
     ]
   );
 };
+
+// Initialize SSE subscription for CLI node selection events
+// Subscribe to 'mindmap_update' events to handle CLI-triggered node selection
+sseEventBus.subscribe('mindmap_update', (event) => {
+  try {
+    // Handle nested data structure from unified SSE - data might be wrapped
+    let eventData = event.data;
+
+    // Check if data is nested (unified SSE pattern)
+    if (
+      eventData &&
+      typeof eventData === 'object' &&
+      'data' in eventData &&
+      eventData.data &&
+      typeof eventData.data === 'object'
+    ) {
+      eventData = eventData.data;
+    }
+
+    // Check if this is a node_selected action
+    if (
+      eventData &&
+      typeof eventData === 'object' &&
+      'action' in eventData &&
+      eventData.action === 'node_selected' &&
+      'nodeId' in eventData &&
+      typeof eventData.nodeId === 'string'
+    ) {
+      // Get the selectNode action from the store
+      const { selectNode } = useMindMapStore.getState();
+
+      // Update the selected node
+      selectNode(eventData.nodeId);
+    }
+  } catch (error) {
+    logger.error('[useMindMapStore] Error handling mindmap_update SSE event:', error);
+  }
+});

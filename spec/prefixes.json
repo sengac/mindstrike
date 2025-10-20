@@ -1,3 +1,29 @@
 {
-  "prefixes": {}
+  "prefixes": {
+    "AGENT": {
+      "prefix": "AGENT",
+      "description": "AI agent integration and agentic coding features",
+      "createdAt": "2025-10-20T01:54:40.715Z"
+    },
+    "ARCH": {
+      "prefix": "ARCH",
+      "description": "Architectural refactoring and system design changes",
+      "createdAt": "2025-10-20T01:54:41.747Z"
+    },
+    "UI": {
+      "prefix": "UI",
+      "description": "User interface and frontend features",
+      "createdAt": "2025-10-20T01:54:42.764Z"
+    },
+    "CORE": {
+      "prefix": "CORE",
+      "description": "Core system functionality and infrastructure",
+      "createdAt": "2025-10-20T01:54:43.793Z"
+    },
+    "BUG": {
+      "prefix": "BUG",
+      "description": "Bug fixes and defect corrections",
+      "createdAt": "2025-10-20T03:01:08.563Z"
+    }
+  }
 }

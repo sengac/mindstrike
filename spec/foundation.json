@@ -2,93 +2,80 @@
   "version": "2.0.0",
   "project": {
     "name": "MindStrike",
-    "vision": "Empower knowledge workers with an AI-powered assistant platform that seamlessly integrates conversational AI, visual knowledge mapping, and autonomous agent workflows to enhance productivity, creativity, and decision-making.",
+    "vision": "MindStrike is an AI-powered knowledge assistant that combines conversational AI, visual mind mapping, and agentic workflows in a unified desktop interface—empowering users to think, organize, and collaborate with AI in new ways.",
     "projectType": "desktop-app"
   },
   "problemSpace": {
     "primaryProblem": {
-      "title": "Information Overload and Cognitive Complexity in AI-Assisted Knowledge Work",
-      "description": "Knowledge workers struggle to manage information overload and cognitive complexity when working with multiple AI conversations, research threads, and interconnected ideas simultaneously. Traditional AI chat interfaces are linear and isolated, making it difficult to track multiple conversation threads, visualize relationships between concepts, organize knowledge, and leverage AI agents for complex workflows.",
+      "title": "Enterprise Developers Blocked from AI Coding Tools by Corporate Procurement and Security Policies",
+      "description": "Enterprise Developers Blocked from AI Coding Tools by Corporate Procurement and Security Policies|||Developers in regulated industries and security-conscious corporations face a productivity crisis: modern AI coding assistants (Claude Code, Cursor, GitHub Copilot) require cloud APIs and SaaS subscriptions that corporate InfoSec teams won't approve due to data exfiltration risks. Raising purchase orders for $20/month tools takes weeks of bureaucratic approval—if approved at all. Security policies prohibit sending proprietary code to third-party servers, creating a compliance nightmare. Meanwhile, developers watch their startup counterparts achieve 10x productivity gains with tools they're forbidden to use. No local-first alternative exists that satisfies both InfoSec requirements (zero data exfiltration) and developer needs (conversational AI + visual knowledge management)—forcing enterprises to choose between security compliance and developer productivity.|||Enterprise developers are handicapped by policies designed to protect the organization, but inadvertently create competitive disadvantage. Procurement friction means even approved tools arrive months late. InfoSec teams reject every cloud AI tool due to legitimate data privacy concerns. Developers resort to shadow IT (personal ChatGPT accounts on company code), creating actual security risks. Organizations lose talent to startups with modern tooling. Institutional knowledge remains trapped in senior developers' heads instead of being visualized and shared through mind maps. The productivity gap between AI-enabled developers and policy-restricted developers widens daily.",
       "impact": "high"
     }
   },
   "solutionSpace": {
-    "overview": "MindStrike provides a unified workspace that combines multi-threaded conversational AI, interactive mind mapping for visual knowledge organization, and autonomous agent workflows. Users can manage multiple AI conversation threads simultaneously, visualize connections between ideas using mind maps, and leverage specialized AI agents for complex tasks, all within a single integrated desktop application.",
+    "overview": "MindStrike provides a local-first desktop application that combines conversational AI coding assistance with visual knowledge management through interactive mind maps—all running entirely on your machine without sending data to third-party services. Users can integrate multiple AI backends (local LLMs like Llama/Mistral or bring-your-own API keys), organize architectural decisions visually through mind mapping, maintain persistent context across coding sessions, and automate workflows with agentic AI—satisfying enterprise InfoSec requirements while delivering modern AI productivity tools without procurement barriers.",
     "capabilities": [
       {
-        "name": "Multi-threaded Conversational AI",
-        "description": "Manage multiple independent AI conversation threads simultaneously, allowing users to explore different aspects of a problem or maintain separate context-specific discussions"
+        "name": "Conversational AI Coding",
+        "description": "Chat with AI assistants (Claude, GPT, Gemini, or local LLMs) for code generation, debugging, architecture advice, and technical problem-solving—all with persistent conversation history"
       },
       {
-        "name": "Interactive Mind Mapping",
-        "description": "Create, edit, and visualize knowledge graphs using interactive mind maps with node-based interfaces, enabling users to organize concepts, relationships, and insights visually"
+        "name": "Visual Knowledge Mapping",
+        "description": "Create interactive mind maps to visualize system architecture, component relationships, technical decisions, and knowledge structures—integrating directly with AI conversations"
       },
       {
-        "name": "Autonomous Agent Workflows",
-        "description": "Define and execute complex AI agent workflows that can perform multi-step tasks autonomously, leveraging specialized agents for different capabilities"
+        "name": "Local-First AI Execution",
+        "description": "Run AI models entirely on your machine using local LLMs (Llama, Mistral, etc.) without sending any data to third-party services—satisfying enterprise security requirements"
       },
       {
-        "name": "Multi-Model AI Support",
-        "description": "Configure and switch between multiple LLM providers (local and cloud-based) including Anthropic, OpenAI, Google, Ollama, and custom models with flexible model management"
+        "name": "Multi-Threaded Conversations",
+        "description": "Manage multiple parallel AI conversations with different contexts, models, and purposes—switching seamlessly between threads without losing context"
       },
       {
-        "name": "Workspace Management",
-        "description": "Organize work into customizable workspaces with persistent state, allowing users to maintain different contexts for various projects or research areas"
+        "name": "Flexible AI Backend Integration",
+        "description": "Connect to multiple AI providers (Anthropic Claude, OpenAI, Google Gemini, Ollama) or bring-your-own API keys—avoiding vendor lock-in"
       },
       {
-        "name": "Code Editing and Integration",
-        "description": "Built-in Monaco code editor for working with code snippets, scripts, and technical content directly within the AI workflow"
+        "name": "Agentic Workflow Automation",
+        "description": "Create and execute multi-step AI workflows with autonomous agents that can perform complex tasks, make decisions, and use tools through Model Context Protocol (MCP)"
+      },
+      {
+        "name": "Persistent Knowledge Management",
+        "description": "Build compound knowledge over time with conversation history, mind maps, and workspace state persisted locally—creating institutional memory that grows with each session"
+      },
+      {
+        "name": "Integrated Code Editing",
+        "description": "Edit code directly within the application using Monaco editor with syntax highlighting, autocomplete, and AI-assisted refactoring—without context switching to external editors"
       }
     ]
   },
   "personas": [
     {
-      "name": "Knowledge Worker",
-      "description": "Professionals who work with complex information, research, and analysis - including researchers, analysts, consultants, writers, and developers",
+      "name": "Enterprise Developer",
+      "description": "Software developer working in regulated industries (finance, healthcare, government, defense) who is blocked by corporate InfoSec policies from using cloud-based AI coding tools due to data exfiltration risks and procurement friction",
       "goals": [
-        "Manage multiple AI conversations to explore different aspects of a problem",
-        "Organize and visualize connections between ideas and research findings",
-        "Increase productivity by leveraging AI for knowledge synthesis"
+        "Use modern AI coding assistants without violating corporate security policies",
+        "Maintain institutional knowledge through visual documentation that persists across projects",
+        "Achieve productivity gains without waiting weeks for procurement approval"
       ]
     },
     {
-      "name": "AI Power User",
-      "description": "Technical users who want advanced control over AI models, parameters, and workflows - including ML engineers, prompt engineers, and AI researchers",
+      "name": "Solo Developer",
+      "description": "Independent developer or indie hacker building proprietary projects who prioritizes data ownership, privacy, and avoiding vendor lock-in while leveraging AI productivity tools",
       "goals": [
-        "Configure and fine-tune local and cloud-based LLM models",
-        "Create and manage complex AI agent workflows",
-        "Experiment with different AI models and compare results"
+        "Retain full ownership of all AI-generated code and conversations",
+        "Build compound knowledge over time without data locked in third-party platforms",
+        "Visualize system architecture and component relationships through mind maps while coding"
       ]
-    }
-  ],
-  "architectureDiagrams": [
-    {
-      "title": "Overall Architecture",
-      "mermaidCode": "graph TB\n    subgraph Electron[\"Electron Desktop App\"]\n        subgraph Renderer[\"Renderer Process\"]\n            React[\"React 18 + TypeScript\"]\n            Vite[\"Vite Dev Server\"]\n            Zustand[\"Zustand State Management\"]\n            SSEBus[\"SSE Event Bus\"]\n        end\n        \n        subgraph Main[\"Main Process\"]\n            ElectronMain[\"Electron Main\"]\n            NestServer[\"Embedded NestJS Server :3001\"]\n        end\n    end\n    \n    subgraph Backend[\"Backend Services\"]\n        NestJS[\"NestJS Framework\"]\n        LangChain[\"LangChain AI\"]\n        MCP[\"Model Context Protocol\"]\n    end\n    \n    subgraph Storage[\"Data Persistence\"]\n        FileSystem[\"File System\"]\n        LocalStorage[\"Browser LocalStorage\"]\n        Workspace[\"Workspace Root\"]\n    end\n    \n    React --> Zustand\n    React --> SSEBus\n    Zustand --> React\n    SSEBus --> React\n    \n    React -->|HTTP/REST| NestServer\n    NestServer -->|SSE Stream| SSEBus\n    \n    ElectronMain --> NestServer\n    ElectronMain --> Renderer\n    \n    NestServer --> NestJS\n    NestJS --> LangChain\n    NestJS --> MCP\n    NestJS --> FileSystem\n    \n    Zustand -.->|persist| LocalStorage\n    NestJS -.->|read/write| Workspace\n    \n    Workspace --> FileSystem"
     },
     {
-      "title": "Frontend State Management",
-      "mermaidCode": "graph LR\n    subgraph UI[\"React Components\"]\n        ChatView[\"ChatView\"]\n        MindMapEditor[\"MindMapEditor\"]\n        ThreadList[\"ThreadList\"]\n        MessageList[\"MessageList\"]\n    end\n    \n    subgraph Stores[\"Zustand Stores\"]\n        AppStore[\"useAppStore<br/>• Font settings<br/>• Active view<br/>• Workspace roots<br/>• LocalStorage persist\"]\n        ThreadsStore[\"useThreadsStore<br/>• Thread list<br/>• Active thread<br/>• API-bound actions\"]\n        ChatStore[\"useChatThreadStore<br/>• Factory pattern<br/>• Per-thread messages<br/>• Message CRUD\"]\n        MindMapStore[\"useMindMapStore<br/>• nodes[], edges[]<br/>• Undo/redo (Immer)<br/>• Generation state\"]\n    end\n    \n    subgraph EventBus[\"Real-time Events\"]\n        SSE[\"SSE Event Bus<br/>• Single EventSource<br/>• Topic routing<br/>• Content decoding\"]\n    end\n    \n    ChatView --> ThreadsStore\n    ChatView --> ChatStore\n    ThreadList --> ThreadsStore\n    MessageList --> ChatStore\n    MindMapEditor --> MindMapStore\n    \n    ThreadsStore --> ChatView\n    ChatStore --> MessageList\n    MindMapStore --> MindMapEditor\n    \n    SSE --> MindMapStore\n    SSE --> ChatStore\n    SSE --> ThreadsStore\n    \n    AppStore -.->|persist| LocalStorage[\"LocalStorage\"]"
-    },
-    {
-      "title": "Backend NestJS Modules",
-      "mermaidCode": "graph TB\n    subgraph NestJS[\"NestJS Application\"]\n        AppModule[\"AppModule<br/>(Root Module)\"]\n        \n        subgraph Core[\"Core Modules\"]\n            ChatModule[\"ChatModule<br/>• ConversationService<br/>• MessageService<br/>• Thread persistence\"]\n            AgentsModule[\"AgentsModule<br/>• ThreadsController<br/>• Role management\"]\n            MindMapModule[\"MindMapModule<br/>• MindmapService<br/>• LangChain generation<br/>• SSE streaming\"]\n        end\n        \n        subgraph Communication[\"Communication\"]\n            EventsModule[\"EventsModule<br/>• SseService<br/>• Client management<br/>• Event broadcasting\"]\n        end\n        \n        subgraph AI[\"AI Integration\"]\n            LLMModule[\"LLMModule<br/>• Model scanning<br/>• LangChain integration<br/>• Model routing\"]\n            MCPModule[\"MCPModule<br/>• Tool registration<br/>• Server lifecycle<br/>• Multi-platform\"]\n        end\n        \n        subgraph Data[\"Data & Storage\"]\n            WorkspaceModule[\"WorkspaceModule<br/>• File operations<br/>• Directory scanning\"]\n            ContentModule[\"ContentModule<br/>• Large content storage<br/>• 5-min TTL cleanup\"]\n            SharedModule[\"SharedModule<br/>• GlobalConfigService<br/>• Shared utilities\"]\n        end\n    end\n    \n    subgraph External[\"External Services\"]\n        LangChain[\"LangChain<br/>• Anthropic<br/>• OpenAI<br/>• Ollama<br/>• Google GenAI\"]\n        FileSystem[\"File System<br/>• mindstrike-chats.json<br/>• mindmaps/\"]\n    end\n    \n    AppModule --> ChatModule\n    AppModule --> AgentsModule\n    AppModule --> MindMapModule\n    AppModule --> EventsModule\n    AppModule --> LLMModule\n    AppModule --> MCPModule\n    AppModule --> WorkspaceModule\n    AppModule --> ContentModule\n    AppModule --> SharedModule\n    \n    ChatModule --> EventsModule\n    MindMapModule --> EventsModule\n    MindMapModule --> LLMModule\n    LLMModule --> LangChain\n    \n    ChatModule -.->|read/write| FileSystem\n    MindMapModule -.->|read/write| FileSystem\n    WorkspaceModule -.->|scan| FileSystem"
-    },
-    {
-      "title": "Real-time Communication Flow (SSE)",
-      "mermaidCode": "sequenceDiagram\n    participant UI as React UI\n    participant SSEBus as SSE Event Bus\n    participant EventSource as EventSource<br/>/api/events/stream\n    participant NestJS as NestJS Server\n    participant SseService as SseService\n    participant Module as Module<br/>(Chat/MindMap/etc)\n    \n    Note over UI,EventSource: Initial Connection\n    UI->>SSEBus: initialize()\n    SSEBus->>EventSource: new EventSource('/api/events/stream')\n    EventSource->>NestJS: GET /api/events/stream\n    NestJS->>SseService: addClient(response)\n    SseService-->>EventSource: Connected (200 OK)\n    \n    Note over EventSource,SseService: Keepalive Loop (30s)\n    loop Every 30 seconds\n        SseService->>EventSource: event: keepalive\n    end\n    \n    Note over UI,Module: User Action → Event Stream\n    UI->>NestJS: POST /api/threads/{id}/messages\n    NestJS->>Module: handleMessage()\n    \n    loop Streaming Response\n        Module->>SseService: broadcast('unified-events', CONTENT_CHUNK)\n        SseService->>EventSource: event: unified-events<br/>data: {type: 'content_chunk', ...}\n        EventSource->>SSEBus: onMessage(event)\n        SSEBus->>UI: emit('content_chunk', data)\n        UI->>UI: Update UI incrementally\n    end\n    \n    Module->>SseService: broadcast('unified-events', COMPLETED)\n    SseService->>EventSource: event: unified-events<br/>data: {type: 'completed', ...}\n    EventSource->>SSEBus: onMessage(event)\n    SSEBus->>UI: emit('completed', data)\n    UI->>UI: Finalize UI update\n    \n    Note over UI,SseService: Large Content Handling\n    Module->>SseService: broadcast with large content (>100MB)\n    SseService->>SseService: Store in contentStore with TTL\n    SseService->>EventSource: event with _large_content ref\n    EventSource->>SSEBus: onMessage(event)\n    SSEBus->>NestJS: GET /api/content/{contentId}\n    NestJS->>SSEBus: Return large content\n    SSEBus->>UI: emit with resolved content"
-    },
-    {
-      "title": "Data Persistence Flow",
-      "mermaidCode": "sequenceDiagram\n    participant User as User\n    participant UI as React Component\n    participant Store as Zustand Store\n    participant API as REST API\n    participant Service as NestJS Service\n    participant FS as File System\n    \n    Note over User,FS: Create New Thread\n    User->>UI: Click 'New Thread'\n    UI->>Store: useThreadsStore.createThread()\n    Store->>API: POST /api/threads\n    API->>Service: ConversationService.createThread()\n    Service->>Service: Add to in-memory Map\n    Service->>FS: Write mindstrike-chats.json\n    FS-->>Service: Success\n    Service-->>API: Return thread data\n    API-->>Store: { id, name, createdAt, ... }\n    Store->>Store: Update threads array\n    Store-->>UI: Trigger re-render\n    UI-->>User: Show new thread in list\n    \n    Note over User,FS: Send Message\n    User->>UI: Type message, click send\n    UI->>Store: useChatThreadStore.addMessage()\n    Store->>API: POST /api/threads/{id}/messages\n    API->>Service: ConversationService.addMessage()\n    Service->>Service: Update thread in Map\n    Service->>FS: Write mindstrike-chats.json\n    FS-->>Service: Success\n    Service-->>API: SSE stream (CONTENT_CHUNK)\n    API-->>Store: Via SSE Event Bus\n    Store->>Store: Append content to message\n    Store-->>UI: Trigger re-render\n    UI-->>User: Show streaming response\n    \n    Note over User,FS: Load on Startup\n    User->>UI: Open app\n    UI->>Store: useThreadsStore (auto-init)\n    Store->>API: GET /api/threads\n    API->>Service: ConversationService.getThreadList()\n    Service->>FS: Read mindstrike-chats.json\n    FS-->>Service: Return JSON data\n    Service->>Service: Load into in-memory Map\n    Service-->>API: Return threads array\n    API-->>Store: Thread list\n    Store-->>UI: Trigger re-render\n    UI-->>User: Display threads"
-    },
-    {
-      "title": "Mind Map Generation Flow",
-      "mermaidCode": "sequenceDiagram\n    participant User as User\n    participant UI as MindMapEditor\n    participant Store as useMindMapStore\n    participant API as REST API\n    participant Service as MindmapService\n    participant LangChain as LangChain Agent\n    participant SSE as SseService\n    \n    Note over User,SSE: Initiate Generation\n    User->>UI: Click 'Generate'\n    UI->>Store: startIterativeGeneration(prompt)\n    Store->>Store: Set isGenerating = true\n    Store->>API: POST /api/mindmaps/{id}/generate?stream=true\n    API->>Service: generateMindmap(prompt)\n    Service->>LangChain: Create agent with tools\n    \n    Note over LangChain,SSE: Streaming Generation Loop\n    loop For each AI decision\n        LangChain->>LangChain: Reason about next node\n        LangChain->>Service: Return tool call (create_node)\n        Service->>SSE: broadcast('unified-events', MINDMAP_CHANGE)\n        SSE->>Store: SSE event { action: 'create', text, parentId }\n        Store->>Store: applyMindmapChanges()\n        Store->>Store: Add node to nodes[]\n        Store->>Store: Add edge to edges[]\n        Store->>Store: Recalculate layout\n        Store-->>UI: Trigger re-render\n        UI-->>User: Show new node in real-time\n    end\n    \n    Note over Service,SSE: Generation Complete\n    Service->>SSE: broadcast('unified-events', TASK_COMPLETED)\n    SSE->>Store: SSE event { type: 'task_completed' }\n    Store->>Store: Set isGenerating = false\n    Store->>Store: Save mind map to file\n    Store-->>UI: Final re-render\n    UI-->>User: Generation complete\n    \n    Note over User,Store: User Edits\n    User->>UI: Drag node, edit text\n    UI->>Store: updateNode(id, changes)\n    Store->>Store: Update nodes[] (Immer draft)\n    Store->>Store: Push to history (undo/redo)\n    Store-->>UI: Re-render\n    \n    User->>UI: Ctrl+Z (Undo)\n    UI->>Store: undo()\n    Store->>Store: historyIndex -= 1\n    Store->>Store: Restore previous state\n    Store-->>UI: Re-render previous state"
-    },
-    {
-      "title": "React Component Hierarchy",
-      "mermaidCode": "graph TB\n    App[\"App.tsx<br/>Main Router\"]\n    \n    subgraph Layout[\"Layout Components\"]\n        Sidebar[\"Sidebar<br/>• Navigation<br/>• View selection\"]\n    end\n    \n    subgraph Views[\"Main Views\"]\n        ChatView[\"ChatView<br/>Multi-threaded chat\"]\n        MindMapsView[\"MindMapsView<br/>Mind map editor\"]\n        WorkspaceView[\"WorkspaceView<br/>File explorer\"]\n        AgentsView[\"AgentsView<br/>Agent management\"]\n        SettingsView[\"SettingsView<br/>Configuration\"]\n    end\n    \n    subgraph ChatComponents[\"Chat Components\"]\n        ThreadList[\"ThreadList<br/>• Thread items<br/>• New thread button\"]\n        ChatPanel[\"ChatPanel<br/>• MessageList<br/>• MessageInput\"]\n        MessageList[\"MessageList<br/>• Message components<br/>• Streaming updates\"]\n        NodePanel[\"NodePanel<br/>• Notes/citations\"]\n    end\n    \n    subgraph MindMapComponents[\"Mind Map Components\"]\n        MindMapList[\"MindMapList<br/>• Map items<br/>• New map button\"]\n        MindMapEditor[\"MindMapEditor<br/>ReactFlow canvas\"]\n        ReactFlow[\"ReactFlow<br/>• Custom nodes<br/>• Custom edges\"]\n        MindMapNodePanel[\"NodePanel<br/>• Properties<br/>• Edit controls\"]\n        GenerationPanel[\"GenerationPanel<br/>• Progress<br/>• Controls\"]\n    end\n    \n    subgraph Dialogs[\"Shared Dialogs\"]\n        ModelDialog[\"LocalModelLoadDialog\"]\n        ConnectionDialog[\"ConnectionMonitorDialog\"]\n        PromptsModal[\"PromptsModal\"]\n    end\n    \n    App --> Sidebar\n    App --> ChatView\n    App --> MindMapsView\n    App --> WorkspaceView\n    App --> AgentsView\n    App --> SettingsView\n    \n    ChatView --> ThreadList\n    ChatView --> ChatPanel\n    ChatView --> NodePanel\n    ChatPanel --> MessageList\n    \n    MindMapsView --> MindMapList\n    MindMapsView --> MindMapEditor\n    MindMapsView --> GenerationPanel\n    MindMapEditor --> ReactFlow\n    MindMapEditor --> MindMapNodePanel\n    \n    App --> Dialogs"
+      "name": "Security-Conscious Team Lead",
+      "description": "Engineering manager or tech lead responsible for team productivity while ensuring compliance with organizational security policies and audit requirements",
+      "goals": [
+        "Enable team to use AI coding tools without creating security risks or compliance violations",
+        "Provide audit trail and transparency for security team review",
+        "Deploy self-hosted solutions that satisfy InfoSec requirements without sacrificing developer productivity"
+      ]
     }
   ]
 }
