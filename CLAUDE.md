@@ -306,6 +306,67 @@ MindStrike is a comprehensive AI knowledge assistant platform built as a modern 
 3. **Error Handling**: Implement proper error handling for all async operations
 4. **Documentation**: Update code comments for complex logic
 
+### NestJS Testing Patterns
+
+#### Controller HTTP Integration Tests - Dependency Injection Workaround
+
+**Problem**: When testing NestJS controllers with HTTP integration tests (using `supertest` and `request(app.getHttpServer())`), dependency injection does not work automatically. The `app` creates separate controller instances for HTTP requests that don't receive injected dependencies.
+
+**Symptoms**:
+- Controller dependencies are `undefined` in HTTP tests
+- Tests fail with "Cannot read properties of undefined"
+- Direct controller method calls work, but HTTP endpoint tests fail
+
+**Solution** - Manual Dependency Injection Pattern:
+
+```typescript
+describe('MyController Integration Tests', () => {
+  let app: INestApplication;
+  let moduleFixture: TestingModule;
+
+  beforeAll(async () => {
+    moduleFixture = await Test.createTestingModule({
+      controllers: [MyController],
+      providers: [MyService],
+    }).compile();
+
+    app = moduleFixture.createNestApplication();
+
+    // Get controller and service from moduleFixture (DI works here)
+    const controller = moduleFixture.get(MyController);
+    const service = moduleFixture.get(MyService);
+
+    // IMPORTANT: Manual injection for HTTP tests
+    // HTTP requests create separate controller instances that don't get DI
+    controller['myService'] = service;
+
+    await app.init();
+  });
+
+  it('should work via HTTP', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/my-endpoint')
+      .expect(200);
+
+    expect(response.body).toBeDefined();
+  });
+});
+```
+
+**Key Points**:
+- **Use `moduleFixture.get()`** to retrieve controller and service instances (DI works correctly here)
+- **Manually assign** the service to the controller's private property before calling `app.init()`
+- This ensures both direct controller calls AND HTTP requests work correctly
+- This is a known NestJS testing limitation when combining `INestApplication` with integration tests
+
+**Alternative Patterns**:
+- **Unit tests**: Just use `new MyController(mockService)` - no NestJS DI needed
+- **Service tests**: Use `moduleFixture.get(MyService)` - DI works automatically
+- **Controller method tests**: Use `moduleFixture.get(MyController)` - DI works automatically
+- **HTTP integration tests**: Use the manual injection pattern above
+
+**Related Examples**: See `server/modules/llm/__tests__/llm.controller.check-updates.spec.ts:83-88` and `server/modules/cli/__tests__/cli-module.test.ts:28-35` for implementations of this pattern.
+
 ### Specialized Subagents
 
 MindStrike uses specialized subagents for specific development tasks. Use these agents proactively when their expertise matches the task:
