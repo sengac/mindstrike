@@ -1,12 +1,75 @@
 {
   "meta": {
     "version": "1.0.0",
-    "lastUpdated": "2025-10-17T09:47:58.525Z"
+    "lastUpdated": "2025-10-23T02:36:25.232Z"
   },
-  "workUnits": {},
+  "workUnits": {
+    "CLI-001": {
+      "id": "CLI-001",
+      "title": "CLI Command Interface for AI Agent Control",
+      "type": "story",
+      "status": "specifying",
+      "createdAt": "2025-10-23T02:32:47.041Z",
+      "updatedAt": "2025-10-23T02:36:25.232Z",
+      "description": "Create a 'mindstrike' CLI application that serves as a bidirectional bridge between AI agents (like Claude Code) and the MindStrike desktop app. The CLI bootstraps AI agents with context (.claude/commands/mindstrike.md), uses system-reminder patterns to guide next steps, and provides complete programmatic control over every aspect of the app (select/edit mind map nodes, manage threads, trigger UI actions, query state). Leverages existing SSE event bus architecture for real-time updates.",
+      "children": [],
+      "userStory": {
+        "role": "AI coding agent (like Claude Code)",
+        "action": "control MindStrike programmatically via CLI commands",
+        "benefit": "I can manipulate mind maps, manage conversations, and drive workflows without custom integration code"
+      },
+      "stateHistory": [
+        {
+          "state": "specifying",
+          "timestamp": "2025-10-23T02:33:22.909Z"
+        }
+      ],
+      "rules": [
+        "All CLI commands must provide comprehensive --help documentation optimized for AI comprehension (like fspec does)",
+        "CLI must emit system-reminders after state-changing operations to guide AI on next steps",
+        "All commands must support --format=json for programmatic parsing by AI agents",
+        "HTTP API to embedded NestJS server (localhost:3000/api/cli/*). Use REST for request-response, SSE event bus for real-time streaming",
+        "Verb-noun command syntax (fspec style): 'mindstrike create-node', 'mindstrike select-node', 'mindstrike send-message'",
+        "System-reminders embedded in command output. Emit <system-reminder> tags after state-changing operations with 3-5 concise next-step suggestions"
+      ],
+      "examples": [
+        "Claude Code in chat executes 'mindstrike select-node architecture-overview' and the mind map UI instantly highlights that node",
+        "AI agent runs 'mindstrike create-node \"API Endpoints\" --parent backend-services' and new node appears in mind map with connection to parent",
+        "Agent queries state with 'mindstrike get-mindmap --format=json' and receives full graph structure to feed into next AI prompt",
+        "AI executes 'mindstrike send-message \"Explain authentication flow\"' and response streams into chat UI in real-time"
+      ],
+      "questions": [
+        {
+          "text": "@human: How should the CLI communicate with the desktop app? Via IPC, HTTP API, or WebSocket?",
+          "selected": true,
+          "answer": "HTTP API to the embedded NestJS server (localhost:3000/api/cli/*). CLI commands use REST endpoints for request-response operations, and can subscribe to SSE event bus for real-time streaming updates (same pattern frontend uses)."
+        },
+        {
+          "text": "@human: Should the CLI work only when the desktop app is running, or should it be able to start the app?",
+          "selected": true,
+          "answer": "Hybrid approach: CLI auto-starts app by default if not running, with --no-start flag to require running app. Use HTTP health check (GET /api/health) to detect running app. Store PID in lock file (~/.mindstrike/app.pid)."
+        },
+        {
+          "text": "@human: What command structure should we use? Verb-noun (fspec style), noun-verb (git style), or subcommands (docker style)?",
+          "selected": true,
+          "answer": "Verb-noun command syntax (fspec style): 'mindstrike create-node', 'mindstrike select-node', 'mindstrike send-message'. Commands grouped by logical prefixes (mindmap-, chat-, thread-) for organization."
+        },
+        {
+          "text": "@human: How should system-reminders be delivered? In command output or via separate command?",
+          "selected": true,
+          "answer": "System-reminders embedded in command output (fspec style). Emit <system-reminder> tags after state-changing operations with 3-5 concise next-step suggestions. Read-only operations don't emit reminders."
+        }
+      ],
+      "attachments": [
+        "spec/attachments/CLI-001/cli-implementation-learnings.md"
+      ]
+    }
+  },
   "states": {
     "backlog": [],
-    "specifying": [],
+    "specifying": [
+      "CLI-001"
+    ],
     "testing": [],
     "implementing": [],
     "validating": [],

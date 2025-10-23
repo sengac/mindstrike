@@ -1,3 +1,9 @@
 {
-  "prefixes": {}
+  "prefixes": {
+    "CLI": {
+      "prefix": "CLI",
+      "description": "CLI command interface and agent integration features",
+      "createdAt": "2025-10-23T02:32:36.484Z"
+    }
+  }
 }
