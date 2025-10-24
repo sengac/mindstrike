@@ -840,6 +840,41 @@ function MindMapInner({
     selectNode(null);
   }, [selectNode]);
 
+  // Custom wheel handler for Ctrl+scroll panning
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+
+    const handleWheel = (event: WheelEvent) => {
+      // If Ctrl key is held, enable panning with scroll wheel
+      if (event.ctrlKey || event.metaKey) {
+        event.preventDefault();
+
+        // Pan the viewport based on scroll delta
+        const deltaX = event.deltaX;
+        const deltaY = event.deltaY;
+
+        const viewport = reactFlowInstance.getViewport();
+        reactFlowInstance.setViewport({
+          x: viewport.x - deltaX,
+          y: viewport.y - deltaY,
+          zoom: viewport.zoom,
+        });
+      }
+    };
+
+    const reactFlowElement = container.querySelector('.react-flow');
+    if (reactFlowElement) {
+      reactFlowElement.addEventListener('wheel', handleWheel, { passive: false });
+
+      return () => {
+        reactFlowElement.removeEventListener('wheel', handleWheel);
+      };
+    }
+  }, [reactFlowInstance]);
+
   return (
     <div
       ref={containerRef}
@@ -938,9 +973,10 @@ function MindMapInner({
         nodesDraggable={true}
         nodesConnectable={false}
         elementsSelectable={true}
-        panOnScroll={true}
+        panOnScroll={false}
         zoomOnScroll={true}
         zoomOnPinch={true}
+        zoomOnDoubleClick={false}
         minZoom={0.1}
         maxZoom={2}
         defaultViewport={{

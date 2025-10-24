@@ -1,0 +1,138 @@
+{
+  "scenarios": [
+    {
+      "name": "Zoom in with scroll wheel up",
+      "testMappings": [
+        {
+          "file": "src/mindmaps/components/__tests__/MindMap.scrollZoom.test.tsx",
+          "lines": "144-199",
+          "implMappings": [
+            {
+              "file": "src/mindmaps/components/MindMap.tsx",
+              "lines": [
+                941,
+                942,
+                943
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Zoom out with scroll wheel down",
+      "testMappings": [
+        {
+          "file": "src/mindmaps/components/__tests__/MindMap.scrollZoom.test.tsx",
+          "lines": "201-228",
+          "implMappings": [
+            {
+              "file": "src/mindmaps/components/MindMap.tsx",
+              "lines": [
+                941,
+                942,
+                943
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Pan with click and drag",
+      "testMappings": [
+        {
+          "file": "src/mindmaps/components/__tests__/MindMap.scrollZoom.test.tsx",
+          "lines": "230-254",
+          "implMappings": [
+            {
+              "file": "src/mindmaps/components/MindMap.tsx",
+              "lines": [
+                938
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Pan with Ctrl+scroll wheel",
+      "testMappings": [
+        {
+          "file": "src/mindmaps/components/__tests__/MindMap.scrollZoom.test.tsx",
+          "lines": "256-315",
+          "implMappings": [
+            {
+              "file": "src/mindmaps/components/MindMap.tsx",
+              "lines": [
+                843,
+                844,
+                845,
+                846,
+                847,
+                848,
+                849,
+                850,
+                851,
+                852,
+                853,
+                854,
+                855,
+                856,
+                857,
+                858,
+                859,
+                860,
+                861,
+                862,
+                863,
+                864,
+                865,
+                866,
+                867,
+                868,
+                869,
+                870,
+                871,
+                872,
+                873,
+                874,
+                875,
+                876
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Touchpad pinch-to-zoom still works",
+      "testMappings": [
+        {
+          "file": "src/mindmaps/components/__tests__/MindMap.scrollZoom.test.tsx",
+          "lines": "317-337",
+          "implMappings": [
+            {
+              "file": "src/mindmaps/components/MindMap.tsx",
+              "lines": [
+                943
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "stats": {
+    "totalScenarios": 5,
+    "coveredScenarios": 5,
+    "coveragePercent": 100,
+    "testFiles": [
+      "src/mindmaps/components/__tests__/MindMap.scrollZoom.test.tsx"
+    ],
+    "implFiles": [
+      "src/mindmaps/components/MindMap.tsx"
+    ],
+    "totalLinesCovered": 232
+  }
+}

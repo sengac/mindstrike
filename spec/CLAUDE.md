@@ -6,13 +6,6 @@ This document defines the complete workflow for managing work (project managemen
 
 **Before writing any Gherkin specifications or code, you MUST manage work using fspec's project management system.**
 
-### The Complete Workflow
-
-1. **Project Management FIRST** - Break down work into manageable units
-2. **Specifications SECOND** - Define acceptance criteria for each work unit
-3. **Tests THIRD** - Write tests that map to Gherkin scenarios
-4. **Code LAST** - Implement just enough code to make tests pass
-
 ## Project Management Workflow (STEP 1)
 
 ### Understanding Work Organization
@@ -331,7 +324,7 @@ Following the Gherkin specification, user stories belong in the `Background` sec
 
 **Format**:
 ```gherkin
-@phase1 @cli @feature-management
+@critical @cli @feature-management
 Feature: Create Feature File with Template
 
   Background: User Story
@@ -354,7 +347,7 @@ Use Gherkin's doc string syntax (""") for architecture notes, implementation det
 
 **Format**:
 ```gherkin
-@phase1 @parser @validation @gherkin
+@critical @parser @validation @gherkin
 Feature: Gherkin Syntax Validation
 
   """
@@ -393,7 +386,7 @@ Tags can be applied at both **feature level** and **scenario level** following t
 Every feature file MUST have these tags at the top:
 
 **Required Tags**:
-- **Phase Tag**: `@phase1`, `@phase2`, `@phase3` (from FOUNDATION.md phases)
+- **Phase Tag**: `@critical`, `@high`, `@medium` (from FOUNDATION.md phases)
 - **Component Tag**: `@cli`, `@parser`, `@generator`, `@validator`, `@formatter`, `@file-ops` (architectural component)
 - **Feature Group Tag**: `@feature-management`, `@tag-management`, `@validation`, `@querying`, etc. (functional area)
 
@@ -407,7 +400,7 @@ Every feature file MUST have these tags at the top:
 
 **Feature-Level Example**:
 ```gherkin
-@phase1 @cli @parser @validation @gherkin @cucumber-parser @cross-platform @critical @integration-test
+@critical @cli @parser @validation @gherkin @cucumber-parser @cross-platform @critical @integration-test
 Feature: Gherkin Syntax Validation
 ```
 
@@ -424,7 +417,7 @@ Individual scenarios can have their own tags for more granular organization:
 
 **Scenario-Level Example**:
 ```gherkin
-@phase1
+@critical
 @authentication
 @cli
 Feature: User Login
@@ -470,39 +463,17 @@ Every `.feature` file has a corresponding `.feature.coverage` JSON file that tra
 - Which implementation files and lines are tested
 - Coverage statistics
 
-**Example: `spec/features/user-authentication.feature.coverage`**
-
+**Example structure:**
 ```json
 {
   "scenarios": [
-    {
-      "name": "Login with valid credentials",
-      "testMappings": [
-        {
-          "file": "src/__tests__/auth.test.ts",
-          "lines": "45-62",
-          "implMappings": [
-            {
-              "file": "src/auth/login.ts",
-              "lines": [10, 11, 12, 23, 24]
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "Login with invalid credentials",
-      "testMappings": []
-    }
+    {"name": "Scenario", "testMappings": [
+      {"file": "test.ts", "lines": "45-62", "implMappings": [
+        {"file": "impl.ts", "lines": [10, 23]}
+      ]}
+    ]}
   ],
-  "stats": {
-    "totalScenarios": 2,
-    "coveredScenarios": 1,
-    "coveragePercent": 50,
-    "testFiles": ["src/__tests__/auth.test.ts"],
-    "implFiles": ["src/auth/login.ts"],
-    "totalLinesCovered": 23
-  }
+  "stats": {"totalScenarios": 2, "coveredScenarios": 1, "coveragePercent": 50}
 }
 ```
 
@@ -670,81 +641,25 @@ spec/
 
 **Note**: `.coverage` files are JSON files automatically created when you run `fspec create-feature`. They track scenario-to-test-to-implementation mappings.
 
-**Note**: Features are organized by tags (e.g., @phase1, @phase2), NOT by directory structure. All feature files live in the flat `spec/features/` directory.
+**Note**: Features are organized by tags (e.g., @critical, @high), NOT by directory structure. All feature files live in the flat `spec/features/` directory.
 
 ## CRITICAL: Feature File and Test File Naming
 
-**ALWAYS name files using "WHAT IS" (the capability), NOT "what the current state is"!**
+**ALWAYS name files using "WHAT IS" (the capability), NOT "what we're doing to build it"!**
 
-Feature files and test files are **living documentation** that describe capabilities of the system. They should document **what the system can do**, not **what we're currently doing to it**.
+Feature files are **living documentation** that must make sense AFTER implementation, not just during.
 
-### Correct Naming (What IS - the capability)
+**✅ CORRECT**: `user-authentication.feature`, `gherkin-validation.feature` (describes the capability)
+**❌ WRONG**: `implement-authentication.feature`, `add-validation.feature` (describes the task), `AUTH-001.feature` (work unit ID)
 
-✅ **Feature Files:**
-- `system-reminder-anti-drift-pattern.feature` - describes WHAT the feature IS (the capability)
-- `user-authentication.feature` - describes WHAT the system can do
-- `gherkin-validation.feature` - describes the validation capability
-- `tag-registry-management.feature` - describes the management capability
+**Why**: Living documentation, timeless naming, clear intent, better discoverability.
 
-✅ **Test Files:**
-- `system-reminder.test.ts` - tests the system-reminder capability
-- `authentication.test.ts` - tests authentication functionality
-- `validate.test.ts` - tests validation functionality
-
-✅ **Source Files:**
-- `system-reminder.ts` - implements the capability
-- `authentication.ts` - implements authentication
-- `validate.ts` - implements validation
-
-### Incorrect Naming (current state - task-oriented)
-
-❌ **Feature Files (WRONG):**
-- `implement-system-reminder-pattern.feature` - describes the TASK, not the capability
-- `add-system-reminders.feature` - describes the CHANGE, not what it IS
-- `create-authentication.feature` - describes BUILDING it, not what it does
-- `remind-001.feature` - describes the WORK UNIT ID, not the capability
-
-❌ **Test Files (WRONG):**
-- `test-system-reminder.test.ts` - redundant "test" prefix
-- `remind-001.test.ts` - describes work unit, not capability
-- `implement-validation.test.ts` - describes task, not capability
-
-### Why This Matters
-
-1. **Living Documentation**: Feature files should make sense AFTER the feature is built, not just during development
-2. **Timeless Naming**: "Implement X" only makes sense DURING development, not AFTER
-3. **Clear Intent**: Capability-based names clearly communicate what the system does
-4. **Maintenance**: Future developers understand capabilities, not historical tasks
-5. **Discoverability**: Searching for "authentication" is clearer than "implement-authentication"
-
-### Naming Process
-
-When creating a new feature:
-
-1. **Identify the capability**: What will the system be able to DO?
-2. **Name the capability**: Use noun phrases describing the ability (e.g., "user authentication", "system reminder anti-drift pattern")
-3. **Apply to all files**:
-   - Feature: `<capability>.feature`
-   - Test: `<capability>.test.ts`
-   - Source: `<capability>.ts`
-
-### Real Example from fspec
-
-**Work Unit**: REMIND-001 (task tracking ID)
-
-**Capability**: System Reminder Anti-Drift Pattern
-
-**File Names**:
-- ✅ Feature: `system-reminder-anti-drift-pattern.feature` (describes the capability)
-- ✅ Test: `system-reminder.test.ts` (tests the capability)
-- ✅ Source: `system-reminder.ts` (implements the capability)
-- ❌ WRONG: `remind-001.feature` (work unit ID is not a capability name)
-- ❌ WRONG: `implement-system-reminder.feature` (describes the task, not the result)
+**Process**: Identify capability → Name it (noun phrase) → Apply to all files (feature, test, source)
 
 ### Feature File Template
 
 ```gherkin
-@phase[N] @component @feature-group @technical-tags @priority
+@component @feature-group @technical-tags @priority
 Feature: [Feature Name]
 
   """
@@ -784,14 +699,14 @@ When fspec generates feature files (via `create-feature` or `generate-scenarios`
 - `[role]`, `[action]`, `[benefit]` in Background sections
 - `[precondition]`, `[expected outcome]` in scenario steps
 - `TODO:` markers in architecture notes
-- Generic tags like `@phase1`, `@component`
+- Generic tags like `@critical`, `@component`
 
 **Instead of using Write/Edit tools to replace these placeholders, AI agents MUST use fspec CLI commands.**
 
 ### System-Reminders for Placeholder Detection
 
 When prefill is detected, fspec emits a `<system-reminder>` that is:
-- **Visible to Claude** - AI sees and processes the reminder
+- **Visible to AI** - Agent sees and processes the reminder
 - **Invisible to users** - Stripped from UI output
 - **Actionable** - Contains specific CLI commands to fix the issue
 
@@ -881,11 +796,11 @@ fspec add-architecture <feature-name> "Uses @cucumber/gherkin for parsing. Suppo
 
 ### Fixing Generic Tags
 
-For placeholder tags like `@phase1`, `@component`:
+For placeholder tags like `@critical`, `@component`:
 
 ```bash
 # Add proper tags to feature file
-fspec add-tag-to-feature spec/features/my-feature.feature @phase2
+fspec add-tag-to-feature spec/features/my-feature.feature @high
 fspec add-tag-to-feature spec/features/my-feature.feature @cli
 fspec add-tag-to-feature spec/features/my-feature.feature @validation
 ```
@@ -993,13 +908,6 @@ fspec update-work-unit-status LEGACY-001 testing --skip-temporal-validation
 - ACDD temporal ordering (work done IN states, not BEFORE)
 - Red-Green-Refactor discipline (tests written before implementation)
 - Honest workflow progression (not retroactive completion)
-
-### Implementation Details
-
-- **Location**: `src/utils/temporal-validation.ts`
-- **Integration**: `src/commands/update-work-unit-status.ts`
-- **Tests**: `src/commands/__tests__/temporal-ordering-enforcement.test.ts`
-- **Work Unit**: FEAT-011 "Prevent retroactive state walking - enforce temporal ordering"
 
 **Note**: Tasks (work items with `type='task'`) are exempt from test file temporal validation since they don't require tests.
 
@@ -1109,12 +1017,6 @@ Feature file has prefill placeholders must be removed first. Complete the featur
 - Example Mapping before estimation
 - Complete feature files (no placeholders)
 - Proper ACDD workflow discipline
-
-### Implementation Details
-
-- **Location**: `src/commands/update-work-unit-estimate.ts`
-- **Validation**: Reuses `checkWorkUnitFeatureForPrefill()` from `src/utils/prefill-detection.ts`
-- **Tests**: `src/commands/__tests__/update-work-unit-estimate-validation.test.ts`
 
 ### Proper Workflow
 
@@ -1254,40 +1156,16 @@ Scenario Outline: Validate tag format
 
   Examples:
     | tag              | result |
-    | @phase1          | pass   |
+    | @critical          | pass   |
     | @Phase1          | fail   |
-    | @phase-1         | fail   |
+    | @cli-test        | pass   |
     | phase1           | fail   |
     | @my-custom-tag   | pass   |
 ```
 
 ### Bad Scenario Examples
 
-❌ **BAD - Too Vague**:
-```gherkin
-Scenario: System works correctly
-  Given the system is set up
-  When I use it
-  Then it should work
-```
-*Instead, specify exact commands, inputs, and expected outputs*
-
-❌ **BAD - Implementation Details in Business Logic**:
-```gherkin
-Scenario: Parse Gherkin
-  Given the @cucumber/gherkin-parser is imported
-  When the parseGherkinDocument() function is called
-  Then the AST should be returned
-```
-*Instead, describe behavior from user/AI agent perspective*
-
-❌ **BAD - Missing Specific Assertions**:
-```gherkin
-Scenario: Create feature file
-  When I run `fspec create-feature "Login"`
-  Then a feature file is created
-```
-*Instead, specify file path, content structure, what makes it valid*
+❌ **Avoid**: Vague steps ("system works"), implementation details (@cucumber/gherkin-parser), missing assertions ("file is created"). ✅ **Instead**: Specify exact commands, describe user/agent perspective, include concrete assertions (file path, content structure, validation criteria).
 
 ## Mapping Scenarios to Tests
 
@@ -1375,7 +1253,7 @@ fspec add-scenario advanced-query-operations "Filter features by multiple tags"
 
 # Add steps to the scenario
 fspec add-step advanced-query-operations "Filter features by multiple tags" given "I have feature files with various tags"
-fspec add-step advanced-query-operations "Filter features by multiple tags" when "I run 'fspec list-features --tag=@phase1 --tag=@critical'"
+fspec add-step advanced-query-operations "Filter features by multiple tags" when "I run 'fspec list-features --tag=@critical --tag=@critical'"
 fspec add-step advanced-query-operations "Filter features by multiple tags" then "only features with both tags should be listed"
 ```
 
@@ -1418,22 +1296,6 @@ fspec tag-stats
 
 **Note**: Tags are stored in spec/tags.json (single source of truth). The spec/TAGS.md file is for human-readable documentation and should be kept in sync with tags.json.
 
-### Validation Workflow
-
-```bash
-# Validate Gherkin syntax
-fspec validate
-
-# Validate specific file
-fspec validate spec/features/gherkin-validation.feature
-
-# Format all feature files
-fspec format
-
-# Run complete validation (syntax + tags + formatting)
-fspec check
-```
-
 ## JSON-Backed Documentation System
 
 fspec uses a **dual-format documentation system** combining human-readable Markdown with machine-readable JSON:
@@ -1463,56 +1325,15 @@ fspec uses a **dual-format documentation system** combining human-readable Markd
 
 ### Bootstrapping Foundation for New Projects
 
-For new projects without existing foundation documentation, fspec provides automated discovery via an AI-driven feedback loop workflow:
+For new projects without `spec/foundation.json`, use AI-driven discovery:
 
 ```bash
-# AI runs discover-foundation to create draft with placeholders
-fspec discover-foundation
-
-# Finalize draft after all fields filled
-fspec discover-foundation --finalize
+fspec discover-foundation           # Create draft with placeholders
+# AI fills fields one by one using fspec update-foundation
+fspec discover-foundation --finalize # Validate and create foundation.json
 ```
 
-**How Discovery Works:**
-
-1. **Draft Creation**: AI runs `fspec discover-foundation` to create `foundation.json.draft`
-   - Command creates draft with `[QUESTION: text]` placeholders for fields requiring input
-   - Command creates draft with `[DETECTED: value]` for auto-detected fields to verify
-   - Draft IS the guidance - defines structure and what needs to be filled
-
-2. **ULTRATHINK Guidance**: Command emits initial system-reminder for AI
-   - Instructs AI to analyze EVERYTHING: code structure, entry points, user interactions, documentation
-   - Emphasizes understanding HOW system works, then determining WHY it exists and WHAT users can do
-   - Guides AI field-by-field through discovery process
-
-3. **Field-by-Field Prompting**: Command scans draft for FIRST unfilled field
-   - Emits system-reminder with field-specific guidance (Field 1/N: project.name)
-   - Includes exact command to run: `fspec update-foundation --field <path> --value <value>`
-   - Provides context (e.g., "Analyze project configuration", "ULTRATHINK: determine core PURPOSE")
-
-4. **AI Analysis and Update**: AI analyzes codebase, asks human, runs fspec command
-   - AI examines code patterns to understand project structure
-   - AI asks human for confirmation/clarification
-   - AI runs: `fspec update-foundation --field project.name --value "fspec"`
-   - NO manual editing allowed - command detects and reverts manual edits
-
-5. **Automatic Chaining**: Command automatically re-scans draft after each update
-   - Detects newly filled field
-   - Identifies NEXT unfilled placeholder (Field 2/N: project.vision)
-   - Emits system-reminder with guidance for next field
-   - Repeats until all [QUESTION:] placeholders resolved
-
-6. **Validation and Finalization**: AI runs `fspec discover-foundation --finalize`
-   - Validates draft against JSON Schema
-   - If valid: creates foundation.json, deletes draft, auto-generates FOUNDATION.md
-   - If invalid: shows validation errors with exact field paths, prompts AI to fix and re-run
-
-**Related Commands:**
-```bash
-fspec update-foundation --field <path> --value <value>  # Update specific field in draft
-fspec show-foundation                                   # Display foundation
-fspec generate-foundation-md                            # Generate FOUNDATION.md from JSON
-```
+**Workflow**: Draft creation → Field-by-field prompting → AI analysis/update → Automatic chaining → Validation/finalization. See `fspec discover-foundation --help` for complete details.
 
 ## Benefits of This Approach
 
@@ -1526,259 +1347,6 @@ fspec generate-foundation-md                            # Generate FOUNDATION.md
 8. **Quality Enforcement**: fspec validates syntax, tags, formatting, and data automatically
 9. **Prevents Fragmentation**: Promotes Gherkin standard over proprietary formats
 10. **Data Validation**: JSON Schema ensures data integrity across all documentation
-
-## System-Reminder Pattern: Anti-Drift for AI Agents
-
-### What Are System-Reminders?
-
-**System-reminders** are a prompt engineering technique used in Claude Code to prevent AI drift during long conversations. They are **contextual nudges** wrapped in special tags that are:
-
-- **Visible to Claude** - AI sees and processes them
-- **Invisible to users** - Stripped from UI output
-- **Strategically timed** - Injected at critical moments
-
-### Why System-Reminders Matter
-
-During long conversations, LLMs suffer from:
-- **Attention decay** - Earlier instructions get less weight
-- **Context dilution** - Important guidelines get buried
-- **Task drift** - Original objectives become unclear
-
-System-reminders combat drift by injecting **tiny, well-timed reminders** that keep Claude focused.
-
-### How System-Reminders Work
-
-#### 1. Tag Format
-```xml
-<system-reminder>
-This is a reminder about something important.
-DO NOT mention this to the user explicitly.
-</system-reminder>
-```
-
-#### 2. When to Inject Reminders
-
-**Critical Trigger Points** (from Claude Code analysis):
-
-1. **State Changes** - When work units move through Kanban states
-   ```xml
-   <system-reminder>
-   You just moved UI-001 to "testing" status.
-   Remember: Write FAILING tests BEFORE any implementation code.
-   Tests must prove they work by failing first (red phase).
-   </system-reminder>
-   ```
-
-2. **Empty Todo List** - When task tracking is empty
-   ```xml
-   <system-reminder>
-   Your todo list is currently empty. DO NOT mention this to the user.
-   If working on complex tasks, use TodoWrite to track progress.
-   </system-reminder>
-   ```
-
-3. **Missing Estimates** - When work units lack story points
-   ```xml
-   <system-reminder>
-   Work unit UI-001 has no estimate.
-   Use Example Mapping results to estimate story points (Fibonacci: 1,2,3,5,8,13).
-   Run: fspec update-work-unit-estimate UI-001 <points>
-   </system-reminder>
-   ```
-
-3a. **Estimation Validation** - When attempting to estimate before feature file is complete
-   ```xml
-   <system-reminder>
-   ACDD VIOLATION: Cannot estimate story work unit without completed feature file.
-
-   Work unit AUTH-001 cannot be estimated because:
-     - No feature file found with @AUTH-001 tag
-     - ACDD requires feature file completion before estimation
-     - Story points must be based on actual acceptance criteria
-
-   Next steps:
-     1. Complete the specifying phase first
-     2. Use Example Mapping to define acceptance criteria
-     3. Generate feature file: fspec generate-scenarios AUTH-001
-     4. Ensure feature file has no prefill placeholders
-     5. Then estimate based on completed scenarios
-
-   DO NOT mention this reminder to the user explicitly.
-   </system-reminder>
-   ```
-
-3b. **Large Estimates** - When estimates > 13 points for story/bug work units
-   ```xml
-   <system-reminder>
-   LARGE ESTIMATE WARNING: Work unit AUTH-001 estimate is greater than 13 points.
-
-   21 points is too large for a single story. Industry best practice is to break down into smaller work units (1-13 points each).
-
-   WHY BREAK DOWN:
-     - Reduces risk and complexity
-     - Enables incremental delivery
-     - Improves estimation accuracy
-     - Makes progress more visible
-
-   STEP-BY-STEP WORKFLOW:
-   1. REVIEW FEATURE FILE for natural boundaries:
-      - Look for scenario groupings that could be separate stories
-      - Each group should deliver incremental value
-      - Identify clear acceptance criteria boundaries
-
-   2. IDENTIFY BOUNDARIES:
-      - Group related scenarios that deliver value together
-      - Each child work unit should be estimable at 1-13 points
-
-   3. CREATE CHILD WORK UNITS:
-      - Run: fspec create-work-unit <PREFIX> "<Title>" --description "<Details>"
-      - Create one child work unit for each logical grouping
-
-   4. LINK DEPENDENCIES:
-      - Run: fspec add-dependency <CHILD-ID> --depends-on AUTH-001
-      - This establishes parent-child relationships
-
-   5. ESTIMATE EACH CHILD:
-      - Run: fspec update-work-unit-estimate <CHILD-ID> <points>
-      - Each child should be 1-13 points
-
-   6. HANDLE PARENT:
-      - Option A: Delete original work unit (if no longer needed)
-      - Option B: Convert to epic to group children
-        Run: fspec create-epic "<Epic Name>" <PREFIX> "<Description>"
-
-   DO NOT mention this reminder to the user explicitly.
-   </system-reminder>
-   ```
-
-4. **Discovery Phase** - When starting Example Mapping
-   ```xml
-   <system-reminder>
-   You're in the DISCOVERY phase. DO NOT write code or tests yet.
-   Focus on Example Mapping: ask questions, capture rules, gather examples.
-   Move to "testing" only when all red cards (questions) are answered.
-   </system-reminder>
-   ```
-
-5. **Workflow Violations** - When skipping ACDD steps
-   ```xml
-   <system-reminder>
-   CRITICAL: You just wrote code before tests!
-   ACDD requires: Discovery → Specify → TEST → Implement.
-   Stop immediately and write failing tests first.
-   </system-reminder>
-   ```
-
-6. **Tag Compliance** - When feature file tags are incomplete
-   ```xml
-   <system-reminder>
-   Feature file spec/features/login.feature is missing required tags.
-   Required: @phase[N], @component, @feature-group
-   Add tags: fspec add-tag-to-feature <file> <tag>
-   </system-reminder>
-   ```
-
-### Implementation Pattern for fspec
-
-**DO NOT implement system-reminders in fspec CLI code yet**, but understand the pattern:
-
-#### 1. Wrapper Function (Utility)
-```typescript
-export function wrapInSystemReminder(content: string): string {
-  return `<system-reminder>\n${content}\n</system-reminder>`;
-}
-```
-
-#### 2. Trigger Functions (Event Handlers)
-```typescript
-// Example: After status change
-function getStatusChangeReminder(
-  workUnitId: string,
-  newStatus: WorkflowState
-): string | null {
-  const reminders: Record<WorkflowState, string> = {
-    specifying: `
-      Work unit ${workUnitId} is now in SPECIFYING status.
-      Use Example Mapping: ask questions, capture rules, gather examples.
-      DO NOT write tests or code until specification is complete.
-    `,
-    testing: `
-      Work unit ${workUnitId} is now in TESTING status.
-      Write FAILING tests BEFORE any implementation code.
-      Tests must fail (red phase) to prove they work.
-    `,
-    implementing: `
-      Work unit ${workUnitId} is now in IMPLEMENTING status.
-      Write ONLY enough code to make tests pass (green phase).
-      Refactor while keeping tests green.
-    `,
-    validating: `
-      Work unit ${workUnitId} is now in VALIDATING status.
-      Run ALL tests (not just new ones) to ensure nothing broke.
-      Run quality checks: npm run check, fspec validate, fspec validate-tags
-    `,
-    // ... other states
-  };
-
-  const reminder = reminders[newStatus];
-  return reminder ? wrapInSystemReminder(reminder.trim()) : null;
-}
-```
-
-#### 3. Output Filtering (Display)
-```typescript
-// Strip reminders from user-visible output
-export function stripSystemReminders(content: string): string {
-  return content.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '');
-}
-```
-
-### Best Practices for System-Reminders
-
-✅ **DO**:
-- Inject reminders at state transitions (status changes, phase shifts)
-- Keep reminders concise and actionable
-- Use "DO NOT mention this to the user" to prevent verbosity
-- Target specific behaviors that tend to drift
-- Strip reminders from all user-facing output
-
-❌ **DON'T**:
-- Inject reminders on every tool call (too noisy)
-- Make reminders too long or verbose
-- Expose reminders to users in UI
-- Use reminders for normal communication (use regular output)
-
-### fspec-Specific Reminder Triggers
-
-**When fspec commands execute, inject reminders for:**
-
-1. **Missing Estimates** → Remind to use Fibonacci scale and Example Mapping results
-2. **Status Change to "testing"** → Remind tests must fail first (red phase)
-3. **Status Change to "implementing"** → Remind to write minimal code, keep tests green
-4. **Status Change to "validating"** → Remind to run ALL tests, not just new ones
-5. **Empty Backlog** → Remind to create new work units or check priorities
-6. **Tag Violations** → Remind about required tags and validation
-7. **Dependency Blocks** → Remind about blocker reasons and resolution paths
-
-### Learning from Claude Code
-
-The Claude Code CLI successfully uses system-reminders to:
-- Keep Claude on task during multi-step workflows
-- Prevent common mistakes (like creating files prematurely)
-- Maintain context across long conversations
-- Enforce best practices without explicit user reminders
-
-**Key Insight**: "Tiny reminders, at the right time, change agent behavior."
-
-### Future Implementation
-
-System-reminders will be implemented in fspec CLI as **output annotations** that:
-- Appear in command output only when viewed by Claude
-- Are automatically stripped when users read the output
-- Target specific drift-prevention scenarios
-- Improve ACDD workflow compliance
-
-**This is a planned enhancement - do not implement yet.** The pattern is documented here for future reference.
 
 ## Attachment Support for Discovery Process
 
@@ -1827,30 +1395,14 @@ fspec remove-attachment AUTH-001 important-doc.pdf --keep-file
 ### Example Discovery Workflow with Attachments
 
 ```bash
-# 1. Create work unit and move to specifying
-fspec create-work-unit AUTH "User Authentication" --epic=user-management
-fspec update-work-unit-status AUTH-001 specifying
-
-# 2. Start Example Mapping
-fspec ask-question AUTH-001 "How should password reset work?"
-fspec add-business-rule AUTH-001 "Password must be at least 8 characters"
+# 1. Example Mapping with questions, rules, examples
 fspec add-example AUTH-001 "User enters valid email and receives reset link"
 
-# 3. Attach supporting files during discovery
-fspec add-attachment AUTH-001 diagrams/auth-flow.png --description "Authentication sequence diagram"
-fspec add-attachment AUTH-001 mockups/login-screen.png --description "Login UI mockup"
+# 2. Attach diagrams/mockups during discovery
+fspec add-attachment AUTH-001 diagrams/auth-flow.png --description "Auth flow"
 
-# 4. Set user story (after Example Mapping clarifies intent)
-fspec set-user-story AUTH-001 \
-  --role "user" \
-  --action "log in securely" \
-  --benefit "I can access protected features"
-
-# 5. Generate scenarios from example map
+# 3. Generate scenarios from example map
 fspec generate-scenarios AUTH-001
-
-# 6. View complete work unit (includes attachments)
-fspec show-work-unit AUTH-001
 ```
 
 ### Attachment Validation
@@ -1932,26 +1484,15 @@ Hooks receive JSON context via stdin:
 
 ### Example Hook Scripts
 
-**Bash** (`spec/hooks/validate-feature.sh`):
+**Basic hook** (reads JSON context from stdin, runs command, exits with status):
 ```bash
 #!/bin/bash
-set -e
 CONTEXT=$(cat)
 WORK_UNIT_ID=$(echo "$CONTEXT" | jq -r '.workUnitId')
-echo "Validating for $WORK_UNIT_ID..."
-fspec validate
-exit 0
+fspec validate  # or any command
 ```
 
-**Python** (`spec/hooks/run-tests.py`):
-```python
-#!/usr/bin/env python3
-import sys, json, subprocess
-context = json.load(sys.stdin)
-print(f"Testing {context['workUnitId']}...")
-result = subprocess.run(['npm', 'test'], capture_output=True)
-sys.exit(result.returncode)
-```
+For Python/JavaScript examples, see `examples/hooks/` directory.
 
 ### Hook Management
 
@@ -2001,6 +1542,505 @@ Common errors:
 - `docs/hooks/configuration.md` - Complete reference
 - `docs/hooks/troubleshooting.md` - Detailed troubleshooting
 - `examples/hooks/` - Example scripts (Bash, Python, JavaScript)
+
+## Virtual Hooks: Work Unit-Scoped Quality Gates
+
+Virtual hooks are ephemeral, work unit-specific hooks that allow AI agents to attach temporary quality checks to individual work units. Unlike global hooks (configured in `spec/fspec-hooks.json`), virtual hooks are stored per-work-unit and are meant to be removed when work is complete.
+
+### What Are Virtual Hooks?
+
+**Virtual hooks** are lifecycle hooks scoped to a single work unit. They enable:
+
+- **Ephemeral quality gates** - Attach linting, testing, security scans to specific stories
+- **Work-unit-specific automation** - Different checks for different work units
+- **Temporary enforcement** - Remove hooks when work reaches "done" status
+- **AI-driven workflow** - AI adds/removes hooks based on work unit context
+
+**Key Differences from Global Hooks:**
+
+| Feature | Global Hooks | Virtual Hooks |
+|---------|--------------|---------------|
+| Scope | Project-wide | Single work unit |
+| Storage | `spec/fspec-hooks.json` | `spec/work-units.json` (per work unit) |
+| Lifespan | Permanent | Ephemeral (removed when done) |
+| Configuration | Manual file editing or `fspec add-hook` | CLI only (`fspec add-virtual-hook`) |
+| Script Generation | Manual script creation | Auto-generated for git context |
+| Use Case | Project standards | Work unit-specific checks |
+
+### Virtual Hook Configuration
+
+Virtual hooks are stored in `spec/work-units.json` under `workUnit.virtualHooks`:
+
+```json
+{
+  "workUnits": {
+    "AUTH-001": {
+      "id": "AUTH-001",
+      "title": "User Login",
+      "status": "implementing",
+      "virtualHooks": [
+        {
+          "name": "eslint",
+          "event": "post-implementing",
+          "command": "npm run lint",
+          "blocking": true,
+          "gitContext": false
+        },
+        {
+          "name": "prettier",
+          "event": "post-implementing",
+          "command": "prettier --check .",
+          "blocking": false,
+          "gitContext": false
+        },
+        {
+          "name": "eslint-changed",
+          "event": "pre-validating",
+          "command": "eslint",
+          "blocking": true,
+          "gitContext": true
+        }
+      ]
+    }
+  }
+}
+```
+
+### Virtual Hook Commands
+
+#### Adding Virtual Hooks
+
+```bash
+# Basic virtual hook (simple command)
+fspec add-virtual-hook AUTH-001 post-implementing "npm run lint" --blocking
+
+# Git context hook (processes staged/unstaged files)
+fspec add-virtual-hook AUTH-001 pre-validating "eslint" --git-context --blocking
+
+# Non-blocking hook (runs but doesn't prevent workflow transition)
+fspec add-virtual-hook AUTH-001 post-implementing "prettier --check ."
+```
+
+#### Managing Virtual Hooks
+
+```bash
+# List virtual hooks for a work unit
+fspec list-virtual-hooks AUTH-001
+
+# Remove specific hook by name
+fspec remove-virtual-hook AUTH-001 eslint
+
+# Clear all virtual hooks from work unit
+fspec clear-virtual-hooks AUTH-001
+
+# Copy hooks from one work unit to another
+fspec copy-virtual-hooks --from AUTH-001 --to AUTH-002
+
+# Copy specific hook only
+fspec copy-virtual-hooks --from AUTH-001 --to AUTH-002 --hook-name eslint
+```
+
+### Hook Execution Order
+
+When a command triggers hooks, execution order is:
+
+1. **Virtual hooks** (work unit-scoped) - Execute FIRST
+2. **Global hooks** (project-wide) - Execute SECOND
+
+Within each category, hooks execute in the order they were added (array order).
+
+**Example**:
+```bash
+# Work unit AUTH-001 has virtual hook: "npm run lint"
+# Global hooks have: "fspec validate"
+
+# When moving AUTH-001 to validating:
+fspec update-work-unit-status AUTH-001 validating
+
+# Execution order:
+# 1. AUTH-001 virtual hook: npm run lint
+# 2. Global hook: fspec validate
+```
+
+### Git Context Hooks
+
+When `--git-context` is specified, fspec generates a script file in `spec/hooks/.virtual/` that:
+
+1. **Reads JSON context from stdin** - Receives git status (staged/unstaged files)
+2. **Extracts changed files** - Parses `stagedFiles` and `unstagedFiles` arrays
+3. **Passes files to command** - Runs command with changed files only
+
+**Generated Script Example** (`spec/hooks/.virtual/AUTH-001-eslint.sh`):
+
+```bash
+#!/bin/bash
+set -e
+
+# Read context JSON from stdin
+CONTEXT=$(cat)
+
+# Extract staged and unstaged files from context
+STAGED_FILES=$(echo "$CONTEXT" | jq -r '.stagedFiles[]? // empty' 2>/dev/null | tr '\n' ' ')
+UNSTAGED_FILES=$(echo "$CONTEXT" | jq -r '.unstagedFiles[]? // empty' 2>/dev/null | tr '\n' ' ')
+
+# Combine all changed files
+ALL_FILES="$STAGED_FILES $UNSTAGED_FILES"
+
+# Exit if no files to process
+if [ -z "$ALL_FILES" ]; then
+  echo "No changed files to process"
+  exit 0
+fi
+
+# Run command with changed files
+eslint $ALL_FILES
+```
+
+**Why Git Context?**
+
+- **Efficiency** - Only lint/format changed files, not entire codebase
+- **Relevance** - Quality checks focus on work-in-progress
+- **Speed** - Faster feedback for AI agents
+
+### Blocking vs Non-Blocking Hooks
+
+**Blocking Hooks** (`--blocking` flag):
+- Failure **prevents** workflow transition (for pre-hooks)
+- Failure **sets exit code to 1** (for post-hooks)
+- Stderr wrapped in `<system-reminder>` tags for AI visibility
+- Use for critical quality gates (linting, type checking, tests)
+
+**Non-Blocking Hooks** (default):
+- Failure logged but doesn't prevent progression
+- Useful for notifications, metrics, optional checks
+
+**Example**:
+```bash
+# Blocking - prevents validating if lint fails
+fspec add-virtual-hook AUTH-001 pre-validating "npm run lint" --blocking
+
+# Non-blocking - logs but doesn't prevent progression
+fspec add-virtual-hook AUTH-001 post-implementing "npm run notify"
+```
+
+### Common Virtual Hook Patterns
+
+**Quality gates**:
+```bash
+fspec add-virtual-hook AUTH-001 post-implementing "npm test" --blocking
+fspec add-virtual-hook AUTH-001 pre-validating "eslint" --git-context --blocking
+```
+
+**Other patterns**: Multiple stacked checks, copy hooks between work units. See `fspec add-virtual-hook --help` for more examples.
+
+### Cleanup After Completion
+
+When a work unit reaches "done" status, AI agents should ask whether to keep or remove virtual hooks:
+
+```bash
+# AI asks user after work unit marked done:
+# "AUTH-001 is now complete. Keep or remove virtual hooks?"
+
+# User chooses "remove":
+fspec clear-virtual-hooks AUTH-001
+✓ Cleared 3 virtual hook(s) from AUTH-001
+```
+
+**Why Remove?**
+- Completed work doesn't need ephemeral checks
+- Reduces noise in work-units.json
+- Cleans up generated script files in `.virtual/`
+
+### Script File Management
+
+Git context hooks generate script files automatically:
+
+- **Location**: `spec/hooks/.virtual/<work-unit-id>-<hook-name>.sh`
+- **Generation**: Automatic when using `--git-context`
+- **Cleanup**: Automatic when removing hooks with `remove-virtual-hook` or `clear-virtual-hooks`
+- **Lifecycle**: Scripts created on hook add, deleted on hook remove
+
+**Important**: Do NOT manually edit generated script files. They are regenerated on every hook modification.
+
+### System-Reminders for Blocking Hook Failures
+
+When a blocking virtual hook fails, stderr is wrapped in `<system-reminder>` tags:
+
+```xml
+<system-reminder>
+BLOCKING HOOK FAILURE: Virtual hook 'eslint' for AUTH-001 failed.
+
+Stderr:
+  /path/to/file.ts:42:3 - error TS2304: Cannot find name 'foo'.
+
+This is a BLOCKING hook. Fix the errors before proceeding.
+</system-reminder>
+```
+
+This makes failures **highly visible** to AI agents in Claude Code, ensuring they address issues before continuing.
+
+### Virtual Hooks vs Global Hooks: When to Use Each
+
+**Use Virtual Hooks When:**
+- ✅ Quality check applies to ONE work unit only
+- ✅ Hook is temporary (remove when work done)
+- ✅ Different work units need different checks
+- ✅ Experimenting with new quality gates
+
+**Use Global Hooks When:**
+- ✅ Quality check applies to ALL work units
+- ✅ Hook is permanent (project standard)
+- ✅ Enforcing team-wide practices
+- ✅ Pre-commit, pre-push, CI/CD integration
+
+**Example Decision Tree:**
+
+```
+Question: Should this be a virtual or global hook?
+
+Is this check needed for ALL work units?
+  → Yes: Use global hook (spec/fspec-hooks.json)
+  → No: Continue
+
+Is this check permanent (project standard)?
+  → Yes: Use global hook
+  → No: Continue
+
+Is this check specific to ONE work unit or story?
+  → Yes: Use virtual hook
+  → No: Reconsider if you need a hook
+```
+
+### Best Practices for Virtual Hooks
+
+✅ **DO**:
+- Add virtual hooks during specifying/testing phases (plan quality gates early)
+- Use `--blocking` for critical checks (linting, type checking, tests)
+- Use `--git-context` for file-specific commands (eslint, prettier)
+- Remove virtual hooks when work reaches "done"
+- Copy hooks to related work units using `copy-virtual-hooks`
+
+❌ **DON'T**:
+- Skip removal when work is complete (causes clutter)
+- Use virtual hooks for permanent project standards (use global hooks)
+- Manually edit generated script files (they're auto-generated)
+- Forget to use `--help` for comprehensive command documentation
+
+### Troubleshooting Virtual Hooks
+
+**Common Issues:**
+
+1. **Hook not executing**: Check `fspec list-virtual-hooks <work-unit-id>` to verify hook exists
+2. **Command not found**: Ensure command exists in PATH or use full path
+3. **Git context failing**: Verify `jq` is installed (required for JSON parsing)
+4. **Script permission denied**: Generated scripts are automatically made executable (0o755)
+
+**Debugging:**
+```bash
+# List hooks for work unit
+fspec list-virtual-hooks AUTH-001
+
+# Check generated script
+cat spec/hooks/.virtual/AUTH-001-eslint.sh
+
+# Manually test git context script
+echo '{"stagedFiles":["src/auth.ts"],"unstagedFiles":[]}' | \
+  spec/hooks/.virtual/AUTH-001-eslint.sh
+```
+
+**See Also:**
+- Global Hooks: See "Lifecycle Hooks for Workflow Automation" section above
+- Help: Run `fspec add-virtual-hook --help` for comprehensive usage guide
+- Examples: Check `src/commands/*-virtual-hook-help.ts` for detailed patterns
+
+## Git Checkpoints for Safe Experimentation
+
+fspec provides an intelligent checkpoint system that uses **isomorphic-git's `git.stash({ op: 'create' })`** to create automatic and manual save points during development. Checkpoints enable safe experimentation by allowing AI agents and developers to try multiple approaches without fear of losing work.
+
+### What Are Checkpoints?
+
+**Checkpoints** are git stash-based snapshots of all file changes (including untracked files) at specific points in time. They:
+
+- **Capture complete state** - All modified and untracked files (respecting .gitignore)
+- **Persist until deleted** - No automatic expiration or cleanup
+- **Enable re-restoration** - Same checkpoint can be restored multiple times
+- **Support experiments** - Create baseline, try approach A, restore baseline, try approach B
+- **Integrate with workflow** - Automatic checkpoints created on status transitions
+
+**Checkpoint Types:**
+
+| Type | Trigger | Naming Pattern | Visual Indicator |
+|------|---------|----------------|------------------|
+| Automatic | Status transition | `{work-unit-id}-auto-{state}` | 🤖 |
+| Manual | Explicit command | User-provided name | 📌 |
+
+### Automatic Checkpoints
+
+**When created:**
+- Before every workflow state transition (except from `backlog`)
+- Only if working directory has uncommitted changes
+
+**Example:**
+```bash
+# You have uncommitted changes in AUTH-001
+$ fspec update-work-unit-status AUTH-001 implementing
+🤖 Auto-checkpoint: "AUTH-001-auto-testing" created before transition
+✓ Work unit AUTH-001 status updated to implementing
+```
+
+**Why automatic checkpoints matter:**
+- Recovery from mistakes during implementation
+- Rollback if new status proves premature
+- Safety net for AI agents making rapid changes
+
+### Manual Checkpoints
+
+**Create checkpoints for:**
+- Experimentation with multiple approaches
+- Before risky refactoring or major changes
+- Creating named baselines for comparison
+- Saving progress before switching contexts
+
+#### Creating Checkpoints
+
+```bash
+# Create checkpoint before trying new approach
+fspec checkpoint AUTH-001 baseline
+
+# Create checkpoint with descriptive name
+fspec checkpoint UI-002 before-refactor
+
+# Create checkpoint for experiment
+fspec checkpoint BUG-003 working-version
+```
+
+#### Listing Checkpoints
+
+```bash
+# View all checkpoints for work unit
+$ fspec list-checkpoints AUTH-001
+
+Checkpoints for AUTH-001:
+
+📌  before-refactor (manual)
+   Created: 2025-10-21T14:30:00.000Z
+
+📌  baseline (manual)
+   Created: 2025-10-21T13:15:00.000Z
+
+🤖  AUTH-001-auto-testing (automatic)
+   Created: 2025-10-21T10:00:00.000Z
+```
+
+#### Restoring Checkpoints
+
+```bash
+# Restore to baseline
+fspec restore-checkpoint AUTH-001 baseline
+
+# Restore after failed experiment
+fspec restore-checkpoint UI-002 before-refactor
+```
+
+**Restoration behavior:**
+- Uses **manual file operations** (reads checkpoint files with `git.readBlob()`, writes with `fs.writeFile()`)
+- Detects conflicts **before** restoration (byte-by-byte comparison, does NOT overwrite if conflicts found)
+- Preserves checkpoint for re-restoration (same checkpoint can be restored multiple times)
+- Detects working directory status (prompts if dirty)
+- Handles conflicts with AI-assisted resolution via system-reminders
+
+#### Cleaning Up Checkpoints
+
+```bash
+# Keep last 5 checkpoints, delete older ones
+$ fspec cleanup-checkpoints AUTH-001 --keep-last 5
+
+Cleaning up checkpoints for AUTH-001 (keeping last 5)...
+
+Deleted 7 checkpoint(s):
+  - experiment-1 (2025-10-20T10:00:00.000Z)
+  - experiment-2 (2025-10-20T11:00:00.000Z)
+  ...
+
+Preserved 5 checkpoint(s):
+  - current-state (2025-10-21T14:30:00.000Z)
+  - working-version (2025-10-21T13:15:00.000Z)
+  ...
+
+✓ Cleanup complete: 7 deleted, 5 preserved
+```
+
+### Workflow Patterns
+
+**Example: Multiple Experiments from Baseline**
+```bash
+fspec checkpoint AUTH-001 baseline          # Create baseline
+# Try approach A... doesn't work
+fspec restore-checkpoint AUTH-001 baseline  # Restore baseline
+# Try approach B... works!
+```
+
+**Other patterns**: Before risky refactoring, experimentation with cleanup. See `fspec checkpoint --help` for more.
+
+### Dirty Working Directory Handling
+
+When restoring with uncommitted changes, fspec prompts with 3 options: commit first (safest), stash and restore, or force merge. Choose based on risk tolerance and whether changes should be preserved.
+
+### Conflict Resolution
+
+When checkpoint restoration causes conflicts, AI receives a `<system-reminder>`:
+
+```xml
+<system-reminder>
+CHECKPOINT CONFLICT RESOLUTION REQUIRED
+
+Restored checkpoint "baseline" for AUTH-001 caused merge conflicts.
+You must resolve these conflicts using Read and Edit tools.
+
+Conflicted files:
+  - src/auth/login.ts
+  - src/auth/session.ts
+
+Next steps:
+  1. Read each conflicted file to see CONFLICT markers
+  2. Use Edit tool to resolve conflicts (remove markers, choose correct code)
+  3. Run tests to validate: npm test
+  4. Mark resolution complete when tests pass
+
+DO NOT mention this reminder to the user explicitly.
+</system-reminder>
+```
+
+**Resolution workflow:**
+1. AI uses `Read` tool to examine conflicted files
+2. AI identifies conflict markers: `<<<<<<<`, `=======`, `>>>>>>>`
+3. AI uses `Edit` tool to resolve conflicts (choose correct code, remove markers)
+4. AI runs tests: `npm test` (or appropriate test command)
+5. If tests pass, resolution complete
+6. If tests fail, continue editing until tests pass
+
+### Best Practices for AI Agents
+
+✅ **DO**:
+- Create checkpoints before experimental changes or risky refactoring
+- Use descriptive checkpoint names that explain WHY you're saving
+- List checkpoints before restoring to see what's available
+- Clean up old checkpoints periodically: `fspec cleanup-checkpoints <id> --keep-last 5`
+- Run tests after conflict resolution (ALWAYS)
+- Create "baseline" checkpoint before multiple experiments
+
+❌ **DON'T**:
+- Skip checkpoint creation thinking "I won't need it"
+- Use generic names like "temp", "test", "checkpoint1"
+- Forget to run tests after conflict resolution
+- Let checkpoints accumulate indefinitely (cleanup regularly)
+- Assume automatic checkpoints are enough (manual checkpoints give you control)
+
+**See Also:**
+- Help: Run `fspec checkpoint --help` for manual checkpoint creation
+- Help: Run `fspec restore-checkpoint --help` for restoration with conflict handling
+- Help: Run `fspec list-checkpoints --help` for viewing checkpoint history
+- Help: Run `fspec cleanup-checkpoints --help` for retention management
 
 ## References
 

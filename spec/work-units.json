@@ -1,7 +1,7 @@
 {
   "meta": {
     "version": "1.0.0",
-    "lastUpdated": "2025-10-20T03:14:13.372Z"
+    "lastUpdated": "2025-10-24T05:58:28.853Z"
   },
   "workUnits": {
     "AGENT-001": {
@@ -219,6 +219,88 @@
         "Server broadcasts SSE event {type: 'mindmap_update', action: 'node_selected', nodeId: 'test-node'} and frontend calls selectNode('test-node')"
       ],
       "estimate": 2
+    },
+    "UI-001": {
+      "id": "UI-001",
+      "title": "Mindmap Zoom with Scroll Wheel",
+      "type": "story",
+      "status": "done",
+      "createdAt": "2025-10-23T22:29:06.167Z",
+      "updatedAt": "2025-10-24T06:08:34.650Z",
+      "description": "Change mindmap interaction to use scroll wheel for zooming instead of panning. Keep click-and-drag for panning.",
+      "children": [],
+      "stateHistory": [
+        {
+          "state": "specifying",
+          "timestamp": "2025-10-23T22:29:18.266Z"
+        },
+        {
+          "state": "testing",
+          "timestamp": "2025-10-24T06:00:35.882Z"
+        },
+        {
+          "state": "implementing",
+          "timestamp": "2025-10-24T06:05:43.831Z"
+        },
+        {
+          "state": "validating",
+          "timestamp": "2025-10-24T06:07:03.157Z"
+        },
+        {
+          "state": "done",
+          "timestamp": "2025-10-24T06:08:34.650Z"
+        }
+      ],
+      "userStory": {
+        "role": "user navigating the mindmap",
+        "action": "zoom the mindmap using the scroll wheel",
+        "benefit": "I can quickly zoom in and out without switching tools or using keyboard shortcuts"
+      },
+      "rules": [
+        "Scroll wheel must zoom the mindmap (not pan)",
+        "Click-and-drag must pan the mindmap",
+        "Zoom behavior replaces current scroll wheel panning",
+        "Zoom centered on mouse cursor position (not viewport center)",
+        "Keep existing touchpad pinch-to-zoom functionality - it currently works and should be retained alongside scroll wheel zoom",
+        "Ctrl+scroll wheel should pan the mindmap (preserving current scroll behavior as a modifier). Normal scroll wheel (without Ctrl) should zoom."
+      ],
+      "examples": [
+        "User scrolls mouse wheel up → mindmap zooms in",
+        "User scrolls mouse wheel down → mindmap zooms out",
+        "User clicks and drags on mindmap → canvas pans in drag direction"
+      ],
+      "questions": [
+        {
+          "text": "@human: Should zoom be centered on the mouse cursor position, or on the center of the viewport?",
+          "selected": true,
+          "answer": "Zoom centered on mouse cursor position (not viewport center)"
+        },
+        {
+          "text": "@human: Should there be minimum and maximum zoom levels? If so, what should they be?",
+          "selected": true,
+          "answer": "Use existing default minimum and maximum zoom levels from current implementation"
+        },
+        {
+          "text": "@human: Should the zoom transition be smooth/animated, or instant?",
+          "selected": true,
+          "answer": "Use existing zoom transition behavior from current implementation"
+        },
+        {
+          "text": "@human: Should touchpad pinch-to-zoom gestures also work for zooming?",
+          "selected": true,
+          "answer": "Keep existing touchpad pinch-to-zoom functionality - it currently works and should be retained alongside scroll wheel zoom"
+        },
+        {
+          "text": "@human: Are there any keyboard modifiers that should change scroll behavior (e.g., Ctrl+scroll for different zoom speed)?",
+          "selected": true,
+          "answer": "Ctrl+scroll wheel should pan the mindmap (preserving current scroll behavior as a modifier). Normal scroll wheel (without Ctrl) should zoom."
+        }
+      ],
+      "assumptions": [
+        "Use existing default minimum and maximum zoom levels from current implementation",
+        "Use existing zoom transition behavior from current implementation"
+      ],
+      "estimate": 3
     }
   },
   "states": {
@@ -232,7 +314,8 @@
     "done": [
       "AGENT-002",
       "BUG-001",
-      "BUG-002"
+      "BUG-002",
+      "UI-001"
     ],
     "blocked": []
   }

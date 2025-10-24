@@ -72,9 +72,10 @@ BACKLOG → SPECIFYING → TESTING → IMPLEMENTING → VALIDATING → DONE
 **Work is tracked using:**
 1. **Work Unit IDs**: EXAMPLE-006, EXAMPLE-008, EXAMPLE-009, etc.
 2. **Kanban States**: Track progress through ACDD phases
-3. **Feature Tags**: `@wip` (in progress), `@done` (completed), `@critical`, `@phase1`, etc.
+3. **Feature Tags**: `@wip` (in progress), `@done` (completed), `@critical`, `@critical`, etc.
 4. **Test-Feature Links**: Comments at top of test files reference feature files
 5. **Coverage Files**: `*.feature.coverage` files track scenario-to-test-to-implementation mappings for traceability
+
 
 ## Step 1: Load fspec Context
 
@@ -153,6 +154,7 @@ fspec discover-foundation --finalize
 - ONLY if `spec/foundation.json` already exists
 
 **See also:** `spec/CLAUDE.md` section "Bootstrapping Foundation for New Projects" for complete guidance.
+
 
 ## Step 2: Example Mapping - Discovery BEFORE Specification
 
@@ -383,6 +385,7 @@ fspec show-work-unit <work-unit-id>
 
 **Reference**: [Example Mapping Introduction](https://cucumber.io/blog/bdd/example-mapping-introduction/)
 
+
 ## Step 2.5: Story Point Estimation (After Generating Scenarios)
 
 **CRITICAL**: After generating scenarios from Example Mapping, you MUST estimate story points based on feature file complexity to help with prioritization and velocity tracking.
@@ -549,6 +552,7 @@ fspec query-estimation-guide EXAMPLE-006
 
 **Reference**: Story points help with sprint planning and predicting completion dates. Track your velocity over time to improve accuracy.
 
+
 ## Step 3: Kanban Workflow - How to Track Work
 
 ### View the Board
@@ -646,7 +650,7 @@ fspec update-work-unit-status EXAMPLE-006 testing
 - `@done` - Completed and validated
 - `@blocked` - Cannot proceed (add blocker reason to work unit)
 - `@critical` - High priority
-- `@phase1`, `@phase2` - Release phase
+- `@critical`, `@high` - Release phase
 
 **Update tags as you progress:**
 ```bash
@@ -666,6 +670,7 @@ fspec update-work-unit-status EXAMPLE-006 blocked
 fspec add-tag-to-feature spec/features/feature-name.feature @blocked
 # Add note to work unit about why it's blocked
 ```
+
 
 ## Step 3: Critical Rules
 
@@ -696,6 +701,7 @@ As **Developer**:
 - Write failing tests first, implement to pass (TDD)
 - Update work unit status AND feature tags as you progress
 - Ensure quality checks pass before marking done
+
 
 ## Step 5: Complete ACDD Workflow Example
 
@@ -827,6 +833,7 @@ fspec board                                      # Verify work unit in DONE colu
 7. **Validate ALL** - Run `npm test` again to ensure ALL tests still pass (nothing broke)
 8. **Tags Updated** - Remove `@wip`, add `@done` when complete
 
+
 ## Step 7: Monitoring Progress
 
 ```bash
@@ -837,6 +844,7 @@ fspec generate-summary-report         # Comprehensive report
 fspec show-coverage                   # Project-wide coverage report
 fspec show-coverage user-authentication # Feature-specific coverage
 ```
+
 
 ## Key ACDD Principles
 
@@ -876,6 +884,7 @@ describe('Feature: [Feature Name]', () => {
   });
 });
 ```
+
 
 ## Step 6.5: Coverage Tracking - Link Tests and Implementation
 
@@ -997,6 +1006,7 @@ Coverage files (`*.feature.coverage`) are JSON files automatically created when 
 3. **Use audit** - Run `fspec audit-coverage <feature>` to verify file paths are correct
 4. **Track changes** - When refactoring changes line numbers, update coverage mappings
 5. **Project-wide view** - Run `fspec show-coverage` (no arguments) to see all features at once
+
 
 ## Ready to Start
 

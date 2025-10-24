@@ -6,6 +6,10 @@
       "required": true,
       "tags": [
         {
+          "name": "@medium",
+          "description": "Medium priority features - UX improvements and enhancements"
+        },
+        {
           "name": "@phase1",
           "description": "Phase 1 features"
         }
@@ -19,6 +23,10 @@
         {
           "name": "@cli",
           "description": "Command-line interface component"
+        },
+        {
+          "name": "@ui",
+          "description": "User interface component - frontend React components"
         }
       ]
     },
@@ -30,6 +38,14 @@
         {
           "name": "@agent-integration",
           "description": "AI agent integration and automation features"
+        },
+        {
+          "name": "@interaction",
+          "description": "User interaction patterns - mouse, keyboard, touch gestures"
+        },
+        {
+          "name": "@mindmap",
+          "description": "Mindmap visualization and interaction features"
         }
       ]
     },
@@ -110,7 +126,7 @@
     "examples": []
   },
   "statistics": {
-    "lastUpdated": "2025-10-20T02:25:43.408Z",
+    "lastUpdated": "2025-10-24T06:00:01.580Z",
     "phaseStats": [],
     "componentStats": [],
     "featureGroupStats": [],

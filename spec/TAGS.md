@@ -10,34 +10,38 @@
 
 Phase identification tags
 
-| Tag | Description | Usage |
-|-----|-------------|-------|
-| `@phase1` | Phase 1 features |  |
+| Tag | Description |
+|-----|-------------|
+| `@medium` | Medium priority features - UX improvements and enhancements |
+| `@phase1` | Phase 1 features |
 
 ### Component Tags (Required)
 
 Architectural component tags
 
-| Tag | Description | Usage |
-|-----|-------------|-------|
-| `@cli` | Command-line interface component |  |
+| Tag | Description |
+|-----|-------------|
+| `@cli` | Command-line interface component |
+| `@ui` | User interface component - frontend React components |
 
 ### Feature Group Tags (Required)
 
 Functional area tags
 
-| Tag | Description | Usage |
-|-----|-------------|-------|
-| `@agent-integration` | AI agent integration and automation features |  |
+| Tag | Description |
+|-----|-------------|
+| `@agent-integration` | AI agent integration and automation features |
+| `@interaction` | User interaction patterns - mouse, keyboard, touch gestures |
+| `@mindmap` | Mindmap visualization and interaction features |
 
 ### Technical Tags
 
 Technical concern tags
 
-| Tag | Description | Usage |
-|-----|-------------|-------|
-| `@http-api` | HTTP REST API communication |  |
-| `@sse` | Server-Sent Events streaming functionality |  |
+| Tag | Description |
+|-----|-------------|
+| `@http-api` | HTTP REST API communication |
+| `@sse` | Server-Sent Events streaming functionality |
 
 ### Platform Tags
 
@@ -73,7 +77,7 @@ Automation integration tags
 
 ## Tag Statistics
 
-_Last updated: 2025-10-20T02:25:43.408Z_
+_Last updated: 2025-10-24T06:00:01.580Z_
 
 **Update Command**: `fspec tag-stats`
 

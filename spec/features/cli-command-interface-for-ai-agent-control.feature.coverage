@@ -39,10 +39,14 @@
           "implMappings": []
         }
       ]
+    },
+    {
+      "name": "Handle tree-structured mindmap data in getMindmap",
+      "testMappings": []
     }
   ],
   "stats": {
-    "totalScenarios": 4,
+    "totalScenarios": 5,
     "coveredScenarios": 4,
     "coveragePercent": 100,
     "testFiles": [
