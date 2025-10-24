@@ -24,6 +24,11 @@
       "prefix": "BUG",
       "description": "Bug fixes and defect corrections",
       "createdAt": "2025-10-20T03:01:08.563Z"
+    },
+    "CLI": {
+      "prefix": "CLI",
+      "description": "CLI command interface and agent integration features",
+      "createdAt": "2025-10-23T02:32:36.484Z"
     }
   }
 }
