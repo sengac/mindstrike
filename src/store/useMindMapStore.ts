@@ -1608,7 +1608,7 @@ export const useMindMapActions = () => {
 
 // Initialize SSE subscription for CLI node selection events
 // Subscribe to 'mindmap_update' events to handle CLI-triggered node selection
-sseEventBus.subscribe('mindmap_update', (event) => {
+sseEventBus.subscribe('mindmap_update', event => {
   try {
     // Handle nested data structure from unified SSE - data might be wrapped
     let eventData = event.data;
@@ -1640,6 +1640,9 @@ sseEventBus.subscribe('mindmap_update', (event) => {
       selectNode(eventData.nodeId);
     }
   } catch (error) {
-    logger.error('[useMindMapStore] Error handling mindmap_update SSE event:', error);
+    logger.error(
+      '[useMindMapStore] Error handling mindmap_update SSE event:',
+      error
+    );
   }
 });

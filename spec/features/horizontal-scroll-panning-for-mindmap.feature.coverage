@@ -1,0 +1,284 @@
+{
+  "scenarios": [
+    {
+      "name": "Pan mindmap right with horizontal scroll",
+      "testMappings": [
+        {
+          "file": "tests/integration/MindMap.horizontalScrollPan.test.tsx",
+          "lines": "276-304",
+          "implMappings": [
+            {
+              "file": "src/mindmaps/components/MindMap.tsx",
+              "lines": [
+                843,
+                844,
+                845,
+                846,
+                847,
+                848,
+                849,
+                850,
+                851,
+                852,
+                853,
+                854,
+                855,
+                856,
+                857,
+                858,
+                859,
+                860,
+                861,
+                862,
+                863,
+                864,
+                865,
+                866,
+                867,
+                868,
+                869,
+                870,
+                871,
+                872,
+                873,
+                874,
+                875,
+                876,
+                877,
+                878,
+                879,
+                880,
+                881,
+                882,
+                883,
+                884,
+                885,
+                886,
+                887,
+                888
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Pan mindmap left with horizontal scroll",
+      "testMappings": [
+        {
+          "file": "tests/integration/MindMap.horizontalScrollPan.test.tsx",
+          "lines": "306-334",
+          "implMappings": [
+            {
+              "file": "src/mindmaps/components/MindMap.tsx",
+              "lines": [
+                843,
+                844,
+                845,
+                846,
+                847,
+                848,
+                849,
+                850,
+                851,
+                852,
+                853,
+                854,
+                855,
+                856,
+                857,
+                858,
+                859,
+                860,
+                861,
+                862,
+                863,
+                864,
+                865,
+                866,
+                867,
+                868,
+                869,
+                870,
+                871,
+                872,
+                873,
+                874,
+                875,
+                876,
+                877,
+                878,
+                879,
+                880,
+                881,
+                882,
+                883,
+                884,
+                885,
+                886,
+                887,
+                888
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Vertical scroll still zooms in (unchanged behavior)",
+      "testMappings": [
+        {
+          "file": "tests/integration/MindMap.horizontalScrollPan.test.tsx",
+          "lines": "336-359",
+          "implMappings": []
+        }
+      ]
+    },
+    {
+      "name": "Vertical scroll still zooms out (unchanged behavior)",
+      "testMappings": [
+        {
+          "file": "tests/integration/MindMap.horizontalScrollPan.test.tsx",
+          "lines": "361-384",
+          "implMappings": []
+        }
+      ]
+    },
+    {
+      "name": "Diagonal scroll performs both zoom and pan",
+      "testMappings": [
+        {
+          "file": "tests/integration/MindMap.horizontalScrollPan.test.tsx",
+          "lines": "386-417",
+          "implMappings": [
+            {
+              "file": "src/mindmaps/components/MindMap.tsx",
+              "lines": [
+                843,
+                844,
+                845,
+                846,
+                847,
+                848,
+                849,
+                850,
+                851,
+                852,
+                853,
+                854,
+                855,
+                856,
+                857,
+                858,
+                859,
+                860,
+                861,
+                862,
+                863,
+                864,
+                865,
+                866,
+                867,
+                868,
+                869,
+                870,
+                871,
+                872,
+                873,
+                874,
+                875,
+                876,
+                877,
+                878,
+                879,
+                880,
+                881,
+                882,
+                883,
+                884,
+                885,
+                886,
+                887,
+                888
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Mouse wheel with horizontal scroll capability",
+      "testMappings": [
+        {
+          "file": "tests/integration/MindMap.horizontalScrollPan.test.tsx",
+          "lines": "419-443",
+          "implMappings": [
+            {
+              "file": "src/mindmaps/components/MindMap.tsx",
+              "lines": [
+                843,
+                844,
+                845,
+                846,
+                847,
+                848,
+                849,
+                850,
+                851,
+                852,
+                853,
+                854,
+                855,
+                856,
+                857,
+                858,
+                859,
+                860,
+                861,
+                862,
+                863,
+                864,
+                865,
+                866,
+                867,
+                868,
+                869,
+                870,
+                871,
+                872,
+                873,
+                874,
+                875,
+                876,
+                877,
+                878,
+                879,
+                880,
+                881,
+                882,
+                883,
+                884,
+                885,
+                886,
+                887,
+                888
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "stats": {
+    "totalScenarios": 6,
+    "coveredScenarios": 6,
+    "coveragePercent": 100,
+    "testFiles": [
+      "tests/integration/MindMap.horizontalScrollPan.test.tsx"
+    ],
+    "implFiles": [
+      "src/mindmaps/components/MindMap.tsx"
+    ],
+    "totalLinesCovered": 347
+  }
+}

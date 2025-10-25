@@ -327,7 +327,7 @@ export class ModelDiscoveryService {
       const fetchPromise = loadMetadataFromUrl(model.url);
       const metadata = await Promise.race([fetchPromise, timeout]);
 
-      if (metadata && metadata.n_layers && metadata.embedding_dim) {
+      if (metadata?.n_layers && metadata.embedding_dim) {
         // Prepare architecture info for shared VRAM calculator
         const architectureInfo: ModelArchitectureInfo = {
           layers: metadata.n_layers,

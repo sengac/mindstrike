@@ -7,9 +7,9 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { CliService } from '../services/cli.service';
-import { MindmapService } from '../../mindmap/mindmap.service';
-import { ChatService } from '../../chat/chat.service';
-import { SseService } from '../../events/services/sse.service';
+import type { MindmapService } from '../../mindmap/mindmap.service';
+import type { ChatService } from '../../chat/chat.service';
+import type { SseService } from '../../events/services/sse.service';
 
 describe('BUG-001: getMindmap tree structure transformation', () => {
   let cliService: CliService;
@@ -33,7 +33,7 @@ describe('BUG-001: getMindmap tree structure transformation', () => {
                 {
                   id: 'node-one',
                   text: 'One',
-                  notes: null
+                  notes: null,
                 },
                 {
                   id: 'node-two',
@@ -44,15 +44,15 @@ describe('BUG-001: getMindmap tree structure transformation', () => {
                       id: 'node-three',
                       text: 'Three',
                       notes: null,
-                      chatId: 'thread-test-001'
-                    }
-                  ]
-                }
-              ]
-            }
-          }
-        }
-      ]
+                      chatId: 'thread-test-001',
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      ],
     } as any;
 
     const sseService = {} as SseService;
@@ -71,7 +71,7 @@ describe('BUG-001: getMindmap tree structure transformation', () => {
       'node-root',
       'node-one',
       'node-two',
-      'node-three'
+      'node-three',
     ]);
   });
 
@@ -84,17 +84,17 @@ describe('BUG-001: getMindmap tree structure transformation', () => {
     expect(result.edges).toContainEqual({
       id: 'edge-node-root-node-one',
       source: 'node-root',
-      target: 'node-one'
+      target: 'node-one',
     });
     expect(result.edges).toContainEqual({
       id: 'edge-node-root-node-two',
       source: 'node-root',
-      target: 'node-two'
+      target: 'node-two',
     });
     expect(result.edges).toContainEqual({
       id: 'edge-node-two-node-three',
       source: 'node-two',
-      target: 'node-three'
+      target: 'node-three',
     });
   });
 

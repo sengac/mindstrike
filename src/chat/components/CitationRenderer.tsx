@@ -26,7 +26,7 @@ export function CitationRenderer({
       e.preventDefault();
       e.stopPropagation();
 
-      if (citations && citations[citationIndex]) {
+      if (citations?.[citationIndex]) {
         const url = citations[citationIndex];
         // Open URL in new tab
         window.open(url, '_blank', 'noopener,noreferrer');
@@ -161,8 +161,7 @@ export function CitationRenderer({
       {/* Floating tooltip */}
       {hoveredCitation !== null &&
         citationRefs.current.get(hoveredCitation) &&
-        citations &&
-        citations[hoveredCitation] && (
+        citations?.[hoveredCitation] && (
           <FloatingTooltip
             targetRef={{ current: citationRefs.current.get(hoveredCitation)! }}
             isVisible={true}

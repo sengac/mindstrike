@@ -40,12 +40,20 @@
           "description": "AI agent integration and automation features"
         },
         {
+          "name": "@deployment",
+          "description": "Package deployment, installation, and publishing features"
+        },
+        {
           "name": "@interaction",
           "description": "User interaction patterns - mouse, keyboard, touch gestures"
         },
         {
           "name": "@mindmap",
           "description": "Mindmap visualization and interaction features"
+        },
+        {
+          "name": "@navigation",
+          "description": "Navigation and viewport control features"
         }
       ]
     },
@@ -57,6 +65,10 @@
         {
           "name": "@http-api",
           "description": "HTTP REST API communication"
+        },
+        {
+          "name": "@npm",
+          "description": "NPM package management and publishing"
         },
         {
           "name": "@sse",
@@ -74,13 +86,27 @@
       "name": "Priority Tags",
       "description": "Implementation priority tags",
       "required": false,
-      "tags": []
+      "tags": [
+        {
+          "name": "@high",
+          "description": "High priority features - important but not critical"
+        }
+      ]
     },
     {
       "name": "Status Tags",
       "description": "Development status tags",
       "required": false,
-      "tags": []
+      "tags": [
+        {
+          "name": "@done",
+          "description": "Work completed and validated - all tests pass"
+        },
+        {
+          "name": "@wip",
+          "description": "Work in progress - actively being developed"
+        }
+      ]
     },
     {
       "name": "Testing Tags",
@@ -126,7 +152,7 @@
     "examples": []
   },
   "statistics": {
-    "lastUpdated": "2025-10-24T06:00:01.580Z",
+    "lastUpdated": "2025-10-25T04:27:47.522Z",
     "phaseStats": [],
     "componentStats": [],
     "featureGroupStats": [],

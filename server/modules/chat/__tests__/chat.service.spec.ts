@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { BadRequestException } from '@nestjs/common';
 import { ChatService } from '../chat.service';
-import { GlobalLlmConfigService } from '../../shared/services/global-llm-config.service';
-import { GlobalConfigService } from '../../shared/services/global-config.service';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import type { GlobalLlmConfigService } from '../../shared/services/global-llm-config.service';
+import type { GlobalConfigService } from '../../shared/services/global-config.service';
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 
 // Mock the modules
 vi.mock('../../../agents/chatAgent', () => {

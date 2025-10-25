@@ -50,8 +50,7 @@ import { CliModule } from './modules/cli/cli.module';
 
       // Serve static files in production OR when running in Electron
       const shouldServeStatic =
-        process.env.NODE_ENV === 'production' ||
-        (process.versions && process.versions.electron);
+        process.env.NODE_ENV === 'production' || process.versions?.electron;
 
       return shouldServeStatic
         ? [

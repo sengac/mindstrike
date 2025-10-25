@@ -1,5 +1,5 @@
 import { Workflow } from 'lucide-react';
-import { Workflow as WorkflowType } from '../hooks/useWorkflows';
+import type { Workflow as WorkflowType } from '../hooks/useWorkflows';
 import { ListPanel } from './shared/ListPanel';
 
 interface WorkflowsPanelProps {
@@ -17,7 +17,7 @@ export function WorkflowsPanel({
   onWorkflowSelect,
   onWorkflowCreate,
   onWorkflowRename,
-  onWorkflowDelete
+  onWorkflowDelete,
 }: WorkflowsPanelProps) {
   return (
     <ListPanel
@@ -29,8 +29,8 @@ export function WorkflowsPanel({
       onItemDelete={onWorkflowDelete}
       emptyState={{
         icon: Workflow,
-        title: "No workflows yet",
-        subtitle: "Create a new workflow to begin"
+        title: 'No workflows yet',
+        subtitle: 'Create a new workflow to begin',
       }}
       createButtonTitle="New workflow"
       renameButtonTitle="Rename workflow"

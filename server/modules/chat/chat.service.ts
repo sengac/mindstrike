@@ -176,7 +176,7 @@ Respond with only the title, no other text.`;
         workspaceRoot: this.globalConfigService.getWorkspaceRoot(),
         llmConfig: {
           baseURL: this.currentLlmConfig.baseURL!,
-          model: this.currentLlmConfig.model!,
+          model: this.currentLlmConfig.model,
           displayName: this.currentLlmConfig.displayName,
           apiKey: this.currentLlmConfig.apiKey,
           type: this.currentLlmConfig.type as

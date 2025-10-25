@@ -45,15 +45,19 @@ describe('BUG-002: Frontend SSE subscription for node selection', () => {
       // And: useMindMapStore is initialized
       let subscribedHandler: ((event: SSEEvent) => void) | null = null;
 
-      vi.mocked(sseEventBus.subscribe).mockImplementation((eventType, handler) => {
-        if (eventType === 'mindmap_update') {
-          subscribedHandler = handler;
+      vi.mocked(sseEventBus.subscribe).mockImplementation(
+        (eventType, handler) => {
+          if (eventType === 'mindmap_update') {
+            subscribedHandler = handler;
+          }
+          return vi.fn(); // Return unsubscribe function
         }
-        return vi.fn(); // Return unsubscribe function
-      });
+      );
 
       // Import store to trigger subscription
-      const { useMindMapStore } = await import('../../../src/store/useMindMapStore');
+      const { useMindMapStore } = await import(
+        '../../../src/store/useMindMapStore'
+      );
 
       // When: an SSE event is received with type='mindmap_update' and action='node_selected'
       const testEvent: SSEEvent = {
@@ -79,14 +83,18 @@ describe('BUG-002: Frontend SSE subscription for node selection', () => {
       // And: useMindMapStore has subscribed to 'mindmap_update' events
       let subscribedHandler: ((event: SSEEvent) => void) | null = null;
 
-      vi.mocked(sseEventBus.subscribe).mockImplementation((eventType, handler) => {
-        if (eventType === 'mindmap_update') {
-          subscribedHandler = handler;
+      vi.mocked(sseEventBus.subscribe).mockImplementation(
+        (eventType, handler) => {
+          if (eventType === 'mindmap_update') {
+            subscribedHandler = handler;
+          }
+          return vi.fn(); // Return unsubscribe function
         }
-        return vi.fn(); // Return unsubscribe function
-      });
+      );
 
-      const { useMindMapStore } = await import('../../../src/store/useMindMapStore');
+      const { useMindMapStore } = await import(
+        '../../../src/store/useMindMapStore'
+      );
 
       // Get initial state
       const initialSelectedNodeId = useMindMapStore.getState().selectedNodeId;
@@ -119,14 +127,18 @@ describe('BUG-002: Frontend SSE subscription for node selection', () => {
       // Given: the frontend is connected to SSE event bus
       let subscribedHandler: ((event: SSEEvent) => void) | null = null;
 
-      vi.mocked(sseEventBus.subscribe).mockImplementation((eventType, handler) => {
-        if (eventType === 'mindmap_update') {
-          subscribedHandler = handler;
+      vi.mocked(sseEventBus.subscribe).mockImplementation(
+        (eventType, handler) => {
+          if (eventType === 'mindmap_update') {
+            subscribedHandler = handler;
+          }
+          return vi.fn();
         }
-        return vi.fn();
-      });
+      );
 
-      const { useMindMapStore } = await import('../../../src/store/useMindMapStore');
+      const { useMindMapStore } = await import(
+        '../../../src/store/useMindMapStore'
+      );
 
       // When: an SSE event is received with nested data structure (from unified SSE)
       const testEvent: SSEEvent = {
@@ -153,14 +165,18 @@ describe('BUG-002: Frontend SSE subscription for node selection', () => {
       // Given: the frontend is connected to SSE event bus
       let subscribedHandler: ((event: SSEEvent) => void) | null = null;
 
-      vi.mocked(sseEventBus.subscribe).mockImplementation((eventType, handler) => {
-        if (eventType === 'mindmap_update') {
-          subscribedHandler = handler;
+      vi.mocked(sseEventBus.subscribe).mockImplementation(
+        (eventType, handler) => {
+          if (eventType === 'mindmap_update') {
+            subscribedHandler = handler;
+          }
+          return vi.fn();
         }
-        return vi.fn();
-      });
+      );
 
-      const { useMindMapStore } = await import('../../../src/store/useMindMapStore');
+      const { useMindMapStore } = await import(
+        '../../../src/store/useMindMapStore'
+      );
 
       // When: an SSE event is received with action='node_created' (not 'node_selected')
       const testEvent: SSEEvent = {

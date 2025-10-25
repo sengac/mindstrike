@@ -31,8 +31,10 @@ Functional area tags
 | Tag | Description |
 |-----|-------------|
 | `@agent-integration` | AI agent integration and automation features |
+| `@deployment` | Package deployment, installation, and publishing features |
 | `@interaction` | User interaction patterns - mouse, keyboard, touch gestures |
 | `@mindmap` | Mindmap visualization and interaction features |
+| `@navigation` | Navigation and viewport control features |
 
 ### Technical Tags
 
@@ -41,6 +43,7 @@ Technical concern tags
 | Tag | Description |
 |-----|-------------|
 | `@http-api` | HTTP REST API communication |
+| `@npm` | NPM package management and publishing |
 | `@sse` | Server-Sent Events streaming functionality |
 
 ### Platform Tags
@@ -51,9 +54,18 @@ Platform-specific tags
 
 Implementation priority tags
 
+| Tag | Description |
+|-----|-------------|
+| `@high` | High priority features - important but not critical |
+
 ### Status Tags
 
 Development status tags
+
+| Tag | Description |
+|-----|-------------|
+| `@done` | Work completed and validated - all tests pass |
+| `@wip` | Work in progress - actively being developed |
 
 ### Testing Tags
 
@@ -77,7 +89,7 @@ Automation integration tags
 
 ## Tag Statistics
 
-_Last updated: 2025-10-24T06:00:01.580Z_
+_Last updated: 2025-10-25T04:27:47.522Z_
 
 **Update Command**: `fspec tag-stats`
 

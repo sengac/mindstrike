@@ -1,9 +1,9 @@
 import React, { useState, useRef } from 'react';
-import { Thread, ConversationMessage, NotesAttachment } from '../types';
+import type { Thread, ConversationMessage, NotesAttachment } from '../types';
 import { ChatThreadSelector } from './shared/ChatThreadSelector';
 import { ChatContentViewer } from './shared/ChatContentViewer';
-import { Source } from '../types/mindMap';
-import { ChatPanelRef } from './ChatPanel';
+import type { Source } from '../types/mindMap';
+import type { ChatPanelRef } from './ChatPanel';
 
 interface MindMapChatIntegrationProps {
   nodeId: string;
@@ -60,7 +60,7 @@ export function MindMapChatIntegration({
   onNodeUpdate,
   onNodeDelete,
   onNavigateToPrevNode,
-  onNavigateToNextNode
+  onNavigateToNextNode,
 }: MindMapChatIntegrationProps) {
   const chatPanelRef = useRef<ChatPanelRef>(null);
 
@@ -119,12 +119,12 @@ export function MindMapChatIntegration({
       onMessagesUpdate={handleMessagesUpdateForThread}
       onFirstMessage={onFirstMessage}
       onRoleUpdate={handleRoleUpdateForThread}
-      onNotesUpdate={async (notes) => {
+      onNotesUpdate={async notes => {
         if (onNotesUpdate) {
           await onNotesUpdate(nodeId, notes);
         }
       }}
-      onSourcesUpdate={async (sources) => {
+      onSourcesUpdate={async sources => {
         if (onSourcesUpdate) {
           await onSourcesUpdate(nodeId, sources);
         }

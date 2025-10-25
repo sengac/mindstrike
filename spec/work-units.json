@@ -1,7 +1,7 @@
 {
   "meta": {
     "version": "1.0.0",
-    "lastUpdated": "2025-10-24T05:58:28.853Z"
+    "lastUpdated": "2025-10-25T04:30:03.040Z"
   },
   "workUnits": {
     "AGENT-001": {
@@ -301,12 +301,259 @@
         "Use existing zoom transition behavior from current implementation"
       ],
       "estimate": 3
+    },
+    "UI-002": {
+      "id": "UI-002",
+      "title": "Product Localization for Multiple Languages",
+      "type": "story",
+      "status": "backlog",
+      "createdAt": "2025-10-24T22:28:09.527Z",
+      "updatedAt": "2025-10-24T22:28:09.527Z",
+      "description": "Implement internationalization (i18n) support across MindStrike to enable translation into multiple languages. This includes UI components, chat messages, error messages, tooltips, menu items, and system notifications. Support for RTL languages, locale-specific formatting (dates, numbers, currency), and dynamic language switching without restart.",
+      "children": []
+    },
+    "CLI-001": {
+      "id": "CLI-001",
+      "title": "CLI Global Installation and Publishing Setup",
+      "type": "story",
+      "status": "specifying",
+      "createdAt": "2025-10-24T23:39:24.413Z",
+      "updatedAt": "2025-10-24T23:57:09.502Z",
+      "description": "Prepare mindstrike CLI for global installation and npm publication. Update package name to @sengac/mindstrike-cli (matching fspec pattern), ensure proper npm install -g workflow, create AI agent bootstrap file (.claude/commands/mindstrike.md), document installation process, prepare for npm registry publication, and link implementation files to coverage mappings. This completes the deployment story for AGENT-002.",
+      "children": [],
+      "stateHistory": [
+        {
+          "state": "specifying",
+          "timestamp": "2025-10-24T23:41:04.694Z"
+        }
+      ],
+      "userStory": {
+        "role": "developer or AI agent",
+        "action": "install and use the mindstrike CLI globally on any system",
+        "benefit": "I can control MindStrike programmatically without manual setup"
+      },
+      "rules": [
+        "Package name must follow @sengac namespace pattern (like @sengac/fspec)",
+        "CLI must be installable globally via npm install -g @sengac/mindstrike-cli",
+        "Bootstrap file (.claude/commands/mindstrike.md) must exist for AI agent discovery",
+        "Implementation files must be linked to coverage mappings in feature file",
+        "Package must be publishable to npm registry (proper metadata, license, repository links)",
+        "Overview + --help references (like fspec does). Bootstrap file will be created by 'fspec init' via multi-tool bootstrap system (FEAT-018 in fspec project), not by mindstrike CLI itself. Mindstrike CLI just provides template content to fspec's tool registry.",
+        "@sengac/mindstrike-cli (with -cli suffix). Main project will be @sengac/mindstrike."
+      ],
+      "examples": [
+        "Developer runs 'npm install -g @sengac/mindstrike-cli' and 'mindstrike --help' works immediately",
+        "Package.json shows name as '@sengac/mindstrike-cli' not '@mindstrike/cli'",
+        "Bootstrap file at .claude/commands/mindstrike.md contains command overview and --help references",
+        "Running 'fspec show-coverage cli-command-interface-for-ai-agent-control' shows implementation files linked (not 0 files)",
+        "Package.json includes repository field pointing to GitHub, proper license (MIT), and keywords for npm search"
+      ],
+      "questions": [
+        {
+          "text": "@human: Should we publish to npm registry immediately, or just prepare package.json for future publication?",
+          "selected": true,
+          "answer": "No, just prepare package.json for future publication. Not publishing to npm registry yet."
+        },
+        {
+          "text": "@human: What should the bootstrap file (.claude/commands/mindstrike.md) contain - full command list or just overview with --help references (like fspec does)?",
+          "selected": true,
+          "answer": "Overview + --help references (like fspec does). Bootstrap file will be created by 'fspec init' via multi-tool bootstrap system (FEAT-018 in fspec project), not by mindstrike CLI itself. Mindstrike CLI just provides template content to fspec's tool registry."
+        },
+        {
+          "text": "@human: Should the package name be '@sengac/mindstrike-cli' or '@sengac/mindstrike' (shorter, without -cli suffix)?",
+          "selected": true,
+          "answer": "@sengac/mindstrike-cli (with -cli suffix). Main project will be @sengac/mindstrike."
+        },
+        {
+          "text": "@human: Do we need a separate README.md for the CLI subdirectory, or is package.json description sufficient?",
+          "selected": true,
+          "answer": "No separate README.md needed. Use comprehensive --help system (like fspec does) for all documentation. Package.json description is sufficient for npm listing."
+        }
+      ],
+      "assumptions": [
+        "No, just prepare package.json for future publication. Not publishing to npm registry yet.",
+        "No separate README.md needed. Use comprehensive --help system (like fspec does) for all documentation. Package.json description is sufficient for npm listing."
+      ],
+      "estimate": 3
+    },
+    "CORE-001": {
+      "id": "CORE-001",
+      "title": "Rename Main Project to @sengac/mindstrike",
+      "type": "story",
+      "status": "backlog",
+      "createdAt": "2025-10-24T23:52:49.760Z",
+      "updatedAt": "2025-10-24T23:52:49.760Z",
+      "description": "Rename the main MindStrike project package to @sengac/mindstrike for consistency with CLI (@sengac/mindstrike-cli) and fspec (@sengac/fspec). Update package.json name field, repository references, documentation, and any internal references to the old package name. Prepare for future npm publication under @sengac organization.",
+      "children": []
+    },
+    "UI-003": {
+      "id": "UI-003",
+      "title": "Horizontal scroll panning for mindmap",
+      "type": "story",
+      "status": "done",
+      "createdAt": "2025-10-25T04:10:48.486Z",
+      "updatedAt": "2025-10-25T04:27:33.564Z",
+      "description": "Add horizontal scroll (left/right) panning while maintaining vertical scroll (up/down) zoom. Vertical scroll already controls zoom in/out with modifier keys. Need to enable horizontal scroll to pan the mindmap left/right, completing the scroll-based navigation system.",
+      "children": [],
+      "stateHistory": [
+        {
+          "state": "specifying",
+          "timestamp": "2025-10-25T04:10:53.665Z"
+        },
+        {
+          "state": "testing",
+          "timestamp": "2025-10-25T04:17:11.342Z"
+        },
+        {
+          "state": "implementing",
+          "timestamp": "2025-10-25T04:21:14.459Z"
+        },
+        {
+          "state": "validating",
+          "timestamp": "2025-10-25T04:22:01.285Z"
+        },
+        {
+          "state": "done",
+          "timestamp": "2025-10-25T04:27:33.564Z"
+        }
+      ],
+      "userStory": {
+        "role": "user viewing a mindmap",
+        "action": "pan the mindmap horizontally using scroll wheel",
+        "benefit": "I can navigate large mindmaps naturally without switching to mouse dragging"
+      },
+      "questions": [
+        {
+          "text": "@human: Should horizontal scroll panning work with or without modifier keys?",
+          "selected": true,
+          "answer": "No modifier keys needed. Horizontal panning should always be active when scrolling left/right."
+        },
+        {
+          "text": "@human: How fast should horizontal panning move compared to vertical zoom?",
+          "selected": true,
+          "answer": "Use the same scroll sensitivity that was used before the zoom change was implemented."
+        },
+        {
+          "text": "@human: What should happen when scrolling at the edge of the mindmap?",
+          "selected": true,
+          "answer": "Use existing edge handling code that's already in place."
+        },
+        {
+          "text": "@human: Should trackpads and mouse wheels behave differently for diagonal scrolling?",
+          "selected": true,
+          "answer": "Both should operate the same way: vertical scroll = zoom (up/down), horizontal scroll = pan (left/right). This works naturally on trackpads with 2D scrolling and mouse wheels with horizontal scroll capability."
+        }
+      ],
+      "rules": [
+        "Vertical scroll (up/down) controls zoom in/out",
+        "Horizontal scroll (left/right) controls panning left/right",
+        "Horizontal panning requires no modifier keys (always active)",
+        "Scroll sensitivity matches the pre-zoom-change panning behavior",
+        "Edge handling uses existing ReactFlow viewport bounds logic",
+        "Trackpads and mouse wheels behave identically (vertical=zoom, horizontal=pan)"
+      ],
+      "examples": [
+        "User scrolls horizontally right on trackpad → mindmap pans right, revealing nodes on the right side",
+        "User scrolls horizontally left on trackpad → mindmap pans left, revealing nodes on the left side",
+        "User scrolls vertically up → mindmap zooms in (existing behavior remains unchanged)",
+        "User scrolls vertically down → mindmap zooms out (existing behavior remains unchanged)",
+        "User scrolls diagonally (down-right) on trackpad → mindmap zooms out AND pans right simultaneously",
+        "User has mouse wheel with horizontal scroll capability → scrolling horizontally pans the mindmap"
+      ],
+      "estimate": 2
+    },
+    "BUG-003": {
+      "id": "BUG-003",
+      "title": "Diagonal scroll only zooms, doesn't pan horizontally",
+      "type": "story",
+      "status": "done",
+      "createdAt": "2025-10-25T04:29:59.584Z",
+      "updatedAt": "2025-10-25T05:33:17.034Z",
+      "description": "When scrolling diagonally on trackpad (both horizontal and vertical movement), the mindmap only zooms but doesn't pan horizontally. The current implementation uses 'else if' which prevents simultaneous zoom and pan. Need to allow both operations to happen together when both deltaX and deltaY are present.",
+      "children": [],
+      "stateHistory": [
+        {
+          "state": "specifying",
+          "timestamp": "2025-10-25T04:30:01.239Z"
+        },
+        {
+          "state": "testing",
+          "timestamp": "2025-10-25T04:32:28.034Z"
+        },
+        {
+          "state": "implementing",
+          "timestamp": "2025-10-25T04:33:38.832Z"
+        },
+        {
+          "state": "validating",
+          "timestamp": "2025-10-25T04:34:43.017Z"
+        },
+        {
+          "state": "done",
+          "timestamp": "2025-10-25T04:37:07.028Z"
+        },
+        {
+          "state": "implementing",
+          "timestamp": "2025-10-25T04:40:24.609Z"
+        },
+        {
+          "state": "validating",
+          "timestamp": "2025-10-25T04:41:00.644Z"
+        },
+        {
+          "state": "done",
+          "timestamp": "2025-10-25T04:41:05.392Z"
+        },
+        {
+          "state": "specifying",
+          "timestamp": "2025-10-25T04:48:59.619Z"
+        },
+        {
+          "state": "testing",
+          "timestamp": "2025-10-25T04:49:44.473Z"
+        },
+        {
+          "state": "implementing",
+          "timestamp": "2025-10-25T04:49:48.959Z"
+        },
+        {
+          "state": "validating",
+          "timestamp": "2025-10-25T05:33:12.845Z"
+        },
+        {
+          "state": "done",
+          "timestamp": "2025-10-25T05:33:17.034Z"
+        }
+      ],
+      "userStory": {
+        "role": "user scrolling diagonally on trackpad",
+        "action": "pan horizontally AND zoom vertically simultaneously",
+        "benefit": "I can navigate naturally without the system choosing one action over the other"
+      },
+      "rules": [
+        "When both deltaX and deltaY are present, BOTH operations must execute",
+        "Horizontal scroll (deltaX) controls horizontal panning regardless of vertical scroll",
+        "Vertical scroll (deltaY) controls zoom regardless of horizontal scroll",
+        "No 'else if' logic that prevents simultaneous execution",
+        "ReactFlow's onMove callback should be used to track deltaX accumulation and apply horizontal panning separate from zoom handling",
+        "Don't intercept wheel events during ReactFlow zoom - let ReactFlow handle vertical scroll completely"
+      ],
+      "examples": [
+        "User scrolls diagonally down-right → mindmap zooms out AND pans right (both happen)",
+        "User scrolls mostly right with slight up movement → mindmap pans right AND zooms in slightly",
+        "User scrolls only horizontally → mindmap only pans (no zoom)",
+        "User scrolls only vertically → mindmap only zooms (no pan)"
+      ]
     }
   },
   "states": {
-    "backlog": [],
+    "backlog": [
+      "UI-002",
+      "CORE-001"
+    ],
     "specifying": [
-      "AGENT-001"
+      "AGENT-001",
+      "CLI-001"
     ],
     "testing": [],
     "implementing": [],
@@ -315,7 +562,9 @@
       "AGENT-002",
       "BUG-001",
       "BUG-002",
-      "UI-001"
+      "UI-001",
+      "UI-003",
+      "BUG-003"
     ],
     "blocked": []
   }

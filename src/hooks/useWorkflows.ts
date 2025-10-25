@@ -10,7 +10,7 @@ export interface Workflow {
 }
 
 export function useWorkflows() {
-  const workspaceVersion = useAppStore((state) => state.workspaceVersion);
+  const workspaceVersion = useAppStore(state => state.workspaceVersion);
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [activeWorkflowId, setActiveWorkflowId] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -24,14 +24,15 @@ export function useWorkflows() {
         const parsedWorkflows = data.map((workflow: any) => ({
           ...workflow,
           createdAt: new Date(workflow.createdAt),
-          updatedAt: new Date(workflow.updatedAt)
+          updatedAt: new Date(workflow.updatedAt),
         }));
         setWorkflows(parsedWorkflows);
-        
+
         // Set the most recently updated workflow as active
         if (parsedWorkflows.length > 0) {
-          const mostRecent = parsedWorkflows.sort((a: Workflow, b: Workflow) => 
-            b.updatedAt.getTime() - a.updatedAt.getTime()
+          const mostRecent = parsedWorkflows.sort(
+            (a: Workflow, b: Workflow) =>
+              b.updatedAt.getTime() - a.updatedAt.getTime()
           )[0];
           setActiveWorkflowId(mostRecent.id);
         }
@@ -70,11 +71,11 @@ export function useWorkflows() {
         const response = await fetch('/api/workflows', {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
           },
-          body: JSON.stringify(workflowsToSave)
+          body: JSON.stringify(workflowsToSave),
         });
-        
+
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -84,43 +85,53 @@ export function useWorkflows() {
     }, 500);
   }, []);
 
-  const createWorkflow = useCallback(async (name?: string): Promise<string> => {
-    const newWorkflow: Workflow = {
-      id: Date.now().toString(),
-      name: name || `Workflow ${workflows.length + 1}`,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
+  const createWorkflow = useCallback(
+    async (name?: string): Promise<string> => {
+      const newWorkflow: Workflow = {
+        id: Date.now().toString(),
+        name: name || `Workflow ${workflows.length + 1}`,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
 
-    const updatedWorkflows = [newWorkflow, ...workflows];
-    setWorkflows(updatedWorkflows);
-    setActiveWorkflowId(newWorkflow.id);
-    await saveWorkflows(updatedWorkflows);
-    
-    return newWorkflow.id;
-  }, [workflows, saveWorkflows]);
+      const updatedWorkflows = [newWorkflow, ...workflows];
+      setWorkflows(updatedWorkflows);
+      setActiveWorkflowId(newWorkflow.id);
+      await saveWorkflows(updatedWorkflows);
 
-  const deleteWorkflow = useCallback(async (workflowId: string) => {
-    const updatedWorkflows = workflows.filter(w => w.id !== workflowId);
-    setWorkflows(updatedWorkflows);
-    
-    if (activeWorkflowId === workflowId) {
-      const newActiveId = updatedWorkflows.length > 0 ? updatedWorkflows[0].id : null;
-      setActiveWorkflowId(newActiveId);
-    }
-    
-    await saveWorkflows(updatedWorkflows);
-  }, [workflows, activeWorkflowId, saveWorkflows]);
+      return newWorkflow.id;
+    },
+    [workflows, saveWorkflows]
+  );
 
-  const renameWorkflow = useCallback(async (workflowId: string, newName: string) => {
-    const updatedWorkflows = workflows.map(workflow =>
-      workflow.id === workflowId
-        ? { ...workflow, name: newName, updatedAt: new Date() }
-        : workflow
-    );
-    setWorkflows(updatedWorkflows);
-    await saveWorkflows(updatedWorkflows);
-  }, [workflows, saveWorkflows]);
+  const deleteWorkflow = useCallback(
+    async (workflowId: string) => {
+      const updatedWorkflows = workflows.filter(w => w.id !== workflowId);
+      setWorkflows(updatedWorkflows);
+
+      if (activeWorkflowId === workflowId) {
+        const newActiveId =
+          updatedWorkflows.length > 0 ? updatedWorkflows[0].id : null;
+        setActiveWorkflowId(newActiveId);
+      }
+
+      await saveWorkflows(updatedWorkflows);
+    },
+    [workflows, activeWorkflowId, saveWorkflows]
+  );
+
+  const renameWorkflow = useCallback(
+    async (workflowId: string, newName: string) => {
+      const updatedWorkflows = workflows.map(workflow =>
+        workflow.id === workflowId
+          ? { ...workflow, name: newName, updatedAt: new Date() }
+          : workflow
+      );
+      setWorkflows(updatedWorkflows);
+      await saveWorkflows(updatedWorkflows);
+    },
+    [workflows, saveWorkflows]
+  );
 
   const getActiveWorkflow = useCallback(() => {
     return workflows.find(w => w.id === activeWorkflowId) || null;
@@ -139,6 +150,6 @@ export function useWorkflows() {
     createWorkflow,
     deleteWorkflow,
     renameWorkflow,
-    selectWorkflow
+    selectWorkflow,
   };
 }

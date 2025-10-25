@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Edit2, Trash2, Plus, Network } from 'lucide-react';
-import { KnowledgeGraph } from '../hooks/useKnowledgeGraphs';
+import type { KnowledgeGraph } from '../hooks/useKnowledgeGraphs';
 import { clsx } from 'clsx';
 
 interface KnowledgeGraphsPanelProps {
@@ -18,7 +18,7 @@ export function KnowledgeGraphsPanel({
   onKnowledgeGraphSelect,
   onKnowledgeGraphCreate,
   onKnowledgeGraphRename,
-  onKnowledgeGraphDelete
+  onKnowledgeGraphDelete,
 }: KnowledgeGraphsPanelProps) {
   const [editingGraphId, setEditingGraphId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
@@ -58,27 +58,33 @@ export function KnowledgeGraphsPanel({
           <div className="p-4 text-center text-gray-500">
             <Network size={24} className="mx-auto mb-2 opacity-50" />
             <p className="text-sm">No knowledge graphs yet</p>
-            <p className="text-xs mt-1">Create a new knowledge graph to begin</p>
+            <p className="text-xs mt-1">
+              Create a new knowledge graph to begin
+            </p>
           </div>
         ) : (
           <div className="p-2 space-y-1">
-            {knowledgeGraphs.map((graph) => (
+            {knowledgeGraphs.map(graph => (
               <div
                 key={graph.id}
                 className={clsx(
                   'group relative p-3 rounded-lg cursor-pointer transition-colors',
                   'hover:bg-gray-700',
-                  activeKnowledgeGraphId === graph.id ? 'bg-gray-700 border border-blue-500' : 'border border-transparent'
+                  activeKnowledgeGraphId === graph.id
+                    ? 'bg-gray-700 border border-blue-500'
+                    : 'border border-transparent'
                 )}
                 onMouseEnter={() => setHoveredGraphId(graph.id)}
                 onMouseLeave={() => setHoveredGraphId(null)}
-                onClick={() => !editingGraphId && onKnowledgeGraphSelect(graph.id)}
+                onClick={() =>
+                  !editingGraphId && onKnowledgeGraphSelect(graph.id)
+                }
               >
                 {editingGraphId === graph.id ? (
                   <input
                     type="text"
                     value={editingName}
-                    onChange={(e) => setEditingName(e.target.value)}
+                    onChange={e => setEditingName(e.target.value)}
                     onKeyDown={handleKeyDown}
                     onBlur={handleSaveEdit}
                     className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -102,11 +108,11 @@ export function KnowledgeGraphsPanel({
                           {new Date(graph.updatedAt).toLocaleDateString()}
                         </p>
                       </div>
-                      
+
                       {hoveredGraphId === graph.id && (
                         <div className="flex items-center space-x-1 ml-2">
                           <button
-                            onClick={(e) => {
+                            onClick={e => {
                               e.stopPropagation();
                               handleStartEdit(graph);
                             }}
@@ -116,7 +122,7 @@ export function KnowledgeGraphsPanel({
                             <Edit2 size={12} />
                           </button>
                           <button
-                            onClick={(e) => {
+                            onClick={e => {
                               e.stopPropagation();
                               onKnowledgeGraphDelete(graph.id);
                             }}

@@ -84,8 +84,7 @@ async function bootstrap() {
 
   // In production or Electron, serve bundled Swagger UI assets
   const isProductionOrElectron =
-    process.env.NODE_ENV === 'production' ||
-    (process.versions && process.versions.electron);
+    process.env.NODE_ENV === 'production' || process.versions?.electron;
 
   if (isProductionOrElectron) {
     // Determine the swagger-ui path

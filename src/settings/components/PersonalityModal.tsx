@@ -27,10 +27,14 @@ export const PersonalityModal: React.FC<PersonalityModalProps> = ({
   const [showCustomRole, setShowCustomRole] = useState(false);
   const [generatedRole, setGeneratedRole] = useState('');
 
-  if (!shouldRender) return null;
+  if (!shouldRender) {
+    return null;
+  }
 
   const handleGenerateRole = async () => {
-    if (!customPersonality.trim()) return;
+    if (!customPersonality.trim()) {
+      return;
+    }
 
     setIsGenerating(true);
     try {

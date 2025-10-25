@@ -15,6 +15,6 @@ import { ChatModule } from '../chat/chat.module';
   imports: [EventsModule, MindmapModule, ChatModule],
   controllers: [CliController],
   providers: [CliService],
-  exports: [CliService]
+  exports: [CliService],
 })
 export class CliModule {}

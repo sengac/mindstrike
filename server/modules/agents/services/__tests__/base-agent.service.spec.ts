@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { Test, TestingModule } from '@nestjs/testing';
+import type { TestingModule } from '@nestjs/testing';
+import { Test } from '@nestjs/testing';
 import { BaseAgentService } from '../base-agent.service';
 import { McpManagerService } from '../../../mcp/services/mcp-manager.service';
 import { SseService } from '../../../events/services/sse.service';

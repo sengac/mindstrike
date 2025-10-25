@@ -840,7 +840,8 @@ function MindMapInner({
     selectNode(null);
   }, [selectNode]);
 
-  // Custom wheel handler for Ctrl+scroll panning
+  // Custom wheel handler - handles BOTH zoom and horizontal pan
+  // Takes full control to ensure both operations work simultaneously
   useEffect(() => {
     const container = containerRef.current;
     if (!container) {
@@ -848,29 +849,86 @@ function MindMapInner({
     }
 
     const handleWheel = (event: WheelEvent) => {
-      // If Ctrl key is held, enable panning with scroll wheel
+      const deltaX = event.deltaX;
+      const deltaY = event.deltaY;
+      const hasHorizontalScroll = Math.abs(deltaX) > 0;
+      const hasVerticalScroll = Math.abs(deltaY) > 0;
+
+      // If Ctrl/Cmd key is held, enable panning with scroll wheel (original behavior)
       if (event.ctrlKey || event.metaKey) {
         event.preventDefault();
-
-        // Pan the viewport based on scroll delta
-        const deltaX = event.deltaX;
-        const deltaY = event.deltaY;
-
         const viewport = reactFlowInstance.getViewport();
         reactFlowInstance.setViewport({
           x: viewport.x - deltaX,
           y: viewport.y - deltaY,
           zoom: viewport.zoom,
         });
+        return;
+      }
+
+      // Handle horizontal pan and/or vertical zoom
+      if (hasHorizontalScroll || hasVerticalScroll) {
+        event.preventDefault(); // Prevent default AND block ReactFlow's handler
+
+        const viewport = reactFlowInstance.getViewport();
+        let newZoom = viewport.zoom;
+        let newX = viewport.x;
+        let newY = viewport.y;
+
+        // Get mouse position for zoom centering
+        const reactFlowElement = container.querySelector('.react-flow');
+        if (!reactFlowElement) {
+          return;
+        }
+        const bounds = reactFlowElement.getBoundingClientRect();
+        const mouseX = event.clientX - bounds.left;
+        const mouseY = event.clientY - bounds.top;
+
+        // Apply zoom from vertical scroll (using ReactFlow's zoom calculation)
+        if (hasVerticalScroll) {
+          // Match ReactFlow's zoom delta calculation
+          // From ReactFlow source: wheelDelta = -event.deltaY * (deltaMode === 1 ? 0.05 : deltaMode ? 1 : 0.002)
+          const deltaMode = event.deltaMode;
+          const zoomDelta = -deltaY * (deltaMode === 1 ? 0.05 : deltaMode ? 1 : 0.002);
+          newZoom = viewport.zoom * Math.pow(2, zoomDelta);
+          // Clamp zoom to ReactFlow's min/max
+          newZoom = Math.max(0.1, Math.min(2, newZoom));
+
+          // Zoom-to-point formula: adjust viewport position to keep point under cursor fixed
+          // The point in flow coordinates: (mouseX - viewport.x) / viewport.zoom
+          // After zoom, we want: mouseX = newX + flowPoint * newZoom
+          // Therefore: newX = mouseX - flowPoint * newZoom
+          //          = mouseX - ((mouseX - viewport.x) / viewport.zoom) * newZoom
+          //          = viewport.x + (mouseX - viewport.x) * (1 - newZoom / viewport.zoom)
+          const zoomRatio = newZoom / viewport.zoom;
+          newX = viewport.x + (mouseX - viewport.x) * (1 - zoomRatio);
+          newY = viewport.y + (mouseY - viewport.y) * (1 - zoomRatio);
+        }
+
+        // Apply horizontal pan (on top of zoom adjustment)
+        if (hasHorizontalScroll) {
+          newX = newX - deltaX;
+        }
+
+        // Apply both changes at once
+        reactFlowInstance.setViewport(
+          { x: newX, y: newY, zoom: newZoom },
+          { duration: 0 }
+        );
       }
     };
 
     const reactFlowElement = container.querySelector('.react-flow');
     if (reactFlowElement) {
-      reactFlowElement.addEventListener('wheel', handleWheel, { passive: false });
+      reactFlowElement.addEventListener('wheel', handleWheel as EventListener, {
+        passive: false,
+      });
 
       return () => {
-        reactFlowElement.removeEventListener('wheel', handleWheel);
+        reactFlowElement.removeEventListener(
+          'wheel',
+          handleWheel as EventListener
+        );
       };
     }
   }, [reactFlowInstance]);
@@ -974,7 +1032,7 @@ function MindMapInner({
         nodesConnectable={false}
         elementsSelectable={true}
         panOnScroll={false}
-        zoomOnScroll={true}
+        zoomOnScroll={false}
         zoomOnPinch={true}
         zoomOnDoubleClick={false}
         minZoom={0.1}

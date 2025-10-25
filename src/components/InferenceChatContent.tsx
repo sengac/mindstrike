@@ -12,7 +12,10 @@ interface InferenceChatContentProps {
   nodeId: string;
 }
 
-export function InferenceChatContent({ nodeLabel, nodeId }: InferenceChatContentProps) {
+export function InferenceChatContent({
+  nodeLabel,
+  nodeId,
+}: InferenceChatContentProps) {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -22,10 +25,12 @@ export function InferenceChatContent({ nodeLabel, nodeId }: InferenceChatContent
   // Initialize chat when component mounts
   useEffect(() => {
     if (chatMessages.length === 0) {
-      setChatMessages([{
-        role: 'assistant',
-        content: `Hi! I'm here to help you explore inferences and insights about "${nodeLabel}". What would you like to know or discuss about this concept?`
-      }]);
+      setChatMessages([
+        {
+          role: 'assistant',
+          content: `Hi! I'm here to help you explore inferences and insights about "${nodeLabel}". What would you like to know or discuss about this concept?`,
+        },
+      ]);
     }
   }, [nodeLabel, chatMessages.length]);
 
@@ -45,13 +50,18 @@ export function InferenceChatContent({ nodeLabel, nodeId }: InferenceChatContent
 
   const handleChatSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim() || isLoading) return;
+    if (!chatInput.trim() || isLoading) {
+      return;
+    }
 
     const userMessage = chatInput.trim();
     setChatInput('');
     setIsLoading(true);
 
-    const newMessages = [...chatMessages, { role: 'user' as const, content: userMessage }];
+    const newMessages = [
+      ...chatMessages,
+      { role: 'user' as const, content: userMessage },
+    ];
     setChatMessages(newMessages);
 
     try {
@@ -70,12 +80,25 @@ export function InferenceChatContent({ nodeLabel, nodeId }: InferenceChatContent
       }
 
       const result = await response.json();
-      const assistantMessage = result.content || result.message || 'I apologize, but I could not generate a response at this time.';
-      
-      setChatMessages([...newMessages, { role: 'assistant', content: assistantMessage }]);
+      const assistantMessage =
+        result.content ||
+        result.message ||
+        'I apologize, but I could not generate a response at this time.';
+
+      setChatMessages([
+        ...newMessages,
+        { role: 'assistant', content: assistantMessage },
+      ]);
     } catch (error) {
       console.error('Error calling AI API:', error);
-      setChatMessages([...newMessages, { role: 'assistant', content: 'Sorry, I encountered an error connecting to the AI service. Please try again.' }]);
+      setChatMessages([
+        ...newMessages,
+        {
+          role: 'assistant',
+          content:
+            'Sorry, I encountered an error connecting to the AI service. Please try again.',
+        },
+      ]);
     } finally {
       setIsLoading(false);
     }
@@ -96,7 +119,7 @@ export function InferenceChatContent({ nodeLabel, nodeId }: InferenceChatContent
         <span className="text-white text-sm font-medium">Node Panel</span>
         <span className="text-gray-400 text-xs">• {nodeLabel}</span>
       </div>
-      
+
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
         {chatMessages.map((message, index) => (
@@ -116,22 +139,31 @@ export function InferenceChatContent({ nodeLabel, nodeId }: InferenceChatContent
           <div className="bg-gray-700 text-gray-100 p-2 rounded text-sm mr-8">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
-              <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" style={{animationDelay: '0.2s'}}></div>
-              <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" style={{animationDelay: '0.4s'}}></div>
+              <div
+                className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"
+                style={{ animationDelay: '0.2s' }}
+              ></div>
+              <div
+                className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"
+                style={{ animationDelay: '0.4s' }}
+              ></div>
             </div>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
-      
+
       {/* Input */}
-      <form onSubmit={handleChatSubmit} className="flex-shrink-0 p-3 border-t border-gray-600">
+      <form
+        onSubmit={handleChatSubmit}
+        className="flex-shrink-0 p-3 border-t border-gray-600"
+      >
         <div className="flex gap-2">
           <input
             ref={chatInputRef}
             type="text"
             value={chatInput}
-            onChange={(e) => setChatInput(e.target.value)}
+            onChange={e => setChatInput(e.target.value)}
             onKeyDown={handleChatKeyDown}
             placeholder="Ask about this concept..."
             className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-blue-400"

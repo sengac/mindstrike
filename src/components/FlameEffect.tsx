@@ -9,10 +9,14 @@ export function FlameEffect({ className = '' }: FlameEffectProps) {
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) {
+      return;
+    }
 
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
 
     // Set canvas size
     const resizeCanvas = () => {
@@ -38,23 +42,32 @@ export function FlameEffect({ className = '' }: FlameEffectProps) {
     // Cube vertices
     const cubeVertices: Point3D[] = [
       { x: -1, y: -1, z: -1 }, // 0
-      { x:  1, y: -1, z: -1 }, // 1
-      { x:  1, y:  1, z: -1 }, // 2
-      { x: -1, y:  1, z: -1 }, // 3
-      { x: -1, y: -1, z:  1 }, // 4
-      { x:  1, y: -1, z:  1 }, // 5
-      { x:  1, y:  1, z:  1 }, // 6
-      { x: -1, y:  1, z:  1 }, // 7
+      { x: 1, y: -1, z: -1 }, // 1
+      { x: 1, y: 1, z: -1 }, // 2
+      { x: -1, y: 1, z: -1 }, // 3
+      { x: -1, y: -1, z: 1 }, // 4
+      { x: 1, y: -1, z: 1 }, // 5
+      { x: 1, y: 1, z: 1 }, // 6
+      { x: -1, y: 1, z: 1 }, // 7
     ];
 
     // Cube edges (which vertices connect to which)
     const cubeEdges: [number, number][] = [
       // Front face
-      [0, 1], [1, 2], [2, 3], [3, 0],
+      [0, 1],
+      [1, 2],
+      [2, 3],
+      [3, 0],
       // Back face
-      [4, 5], [5, 6], [6, 7], [7, 4],
+      [4, 5],
+      [5, 6],
+      [6, 7],
+      [7, 4],
       // Connecting edges
-      [0, 4], [1, 5], [2, 6], [3, 7]
+      [0, 4],
+      [1, 5],
+      [2, 6],
+      [3, 7],
     ];
 
     // Cube faces (which vertices form each face)
@@ -68,15 +81,21 @@ export function FlameEffect({ className = '' }: FlameEffectProps) {
     ];
 
     // 3D to 2D projection with rotation and zoom
-    const project = (point: Point3D, rotX: number, rotY: number, rotZ: number, zoom: number): Point2D => {
+    const project = (
+      point: Point3D,
+      rotX: number,
+      rotY: number,
+      rotZ: number,
+      zoom: number
+    ): Point2D => {
       const centerX = canvas.width / 2;
       const centerY = canvas.height / 2;
       // Scale to fit within canvas bounds with margin, modified by zoom
       const baseScale = Math.min(canvas.width, canvas.height) * 0.15;
       const scale = baseScale * zoom;
-      
+
       let { x, y, z } = point;
-      
+
       // Rotate around X axis
       const cosX = Math.cos(rotX);
       const sinX = Math.sin(rotX);
@@ -84,7 +103,7 @@ export function FlameEffect({ className = '' }: FlameEffectProps) {
       const z1 = y * sinX + z * cosX;
       y = y1;
       z = z1;
-      
+
       // Rotate around Y axis
       const cosY = Math.cos(rotY);
       const sinY = Math.sin(rotY);
@@ -92,7 +111,7 @@ export function FlameEffect({ className = '' }: FlameEffectProps) {
       const z2 = -x * sinY + z * cosY;
       x = x1;
       z = z2;
-      
+
       // Rotate around Z axis
       const cosZ = Math.cos(rotZ);
       const sinZ = Math.sin(rotZ);
@@ -100,10 +119,10 @@ export function FlameEffect({ className = '' }: FlameEffectProps) {
       const y2 = x * sinZ + y * cosZ;
       x = x2;
       y = y2;
-      
+
       return {
         x: centerX + x * scale,
-        y: centerY + y * scale
+        y: centerY + y * scale,
       };
     };
 
@@ -112,17 +131,17 @@ export function FlameEffect({ className = '' }: FlameEffectProps) {
       const v1 = vertices[face[0]];
       const v2 = vertices[face[1]];
       const v3 = vertices[face[2]];
-      
+
       const edge1 = { x: v2.x - v1.x, y: v2.y - v1.y, z: v2.z - v1.z };
       const edge2 = { x: v3.x - v1.x, y: v3.y - v1.y, z: v3.z - v1.z };
-      
+
       // Cross product for normal
       const normal = {
         x: edge1.y * edge2.z - edge1.z * edge2.y,
         y: edge1.z * edge2.x - edge1.x * edge2.z,
-        z: edge1.x * edge2.y - edge1.y * edge2.x
+        z: edge1.x * edge2.y - edge1.y * edge2.x,
       };
-      
+
       return normal.z; // Return z component for depth
     };
 
@@ -149,7 +168,7 @@ export function FlameEffect({ className = '' }: FlameEffectProps) {
       networkNodes.push({
         x: Math.random() * canvas.width,
         y: Math.random() * canvas.height,
-        connections: []
+        connections: [],
       });
     }
 
@@ -158,8 +177,8 @@ export function FlameEffect({ className = '' }: FlameEffectProps) {
       networkNodes.forEach((otherNode, otherIndex) => {
         if (index !== otherIndex) {
           const distance = Math.sqrt(
-            Math.pow(node.x - otherNode.x, 2) + 
-            Math.pow(node.y - otherNode.y, 2)
+            Math.pow(node.x - otherNode.x, 2) +
+              Math.pow(node.y - otherNode.y, 2)
           );
           if (distance < 150 && node.connections.length < 3) {
             node.connections.push(otherIndex);
@@ -172,9 +191,10 @@ export function FlameEffect({ className = '' }: FlameEffectProps) {
     const handleKeyPress = () => {
       targetSpeed = 1.5; // Gentle speed up on keypress
       lastKeyTime = time;
-      
+
       // Track first key of typing session
-      if (time - lastKeyTime > 2) { // If more than 2 seconds since last key
+      if (time - lastKeyTime > 2) {
+        // If more than 2 seconds since last key
         firstKeyTime = time;
       }
     };
@@ -187,11 +207,11 @@ export function FlameEffect({ className = '' }: FlameEffectProps) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       time += 0.02;
-      
+
       // Network effect based on typing duration
       const typingDuration = time - firstKeyTime;
       const timeSinceLastKey = time - lastKeyTime;
-      
+
       if (timeSinceLastKey <= 1 && typingDuration >= 3) {
         // Show network if typing for more than 3 seconds
         targetNetworkAlpha = 0.6;
@@ -199,30 +219,31 @@ export function FlameEffect({ className = '' }: FlameEffectProps) {
         // Fade network when typing stops
         targetNetworkAlpha = 0;
       }
-      
+
       // Smooth network fade
       networkAlpha += (targetNetworkAlpha - networkAlpha) * 0.03;
-      
+
       // Gradually slow down if no recent key presses
-      if (timeSinceLastKey > 1) { // 1 second after last keypress
+      if (timeSinceLastKey > 1) {
+        // 1 second after last keypress
         targetSpeed = Math.max(0.8, targetSpeed * 0.99); // Slowly reduce speed, minimum 0.8
       }
-      
+
       // Smoothly interpolate to target speed
       currentSpeed += (targetSpeed - currentSpeed) * 0.02; // Slightly faster transition
-      
+
       // Calculate rotations with smooth variable speed
       const rotX = time * 0.7 * currentSpeed;
       const rotY = time * 0.5 * currentSpeed;
       const rotZ = time * 0.3 * currentSpeed;
-      
+
       // Calculate zoom with smooth in/out effect
       const zoomCycle = Math.sin(time * 0.3) * 0.5 + 1; // Oscillates between 0.5 and 1.5
-      
+
       // Rotate vertices for normal calculation
       const rotatedVertices = cubeVertices.map(vertex => {
         let { x, y, z } = vertex;
-        
+
         // Apply same rotations as projection
         const cosX = Math.cos(rotX);
         const sinX = Math.sin(rotX);
@@ -230,34 +251,34 @@ export function FlameEffect({ className = '' }: FlameEffectProps) {
         const z1 = y * sinX + z * cosX;
         y = y1;
         z = z1;
-        
+
         const cosY = Math.cos(rotY);
         const sinY = Math.sin(rotY);
         const x1 = x * cosY + z * sinY;
         const z2 = -x * sinY + z * cosY;
         x = x1;
         z = z2;
-        
+
         const cosZ = Math.cos(rotZ);
         const sinZ = Math.sin(rotZ);
         const x2 = x * cosZ - y * sinZ;
         const y2 = x * sinZ + y * cosZ;
-        
+
         return { x: x2, y: y2, z };
       });
-      
+
       // Project all vertices with zoom
-      const projectedVertices = cubeVertices.map(vertex => 
+      const projectedVertices = cubeVertices.map(vertex =>
         project(vertex, rotX, rotY, rotZ, zoomCycle)
       );
-      
+
       // Draw network effect in background
       if (networkAlpha > 0.01) {
         // Draw network connections
         networkNodes.forEach((node, index) => {
           node.connections.forEach(connectionIndex => {
             const connectedNode = networkNodes[connectionIndex];
-            
+
             ctx.strokeStyle = `rgba(59, 130, 246, ${networkAlpha * 0.3})`;
             ctx.lineWidth = 1;
             ctx.beginPath();
@@ -266,7 +287,7 @@ export function FlameEffect({ className = '' }: FlameEffectProps) {
             ctx.stroke();
           });
         });
-        
+
         // Draw network nodes
         networkNodes.forEach(node => {
           ctx.fillStyle = `rgba(59, 130, 246, ${networkAlpha})`;
@@ -275,22 +296,22 @@ export function FlameEffect({ className = '' }: FlameEffectProps) {
           ctx.fill();
         });
       }
-      
+
       // Draw wireframe edges
       ctx.strokeStyle = '#1e40af';
       ctx.lineWidth = 2;
       ctx.lineCap = 'round';
-      
+
       cubeEdges.forEach(([start, end]) => {
         const p1 = projectedVertices[start];
         const p2 = projectedVertices[end];
-        
+
         ctx.beginPath();
         ctx.moveTo(p1.x, p1.y);
         ctx.lineTo(p2.x, p2.y);
         ctx.stroke();
       });
-      
+
       // Draw vertices as dots
       ctx.fillStyle = '#3b82f6';
       projectedVertices.forEach(point => {

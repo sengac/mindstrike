@@ -14,26 +14,30 @@ export const PersonalityModal: React.FC<PersonalityModalProps> = ({
   onClose,
   currentRole,
   defaultRole,
-  onRoleChange
+  onRoleChange,
 }) => {
   const [customPersonality, setCustomPersonality] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [showCustomRole, setShowCustomRole] = useState(false);
   const [generatedRole, setGeneratedRole] = useState('');
 
-  if (!isOpen) return null;
+  if (!isOpen) {
+    return null;
+  }
 
   const handleGenerateRole = async () => {
-    if (!customPersonality.trim()) return;
+    if (!customPersonality.trim()) {
+      return;
+    }
 
     setIsGenerating(true);
     try {
       const response = await fetch('/api/generate-role', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ personality: customPersonality.trim() })
+        body: JSON.stringify({ personality: customPersonality.trim() }),
       });
 
       if (response.ok) {
@@ -77,8 +81,12 @@ export const PersonalityModal: React.FC<PersonalityModalProps> = ({
               <User size={20} className="text-purple-600" />
             </div>
             <div>
-              <h3 className="text-lg font-medium text-white">Change Personality</h3>
-              <p className="text-sm text-gray-400">Customize your assistant's role and behavior</p>
+              <h3 className="text-lg font-medium text-white">
+                Change Personality
+              </h3>
+              <p className="text-sm text-gray-400">
+                Customize your assistant's role and behavior
+              </p>
             </div>
           </div>
           <button
@@ -100,7 +108,9 @@ export const PersonalityModal: React.FC<PersonalityModalProps> = ({
                 {currentRole}
               </div>
               {isUsingDefault && (
-                <p className="text-xs text-gray-500 mt-1">Currently using default role</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Currently using default role
+                </p>
               )}
             </div>
 
@@ -111,7 +121,7 @@ export const PersonalityModal: React.FC<PersonalityModalProps> = ({
               </label>
               <textarea
                 value={customPersonality}
-                onChange={(e) => setCustomPersonality(e.target.value)}
+                onChange={e => setCustomPersonality(e.target.value)}
                 placeholder="e.g., 'A friendly, enthusiastic coding mentor who explains things clearly and encourages best practices'"
                 className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
                 rows={3}
@@ -128,7 +138,7 @@ export const PersonalityModal: React.FC<PersonalityModalProps> = ({
               >
                 Cancel
               </button>
-              
+
               {!isUsingDefault && (
                 <button
                   onClick={handleUseDefault}
@@ -138,7 +148,7 @@ export const PersonalityModal: React.FC<PersonalityModalProps> = ({
                   Use Default
                 </button>
               )}
-              
+
               <button
                 onClick={handleGenerateRole}
                 disabled={!customPersonality.trim() || isGenerating}
@@ -178,7 +188,7 @@ export const PersonalityModal: React.FC<PersonalityModalProps> = ({
               >
                 Back
               </button>
-              
+
               <button
                 onClick={handleApplyRole}
                 className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition-colors"

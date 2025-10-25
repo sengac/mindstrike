@@ -9,7 +9,7 @@ import type { WorkspaceService } from '../workspace.service';
 import type { WorkspaceFileService } from '../services/workspace-file.service';
 import type { AgentPoolService } from '../../agents/services/agent-pool.service';
 import type { ConversationService } from '../../chat/services/conversation.service';
-import { GlobalConfigService } from '../../shared/services/global-config.service';
+import type { GlobalConfigService } from '../../shared/services/global-config.service';
 import * as path from 'path';
 import * as fs from 'fs';
 

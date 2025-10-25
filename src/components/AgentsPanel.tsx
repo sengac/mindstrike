@@ -11,7 +11,7 @@ import { AppBar } from './AppBar';
 import { useState, useEffect } from 'react';
 import { CodeEditor } from './CodeEditor';
 import MCPIcon from './MCPIcon';
-import { LucideProps } from 'lucide-react';
+import type { LucideProps } from 'lucide-react';
 
 interface MCPServer {
   id: string;

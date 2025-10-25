@@ -7,13 +7,17 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { SseService, SSEEventType } from '../../events/services/sse.service';
-import { MindmapService, type MindMapNode, type MindMapEdge } from '../../mindmap/mindmap.service';
+import {
+  MindmapService,
+  type MindMapNode,
+  type MindMapEdge,
+} from '../../mindmap/mindmap.service';
 import { ChatService } from '../../chat/chat.service';
 import type {
   SelectNodeResponseDto,
   CreateNodeResponseDto,
   GetMindmapResponseDto,
-  SendMessageResponseDto
+  SendMessageResponseDto,
 } from '../dto/cli.dto';
 
 @Injectable()
@@ -34,17 +38,20 @@ export class CliService {
       type: 'mindmap_update',
       action: 'node_selected',
       nodeId,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
 
     return {
       success: true,
       nodeId,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
   }
 
-  async createNode(label: string, parentId?: string): Promise<CreateNodeResponseDto> {
+  async createNode(
+    label: string,
+    parentId?: string
+  ): Promise<CreateNodeResponseDto> {
     this.logger.log(`Creating node: ${label}, parent: ${parentId}`);
 
     const nodeId = `node-${uuidv4()}`;
@@ -64,12 +71,12 @@ export class CliService {
       id: nodeId,
       type: 'default',
       data: {
-        label
+        label,
       },
       position: {
         x: Math.random() * 500,
-        y: Math.random() * 500
-      }
+        y: Math.random() * 500,
+      },
     };
 
     mindmap.nodes.push(newNode);
@@ -85,7 +92,7 @@ export class CliService {
         id: `edge-${uuidv4()}`,
         source: parentId,
         target: nodeId,
-        type: 'default'
+        type: 'default',
       };
 
       mindmap.edges.push(newEdge);
@@ -101,7 +108,7 @@ export class CliService {
       nodeId,
       parentId,
       label,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
 
     return {
@@ -109,7 +116,7 @@ export class CliService {
       nodeId,
       label,
       parentId,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
   }
 
@@ -124,8 +131,8 @@ export class CliService {
         nodes: [],
         edges: [],
         metadata: {
-          title: 'Empty Mindmap'
-        }
+          title: 'Empty Mindmap',
+        },
       };
     }
 
@@ -133,11 +140,26 @@ export class CliService {
     const mindmap = mindmaps[0];
 
     // Transform tree structure to flat nodes/edges arrays
-    const nodes: Array<{ id: string; label: string; position: { x: number; y: number }; data?: unknown }> = [];
-    const edges: Array<{ id: string; source: string; target: string; label?: string }> = [];
+    const nodes: Array<{
+      id: string;
+      label: string;
+      position: { x: number; y: number };
+      data?: unknown;
+    }> = [];
+    const edges: Array<{
+      id: string;
+      source: string;
+      target: string;
+      label?: string;
+    }> = [];
 
     // Recursively flatten tree structure
-    const flattenNode = (node: any, parentId?: string, depth: number = 0, index: number = 0): void => {
+    const flattenNode = (
+      node: any,
+      parentId?: string,
+      depth: number = 0,
+      index: number = 0
+    ): void => {
       if (!node) {
         return;
       }
@@ -147,7 +169,7 @@ export class CliService {
         id: node.id,
         label: node.text || node.id,
         position: { x: depth * 200, y: index * 100 },
-        data: { chatId: node.chatId, notes: node.notes }
+        data: { chatId: node.chatId, notes: node.notes },
       });
 
       // Add edge from parent
@@ -155,7 +177,7 @@ export class CliService {
         edges.push({
           id: `edge-${parentId}-${node.id}`,
           source: parentId,
-          target: node.id
+          target: node.id,
         });
       }
 
@@ -168,7 +190,7 @@ export class CliService {
     };
 
     // Start flattening from root
-    if (mindmap.mindmapData && mindmap.mindmapData.root) {
+    if (mindmap.mindmapData?.root) {
       flattenNode(mindmap.mindmapData.root);
     }
 
@@ -177,13 +199,24 @@ export class CliService {
       edges,
       metadata: {
         title: mindmap.name || 'Untitled',
-        created: mindmap.createdAt ? (typeof mindmap.createdAt === 'string' ? mindmap.createdAt : mindmap.createdAt.toISOString()) : undefined,
-        modified: mindmap.updatedAt ? (typeof mindmap.updatedAt === 'string' ? mindmap.updatedAt : mindmap.updatedAt.toISOString()) : undefined
-      }
+        created: mindmap.createdAt
+          ? typeof mindmap.createdAt === 'string'
+            ? mindmap.createdAt
+            : mindmap.createdAt.toISOString()
+          : undefined,
+        modified: mindmap.updatedAt
+          ? typeof mindmap.updatedAt === 'string'
+            ? mindmap.updatedAt
+            : mindmap.updatedAt.toISOString()
+          : undefined,
+      },
     };
   }
 
-  async sendMessage(message: string, clientId?: string): Promise<SendMessageResponseDto> {
+  async sendMessage(
+    message: string,
+    clientId?: string
+  ): Promise<SendMessageResponseDto> {
     this.logger.log(`Sending message: ${message.substring(0, 50)}...`);
 
     // Get or create active thread
@@ -208,16 +241,16 @@ export class CliService {
         threadId,
         messageId: result.id,
         content: message,
-        role: 'user'
+        role: 'user',
       },
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
 
     return {
       success: true,
       messageId: result.id,
       threadId,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
   }
 }

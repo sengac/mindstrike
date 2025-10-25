@@ -13,7 +13,7 @@ import {
   type CreateNodeResponseDto,
   type GetMindmapResponseDto,
   SendMessageDto,
-  type SendMessageResponseDto
+  type SendMessageResponseDto,
 } from './dto/cli.dto';
 
 @Controller('api/cli')
@@ -41,8 +41,12 @@ export class CliController {
   }
 
   @Post('chat/send-message')
-  async sendMessage(@Body() dto: SendMessageDto): Promise<SendMessageResponseDto> {
-    this.logger.log(`POST /api/cli/chat/send-message: ${dto.message.substring(0, 50)}...`);
+  async sendMessage(
+    @Body() dto: SendMessageDto
+  ): Promise<SendMessageResponseDto> {
+    this.logger.log(
+      `POST /api/cli/chat/send-message: ${dto.message.substring(0, 50)}...`
+    );
     return this.cliService.sendMessage(dto.message, dto.clientId);
   }
 }

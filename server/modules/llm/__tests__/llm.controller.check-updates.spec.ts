@@ -1,5 +1,7 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, Logger } from '@nestjs/common';
+import type { TestingModule } from '@nestjs/testing';
+import { Test } from '@nestjs/testing';
+import type { Logger } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import { LlmController } from '../llm.controller';
 import { LlmService } from '../services/llm.service';
 import { ModelDiscoveryService } from '../services/model-discovery.service';

@@ -11,7 +11,8 @@ import {
   Server,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useDebugStore, LLMDebugEntry } from '../store/useDebugStore';
+import type { LLMDebugEntry } from '../store/useDebugStore';
+import { useDebugStore } from '../store/useDebugStore';
 import { useTaskStore } from '../store/useTaskStore';
 import { useMCPLogsStore } from '../store/useMCPLogsStore';
 import { JSONViewer } from './JSONViewer';
@@ -233,9 +234,12 @@ export function LLMDebugDialog({
   );
 
   const filteredMCPLogs = logs.filter(log => {
-    if (mcpServerFilter !== 'all' && log.serverId !== mcpServerFilter)
+    if (mcpServerFilter !== 'all' && log.serverId !== mcpServerFilter) {
       return false;
-    if (mcpLevelFilter !== 'all' && log.level !== mcpLevelFilter) return false;
+    }
+    if (mcpLevelFilter !== 'all' && log.level !== mcpLevelFilter) {
+      return false;
+    }
     return true;
   });
 
@@ -269,7 +273,9 @@ export function LLMDebugDialog({
     }
   };
 
-  if (!shouldRender) return null;
+  if (!shouldRender) {
+    return null;
+  }
 
   return (
     <BaseDialog

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MindmapAgentIterativeService } from '../mindmap-agent-iterative.service';
 import type { SseService } from '../../../events/services/sse.service';
-import { GlobalConfigService } from '../../../shared/services/global-config.service';
+import type { GlobalConfigService } from '../../../shared/services/global-config.service';
 import type { MindMapData } from '../../../../../src/utils/mindMapData';
 import { SSEEventType } from '../../../../../src/types';
 import * as fs from 'fs';

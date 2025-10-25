@@ -4,7 +4,8 @@ import * as path from 'path';
 import { ConversationService } from '../services/conversation.service';
 import { GlobalConfigService } from '../../shared/services/global-config.service';
 import { ChatPerplexityExtended } from '../../agents/services/chat-perplexity-extended';
-import { HumanMessage, AIMessage } from '@langchain/core/messages';
+import type { AIMessage } from '@langchain/core/messages';
+import { HumanMessage } from '@langchain/core/messages';
 import type { ConversationMessage } from '../types/conversation.types';
 
 // Mock the file system

@@ -272,7 +272,7 @@ export class MindMapDataManager {
     rootNodeId: string;
     layout: 'LR' | 'RL' | 'TB' | 'BT' | 'RD';
   }> {
-    if (initialData && initialData.root) {
+    if (initialData?.root) {
       const { nodes, rootNodeId, layout } =
         this.convertTreeToNodes(initialData);
       const edges = this.generateEdges(nodes, layout);

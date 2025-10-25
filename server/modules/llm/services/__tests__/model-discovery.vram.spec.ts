@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Test, TestingModule } from '@nestjs/testing';
+import type { TestingModule } from '@nestjs/testing';
+import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
 import {
@@ -59,7 +60,9 @@ describe('ModelDiscoveryService - VRAM Fetching', () => {
   beforeEach(async () => {
     mockConfigService = {
       get: vi.fn().mockImplementation((key: string) => {
-        if (key === 'NODE_ENV') return 'test';
+        if (key === 'NODE_ENV') {
+          return 'test';
+        }
         return undefined;
       }),
     };

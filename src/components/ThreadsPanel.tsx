@@ -1,5 +1,5 @@
 import { MessageSquare, UserCheck } from 'lucide-react';
-import { Thread } from '../types';
+import type { Thread } from '../types';
 import { ListPanel } from './shared/ListPanel';
 
 interface ThreadsPanelProps {
@@ -17,7 +17,7 @@ export function ThreadsPanel({
   onThreadSelect,
   onThreadCreate,
   onThreadRename,
-  onThreadDelete
+  onThreadDelete,
 }: ThreadsPanelProps) {
   return (
     <ListPanel
@@ -29,20 +29,17 @@ export function ThreadsPanel({
       onItemDelete={onThreadDelete}
       emptyState={{
         icon: MessageSquare,
-        title: "No conversations yet",
-        subtitle: "Start a new chat to begin"
+        title: 'No conversations yet',
+        subtitle: 'Start a new chat to begin',
       }}
       createButtonTitle="New conversation"
       renameButtonTitle="Rename conversation"
       deleteButtonTitle="Delete conversation"
       testId="chat-slider"
-      renderItemContent={(thread) => 
+      renderItemContent={thread =>
         thread.customRole ? (
           <div title="Custom personality applied">
-            <UserCheck 
-              size={14} 
-              className="text-purple-400 flex-shrink-0" 
-            />
+            <UserCheck size={14} className="text-purple-400 flex-shrink-0" />
           </div>
         ) : null
       }

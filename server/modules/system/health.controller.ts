@@ -22,7 +22,7 @@ export class HealthController {
     return {
       status: 'ok',
       timestamp: Date.now(),
-      uptime: Date.now() - this.startTime
+      uptime: Date.now() - this.startTime,
     };
   }
 }

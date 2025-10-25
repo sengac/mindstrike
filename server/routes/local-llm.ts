@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import type { Request, Response } from 'express';
+import { Router } from 'express';
 import { exec } from 'child_process';
 import fs from 'fs';
 import os from 'os';

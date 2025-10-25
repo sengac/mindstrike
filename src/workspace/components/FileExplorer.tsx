@@ -173,7 +173,9 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
   };
 
   const handleSaveFile = async () => {
-    if (!selectedFile) return;
+    if (!selectedFile) {
+      return;
+    }
 
     try {
       // Construct full path relative to workspace root
@@ -207,7 +209,9 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
   };
 
   const handleDeleteConfirm = async () => {
-    if (!fileToDelete) return;
+    if (!fileToDelete) {
+      return;
+    }
 
     try {
       // Construct full path relative to workspace root
@@ -255,7 +259,9 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
   };
 
   const handleDirectorySubmit = async () => {
-    if (!newDirectoryPath.trim()) return;
+    if (!newDirectoryPath.trim()) {
+      return;
+    }
 
     const result = await changeDirectory(
       newDirectoryPath.trim(),
@@ -594,8 +600,12 @@ export function FileExplorer({ onDirectoryChange }: FileExplorerProps) {
                 value={newDirectoryPath}
                 onChange={e => setNewDirectoryPath(e.target.value)}
                 onKeyDown={e => {
-                  if (e.key === 'Enter') handleDirectorySubmit();
-                  if (e.key === 'Escape') closeDirectoryInput();
+                  if (e.key === 'Enter') {
+                    handleDirectorySubmit();
+                  }
+                  if (e.key === 'Escape') {
+                    closeDirectoryInput();
+                  }
                 }}
                 className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
                 placeholder="Enter directory path (e.g., . or src or ../other-project)"
