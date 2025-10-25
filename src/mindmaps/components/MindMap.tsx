@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useRef } from 'react';
+import React, { useEffect, useCallback, useRef, useState } from 'react';
 import type { Node } from 'reactflow';
 import ReactFlow, {
   ConnectionMode,
@@ -11,6 +11,7 @@ import { Plus, Trash2, Sparkles } from 'lucide-react';
 import { detectNodeOverlaps } from '../../utils/overlapDetection';
 
 import { MindMapNode } from './MindMapNode';
+import { ScrollModeOverlay } from './ScrollModeOverlay';
 import { MusicVisualization } from '../../components/MusicVisualization';
 import type { MindMapNodeData } from '../types/mindMap';
 import { GenerateDialog } from '../../components/shared/GenerateDialog';
@@ -31,6 +32,7 @@ import {
 import { useMindMapDrag } from '../hooks/useMindMapDrag';
 import type { MindMapData } from '../../utils/mindMapData';
 import { useDialogAnimation } from '../../hooks/useDialogAnimation';
+import { useAppStore } from '../../store/useAppStore';
 
 // Import the new Zustand store and hooks
 import {
@@ -125,6 +127,30 @@ function MindMapInner({
     changeLayout,
     resetLayout,
   } = useMindMapActions();
+
+  // Get key bindings from app store
+  const mindMapKeyBindings = useAppStore(state => state.mindMapKeyBindings);
+
+  // Track pan modifier key state and scrolling
+  const [isPanModeActive, setIsPanModeActive] = useState(false);
+  const [isScrolling, setIsScrolling] = useState(false);
+  const [container, setContainer] = useState<HTMLDivElement | null>(null);
+  const [isMouseOverContainer, setIsMouseOverContainer] = useState(false);
+
+  // Get pan modifier key from bindings (default to Space)
+  const panModifierKey = mindMapKeyBindings?.panModifier || 'Space';
+
+  // Callback ref to track container mounting AND maintain containerRef
+  const containerRefCallback = useCallback((node: HTMLDivElement | null) => {
+    // Update both the ref (for other code) and state (to trigger useEffect)
+    // We can't directly assign to .current, but we can use Object.defineProperty
+    Object.defineProperty(containerRef, 'current', {
+      value: node,
+      writable: true,
+      configurable: true,
+    });
+    setContainer(node);
+  }, []);
 
   // Define handleMoveNode before using it in useMindMapDrag
   const handleMoveNode = useCallback(
@@ -840,11 +866,81 @@ function MindMapInner({
     selectNode(null);
   }, [selectNode]);
 
+  // Track mouse enter/leave for pan modifier key activation scope
+  const handleMouseEnter = useCallback(() => {
+    setIsMouseOverContainer(true);
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    setIsMouseOverContainer(false);
+    // Clear pan mode when mouse leaves
+    setIsPanModeActive(false);
+  }, []);
+
+  // Track pan modifier key state (Space, Shift, etc.)
+  // Only active when mouse is hovering over the container
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Don't handle keys when user is typing in an input
+      if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+
+      // Only handle keys when mouse is over the MindMap container
+      if (!isMouseOverContainer) {
+        return;
+      }
+
+      // Check if the pressed key matches the pan modifier
+      if (event.key === ' ' && panModifierKey === 'Space') {
+        setIsPanModeActive(true);
+      } else if (event.shiftKey && panModifierKey === 'Shift') {
+        setIsPanModeActive(true);
+      } else if (event.altKey && panModifierKey === 'Alt') {
+        setIsPanModeActive(true);
+      }
+    };
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      // Don't handle keys when user is typing in an input
+      if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+
+      // Only handle keys when mouse is over the MindMap container
+      if (!isMouseOverContainer) {
+        return;
+      }
+
+      // Check if the released key matches the pan modifier
+      if (event.key === ' ' && panModifierKey === 'Space') {
+        setIsPanModeActive(false);
+      } else if (!event.shiftKey && panModifierKey === 'Shift') {
+        setIsPanModeActive(false);
+      } else if (!event.altKey && panModifierKey === 'Alt') {
+        setIsPanModeActive(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [panModifierKey, isMouseOverContainer]);
+
   // Custom wheel handler - handles BOTH zoom and horizontal pan
   // Takes full control to ensure both operations work simultaneously
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) {
+    if (!container || !reactFlowInstance) {
       return;
     }
 
@@ -854,8 +950,18 @@ function MindMapInner({
       const hasHorizontalScroll = Math.abs(deltaX) > 0;
       const hasVerticalScroll = Math.abs(deltaY) > 0;
 
-      // If Ctrl/Cmd key is held, enable panning with scroll wheel (original behavior)
-      if (event.ctrlKey || event.metaKey) {
+      // Mark as scrolling for overlay opacity
+      setIsScrolling(true);
+      setTimeout(() => setIsScrolling(false), 500);
+
+      // Check if pan modifier key is being held (configurable)
+      const isPanModifierHeld =
+        (panModifierKey === 'Shift' && event.shiftKey) ||
+        (panModifierKey === 'Alt' && event.altKey) ||
+        isPanModeActive;
+
+      // If pan modifier is held, enable panning with scroll wheel
+      if (isPanModifierHeld) {
         event.preventDefault();
         const viewport = reactFlowInstance.getViewport();
         reactFlowInstance.setViewport({
@@ -889,7 +995,8 @@ function MindMapInner({
           // Match ReactFlow's zoom delta calculation
           // From ReactFlow source: wheelDelta = -event.deltaY * (deltaMode === 1 ? 0.05 : deltaMode ? 1 : 0.002)
           const deltaMode = event.deltaMode;
-          const zoomDelta = -deltaY * (deltaMode === 1 ? 0.05 : deltaMode ? 1 : 0.002);
+          const zoomDelta =
+            -deltaY * (deltaMode === 1 ? 0.05 : deltaMode ? 1 : 0.002);
           newZoom = viewport.zoom * Math.pow(2, zoomDelta);
           // Clamp zoom to ReactFlow's min/max
           newZoom = Math.max(0.1, Math.min(2, newZoom));
@@ -931,12 +1038,14 @@ function MindMapInner({
         );
       };
     }
-  }, [reactFlowInstance]);
+  }, [container, reactFlowInstance, panModifierKey, isPanModeActive]);
 
   return (
     <div
-      ref={containerRef}
+      ref={containerRefCallback}
       className="w-full h-full bg-slate-50 dark:bg-dark-bg relative"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       {/* Music Visualization Background */}
       <MusicVisualization className="absolute inset-0 w-full h-full pointer-events-none" />
@@ -1218,6 +1327,13 @@ function MindMapInner({
           </button>
         </div>
       )}
+
+      {/* Scroll Mode Overlay - fixed bottom-left */}
+      <ScrollModeOverlay
+        isPanMode={isPanModeActive}
+        panModifierKey={panModifierKey}
+        isScrolling={isScrolling}
+      />
     </div>
   );
 }

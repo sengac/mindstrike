@@ -1,3 +1,4 @@
+@ui
 @ui-overlay
 @keybindings
 @navigation
@@ -7,7 +8,7 @@
 Feature: Scroll Modifier Key for Pan/Zoom Switching with Visual Indicator
 
   """
-  Integrates with existing key binding system (useAppStore mindMapKeyBindings). Modifies wheel event handler in MindMap.tsx (handleWheel function, lines 843-934). Removes broken Ctrl/Cmd hardcoded pan logic. Adds new overlay component positioned at bottom-left (fixed positioning). Uses existing Z_INDEX_LAYERS constants for proper layering (Z_INDEX_LAYERS.CONTROLS). Overlay matches existing UI style (dark background, rounded corners like floating action buttons). Key binding detection uses same pattern as existing bindings (getKeyString normalization). Space key default can be rebound through ControlsModal.tsx. Horizontal scroll always pans (preserves existing behavior). Vertical scroll: zoom (default) or pan (when modifier held).
+  Integrates with existing key binding system (useAppStore mindMapKeyBindings). Modifies wheel event handler in MindMap.tsx (handleWheel function). Removes broken Ctrl/Cmd hardcoded pan logic. Adds new overlay component positioned at bottom-left using absolute positioning (relative to ReactFlow container, not screen). Overlay matches existing UI style (dark background, rounded corners like floating action buttons). Pan modifier key only activates when mouse is hovering over ReactFlow container (onMouseEnter/onMouseLeave handlers). Clears pan mode when mouse leaves container. Space key default can be rebound through ControlsModal.tsx. Horizontal scroll always pans (preserves existing behavior). Vertical scroll: zoom (default) or pan (when modifier held AND mouse over container).
   """
 
   # ========================================
@@ -25,6 +26,9 @@ Feature: Scroll Modifier Key for Pan/Zoom Switching with Visual Indicator
   #   8. Pan mode modifier must be tracked via key binding system (useAppStore mindMapKeyBindings)
   #   9. Overlay must be positioned at bottom-left with appropriate z-index (higher than base, lower than modals)
   #   10. Horizontal scrolling should pan horizontally regardless of modifier key state
+  #   11. Pan mode modifier only activates when mouse is hovering over ReactFlow container (not focus-based)
+  #   12. Pan mode clears immediately when mouse leaves container
+  #   13. Overlay uses absolute positioning relative to ReactFlow container (not fixed to viewport)
   #
   # EXAMPLES:
   #   1. User holds Space and scrolls vertically - viewport pans vertically instead of zooming
@@ -33,6 +37,9 @@ Feature: Scroll Modifier Key for Pan/Zoom Switching with Visual Indicator
   #   4. User opens key bindings dialog - sees new entry 'Pan Mode Modifier' with default key 'Space'
   #   5. User rebinds pan mode modifier to 'Shift' - holding Shift now enables pan mode instead of Space
   #   6. Overlay is semi-transparent (50% opacity) when idle, becomes fully opaque when Space is pressed or scrolling occurs
+  #   7. User moves mouse over ReactFlow and holds Space - pan mode activates
+  #   8. User moves mouse outside ReactFlow while holding Space - pan mode deactivates immediately
+  #   9. Overlay positioned at bottom-left of ReactFlow container, not entire screen viewport
   #
   # QUESTIONS (ANSWERED):
   #   Q: Should we use Space bar as the modifier key for pan mode?
@@ -108,4 +115,38 @@ Feature: Scroll Modifier Key for Pan/Zoom Switching with Visual Indicator
     Then the overlay should become fully opaque
     When I scroll the mouse wheel
     Then the overlay should become fully opaque during scrolling
+
+
+  Scenario: Pan mode modifier only active when mouse is over MindMap container
+    Given I am viewing a mindmap
+    And my mouse cursor is hovering over the ReactFlow diagram
+    When I hold Space and scroll vertically
+    Then the viewport should pan vertically
+
+
+  Scenario: Pan mode modifier inactive when mouse is outside MindMap container
+    Given I am viewing a mindmap
+    And my mouse cursor is outside the ReactFlow diagram
+    When I hold Space (the pan modifier key)
+    Then pan mode should NOT activate
+    And the overlay should still show 'Zoom Mode (hold Space for Pan Mode)'
+
+
+  Scenario: Overlay positioned at bottom-left of ReactFlow container
+    Given I am viewing a mindmap
+    When the mindmap renders
+    Then the scroll mode overlay should be positioned at the bottom-left corner of the ReactFlow container
+    And the overlay should NOT be positioned relative to the entire screen
+    And the overlay should use absolute positioning (not fixed)
+
+
+  Scenario: Pan mode clears when mouse leaves container while holding modifier
+    Given [precondition]
+    When [action]
+    Then [expected outcome]
+    Given I am viewing a mindmap with my mouse over the ReactFlow container
+    And I have activated pan mode by holding Space
+    When I move my mouse outside the ReactFlow container while still holding Space
+    Then pan mode should immediately deactivate
+    And the overlay should change back to 'Zoom Mode (hold Space for Pan Mode)'
 

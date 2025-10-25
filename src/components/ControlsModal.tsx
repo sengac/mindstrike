@@ -75,6 +75,13 @@ const DEFAULT_KEY_BINDINGS: KeyBinding[] = [
     defaultKey: '/',
     currentKey: '/',
   },
+  {
+    id: 'panModifier',
+    action: 'Pan Mode Modifier',
+    description: 'Hold this key while scrolling to pan instead of zoom',
+    defaultKey: 'Space',
+    currentKey: 'Space',
+  },
 ];
 
 export function ControlsModal({

@@ -549,15 +549,35 @@
       "id": "UI-004",
       "title": "Scroll Modifier Key for Pan/Zoom Switching with Visual Indicator",
       "type": "story",
-      "status": "specifying",
+      "status": "implementing",
       "createdAt": "2025-10-25T05:58:29.841Z",
-      "updatedAt": "2025-10-25T06:54:43.765Z",
+      "updatedAt": "2025-10-25T07:26:58.221Z",
       "description": "Add a configurable modifier key that switches scroll wheel behavior from zoom mode to pan mode when held down. Display a fixed bottom-left overlay in the mindmap showing current scroll mode and active modifier keys, with information updating dynamically when modifiers are pressed. Integrate with existing key binding system and add configuration option in key bindings dialog. Choose optimal cross-platform modifier key (e.g., Shift, Alt, or Space) that is easily accessible and doesn't conflict with existing bindings.",
       "children": [],
       "stateHistory": [
         {
           "state": "specifying",
           "timestamp": "2025-10-25T05:58:35.688Z"
+        },
+        {
+          "state": "testing",
+          "timestamp": "2025-10-25T07:00:02.089Z"
+        },
+        {
+          "state": "implementing",
+          "timestamp": "2025-10-25T07:05:20.879Z"
+        },
+        {
+          "state": "validating",
+          "timestamp": "2025-10-25T07:17:43.685Z"
+        },
+        {
+          "state": "testing",
+          "timestamp": "2025-10-25T07:23:21.242Z"
+        },
+        {
+          "state": "implementing",
+          "timestamp": "2025-10-25T07:26:58.222Z"
         }
       ],
       "questions": [
@@ -627,11 +647,12 @@
     ],
     "specifying": [
       "AGENT-001",
-      "CLI-001",
-      "UI-004"
+      "CLI-001"
     ],
     "testing": [],
-    "implementing": [],
+    "implementing": [
+      "UI-004"
+    ],
     "validating": [],
     "done": [
       "AGENT-002",
