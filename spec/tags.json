@@ -67,12 +67,20 @@
           "description": "HTTP REST API communication"
         },
         {
+          "name": "@keybindings",
+          "description": "Key binding configuration and customization"
+        },
+        {
           "name": "@npm",
           "description": "NPM package management and publishing"
         },
         {
           "name": "@sse",
           "description": "Server-Sent Events streaming functionality"
+        },
+        {
+          "name": "@ui-overlay",
+          "description": "UI overlay components and fixed positioning"
         }
       ]
     },
@@ -152,7 +160,7 @@
     "examples": []
   },
   "statistics": {
-    "lastUpdated": "2025-10-25T04:27:47.522Z",
+    "lastUpdated": "2025-10-25T06:54:02.727Z",
     "phaseStats": [],
     "componentStats": [],
     "featureGroupStats": [],

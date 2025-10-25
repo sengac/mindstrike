@@ -43,8 +43,10 @@ Technical concern tags
 | Tag | Description |
 |-----|-------------|
 | `@http-api` | HTTP REST API communication |
+| `@keybindings` | Key binding configuration and customization |
 | `@npm` | NPM package management and publishing |
 | `@sse` | Server-Sent Events streaming functionality |
+| `@ui-overlay` | UI overlay components and fixed positioning |
 
 ### Platform Tags
 
@@ -89,7 +91,7 @@ Automation integration tags
 
 ## Tag Statistics
 
-_Last updated: 2025-10-25T04:27:47.522Z_
+_Last updated: 2025-10-25T06:54:02.727Z_
 
 **Update Command**: `fspec tag-stats`
 

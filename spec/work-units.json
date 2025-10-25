@@ -1,7 +1,7 @@
 {
   "meta": {
     "version": "1.0.0",
-    "lastUpdated": "2025-10-25T04:30:03.040Z"
+    "lastUpdated": "2025-10-25T06:51:43.098Z"
   },
   "workUnits": {
     "AGENT-001": {
@@ -544,6 +544,80 @@
         "User scrolls only horizontally → mindmap only pans (no zoom)",
         "User scrolls only vertically → mindmap only zooms (no pan)"
       ]
+    },
+    "UI-004": {
+      "id": "UI-004",
+      "title": "Scroll Modifier Key for Pan/Zoom Switching with Visual Indicator",
+      "type": "story",
+      "status": "specifying",
+      "createdAt": "2025-10-25T05:58:29.841Z",
+      "updatedAt": "2025-10-25T06:54:43.765Z",
+      "description": "Add a configurable modifier key that switches scroll wheel behavior from zoom mode to pan mode when held down. Display a fixed bottom-left overlay in the mindmap showing current scroll mode and active modifier keys, with information updating dynamically when modifiers are pressed. Integrate with existing key binding system and add configuration option in key bindings dialog. Choose optimal cross-platform modifier key (e.g., Shift, Alt, or Space) that is easily accessible and doesn't conflict with existing bindings.",
+      "children": [],
+      "stateHistory": [
+        {
+          "state": "specifying",
+          "timestamp": "2025-10-25T05:58:35.688Z"
+        }
+      ],
+      "questions": [
+        {
+          "text": "@human: Should we use Space bar as the modifier key for pan mode?",
+          "selected": true,
+          "answer": "Yes, use Space bar as the pan mode modifier key"
+        },
+        {
+          "text": "@human: What should the bottom-left overlay display?",
+          "selected": true,
+          "answer": "Display 'Zoom Mode (hold Space for Pan Mode)' when in zoom mode, and 'Pan Mode' when Space is held"
+        },
+        {
+          "text": "@human: Should the overlay be always visible, hover-only, activity-based fade, or always visible with transparency changes?",
+          "selected": true,
+          "answer": "Always visible but semi-transparent, then fully opaque on interaction"
+        },
+        {
+          "text": "@human: Should the pan mode modifier be configurable in the key bindings dialog like other bindings, or fixed/toggle-only?",
+          "selected": true,
+          "answer": "Configurable entry in key bindings dialog, same pattern as other bindings (user can rebind to any key)"
+        },
+        {
+          "text": "@human: Should we keep existing Ctrl/Cmd pan behavior, replace it entirely, or make it configurable?",
+          "selected": true,
+          "answer": "Replace the broken Ctrl/Cmd pan behavior entirely. Use only the new configurable key binding system with Space as default pan mode modifier. Remove hardcoded Ctrl/Cmd pan logic from wheel handler."
+        },
+        {
+          "text": "@human: What visual style should the bottom-left overlay use?",
+          "selected": true,
+          "answer": "Match existing MindStrike UI style - dark background with rounded corners, consistent with floating action buttons"
+        }
+      ],
+      "rules": [
+        "Yes, use Space bar as the pan mode modifier key",
+        "Display 'Zoom Mode (hold Space for Pan Mode)' when in zoom mode, and 'Pan Mode' when Space is held",
+        "Always visible but semi-transparent, then fully opaque on interaction",
+        "Configurable entry in key bindings dialog, same pattern as other bindings (user can rebind to any key)",
+        "Replace the broken Ctrl/Cmd pan behavior entirely. Use only the new configurable key binding system with Space as default pan mode modifier. Remove hardcoded Ctrl/Cmd pan logic from wheel handler.",
+        "Remove broken Ctrl/Cmd hardcoded pan behavior from wheel handler in MindMap.tsx",
+        "Match existing MindStrike UI style - dark background with rounded corners, consistent with floating action buttons",
+        "Pan mode modifier must be tracked via key binding system (useAppStore mindMapKeyBindings)",
+        "Overlay must be positioned at bottom-left with appropriate z-index (higher than base, lower than modals)",
+        "Horizontal scrolling should pan horizontally regardless of modifier key state"
+      ],
+      "examples": [
+        "User holds Space and scrolls vertically - viewport pans vertically instead of zooming",
+        "User scrolls without holding Space - viewport zooms in/out as normal",
+        "User holds Space - overlay changes from 'Zoom Mode (hold Space for Pan Mode)' to 'Pan Mode' and becomes fully opaque",
+        "User opens key bindings dialog - sees new entry 'Pan Mode Modifier' with default key 'Space'",
+        "User rebinds pan mode modifier to 'Shift' - holding Shift now enables pan mode instead of Space",
+        "Overlay is semi-transparent (50% opacity) when idle, becomes fully opaque when Space is pressed or scrolling occurs"
+      ],
+      "userStory": {
+        "role": "mindmap user",
+        "action": "switch between zoom and pan modes while scrolling",
+        "benefit": "I can navigate the mindmap more efficiently with a single modifier key"
+      },
+      "estimate": 5
     }
   },
   "states": {
@@ -553,7 +627,8 @@
     ],
     "specifying": [
       "AGENT-001",
-      "CLI-001"
+      "CLI-001",
+      "UI-004"
     ],
     "testing": [],
     "implementing": [],
